@@ -107,7 +107,8 @@ app.get('/api/health', (req, res) => {
       reports: true,
       bans: true,
       analytics: true,
-      auctions: true
+      auctions: true,
+      storage: true  // Added storage feature flag
     },
   });
 });
@@ -131,6 +132,255 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
+
+// ---------------------- Storage API Routes ----------------------
+// Backend storage for critical data - replaces localStorage for production
+app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
+  try {
+    const { key } = req.params;
+    const userId = req.user.id;
+    
+    // Find the user and get their storage object
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    // Initialize storage if it doesn't exist
+    if (!user.storage) {
+      user.storage = {};
+    }
+    
+    const value = user.storage[key] || null;
+    
+    res.json({ 
+      success: true, 
+      data: { value } 
+    });
+  } catch (error) {
+    console.error(`Storage GET error for key ${req.params.key}:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/storage/set', authMiddleware, async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    const userId = req.user.id;
+    
+    // Validate input
+    if (!key || typeof key !== 'string') {
+      return res.status(400).json({ success: false, error: 'Invalid key' });
+    }
+    
+    // Size limit check (1MB)
+    const valueSize = JSON.stringify(value).length;
+    if (valueSize > 1024 * 1024) {
+      return res.status(413).json({ success: false, error: 'Value too large (max 1MB)' });
+    }
+    
+    // Update user's storage
+    const result = await User.findByIdAndUpdate(
+      userId,
+      { 
+        [`storage.${key}`]: value,
+        'storageUpdatedAt': new Date()
+      },
+      { new: true }
+    );
+    
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`Storage SET error for key ${req.body.key}:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/api/storage/delete/:key', authMiddleware, async (req, res) => {
+  try {
+    const { key } = req.params;
+    const userId = req.user.id;
+    
+    // Remove the key from storage
+    const result = await User.findByIdAndUpdate(
+      userId,
+      { 
+        $unset: { [`storage.${key}`]: 1 },
+        'storageUpdatedAt': new Date()
+      },
+      { new: true }
+    );
+    
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error(`Storage DELETE error for key ${req.params.key}:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/storage/keys', authMiddleware, async (req, res) => {
+  try {
+    const { pattern } = req.body;
+    const userId = req.user.id;
+    
+    // Get user's storage
+    const user = await User.findById(userId);
+    if (!user || !user.storage) {
+      return res.json({ success: true, data: { keys: [] } });
+    }
+    
+    // Get all keys, optionally filtered by pattern
+    let keys = Object.keys(user.storage);
+    
+    if (pattern) {
+      keys = keys.filter(key => key.includes(pattern));
+    }
+    
+    res.json({ 
+      success: true, 
+      data: { keys } 
+    });
+  } catch (error) {
+    console.error('Storage KEYS error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/storage/exists/:key', authMiddleware, async (req, res) => {
+  try {
+    const { key } = req.params;
+    const userId = req.user.id;
+    
+    const user = await User.findById(userId);
+    const exists = user && user.storage && key in user.storage;
+    
+    res.json({ 
+      success: true, 
+      data: { exists } 
+    });
+  } catch (error) {
+    console.error(`Storage EXISTS error for key ${req.params.key}:`, error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/storage/clear', authMiddleware, async (req, res) => {
+  try {
+    const { preserveKeys } = req.body;
+    const userId = req.user.id;
+    
+    if (preserveKeys && preserveKeys.length > 0) {
+      // Get current storage and preserve specified keys
+      const user = await User.findById(userId);
+      const preserved = {};
+      
+      if (user && user.storage) {
+        preserveKeys.forEach(key => {
+          if (key in user.storage) {
+            preserved[key] = user.storage[key];
+          }
+        });
+      }
+      
+      // Clear and restore preserved keys
+      await User.findByIdAndUpdate(userId, { 
+        storage: preserved,
+        'storageUpdatedAt': new Date()
+      });
+    } else {
+      // Clear all storage
+      await User.findByIdAndUpdate(userId, { 
+        storage: {},
+        'storageUpdatedAt': new Date()
+      });
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Storage CLEAR error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/storage/info', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const user = await User.findById(userId);
+    const storage = user?.storage || {};
+    
+    // Calculate storage size
+    const used = JSON.stringify(storage).length;
+    const quota = 5 * 1024 * 1024; // 5MB quota per user
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        used, 
+        quota,
+        percentage: (used / quota) * 100,
+        keys: Object.keys(storage).length
+      } 
+    });
+  } catch (error) {
+    console.error('Storage INFO error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// UI preferences endpoint (can work without auth for initial load)
+app.post('/api/storage/ui-preference', async (req, res) => {
+  try {
+    const { key, value } = req.body;
+    
+    // If user is authenticated, save to their profile
+    if (req.headers.authorization) {
+      try {
+        // Verify token
+        const token = req.headers.authorization.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        
+        await User.findByIdAndUpdate(
+          decoded.id,
+          { [`uiPreferences.${key}`]: value }
+        );
+      } catch (err) {
+        // Token invalid, but that's ok for UI preferences
+      }
+    }
+    
+    // Always return success for UI preferences
+    res.json({ success: true });
+  } catch (error) {
+    console.error('UI preference error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/storage/ui-preferences', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    const user = await User.findById(userId);
+    const preferences = user?.uiPreferences || {};
+    
+    res.json({ 
+      success: true, 
+      data: { preferences } 
+    });
+  } catch (error) {
+    console.error('Get UI preferences error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // --- Compatibility mounts (support old clients that forget '/api') ---
 app.use('/subscriptions', subscriptionRoutes);
@@ -836,6 +1086,27 @@ async function initializeAuctionSystem() {
   }
 }
 
+// Initialize storage system on startup
+async function initializeStorageSystem() {
+  try {
+    // Add storage field to User schema if it doesn't exist
+    const usersWithoutStorage = await User.countDocuments({ storage: { $exists: false } });
+    if (usersWithoutStorage > 0) {
+      console.log(`   - Adding storage field to ${usersWithoutStorage} users...`);
+      await User.updateMany(
+        { storage: { $exists: false } },
+        { $set: { storage: {}, uiPreferences: {} } }
+      );
+    }
+    
+    console.log(`✅ Storage system initialized`);
+    console.log(`   - Backend storage endpoints ready`);
+    console.log(`   - UI preferences endpoints ready`);
+  } catch (error) {
+    console.error('⚠️ Error initializing storage system:', error);
+  }
+}
+
 // Start server
 server.listen(PORT, async () => {
   console.log(`🚀 Backend server running on http://localhost:${PORT}`);
@@ -855,6 +1126,9 @@ server.listen(PORT, async () => {
   
   await initializeAuctionSystem();
   console.log(`🔨 Auction system ready - instant processing enabled (1s checks)`);
+  
+  await initializeStorageSystem();
+  console.log(`💾 Storage system ready - backend storage enabled`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -876,5 +1150,6 @@ server.listen(PORT, async () => {
   console.log('  - Bans:          /api/admin/bans/*');
   console.log('  - Analytics:     /api/analytics/*');
   console.log('  - Auctions:      /api/auctions/*');
+  console.log('  - Storage:       /api/storage/*');
   console.log('\n💸 Go get you that lambo fuh nigga!\n');
 });

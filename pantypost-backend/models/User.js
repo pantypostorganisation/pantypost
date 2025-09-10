@@ -141,6 +141,22 @@ const userSchema = new mongoose.Schema({
     default: 0
   },
   
+  // STORAGE FIELDS FOR BACKEND STORAGE SERVICE (NEW)
+  storage: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  uiPreferences: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  storageUpdatedAt: {
+    type: Date,
+    default: Date.now
+  },
+  
   // SETTINGS
   settings: {
     emailNotifications: {
@@ -196,6 +212,14 @@ const userSchema = new mongoose.Schema({
 userSchema.set('toObject', { getters: true });
 userSchema.set('toJSON', { getters: true });
 
+// Add indexes for performance
+userSchema.index({ username: 1 });
+userSchema.index({ email: 1 });
+userSchema.index({ role: 1 });
+userSchema.index({ isVerified: 1 });
+userSchema.index({ isBanned: 1 });
+userSchema.index({ 'storage': 1 });
+
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   // Only hash if password is new or modified
@@ -216,11 +240,23 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-// Method to get safe user data (without password)
+// Method to get safe user data (without password and storage)
 userSchema.methods.toSafeObject = function() {
   const user = this.toObject();
   delete user.password;
   delete user.verificationData; // Don't send verification data to frontend
+  delete user.storage; // Don't send storage data to frontend
+  delete user.storageUpdatedAt;
+  return user;
+};
+
+// Override toJSON to exclude sensitive fields
+userSchema.methods.toJSON = function() {
+  const user = this.toObject();
+  delete user.password;
+  delete user.verificationData;
+  delete user.storage; // Don't expose storage in API responses
+  delete user.storageUpdatedAt;
   return user;
 };
 

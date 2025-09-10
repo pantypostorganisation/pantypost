@@ -26,6 +26,7 @@ export const FEATURES = {
   USE_API_BANS: process.env.NEXT_PUBLIC_USE_API_BANS !== 'false',
   USE_API_REPORTS: process.env.NEXT_PUBLIC_USE_API_REPORTS !== 'false',
   USE_MOCK_API: false, // Always false - no mocks!
+  USE_BACKEND_STORAGE: process.env.NEXT_PUBLIC_USE_BACKEND_STORAGE !== 'false', // ADDED THIS LINE
 };
 
 // API endpoints with parameter placeholders

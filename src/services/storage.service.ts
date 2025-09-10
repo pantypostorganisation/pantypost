@@ -2,62 +2,226 @@
 
 import { FEATURES, ApiResponse } from './api.config';
 import { sanitizeStrict, sanitizeObject } from '@/utils/security/sanitization';
-import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { z } from 'zod';
 
 /**
- * Enhanced Storage Service with transaction support and error recovery
+ * Production Storage Service with Backend Support
+ * Auth tokens handled separately to prevent circular dependencies
  */
 
-interface StorageTransaction {
-  operations: Array<{
-    type: 'set' | 'remove';
-    key: string;
-    value?: any;
-  }>;
-  backup: Map<string, string | null>;
-}
-
-// Constants for security limits
-const STORAGE_LIMITS = {
-  MAX_KEY_LENGTH: 100,
-  MAX_VALUE_SIZE: 1 * 1024 * 1024, // 1MB per value
-  MAX_TOTAL_SIZE: 5 * 1024 * 1024, // 5MB total
-  MAX_KEYS: 1000,
-  MAX_BATCH_SIZE: 50,
-  ALLOWED_KEY_PATTERN: /^[a-zA-Z0-9_-]+$/,
-  RESERVED_PREFIXES: ['system_', 'internal_'],
-  // Allow these specific system keys that the app uses
-  ALLOWED_SYSTEM_KEYS: ['__walletMockDataCleared__', '__lastSyncTime__', '__initialized__', 'currentUser', 'session_fingerprint', 'auth_token', 'refresh_token', 'auth_token_data', 'panty_custom_requests'],
+// Storage configuration
+const STORAGE_CONFIG = {
+  // Critical data - backend when authenticated
+  BACKEND_PREFERRED: [
+    'wallet_',
+    'order_',
+    'message_',
+    'transaction_',
+    'balance_',
+    'payment_'
+  ],
+  
+  // UI preferences - always local for speed
+  LOCAL_ONLY: [
+    'theme',
+    'language',
+    'dismissed_',
+    'ui_pref_',
+    'layout_',
+    'notification_pref_',
+    '__walletMockDataCleared__',
+    '__lastSyncTime__',
+    '__initialized__'
+  ],
+  
+  // Session data
+  SESSION_ONLY: [
+    'form_draft_',
+    'temp_',
+    'cache_',
+    'panty_custom_requests'
+  ],
+  
+  // Auth data - special handling, never through storage API
+  AUTH_KEYS: [
+    'auth_token',
+    'refresh_token',
+    'auth_token_data',
+    'currentUser',
+    'session_fingerprint'
+  ]
 };
 
-// Validation schemas
+// Storage limits
+const STORAGE_LIMITS = {
+  MAX_KEY_LENGTH: 100,
+  MAX_VALUE_SIZE: 1 * 1024 * 1024, // 1MB
+  ALLOWED_KEY_PATTERN: /^[a-zA-Z0-9_-]+$/,
+};
+
+// Key validation schema
 const storageKeySchema = z.string()
   .min(1, 'Key cannot be empty')
   .max(STORAGE_LIMITS.MAX_KEY_LENGTH, `Key cannot exceed ${STORAGE_LIMITS.MAX_KEY_LENGTH} characters`)
-  .regex(STORAGE_LIMITS.ALLOWED_KEY_PATTERN, 'Key contains invalid characters')
-  .refine(key => {
-    // Allow specific system keys
-    if (STORAGE_LIMITS.ALLOWED_SYSTEM_KEYS.includes(key)) {
-      return true;
-    }
-    // Otherwise check for reserved prefixes
-    return !STORAGE_LIMITS.RESERVED_PREFIXES.some(prefix => key.startsWith(prefix));
-  }, {
-    message: 'Key uses reserved prefix'
-  });
+  .regex(STORAGE_LIMITS.ALLOWED_KEY_PATTERN, 'Key contains invalid characters');
 
 export class StorageService {
-  private static transactionInProgress = false;
-  private static operationQueue: Array<() => Promise<void>> = [];
-  private static isProcessingQueue = false;
-  private rateLimiter = getRateLimiter();
-  // Track auth-related operations separately with more lenient limits
-  private static authOperationCount = 0;
-  private static authOperationResetTime = 0;
+  private memoryCache: Map<string, { value: any; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 5000; // 5 seconds
+  private readonly UI_CACHE_TTL = 60000; // 1 minute
+  private useBackendStorage: boolean = false;
+  private isAuthenticated: boolean = false;
+  private migrationComplete: boolean = false;
+
+  constructor() {
+    // Check if backend storage should be enabled
+    this.useBackendStorage = FEATURES.USE_BACKEND_STORAGE !== false;
+    
+    if (this.useBackendStorage) {
+      console.log('[StorageService] Backend storage enabled');
+      // Delay initialization to avoid conflicts
+      if (typeof window !== 'undefined') {
+        setTimeout(() => this.initialize(), 2000);
+      }
+    }
+  }
 
   /**
-   * Validate storage key
+   * Initialize storage service
+   */
+  private async initialize() {
+    // Check if user is authenticated by looking for auth token
+    this.isAuthenticated = this.checkAuthentication();
+    
+    if (this.isAuthenticated && this.useBackendStorage && !this.migrationComplete) {
+      await this.migrateToBackend();
+    }
+  }
+
+  /**
+   * Check if user is authenticated
+   */
+  private checkAuthentication(): boolean {
+    if (typeof window === 'undefined') return false;
+    
+    // Check for auth token in session/local storage
+    const hasToken = !!(sessionStorage.getItem('auth_token') || 
+                       sessionStorage.getItem('auth_tokens') ||
+                       localStorage.getItem('auth_token'));
+    
+    return hasToken;
+  }
+
+  /**
+   * Get auth token for API calls (without recursion)
+   */
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // Check sessionStorage first (where AuthContext stores it)
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (authTokens) {
+        const parsed = JSON.parse(authTokens);
+        return parsed.token || null;
+      }
+      
+      // Check direct auth_token
+      const token = sessionStorage.getItem('auth_token') || 
+                   localStorage.getItem('auth_token');
+      return token;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Make authenticated API call
+   */
+  private async makeAuthenticatedCall<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    const token = this.getAuthToken();
+    
+    if (!token) {
+      return { success: false, error: { message: 'Not authenticated' } };
+    }
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      ...(options.headers as Record<string, string> || {})
+    };
+    
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+      const url = `${baseUrl}/api${endpoint}`;
+      
+      const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include'
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        return { 
+          success: false, 
+          error: { 
+            message: data.error || 'Request failed',
+            code: response.status.toString()
+          } 
+        };
+      }
+      
+      return { success: true, data: data.data || data };
+    } catch (error) {
+      console.error('API call failed:', error);
+      return { 
+        success: false, 
+        error: { message: 'Network error' } 
+      };
+    }
+  }
+
+  /**
+   * Determine storage strategy
+   */
+  private getStorageStrategy(key: string): 'backend' | 'local' | 'session' | 'skip' {
+    // Never store auth keys through this service
+    if (STORAGE_CONFIG.AUTH_KEYS.some(authKey => key === authKey)) {
+      return 'skip';
+    }
+    
+    // UI preferences always local
+    if (STORAGE_CONFIG.LOCAL_ONLY.some(prefix => 
+      key.startsWith(prefix) || key === prefix
+    )) {
+      return 'local';
+    }
+    
+    // Session data
+    if (STORAGE_CONFIG.SESSION_ONLY.some(prefix => 
+      key.startsWith(prefix) || key === prefix
+    )) {
+      return 'session';
+    }
+    
+    // Critical data - use backend if authenticated and enabled
+    if (STORAGE_CONFIG.BACKEND_PREFERRED.some(prefix => 
+      key.startsWith(prefix)
+    )) {
+      return (this.useBackendStorage && this.isAuthenticated) ? 'backend' : 'local';
+    }
+    
+    // Default
+    return 'local';
+  }
+
+  /**
+   * Validate key
    */
   private validateKey(key: string): string {
     const result = storageKeySchema.safeParse(key);
@@ -68,388 +232,307 @@ export class StorageService {
   }
 
   /**
-   * Check if value size is within limits
+   * Get from cache
    */
-  private validateValueSize(value: any): void {
-    const serialized = JSON.stringify(value);
-    if (serialized.length > STORAGE_LIMITS.MAX_VALUE_SIZE) {
-      throw new Error(`Value size exceeds limit of ${STORAGE_LIMITS.MAX_VALUE_SIZE / 1024}KB`);
-    }
-  }
-
-  /**
-   * Check storage quota before writing
-   */
-  private async checkStorageQuota(): Promise<void> {
-    const info = await this.getStorageInfo();
-    if (info.percentage > 90) {
-      throw new Error('Storage quota exceeded (90% full)');
-    }
-  }
-
-  /**
-   * Check if this is an auth-related operation
-   */
-  private isAuthOperation(key: string): boolean {
-    const authKeys = ['currentUser', 'auth_token', 'refresh_token', 'auth_token_data', 'session_fingerprint'];
-    return authKeys.includes(key);
-  }
-
-  /**
-   * Check rate limit for auth operations (more lenient)
-   */
-  private checkAuthRateLimit(): boolean {
-    const now = Date.now();
+  private getFromCache<T>(key: string): T | null {
+    const cached = this.memoryCache.get(key);
+    if (!cached) return null;
     
-    // Reset counter every minute
-    if (now - StorageService.authOperationResetTime > 60000) {
-      StorageService.authOperationCount = 0;
-      StorageService.authOperationResetTime = now;
+    const ttl = this.getStorageStrategy(key) === 'backend' ? this.CACHE_TTL : this.UI_CACHE_TTL;
+    
+    if (Date.now() - cached.timestamp < ttl) {
+      return cached.value as T;
     }
     
-    // Allow up to 500 auth operations per minute for testing
-    if (StorageService.authOperationCount >= 500) {
+    this.memoryCache.delete(key);
+    return null;
+  }
+
+  /**
+   * Set in cache
+   */
+  private setInCache(key: string, value: any): void {
+    this.memoryCache.set(key, { value, timestamp: Date.now() });
+    
+    if (this.memoryCache.size > 100) {
+      const firstKey = this.memoryCache.keys().next().value;
+      if (firstKey) this.memoryCache.delete(firstKey);
+    }
+  }
+
+  /**
+   * Get from backend
+   */
+  private async getFromBackend<T>(key: string): Promise<T | null> {
+    const response = await this.makeAuthenticatedCall<{ value: T }>(
+      `/storage/get/${encodeURIComponent(key)}`
+    );
+    
+    if (response.success && response.data) {
+      return response.data.value;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Set in backend
+   */
+  private async setInBackend(key: string, value: any): Promise<boolean> {
+    const response = await this.makeAuthenticatedCall<{ success: boolean }>(
+      '/storage/set',
+      {
+        method: 'POST',
+        body: JSON.stringify({ key, value })
+      }
+    );
+    
+    return response.success;
+  }
+
+  /**
+   * Get from browser storage
+   */
+  private getFromBrowserStorage<T>(key: string, type: 'local' | 'session'): T | null {
+    try {
+      if (typeof window === 'undefined') return null;
+      
+      const storage = type === 'local' ? localStorage : sessionStorage;
+      const item = storage.getItem(key);
+      
+      if (item === null) return null;
+      
+      try {
+        return JSON.parse(item) as T;
+      } catch {
+        return item as unknown as T;
+      }
+    } catch (error) {
+      console.warn(`Failed to get ${key} from ${type}Storage:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Set in browser storage
+   */
+  private setInBrowserStorage(key: string, value: any, type: 'local' | 'session'): boolean {
+    try {
+      if (typeof window === 'undefined') return false;
+      
+      const storage = type === 'local' ? localStorage : sessionStorage;
+      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+      storage.setItem(key, serialized);
+      return true;
+    } catch (error) {
+      console.warn(`Failed to set ${key} in ${type}Storage:`, error);
       return false;
     }
-    
-    StorageService.authOperationCount++;
-    return true;
   }
 
   /**
-   * Execute a function with retry logic
-   */
-  private async withRetry<T>(
-    operation: () => T,
-    maxRetries: number = 3,
-    delay: number = 100
-  ): Promise<T> {
-    let lastError: Error | null = null;
-    
-    for (let i = 0; i < maxRetries; i++) {
-      try {
-        return operation();
-      } catch (error) {
-        lastError = error as Error;
-        if (i < maxRetries - 1) {
-          await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
-        }
-      }
-    }
-    
-    throw lastError || new Error('Operation failed after retries');
-  }
-
-  /**
-   * Process queued operations sequentially
-   */
-  private async processQueue(): Promise<void> {
-    if (StorageService.isProcessingQueue || StorageService.operationQueue.length === 0) {
-      return;
-    }
-
-    StorageService.isProcessingQueue = true;
-
-    while (StorageService.operationQueue.length > 0) {
-      const operation = StorageService.operationQueue.shift();
-      if (operation) {
-        try {
-          await operation();
-        } catch (error) {
-          console.error('Queue operation failed:', error);
-        }
-      }
-    }
-
-    StorageService.isProcessingQueue = false;
-  }
-
-  /**
-   * Queue an operation to prevent race conditions
-   */
-  private async queueOperation<T>(operation: () => Promise<T>, key?: string): Promise<T> {
-    // For auth operations, use more lenient rate limiting
-    if (key && this.isAuthOperation(key)) {
-      if (!this.checkAuthRateLimit()) {
-        throw new Error('Auth operation rate limit exceeded. Please wait a moment.');
-      }
-    } else {
-      // Check rate limit for non-auth storage operations
-      const rateLimitResult = this.rateLimiter.check('API_CALL', {
-        ...RATE_LIMITS.API_CALL,
-        maxAttempts: 1000, // Increased for testing
-        windowMs: 60 * 1000 // 1 minute window
-      });
-      
-      if (!rateLimitResult.allowed) {
-        throw new Error(`Rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.`);
-      }
-    }
-
-    return new Promise((resolve, reject) => {
-      StorageService.operationQueue.push(async () => {
-        try {
-          const result = await operation();
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        }
-      });
-      
-      // Start processing queue if not already processing
-      this.processQueue();
-    });
-  }
-
-  /**
-   * Get item from storage with validation
+   * Main getItem method
    */
   async getItem<T>(key: string, defaultValue: T): Promise<T> {
     try {
-      // Validate key
       const validatedKey = this.validateKey(key);
-
-      if (FEATURES.USE_MOCK_API) {
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-
-      const item = await this.withRetry(() => localStorage.getItem(validatedKey));
       
-      if (item === null) {
+      // Check cache
+      const cached = this.getFromCache<T>(validatedKey);
+      if (cached !== null) return cached;
+      
+      const strategy = this.getStorageStrategy(validatedKey);
+      
+      if (strategy === 'skip') {
+        console.warn(`[StorageService] Skipping auth key: ${key}`);
         return defaultValue;
       }
-
-      try {
-        const parsed = JSON.parse(item);
-        
-        // Sanitize the retrieved data
-        const sanitized = this.sanitizeStoredData(parsed);
-        
-        // Validate the parsed data matches expected type structure
-        if (this.isValidData(sanitized, defaultValue)) {
-          return sanitized as T;
-        } else {
-          console.warn(`Invalid data structure for key "${validatedKey}", using default`);
-          return defaultValue;
-        }
-      } catch (parseError) {
-        console.error(`Error parsing item "${validatedKey}":`, parseError);
-        
-        // Try to parse as number for backward compatibility
-        if (typeof defaultValue === 'number' && !isNaN(Number(item))) {
-          return Number(item) as T;
-        }
-        
-        return defaultValue;
+      
+      let value: T | null = null;
+      
+      switch (strategy) {
+        case 'backend':
+          // Try backend first
+          value = await this.getFromBackend<T>(validatedKey);
+          // Fallback to local if backend fails
+          if (value === null) {
+            value = this.getFromBrowserStorage<T>(validatedKey, 'local');
+          }
+          break;
+          
+        case 'local':
+          value = this.getFromBrowserStorage<T>(validatedKey, 'local');
+          break;
+          
+        case 'session':
+          value = this.getFromBrowserStorage<T>(validatedKey, 'session');
+          break;
       }
+      
+      if (value !== null) {
+        this.setInCache(validatedKey, value);
+        return value;
+      }
+      
+      return defaultValue;
     } catch (error) {
-      console.error(`Error getting item "${key}" from storage:`, error);
+      console.error(`Error getting item "${key}":`, error);
       return defaultValue;
     }
   }
 
   /**
-   * Set item in storage with queuing
+   * Main setItem method
    */
   async setItem<T>(key: string, value: T): Promise<boolean> {
-    return this.queueOperation(async () => {
-      try {
-        // Validate key
-        const validatedKey = this.validateKey(key);
-        
-        // Validate value size
-        this.validateValueSize(value);
-        
-        // Check storage quota
-        await this.checkStorageQuota();
-
-        if (FEATURES.USE_MOCK_API) {
-          await new Promise(resolve => setTimeout(resolve, 50));
-        }
-
-        const serialized = JSON.stringify(value);
-        
-        await this.withRetry(() => {
-          localStorage.setItem(validatedKey, serialized);
-          
-          // Verify write was successful
-          const verification = localStorage.getItem(validatedKey);
-          if (verification !== serialized) {
-            throw new Error('Storage write verification failed');
-          }
-        });
-
-        return true;
-      } catch (error) {
-        console.error(`Error setting item "${key}" in storage:`, error);
+    try {
+      const validatedKey = this.validateKey(key);
+      
+      const strategy = this.getStorageStrategy(validatedKey);
+      
+      if (strategy === 'skip') {
+        console.warn(`[StorageService] Skipping auth key: ${key}`);
         return false;
       }
-    }, key);
+      
+      let success = false;
+      
+      switch (strategy) {
+        case 'backend':
+          // Try backend first
+          success = await this.setInBackend(validatedKey, value);
+          // Also save locally as backup
+          this.setInBrowserStorage(validatedKey, value, 'local');
+          break;
+          
+        case 'local':
+          success = this.setInBrowserStorage(validatedKey, value, 'local');
+          break;
+          
+        case 'session':
+          success = this.setInBrowserStorage(validatedKey, value, 'session');
+          break;
+      }
+      
+      if (success) {
+        this.setInCache(validatedKey, value);
+      }
+      
+      return success;
+    } catch (error) {
+      console.error(`Error setting item "${key}":`, error);
+      return false;
+    }
   }
 
   /**
-   * Remove item from storage
+   * Remove item
    */
   async removeItem(key: string): Promise<boolean> {
-    return this.queueOperation(async () => {
-      try {
-        // Validate key
-        const validatedKey = this.validateKey(key);
-
-        if (FEATURES.USE_MOCK_API) {
-          await new Promise(resolve => setTimeout(resolve, 20));
-        }
-
-        await this.withRetry(() => localStorage.removeItem(validatedKey));
-        return true;
-      } catch (error) {
-        console.error(`Error removing item "${key}" from storage:`, error);
-        return false;
-      }
-    }, key);
-  }
-
-  /**
-   * Begin a transaction for atomic operations
-   */
-  beginTransaction(): StorageTransaction {
-    if (StorageService.transactionInProgress) {
-      throw new Error('Another transaction is already in progress');
-    }
-    
-    StorageService.transactionInProgress = true;
-    
-    return {
-      operations: [],
-      backup: new Map()
-    };
-  }
-
-  /**
-   * Commit a transaction atomically
-   */
-  async commitTransaction(transaction: StorageTransaction): Promise<boolean> {
     try {
-      // Validate all operations first
-      for (const op of transaction.operations) {
-        this.validateKey(op.key);
-        if (op.type === 'set' && op.value !== undefined) {
-          this.validateValueSize(op.value);
-        }
+      const validatedKey = this.validateKey(key);
+      
+      this.memoryCache.delete(validatedKey);
+      
+      const strategy = this.getStorageStrategy(validatedKey);
+      
+      if (strategy === 'skip') return true;
+      
+      switch (strategy) {
+        case 'backend':
+          const response = await this.makeAuthenticatedCall<{ success: boolean }>(
+            `/storage/delete/${encodeURIComponent(validatedKey)}`,
+            { method: 'DELETE' }
+          );
+          // Also remove from local
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(validatedKey);
+          }
+          return response.success;
+          
+        case 'local':
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem(validatedKey);
+          }
+          return true;
+          
+        case 'session':
+          if (typeof window !== 'undefined') {
+            sessionStorage.removeItem(validatedKey);
+          }
+          return true;
+          
+        default:
+          return false;
       }
-
-      // Check storage quota
-      await this.checkStorageQuota();
-
-      // Backup current values
-      for (const op of transaction.operations) {
-        if (op.type === 'set' || op.type === 'remove') {
-          const currentValue = localStorage.getItem(op.key);
-          transaction.backup.set(op.key, currentValue);
-        }
-      }
-
-      // Execute all operations
-      for (const op of transaction.operations) {
-        if (op.type === 'set') {
-          localStorage.setItem(op.key, JSON.stringify(op.value));
-        } else if (op.type === 'remove') {
-          localStorage.removeItem(op.key);
-        }
-      }
-
-      return true;
     } catch (error) {
-      // Rollback on error
-      console.error('Transaction failed, rolling back:', error);
-      await this.rollbackTransaction(transaction);
+      console.error(`Error removing item "${key}":`, error);
       return false;
-    } finally {
-      StorageService.transactionInProgress = false;
     }
   }
 
   /**
-   * Rollback a transaction
+   * Update item
    */
-  private async rollbackTransaction(transaction: StorageTransaction): Promise<void> {
-    try {
-      for (const [key, value] of transaction.backup.entries()) {
-        if (value === null) {
-          localStorage.removeItem(key);
-        } else {
-          localStorage.setItem(key, value);
-        }
-      }
-    } catch (error) {
-      console.error('Rollback failed:', error);
+  async updateItem<T extends object>(key: string, updates: Partial<T>): Promise<boolean> {
+    const current = await this.getItem<T | null>(key, null);
+    
+    if (current === null) {
+      return await this.setItem(key, updates as T);
     }
+    
+    const updated = { ...current, ...updates };
+    return await this.setItem(key, updated);
   }
 
   /**
-   * Update specific fields of an object in storage atomically
-   */
-  async updateItem<T extends object>(
-    key: string,
-    updates: Partial<T>
-  ): Promise<boolean> {
-    return this.queueOperation(async () => {
-      try {
-        // Validate key
-        const validatedKey = this.validateKey(key);
-        
-        const current = await this.getItem<T | null>(validatedKey, null);
-        
-        if (current === null) {
-          return await this.setItem(validatedKey, updates as T);
-        }
-
-        const updated = { ...current, ...updates };
-        return await this.setItem(validatedKey, updated);
-      } catch (error) {
-        console.error(`Error updating item "${key}" in storage:`, error);
-        return false;
-      }
-    }, key);
-  }
-
-  /**
-   * Get all keys matching a pattern
+   * Get all keys
    */
   async getKeys(pattern?: string): Promise<string[]> {
-    try {
-      // Validate and sanitize pattern to prevent regex injection
-      const sanitizedPattern = pattern ? sanitizeStrict(pattern).substring(0, 50) : undefined;
-      
-      if (FEATURES.USE_MOCK_API) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
-
-      const keys: string[] = [];
-      const totalKeys = localStorage.length;
-      
-      // Limit the number of keys to prevent DoS
-      if (totalKeys > STORAGE_LIMITS.MAX_KEYS) {
-        console.warn(`Storage contains ${totalKeys} keys, limiting to ${STORAGE_LIMITS.MAX_KEYS}`);
-      }
-
-      for (let i = 0; i < Math.min(totalKeys, STORAGE_LIMITS.MAX_KEYS); i++) {
+    const keys: string[] = [];
+    
+    if (typeof window !== 'undefined') {
+      // Get from localStorage
+      for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (!sanitizedPattern || key.includes(sanitizedPattern))) {
-          // Only return keys that pass validation
-          try {
-            this.validateKey(key);
+        if (key && (!pattern || key.includes(pattern))) {
+          if (!STORAGE_CONFIG.AUTH_KEYS.includes(key)) {
             keys.push(key);
-          } catch {
-            // Skip invalid keys
           }
         }
       }
-      return keys;
-    } catch (error) {
-      console.error('Error getting keys from storage:', error);
-      return [];
+      
+      // Get from sessionStorage
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (!pattern || key.includes(pattern))) {
+          if (!STORAGE_CONFIG.AUTH_KEYS.includes(key) && !keys.includes(key)) {
+            keys.push(key);
+          }
+        }
+      }
     }
+    
+    // Get from backend if authenticated
+    if (this.useBackendStorage && this.isAuthenticated) {
+      const response = await this.makeAuthenticatedCall<{ keys: string[] }>(
+        '/storage/keys',
+        {
+          method: 'POST',
+          body: JSON.stringify({ pattern })
+        }
+      );
+      
+      if (response.success && response.data) {
+        response.data.keys.forEach(key => {
+          if (!keys.includes(key) && !STORAGE_CONFIG.AUTH_KEYS.includes(key)) {
+            keys.push(key);
+          }
+        });
+      }
+    }
+    
+    return keys;
   }
 
   /**
@@ -457,63 +540,96 @@ export class StorageService {
    */
   async hasKey(key: string): Promise<boolean> {
     try {
-      // Validate key
       const validatedKey = this.validateKey(key);
-
-      if (FEATURES.USE_MOCK_API) {
-        await new Promise(resolve => setTimeout(resolve, 10));
+      
+      if (this.memoryCache.has(validatedKey)) return true;
+      
+      const strategy = this.getStorageStrategy(validatedKey);
+      
+      if (strategy === 'skip') return false;
+      
+      switch (strategy) {
+        case 'backend':
+          const response = await this.makeAuthenticatedCall<{ exists: boolean }>(
+            `/storage/exists/${encodeURIComponent(validatedKey)}`
+          );
+          return response.success && response.data?.exists || false;
+          
+        case 'local':
+          return typeof window !== 'undefined' && 
+                 localStorage.getItem(validatedKey) !== null;
+          
+        case 'session':
+          return typeof window !== 'undefined' && 
+                 sessionStorage.getItem(validatedKey) !== null;
+          
+        default:
+          return false;
       }
-
-      return localStorage.getItem(validatedKey) !== null;
     } catch (error) {
-      console.error(`Error checking if key "${key}" exists:`, error);
+      console.error(`Error checking key "${key}":`, error);
       return false;
     }
   }
 
   /**
-   * Clear all storage
+   * Clear storage
    */
   async clear(preserveKeys?: string[]): Promise<boolean> {
-    return this.queueOperation(async () => {
-      try {
-        // Validate preserve keys
-        const validatedPreserveKeys = preserveKeys?.map(key => this.validateKey(key));
-
-        if (FEATURES.USE_MOCK_API) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        if (validatedPreserveKeys && validatedPreserveKeys.length > 0) {
-          // Preserve specified keys
-          const preserved: { [key: string]: any } = {};
-          for (const key of validatedPreserveKeys) {
-            const value = localStorage.getItem(key);
-            if (value !== null) {
-              preserved[key] = value;
-            }
+    try {
+      this.memoryCache.clear();
+      
+      const allPreserveKeys = [
+        ...(preserveKeys || []),
+        ...STORAGE_CONFIG.AUTH_KEYS
+      ];
+      
+      if (typeof window !== 'undefined') {
+        const preserved: Record<string, string> = {};
+        
+        // Preserve specified keys
+        allPreserveKeys.forEach(key => {
+          const localValue = localStorage.getItem(key);
+          if (localValue !== null) {
+            preserved[`local_${key}`] = localValue;
           }
-
-          localStorage.clear();
-
-          // Restore preserved keys
-          for (const [key, value] of Object.entries(preserved)) {
-            localStorage.setItem(key, value);
+          const sessionValue = sessionStorage.getItem(key);
+          if (sessionValue !== null) {
+            preserved[`session_${key}`] = sessionValue;
           }
-        } else {
-          localStorage.clear();
-        }
-
-        return true;
-      } catch (error) {
-        console.error('Error clearing storage:', error);
-        return false;
+        });
+        
+        // Clear storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Restore preserved keys
+        Object.entries(preserved).forEach(([prefixedKey, value]) => {
+          if (prefixedKey.startsWith('session_')) {
+            sessionStorage.setItem(prefixedKey.substring(8), value);
+          } else if (prefixedKey.startsWith('local_')) {
+            localStorage.setItem(prefixedKey.substring(6), value);
+          }
+        });
       }
-    });
+      
+      // Clear backend if authenticated
+      if (this.useBackendStorage && this.isAuthenticated) {
+        await this.makeAuthenticatedCall('/storage/clear', {
+          method: 'POST',
+          body: JSON.stringify({ preserveKeys: allPreserveKeys })
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error clearing storage:', error);
+      return false;
+    }
   }
 
   /**
-   * Get storage size information
+   * Get storage info
    */
   async getStorageInfo(): Promise<{
     used: number;
@@ -529,151 +645,88 @@ export class StorageService {
           percentage: estimate.quota ? ((estimate.usage || 0) / estimate.quota) * 100 : 0,
         };
       }
-
-      // Fallback calculation
-      let totalSize = 0;
-      let keyCount = 0;
       
-      for (let i = 0; i < localStorage.length && i < STORAGE_LIMITS.MAX_KEYS; i++) {
-        const key = localStorage.key(i);
-        if (key) {
-          totalSize += key.length + (localStorage.getItem(key) || '').length;
-          keyCount++;
-        }
-      }
-
-      return {
-        used: totalSize,
-        quota: STORAGE_LIMITS.MAX_TOTAL_SIZE,
-        percentage: (totalSize / STORAGE_LIMITS.MAX_TOTAL_SIZE) * 100,
-      };
-    } catch (error) {
-      console.error('Error getting storage info:', error);
+      return { used: 0, quota: 5 * 1024 * 1024, percentage: 0 };
+    } catch {
       return { used: 0, quota: 0, percentage: 0 };
     }
   }
 
   /**
-   * Batch set multiple items atomically
+   * Migrate data to backend
    */
-  async batchSet(items: Array<{ key: string; value: any }>): Promise<boolean> {
-    // Limit batch size to prevent DoS
-    if (items.length > STORAGE_LIMITS.MAX_BATCH_SIZE) {
-      throw new Error(`Batch size exceeds limit of ${STORAGE_LIMITS.MAX_BATCH_SIZE} items`);
-    }
-
-    const transaction = this.beginTransaction();
+  private async migrateToBackend(): Promise<void> {
+    if (!this.isAuthenticated || this.migrationComplete) return;
     
-    for (const item of items) {
-      transaction.operations.push({
-        type: 'set',
-        key: item.key,
-        value: item.value
-      });
-    }
+    console.log('[StorageService] Starting backend migration...');
     
-    return this.commitTransaction(transaction);
-  }
-
-  /**
-   * Validate data structure matches expected type
-   */
-  private isValidData<T>(data: any, defaultValue: T): boolean {
-    // If default is null, accept any non-null value
-    if (defaultValue === null) {
-      return data !== null && data !== undefined;
-    }
+    const migrated: string[] = [];
+    const failed: string[] = [];
     
-    // For primitive types (string, number, boolean), just check type
-    const primitiveTypes = ['string', 'number', 'boolean'];
-    if (primitiveTypes.includes(typeof defaultValue)) {
-      return typeof data === typeof defaultValue;
-    }
-
-    // Array validation
-    if (Array.isArray(defaultValue)) {
-      return Array.isArray(data);
-    }
-
-    // Object validation
-    if (typeof defaultValue === 'object') {
-      if (data === null || typeof data !== 'object') {
-        return false;
-      }
+    // Only migrate critical data
+    for (const prefix of STORAGE_CONFIG.BACKEND_PREFERRED) {
+      const keys = await this.getKeys(prefix);
       
-      // Check if critical keys exist
-      const defaultKeys = Object.keys(defaultValue);
-      
-      // Allow data to have more keys than default (for backward compatibility)
-      // but it must have at least the default keys
-      for (const key of defaultKeys) {
-        if (!(key in data)) {
-          return false;
+      for (const key of keys) {
+        try {
+          const value = this.getFromBrowserStorage<any>(key, 'local');
+          if (value !== null) {
+            const success = await this.setInBackend(key, value);
+            if (success) {
+              migrated.push(key);
+              // Keep local copy as backup
+              console.log(`[StorageService] Migrated ${key} to backend`);
+            } else {
+              failed.push(key);
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to migrate ${key}:`, error);
+          failed.push(key);
         }
       }
     }
-
-    return true;
+    
+    this.migrationComplete = true;
+    
+    if (migrated.length > 0) {
+      console.log('[StorageService] Migration complete:', migrated);
+    }
+    
+    if (failed.length > 0) {
+      console.warn('[StorageService] Migration failed for:', failed);
+    }
   }
 
   /**
-   * Sanitize data retrieved from storage
+   * Re-authenticate (call when user logs in)
    */
-  private sanitizeStoredData(data: any): any {
-    if (data === null || data === undefined) {
-      return data;
+  async onAuthenticated(): Promise<void> {
+    this.isAuthenticated = true;
+    if (this.useBackendStorage && !this.migrationComplete) {
+      await this.migrateToBackend();
     }
-
-    if (typeof data === 'string') {
-      return sanitizeStrict(data);
-    }
-
-    if (typeof data === 'object') {
-      return sanitizeObject(data, {
-        maxDepth: 10,
-        keySanitizer: (key) => sanitizeStrict(key),
-        valueSanitizer: (value) => {
-          if (typeof value === 'string') {
-            return sanitizeStrict(value);
-          }
-          return value;
-        },
-      });
-    }
-
-    return data;
   }
 
   /**
-   * Export all wallet data for backup
+   * Clear authentication (call when user logs out)
+   */
+  onLogout(): void {
+    this.isAuthenticated = false;
+    this.migrationComplete = false;
+    this.memoryCache.clear();
+  }
+
+  /**
+   * Export wallet data
    */
   async exportWalletData(): Promise<any> {
-    // Check rate limit for export operations
-    const rateLimitResult = this.rateLimiter.check('API_CALL', {
-      maxAttempts: 5,
-      windowMs: 60 * 60 * 1000 // 5 exports per hour
-    });
-    if (!rateLimitResult.allowed) {
-      throw new Error(`Export rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.`);
-    }
-
     const walletKeys = await this.getKeys('wallet_');
     const data: any = {};
-    
-    // Limit export size
-    let exportSize = 0;
-    const maxExportSize = 2 * 1024 * 1024; // 2MB limit for exports
     
     for (const key of walletKeys) {
       const value = await this.getItem(key, null);
       if (value !== null) {
-        const serialized = JSON.stringify(value);
-        exportSize += serialized.length;
-        
-        if (exportSize > maxExportSize) {
-          throw new Error('Export size exceeds 2MB limit');
-        }
-        
         data[key] = value;
       }
     }
@@ -682,58 +735,22 @@ export class StorageService {
   }
 
   /**
-   * Import wallet data from backup
+   * Import wallet data
    */
   async importWalletData(data: any): Promise<boolean> {
     try {
-      // Validate import data structure
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid import data format');
-      }
-
-      // Check rate limit for import operations
-      const rateLimitResult = this.rateLimiter.check('API_CALL', {
-        maxAttempts: 3,
-        windowMs: 60 * 60 * 1000 // 3 imports per hour
-      });
-      if (!rateLimitResult.allowed) {
-        throw new Error(`Import rate limit exceeded. Please wait ${rateLimitResult.waitTime} seconds.`);
-      }
-
-      // Validate and sanitize all keys and values
-      const items: Array<{ key: string; value: any }> = [];
-      
       for (const [key, value] of Object.entries(data)) {
-        // Only allow wallet_ prefixed keys
-        if (!key.startsWith('wallet_')) {
-          console.warn(`Skipping non-wallet key during import: ${key}`);
-          continue;
-        }
-        
-        try {
-          const validatedKey = this.validateKey(key);
-          const sanitizedValue = this.sanitizeStoredData(value);
-          
-          items.push({
-            key: validatedKey,
-            value: sanitizedValue
-          });
-        } catch (error) {
-          console.error(`Failed to import key "${key}":`, error);
+        if (key.startsWith('wallet_')) {
+          await this.setItem(key, value);
         }
       }
-      
-      if (items.length === 0) {
-        throw new Error('No valid data to import');
-      }
-      
-      return await this.batchSet(items);
+      return true;
     } catch (error) {
-      console.error('Error importing wallet data:', error);
+      console.error('Import failed:', error);
       return false;
     }
   }
 }
 
-// Export singleton instance
+// Export singleton
 export const storageService = new StorageService();
