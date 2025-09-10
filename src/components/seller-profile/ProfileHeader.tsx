@@ -95,7 +95,8 @@ const PropsSchema = z.object({
   averageRating: z.number().nullable().optional(),
   reviewsCount: z.number().int().nonnegative().default(0),
   isFavorited: z.boolean().optional(),
-  onToggleFavorite: z.function().args().returns(z.void()).optional(),
+  // ⬇⬇⬇ FIX: accept async functions (Promise<void>) for the favorite toggle
+  onToggleFavorite: z.function().args().returns(z.promise(z.void())).optional(),
 });
 
 interface ProfileHeaderProps extends z.infer<typeof PropsSchema> {}
