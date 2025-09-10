@@ -6,7 +6,7 @@ import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
 import BalanceCard from '@/components/wallet/buyer/BalanceCard';
-import TotalSpentCard from '@/components/wallet/buyer/TotalSpentCard';
+// Removed: TotalSpentCard import
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import EmptyState from '@/components/wallet/buyer/EmptyState';
@@ -27,7 +27,7 @@ function BuyerWalletContent() {
     // Computed values
     buyerPurchases,
     recentPurchases,
-    totalSpent,
+    // Removed: totalSpent (unused now)
 
     // Actions
     handleAddFunds,
@@ -57,10 +57,9 @@ function BuyerWalletContent() {
         {/* Header */}
         <WalletHeader />
 
-        {/* Balance and Total Spent Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Balance Card (Total Spent removed for this page) */}
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
           <BalanceCard balance={balance} />
-          <TotalSpentCard totalSpent={totalSpent} totalOrders={purchasesArray.length} />
         </div>
 
         {/* Add Funds Section */}
