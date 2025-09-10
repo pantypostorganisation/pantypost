@@ -11,5 +11,6 @@
   "/sellers/[username]/page": "app/sellers/[username]/page.js",
   "/sellers/messages/page": "app/sellers/messages/page.js",
   "/sellers/my-listings/page": "app/sellers/my-listings/page.js",
-  "/sellers/profile/page": "app/sellers/profile/page.js"
+  "/sellers/profile/page": "app/sellers/profile/page.js",
+  "/wallet/buyer/page": "app/wallet/buyer/page.js"
 }

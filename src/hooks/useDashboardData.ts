@@ -8,10 +8,11 @@ import { DashboardStats, SubscriptionInfo, RecentActivity } from '@/types/dashbo
 import { Package, MessageCircle, Crown } from 'lucide-react';
 import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
-import walletService, { ApiTransaction } from '@/services/wallet.service';
-import { tipService, type TipTransaction } from '@/services/tip.service';
+import { walletService } from '@/services/wallet.service';
+import { ordersService } from '@/services/orders.service';
+import { tipService } from '@/services/tip.service';
 
-// Type definitions
+// ---------- Local type defs used inside the hook ----------
 interface Listing {
   id: string;
   title: string;
@@ -40,7 +41,7 @@ interface Order {
   shippingStatus?: string;
 }
 
-interface TransactionLS {
+interface Transaction {
   id: string;
   userId: string;
   walletType: 'buyer' | 'seller';
@@ -75,182 +76,117 @@ interface SubscriptionData {
   subscribedAt: string;
 }
 
-// Helper function to validate and sanitize order data
-const sanitizeOrder = (order: Order): Order => {
-  return {
-    ...order,
-    id: sanitizeStrict(order.id),
-    title: sanitizeStrict(order.title),
-    price: sanitizeNumber(order.price, 0, 10000),
-    markedUpPrice: order.markedUpPrice ? sanitizeNumber(order.markedUpPrice, 0, 10000) : undefined,
-    seller: sanitizeStrict(order.seller),
-    buyer: sanitizeStrict(order.buyer),
-    date: order.date, // Keep date as is for parsing
-    shippingStatus: order.shippingStatus ? sanitizeStrict(order.shippingStatus) : undefined
-  };
-};
+// ---------- Helpers ----------
+const sanitizeOrder = (order: Order): Order => ({
+  ...order,
+  id: sanitizeStrict(order.id),
+  title: sanitizeStrict(order.title),
+  price: sanitizeNumber(order.price, 0, 100000),
+  markedUpPrice: order.markedUpPrice ? sanitizeNumber(order.markedUpPrice, 0, 100000) : undefined,
+  seller: sanitizeStrict(order.seller),
+  buyer: sanitizeStrict(order.buyer),
+  date: order.date,
+  shippingStatus: order.shippingStatus ? sanitizeStrict(order.shippingStatus) : undefined,
+});
 
-// Helper function to validate transaction amounts (legacy LS)
-const validateTransactionAmount = (transaction: TransactionLS): boolean => {
+const sanitizeRequest = (request: Request): Request => ({
+  ...request,
+  id: sanitizeStrict(request.id),
+  title: sanitizeStrict(request.title),
+  seller: sanitizeStrict(request.seller),
+  buyer: sanitizeStrict(request.buyer),
+  price: sanitizeNumber(request.price, 0, 100000),
+  status: request.status,
+  date: request.date,
+});
+
+const validateTransactionAmount = (transaction: Transaction): boolean => {
   if (typeof transaction.amount !== 'number' || isNaN(transaction.amount)) return false;
   if (transaction.amount < 0 || transaction.amount > 100000) return false;
   return true;
 };
 
-// Sum helper for API transactions (money OUT for buyer)
-function sumBuyerDebits(
-  txs: ApiTransaction[],
-  buyer: string,
-  types: Array<ApiTransaction['type']>,
-  since?: Date
-): number {
-  const uname = buyer.toLowerCase();
-  return txs
-    .filter((t) => types.includes(t.type))
-    .filter((t) => (t.status === 'completed'))
-    .filter((t) => (t.from || '').toLowerCase() === uname) // money going out from buyer
-    .filter((t) => (since ? new Date(t.createdAt) >= since : true))
-    .reduce((sum, t) => sum + (typeof t.amount === 'number' && t.amount > 0 ? t.amount : 0), 0);
-}
-
-// Count helper for purchases
-function countBuyerPurchases(
-  txs: ApiTransaction[],
-  buyer: string
-): number {
-  const uname = buyer.toLowerCase();
-  return txs
-    .filter((t) => t.type === 'purchase' && t.status === 'completed' && (t.from || '').toLowerCase() === uname)
-    .length;
-}
-
+// ---------- Hook ----------
 export const useDashboardData = () => {
   const { user } = useAuth();
+
   const [subscribedSellers, setSubscribedSellers] = useState<SubscriptionInfo[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [balance, setBalance] = useState(0);
 
   const [orderHistory, setOrderHistory] = useState<Order[]>([]);
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
+
+  const [tipsSpent, setTipsSpent] = useState(0);          // total tips sent ($)
+  const [subsSpent, setSubsSpent] = useState(0);          // total subscription charges ($)
+
   const [messages, setMessages] = useState<Record<string, Message[]>>({});
   const [requests, setRequests] = useState<Request[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errors, setErrors] = useState<string[]>([]);
 
-  // NEW: Wallet transactions (API) and fallback tips if needed
-  const [transactions, setTransactions] = useState<ApiTransaction[]>([]);
-  const [sentTipsFallback, setSentTipsFallback] = useState<TipTransaction[]>([]);
-
-  // Load wallet data (legacy LS balance + orders) — unchanged
+  // Load wallet balance + (legacy) transactions (for balance only)
   useEffect(() => {
     const loadWalletData = async () => {
       if (!user?.username) return;
-
       try {
-        // LEGACY: Local storage transactions to compute balance if present
-        const transactionsLS = await storageService.getItem<TransactionLS[]>('wallet_transactions', []);
-        const userTransactions = transactionsLS
+        const transactions = await storageService.getItem<Transaction[]>('wallet_transactions', []);
+        const userTransactions = transactions
           .filter(t => t.userId === user.username && t.walletType === 'buyer')
           .filter(validateTransactionAmount);
 
         const calculatedBalance = userTransactions.reduce((sum, t) => {
-          const amount = sanitizeNumber(t.amount, 0, 100000);
-          return t.type === 'deposit' ? sum + amount : sum - amount;
+          const amt = sanitizeNumber(t.amount, 0, 100000);
+          return t.type === 'deposit' ? sum + amt : sum - amt;
         }, 0);
 
         setBalance(Math.max(0, calculatedBalance));
-
-        // Orders from LS (used for shipping stats and fallback spend)
-        const orders = await storageService.getItem<Order[]>('wallet_orders', []);
-        const buyerOrders = orders
-          .filter(order => order.buyer === user.username)
-          .map(sanitizeOrder);
-
-        setOrderHistory(buyerOrders);
       } catch (error) {
         console.error('Error loading wallet data:', error);
         setErrors(prev => [...prev, 'Failed to load wallet data']);
       }
     };
-
     loadWalletData();
   }, [user?.username]);
 
-  // NEW: Load wallet transactions from API (primary source for spend)
-  useEffect(() => {
-    const loadTransactions = async () => {
-      if (!user?.username) return;
-      try {
-        const resp = await walletService.getTransactions(user.username, {
-          status: 'completed',
-          limit: 1000
-        });
-        if (resp.success && resp.data) {
-          setTransactions(resp.data);
-        } else {
-          // Fallback: at least fetch sent tips if transactions aren't available
-          const tips = await tipService.getSentTips({ limit: 200 });
-          setSentTipsFallback(tips.tips || []);
-        }
-      } catch (e) {
-        console.error('[Dashboard] Failed to load transactions:', e);
-        const tips = await tipService.getSentTips({ limit: 200 });
-        setSentTipsFallback(tips.tips || []);
-      }
-    };
-    loadTransactions();
-  }, [user?.username]);
-
-  // Load messages with sanitization
+  // Load messages
   useEffect(() => {
     const loadMessages = async () => {
       if (!user?.username) return;
-
       try {
         const allMessages = await storageService.getItem<Record<string, Message[]>>('messages', {});
-        const sanitizedMessages: Record<string, Message[]> = {};
-        Object.entries(allMessages).forEach(([key, messages]) => {
-          sanitizedMessages[key] = messages.map(msg => ({
+        const sanitized: Record<string, Message[]> = {};
+        Object.entries(allMessages).forEach(([key, msgs]) => {
+          sanitized[key] = msgs.map(msg => ({
             ...msg,
             content: sanitizeStrict(msg.content),
             sender: sanitizeStrict(msg.sender),
-            receiver: sanitizeStrict(msg.receiver)
+            receiver: sanitizeStrict(msg.receiver),
           }));
         });
-        setMessages(sanitizedMessages);
+        setMessages(sanitized);
       } catch (error) {
         console.error('Error loading messages:', error);
         setErrors(prev => [...prev, 'Failed to load messages']);
       }
     };
-
     loadMessages();
   }, [user?.username]);
 
-  // Load requests with sanitization
+  // Load requests
   useEffect(() => {
     const loadRequests = async () => {
       if (!user?.username) return;
-
       try {
-        const allRequests = await storageService.getItem<Request[]>('requests', []);
-        const userRequests = allRequests
-          .filter(r => r.buyer === user.username)
-          .map((request) => ({
-            ...request,
-            id: sanitizeStrict(request.id),
-            title: sanitizeStrict(request.title),
-            seller: sanitizeStrict(request.seller),
-            buyer: sanitizeStrict(request.buyer),
-            price: sanitizeNumber(request.price, 0, 1000),
-          }));
-        setRequests(userRequests);
+        const all = await storageService.getItem<Request[]>('requests', []);
+        const mine = all.filter(r => r.buyer === user.username).map(sanitizeRequest);
+        setRequests(mine);
       } catch (error) {
         console.error('Error loading requests:', error);
         setErrors(prev => [...prev, 'Failed to load requests']);
       }
     };
-
     loadRequests();
   }, [user?.username]);
 
@@ -260,13 +196,13 @@ export const useDashboardData = () => {
       try {
         const response = await listingsService.getListings();
         if (response.success && response.data) {
-          const sanitizedListings = response.data.map((listing: Listing) => ({
-            ...listing,
-            title: sanitizeStrict(listing.title),
-            description: sanitizeStrict(listing.description),
-            seller: sanitizeStrict(listing.seller),
-            price: sanitizeNumber(listing.price, 0, 10000),
-            markedUpPrice: listing.markedUpPrice ? sanitizeNumber(listing.markedUpPrice, 0, 10000) : undefined
+          const sanitizedListings = response.data.map((l: Listing) => ({
+            ...l,
+            title: sanitizeStrict(l.title),
+            description: sanitizeStrict(l.description),
+            seller: sanitizeStrict(l.seller),
+            price: sanitizeNumber(l.price, 0, 100000),
+            markedUpPrice: l.markedUpPrice ? sanitizeNumber(l.markedUpPrice, 0, 100000) : undefined,
           }));
           setListings(sanitizedListings);
         } else {
@@ -277,76 +213,138 @@ export const useDashboardData = () => {
         setErrors(prev => [...prev, 'Failed to load listings']);
       }
     };
-
     loadListings();
   }, []);
 
-  // Load subscription info (for sidebar + fallback amounts)
+  // Load Orders + Tips + Subscriptions (spend + active subscriptions count/cards)
   useEffect(() => {
-    const loadSubscriptions = async () => {
+    const loadSpendingAndSubs = async () => {
       if (!user?.username) {
         setIsLoading(false);
         return;
       }
-
       try {
-        // Basic list of sellers the user is subscribed to
-        const subscriptions = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
-        const userSubscriptions = subscriptions[user.username] || [];
+        // ----- Orders (API if available; fallback to local) -----
+        const ordersRes = await ordersService.getOrders({ buyer: user.username });
+        if (ordersRes.success && Array.isArray(ordersRes.data)) {
+          setOrderHistory(ordersRes.data.map(sanitizeOrder));
+        } else {
+          // fallback to local storage key used across app
+          const localOrders = await storageService.getItem<Order[]>('wallet_orders', []);
+          const mine = localOrders.filter(o => o.buyer === user.username).map(sanitizeOrder);
+          setOrderHistory(mine);
+        }
+        setOrdersLoaded(true);
 
-        // With prices (for fallback when no wallet transactions)
-        const subscriptionDetails = await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {});
-        const userSubscriptionDetails = subscriptionDetails[user.username] || [];
+        // ----- Tips (sum all-time tips you sent) -----
+        const tipsRes = await tipService.getSentTips();
+        const tipsTotal = Array.isArray(tipsRes?.tips)
+          ? tipsRes.tips.reduce((sum, t) => sum + (typeof t.amount === 'number' ? t.amount : 0), 0)
+          : 0;
+        setTipsSpent(Math.max(0, tipsTotal));
 
-        const subscriptionData = await Promise.all(
-          userSubscriptions.map(async (seller) => {
-            try {
-              const profileKey = `seller_profile_${seller}`;
-              const profileData = await storageService.getItem<any>(profileKey, null);
-              const sellerListings = listings.filter(l => l.seller === seller);
+        // ----- Subscriptions (tx: type=subscription, status=completed) -----
+        const subsRes = await walletService.getTransactions(user.username, {
+          type: 'subscription',
+          status: 'completed',
+        });
 
-              const subDetail = userSubscriptionDetails.find(sd => sd.seller === seller);
+        let subsTx = subsRes.success && Array.isArray(subsRes.data) ? subsRes.data : [];
+        // Total spent on subscriptions (all-time)
+        const subsTotal = subsTx.reduce((sum, t) => sum + (typeof t.amount === 'number' ? t.amount : 0), 0);
+        setSubsSpent(Math.max(0, subsTotal));
 
-              return {
-                seller: sanitizeStrict(seller),
-                price: subDetail?.price?.toString() || profileData?.subscriptionPrice || '25.00',
-                bio: profileData?.bio ? sanitizeStrict(profileData.bio) : 'No bio available',
-                pic: profileData?.profilePic || null,
-                newListings: sellerListings.filter(l => l.isPremium).length,
-                lastActive: new Date().toISOString(),
-                tier: profileData?.tier ? sanitizeStrict(profileData.tier) : 'Tease',
-                verified: Boolean(profileData?.verificationStatus === 'verified')
-              };
-            } catch (error) {
-              console.error(`Error loading profile for seller ${seller}:`, error);
-              const subDetail = userSubscriptionDetails.find(sd => sd.seller === seller);
-              return {
-                seller: sanitizeStrict(seller),
-                price: subDetail?.price?.toString() || '25.00',
-                bio: 'No bio available',
-                pic: null,
-                newListings: 0,
-                lastActive: new Date().toISOString(),
-                tier: 'Tease',
-                verified: false
-              };
+        // Active subscriptions = unique sellers in last ~35 days
+        const now = Date.now();
+        const WINDOW_MS = 35 * 24 * 60 * 60 * 1000;
+        const activeSellersSet = new Set<string>();
+        const sellerLatestAmount: Record<string, number> = {};
+        const sellerLatestDate: Record<string, number> = {};
+        subsTx.forEach((t) => {
+          const from = t.from ? sanitizeStrict(String(t.from)) : '';
+          const to = t.to ? sanitizeStrict(String(t.to)) : '';
+          const createdAtMs = t.createdAt ? Date.parse(String(t.createdAt)) : NaN;
+          const within = isFinite(createdAtMs) ? (now - createdAtMs <= WINDOW_MS) : true;
+          if (from === user.username && to && within) {
+            activeSellersSet.add(to);
+            const effDate = isFinite(createdAtMs) ? createdAtMs : now;
+            if ((sellerLatestDate[to] ?? 0) <= effDate) {
+              sellerLatestDate[to] = effDate;
+              if (typeof t.amount === 'number' && t.amount > 0) {
+                sellerLatestAmount[to] = t.amount;
+              }
             }
-          })
-        );
+          }
+        });
 
-        setSubscribedSellers(subscriptionData);
+        // Merge with local subscription data (so cards have bios/pics/etc.)
+        const localSubsMap = await storageService.getItem<Record<string, string[]>>('subscriptions', {});
+        const localSubs = localSubsMap[user.username] || [];
+
+        const localSubsDetailsMap =
+          await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {});
+        const localDetails = localSubsDetailsMap[user.username] || [];
+
+        const unifiedSellers = new Set<string>([
+          ...Array.from(activeSellersSet),
+          ...localSubs.map(sanitizeStrict),
+        ]);
+
+        const cards = await Promise.all(Array.from(unifiedSellers).map(async (seller) => {
+          try {
+            const detail = localDetails.find(d => d.seller === seller);
+            const profile = await storageService.getItem<any>(`seller_profile_${seller}`, null);
+            const sellerListings = listings.filter(l => l.seller === seller);
+
+            const resolvedPrice =
+              typeof sellerLatestAmount[seller] === 'number'
+                ? sellerLatestAmount[seller].toFixed(2)
+                : detail?.price?.toString()
+                  || (typeof profile?.subscriptionPrice === 'number' ? profile.subscriptionPrice.toFixed(2) : profile?.subscriptionPrice)
+                  || '25.00';
+
+            return {
+              seller: sanitizeStrict(seller),
+              price: resolvedPrice,
+              bio: profile?.bio ? sanitizeStrict(profile.bio) : 'No bio available',
+              pic: profile?.profilePic || null,
+              newListings: sellerListings.filter(l => l.isPremium).length,
+              lastActive: new Date().toISOString(),
+              tier: profile?.tier ? sanitizeStrict(profile.tier) : 'Tease',
+              verified: Boolean(profile?.verificationStatus === 'verified'),
+            };
+          } catch {
+            const detail = localDetails.find(d => d.seller === seller);
+            const fallbackPrice =
+              typeof sellerLatestAmount[seller] === 'number'
+                ? sellerLatestAmount[seller].toFixed(2)
+                : detail?.price?.toString() || '25.00';
+            return {
+              seller: sanitizeStrict(seller),
+              price: fallbackPrice,
+              bio: 'No bio available',
+              pic: null,
+              newListings: 0,
+              lastActive: new Date().toISOString(),
+              tier: 'Tease',
+              verified: false,
+            };
+          }
+        }));
+
+        setSubscribedSellers(cards);
       } catch (error) {
-        console.error('Error loading subscriptions:', error);
-        setErrors(prev => [...prev, 'Failed to load subscriptions']);
+        console.error('Error loading spend/subscriptions:', error);
+        setErrors(prev => [...prev, 'Failed to load spending/subscriptions']);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadSubscriptions();
+    loadSpendingAndSubs();
   }, [user?.username, listings]);
 
-  // Calculate statistics (now includes wallet transactions)
+  // ---------- Stats (keeps orders count + new total spent) ----------
   const stats = useMemo<DashboardStats>(() => {
     if (!user?.username) {
       return {
@@ -360,18 +358,16 @@ export const useDashboardData = () => {
         averageOrderValue: 0,
         thisWeekSpent: 0,
         thisMonthOrders: 0,
-        pendingShipments: 0
+        pendingShipments: 0,
       };
     }
 
     try {
-      // Count unread messages safely
-      let unreadCount = 0;
-      Object.values(messages).forEach((threadMessages) => {
-        threadMessages.forEach((msg) => {
-          if (msg.receiver === user.username && !msg.read) {
-            unreadCount++;
-          }
+      // Unread messages
+      let unread = 0;
+      Object.values(messages).forEach(thread => {
+        thread.forEach(msg => {
+          if (msg.receiver === user.username && !msg.read) unread++;
         });
       });
 
@@ -379,99 +375,47 @@ export const useDashboardData = () => {
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
 
-      // Shipping stats still come from orderHistory
-      const completedOrders = orderHistory.filter(order =>
-        order.shippingStatus === 'delivered'
-      ).length;
+      const completedOrders = orderHistory.filter(o => o.shippingStatus === 'delivered').length;
+      const pendingShipments = orderHistory.filter(o => o.shippingStatus && o.shippingStatus !== 'delivered').length;
 
-      const pendingShipments = orderHistory.filter(order =>
-        order.shippingStatus && order.shippingStatus !== 'delivered'
-      ).length;
-
-      // ---------- PRIMARY: derive spending from wallet transactions ----------
-      const hasTx = transactions && transactions.length > 0;
-
-      let purchasesSpent = 0;
-      let tipsSpent = 0;
-      let subsSpent = 0;
-      let purchasesThisWeek = 0;
-      let tipsThisWeek = 0;
-      let subsThisWeek = 0;
-      let purchasesCount = 0;
-
-      if (hasTx) {
-        purchasesSpent = sumBuyerDebits(transactions, user.username, ['purchase']);
-        tipsSpent = sumBuyerDebits(transactions, user.username, ['tip']);
-        subsSpent = sumBuyerDebits(transactions, user.username, ['subscription']);
-        purchasesThisWeek = sumBuyerDebits(transactions, user.username, ['purchase'], weekAgo);
-        tipsThisWeek = sumBuyerDebits(transactions, user.username, ['tip'], weekAgo);
-        subsThisWeek = sumBuyerDebits(transactions, user.username, ['subscription'], weekAgo);
-        purchasesCount = countBuyerPurchases(transactions, user.username);
-      } else {
-        // ---------- FALLBACKS ----------
-        // 1) Orders (fallback for purchases)
-        purchasesSpent = orderHistory.reduce((sum, order) => {
-          const price = order.markedUpPrice || order.price;
+      const weekSpentFromOrders = orderHistory
+        .filter(o => {
+          try { return new Date(o.date) >= weekAgo; } catch { return false; }
+        })
+        .reduce((sum, o) => {
+          const price = o.markedUpPrice ?? o.price;
           return sum + (typeof price === 'number' && price > 0 ? price : 0);
         }, 0);
 
-        purchasesThisWeek = orderHistory
-          .filter(order => {
-            try { return new Date(order.date) >= weekAgo; } catch { return false; }
-          })
-          .reduce((sum, order) => {
-            const price = order.markedUpPrice || order.price;
-            return sum + (typeof price === 'number' && price > 0 ? price : 0);
-          }, 0);
-
-        purchasesCount = orderHistory.length;
-
-        // 2) Tips sent (fallback)
-        tipsSpent = (sentTipsFallback || []).reduce((sum, t) => sum + (t.amount > 0 ? t.amount : 0), 0);
-        tipsThisWeek = (sentTipsFallback || [])
-          .filter(t => {
-            try { return new Date(t.date) >= weekAgo; } catch { return false; }
-          })
-          .reduce((sum, t) => sum + (t.amount > 0 ? t.amount : 0), 0);
-
-        // 3) Subscription charges (fallback using “subscription_details” snapshot)
-        const fallbackSubs = subscribedSellers
-          .map((s) => parseFloat(s.price || '0'))
-          .filter((n) => Number.isFinite(n) && n > 0);
-        subsSpent = fallbackSubs.reduce((a, b) => a + b, 0);
-        subsThisWeek = 0; // unknown without transactions; leave as 0 in fallback
-      }
-
-      const totalSpent = Math.max(0, purchasesSpent + tipsSpent + subsSpent);
-      const thisWeekSpent = Math.max(0, purchasesThisWeek + tipsThisWeek + subsThisWeek);
-
-      // Month orders (remain from orders list)
       const monthOrders = orderHistory
-        .filter(order => { try { return new Date(order.date) >= monthAgo; } catch { return false; } })
-        .length;
+        .filter(o => {
+          try { return new Date(o.date) >= monthAgo; } catch { return false; }
+        }).length;
 
-      // Distinct sellers (from orders list)
-      const favoriteSellerCount = new Set(orderHistory.map(order => order.seller)).size;
+      const favoriteSellerCount = new Set(orderHistory.map(o => o.seller)).size;
+
+      const ordersSpent = orderHistory.reduce((sum, o) => {
+        const price = o.markedUpPrice ?? o.price;
+        return sum + (typeof price === 'number' && price > 0 ? price : 0);
+      }, 0);
+
+      const totalSpentAll = Math.max(0, ordersSpent + tipsSpent + subsSpent);
 
       return {
-        totalSpent,
-        totalOrders: Math.max(0, hasTx ? purchasesCount : orderHistory.length),
+        totalSpent: totalSpentAll,
+        totalOrders: Math.max(0, orderHistory.length),
         activeSubscriptions: Math.max(0, subscribedSellers.length),
         pendingRequests: Math.max(0, requests.filter(r => r.status === 'pending').length),
-        unreadMessages: Math.max(0, unreadCount),
+        unreadMessages: Math.max(0, unread),
         completedOrders: Math.max(0, completedOrders),
         favoriteSellerCount: Math.max(0, favoriteSellerCount),
-        averageOrderValue:
-          (hasTx ? purchasesCount : orderHistory.length) > 0
-            ? Math.max(0, (hasTx ? purchasesSpent : totalSpent) / (hasTx ? purchasesCount : orderHistory.length))
-            : 0,
-        thisWeekSpent,
+        averageOrderValue: orderHistory.length > 0 ? Math.max(0, ordersSpent / orderHistory.length) : 0,
+        thisWeekSpent: Math.max(0, weekSpentFromOrders + tipsSpent /* simple approx */),
         thisMonthOrders: Math.max(0, monthOrders),
-        pendingShipments: Math.max(0, pendingShipments)
+        pendingShipments: Math.max(0, pendingShipments),
       };
     } catch (error) {
       console.error('Error calculating stats:', error);
-      // Return safe defaults
       return {
         totalSpent: 0,
         totalOrders: 0,
@@ -483,41 +427,38 @@ export const useDashboardData = () => {
         averageOrderValue: 0,
         thisWeekSpent: 0,
         thisMonthOrders: 0,
-        pendingShipments: 0
+        pendingShipments: 0,
       };
     }
-  }, [user, orderHistory, subscribedSellers, requests, messages, transactions, sentTipsFallback]);
+  }, [user, orderHistory, subscribedSellers, requests, messages, tipsSpent, subsSpent]);
 
-  // Generate recent activity (unchanged, lightly aware of subscriptions)
+  // ---------- Recent activity ----------
   useEffect(() => {
     if (!user?.username) return;
 
     try {
       const activities: RecentActivity[] = [];
 
-      // Add recent orders
-      orderHistory
-        .slice(0, 3)
-        .forEach(order => {
-          activities.push({
-            id: `order-${order.id}`,
-            type: 'order',
-            title: sanitizeStrict(order.title),
-            subtitle: `From ${sanitizeStrict(order.seller)}`,
-            time: new Date(order.date).toLocaleDateString(),
-            amount: sanitizeNumber(order.markedUpPrice || order.price, 0, 10000),
-            status: order.shippingStatus ? sanitizeStrict(order.shippingStatus) : 'pending',
-            href: `/buyers/my-orders#${order.id}`,
-            icon: createElement(Package, { className: 'w-4 h-4' })
-          });
+      // Orders
+      orderHistory.slice(0, 3).forEach(order => {
+        activities.push({
+          id: `order-${order.id}`,
+          type: 'order',
+          title: sanitizeStrict(order.title),
+          subtitle: `From ${sanitizeStrict(order.seller)}`,
+          time: new Date(order.date).toLocaleDateString(),
+          amount: sanitizeNumber(order.markedUpPrice ?? order.price, 0, 100000),
+          status: order.shippingStatus ? sanitizeStrict(order.shippingStatus) : 'pending',
+          href: `/buyers/my-orders#${order.id}`,
+          icon: createElement(Package, { className: 'w-4 h-4' }),
         });
+      });
 
-      // Add recent messages
+      // Messages
       Object.entries(messages).forEach(([thread, threadMessages]) => {
         const recentMsg = threadMessages
-          .filter(msg => msg.receiver === user.username)
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-          .slice(0, 1)[0];
+          .filter(m => m.receiver === user.username)
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
 
         if (recentMsg) {
           activities.push({
@@ -527,12 +468,12 @@ export const useDashboardData = () => {
             subtitle: sanitizeStrict(recentMsg.content).substring(0, 50) + '...',
             time: new Date(recentMsg.timestamp).toLocaleDateString(),
             href: `/buyers/messages?thread=${thread}`,
-            icon: createElement(MessageCircle, { className: 'w-4 h-4' })
+            icon: createElement(MessageCircle, { className: 'w-4 h-4' }),
           });
         }
       });
 
-      // Add subscription activity (display only)
+      // Subscription (show most recent one)
       subscribedSellers.slice(0, 1).forEach(sub => {
         activities.push({
           id: `sub-${sub.seller}`,
@@ -542,11 +483,11 @@ export const useDashboardData = () => {
           time: 'Active',
           amount: parseFloat(sub.price),
           href: `/sellers/${sub.seller}`,
-          icon: createElement(Crown, { className: 'w-4 h-4' })
+          icon: createElement(Crown, { className: 'w-4 h-4' }),
         });
       });
 
-      const sortedActivities = activities
+      const sorted = activities
         .sort((a, b) => {
           if (a.time === 'Active') return -1;
           if (b.time === 'Active') return 1;
@@ -554,7 +495,7 @@ export const useDashboardData = () => {
         })
         .slice(0, 5);
 
-      setRecentActivity(sortedActivities);
+      setRecentActivity(sorted);
     } catch (error) {
       console.error('Error generating activity:', error);
       setRecentActivity([]);
@@ -572,6 +513,6 @@ export const useDashboardData = () => {
     requests,
     listings,
     isLoading,
-    errors
+    errors,
   };
 };
