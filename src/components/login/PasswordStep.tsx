@@ -2,7 +2,7 @@
 'use client';
 
 import { Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface PasswordStepProps {
   username: string;
@@ -41,6 +41,14 @@ export default function PasswordStep({
   onRoleSelect
 }: PasswordStepProps) {
   const [showPassword, setShowPassword] = useState(false);
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  
+  // Reset attempt flag when error changes
+  useEffect(() => {
+    if (!error) {
+      setHasAttemptedSubmit(false);
+    }
+  }, [error]);
   
   // Format wait time for display
   const formatWaitTime = (totalSeconds: number): string => {
@@ -56,17 +64,23 @@ export default function PasswordStep({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/<[^>]*>/g, ''); // Remove HTML tags
     onPasswordChange(value);
+    
+    // Clear error when user starts typing after a failed attempt
+    if (hasAttemptedSubmit && error) {
+      // This will trigger the parent to clear the error
+      onPasswordChange(value);
+    }
   };
 
   // Handle Enter key in password field
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && password && role && !isLoading && !isRateLimited) {
       e.preventDefault();
-      onSubmit(e);
+      handleSubmit(e);
     }
   };
 
-  // Handle form submission - ENHANCED WITH DEBUGGING
+  // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('[PasswordStep] Form submitted', { 
@@ -74,32 +88,14 @@ export default function PasswordStep({
       role, 
       isLoading, 
       isRateLimited,
-      onSubmitType: typeof onSubmit,
-      onSubmitExists: !!onSubmit
+      error
     });
     
-    // Add detailed debug log
-    console.log('[PasswordStep] onSubmit details:', {
-      onSubmit,
-      isFunction: typeof onSubmit === 'function',
-      toString: onSubmit?.toString?.()
-    });
+    setHasAttemptedSubmit(true);
     
-    if (!isLoading && !isRateLimited && role) {
+    if (!isLoading && !isRateLimited && role && password) {
       console.log('[PasswordStep] Calling onSubmit...');
-      try {
-        onSubmit(e);
-        console.log('[PasswordStep] onSubmit called successfully');
-      } catch (error) {
-        console.error('[PasswordStep] Error calling onSubmit:', error);
-      }
-    } else {
-      console.log('[PasswordStep] Not submitting because:', {
-        isLoading,
-        isRateLimited,
-        hasPassword: !!password,
-        hasRole: !!role
-      });
+      onSubmit(e);
     }
   };
   
@@ -108,7 +104,8 @@ export default function PasswordStep({
       {/* Back Button */}
       <button
         onClick={onBack}
-        className="mb-4 text-gray-400 hover:text-white transition-colors text-sm flex items-center gap-2"
+        disabled={isLoading}
+        className="mb-4 text-gray-400 hover:text-white transition-colors text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         ← Back to username
       </button>
@@ -121,7 +118,7 @@ export default function PasswordStep({
         </div>
       </div>
 
-      {/* Error display */}
+      {/* Error display - Show authentication errors prominently */}
       {error && !error.includes('Too many') && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-sm text-red-400">
@@ -144,7 +141,7 @@ export default function PasswordStep({
       <form onSubmit={handleSubmit}>
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-2">
-            Password (Optional)
+            Password
           </label>
           <div className="relative">
             <input
@@ -152,8 +149,10 @@ export default function PasswordStep({
               value={password}
               onChange={handleChange}
               onKeyPress={handleKeyPress}
-              placeholder="Enter any password (not validated)"
-              className="w-full px-4 py-3 pr-10 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
+              placeholder="Enter your password"
+              className={`w-full px-4 py-3 pr-10 bg-black/50 backdrop-blur-sm border ${
+                error && !error.includes('Too many') ? 'border-red-500/50' : 'border-gray-700'
+              } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors`}
               autoFocus
               disabled={isLoading || isRateLimited}
             />
@@ -162,13 +161,16 @@ export default function PasswordStep({
               onClick={() => setShowPassword(!showPassword)}
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
               disabled={isLoading || isRateLimited}
+              tabIndex={-1}
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
-          <p className="text-xs text-gray-500 mt-1">
-            Demo mode: Enter any password, it's not validated by the backend
-          </p>
+          {error && error.includes('Invalid') && (
+            <p className="text-xs text-gray-500 mt-2">
+              Please check your password and try again
+            </p>
+          )}
         </div>
 
         {/* Role Selection */}
@@ -206,7 +208,9 @@ export default function PasswordStep({
                   <div className="flex items-center gap-3 relative z-10">
                     <div className={`p-2 rounded-lg transition-colors ${
                       isSelected 
-                        ? 'bg-[#ff950e] text-black' 
+                        ? isAdminOption
+                          ? 'bg-purple-500 text-white'
+                          : 'bg-[#ff950e] text-black' 
                         : isAdminOption
                           ? 'bg-purple-800 text-purple-300'
                           : 'bg-gray-800 text-gray-400'
@@ -226,9 +230,9 @@ export default function PasswordStep({
 
         <button
           type="submit"
-          disabled={!role || isLoading || hasUser || isRateLimited}
+          disabled={!role || !password || isLoading || hasUser || isRateLimited}
           className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-          style={{ color: (!role || isLoading || hasUser || isRateLimited) ? undefined : '#000' }}
+          style={{ color: (!role || !password || isLoading || hasUser || isRateLimited) ? undefined : '#000' }}
         >
           {isRateLimited ? (
             <>
@@ -254,16 +258,19 @@ export default function PasswordStep({
         </button>
       </form>
 
-      {/* Timeout safety mechanism */}
-      {isLoading && !isRateLimited && (
-        <p className="text-xs text-gray-500 text-center mt-2">
-          Taking longer than expected? <button 
-            onClick={() => window.location.reload()} 
-            className="text-[#ff950e] hover:underline"
-          >
-            Refresh page
-          </button>
-        </p>
+      {/* Help text for authentication failures */}
+      {error && error.includes('Invalid') && !isLoading && (
+        <div className="mt-4 text-center">
+          <p className="text-xs text-gray-500">
+            Having trouble? <button 
+              onClick={() => window.location.href = '/forgot-password'} 
+              className="text-[#ff950e] hover:underline"
+              type="button"
+            >
+              Reset your password
+            </button>
+          </p>
+        </div>
       )}
     </div>
   );

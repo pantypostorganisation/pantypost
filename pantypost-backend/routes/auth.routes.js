@@ -56,18 +56,52 @@ router.post('/signup', async (req, res) => {
     const role = normalizeRole(raw.role);
 
     if (!isValidUsername(username)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid username format' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.VALIDATION_ERROR, 
+          message: 'Username must be 3-20 characters and can only contain letters, numbers, periods, underscores, and hyphens.' 
+        }
+      });
     }
     if (!isValidEmail(email)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid email format' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.VALIDATION_ERROR, 
+          message: 'Please enter a valid email address (e.g., user@example.com).' 
+        }
+      });
     }
     if (!isValidPassword(password)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Password must be at least 6 characters' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.VALIDATION_ERROR, 
+          message: 'Your password needs to be at least 6 characters long for security.' 
+        }
+      });
     }
 
     const existingUser = await User.findOne({ $or: [{ username }, { email }] });
     if (existingUser) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.ALREADY_EXISTS, message: 'Username or email already exists' }});
+      if (existingUser.username === username) {
+        return res.status(400).json({ 
+          success: false, 
+          error: { 
+            code: ERROR_CODES.ALREADY_EXISTS, 
+            message: 'This username is already taken. Try adding numbers or underscores to make it unique!' 
+          }
+        });
+      } else {
+        return res.status(400).json({ 
+          success: false, 
+          error: { 
+            code: ERROR_CODES.ALREADY_EXISTS, 
+            message: 'An account with this email already exists. Try logging in instead!' 
+          }
+        });
+      }
     }
 
     const newUser = new User({
@@ -96,7 +130,13 @@ router.post('/signup', async (req, res) => {
     });
   } catch (error) {
     console.error('[Auth] Signup error:', error);
-    res.status(400).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }});
+    res.status(400).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'Something went wrong while creating your account. Please try again in a moment.' 
+      }
+    });
   }
 });
 
@@ -109,30 +149,56 @@ router.post('/login', async (req, res) => {
     const role = typeof raw.role === 'string' ? raw.role.trim().toLowerCase() : undefined;
 
     if (!isValidUsername(username)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid username format' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.VALIDATION_ERROR, 
+          message: 'Please enter a valid username (3-20 characters, letters and numbers only).' 
+        }
+      });
     }
     if (!isValidPassword(password)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid credentials' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.VALIDATION_ERROR, 
+          message: 'Incorrect password. Try again.' 
+        }
+      });
     }
 
     const user = await User.findOne({ username });
     if (!user) {
-      return res.status(401).json({ success: false, error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Invalid username or password' }});
+      // Be helpful but secure
+      return res.status(401).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, 
+          message: `We couldn't find an account with the username "${username}". Double-check the spelling or sign up for a new account.` 
+        }
+      });
     }
 
     const passwordMatches = await user.comparePassword(password);
     if (!passwordMatches) {
-      return res.status(401).json({ success: false, error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Invalid username or password' }});
+      // Be specific and helpful
+      return res.status(401).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, 
+          message: 'That password doesn\'t match. Please try again or use "Forgot password" if you need help.' 
+        }
+      });
     }
 
-    // ===== NEW STRICT ROLE ENFORCEMENT =====
+    // ===== ROLE ENFORCEMENT WITH FRIENDLY MESSAGES =====
     if (role) {
       if (user.role === 'admin' && role !== 'admin') {
         return res.status(403).json({
           success: false,
           error: {
             code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-            message: 'Admin accounts must use Admin mode to sign in (select "Administrator").'
+            message: 'Your account has admin privileges. Please select "Administrator" to access the admin dashboard.'
           }
         });
       }
@@ -141,16 +207,18 @@ router.post('/login', async (req, res) => {
           success: false,
           error: {
             code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-            message: 'This account is not an administrator.'
+            message: 'This account doesn\'t have administrator access. Please select the correct account type to continue.'
           }
         });
       }
       if (user.role !== 'admin' && role !== user.role) {
+        const correctRole = user.role === 'seller' ? 'Seller' : 'Buyer';
+        const wrongRole = role === 'seller' ? 'Seller' : 'Buyer';
         return res.status(401).json({
           success: false,
           error: {
             code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
-            message: `This account is registered as a ${user.role}, not a ${role}`
+            message: `This account is registered as a ${correctRole}, not a ${wrongRole}. Please select "${correctRole}" to sign in.`
           }
         });
       }
@@ -183,7 +251,13 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('[Auth] Login error:', error);
-    res.status(400).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }});
+    res.status(400).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'We\'re having trouble signing you in right now. Please try again in a moment.' 
+      }
+    });
   }
 });
 
@@ -209,7 +283,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
         webSocketService.broadcastUserStatus(req.user.username, false);
       }
     }
-    res.json({ success: true, message: 'Logged out successfully' });
+    res.json({ success: true, message: 'You\'ve been successfully logged out. See you soon!' });
   } catch (error) {
     console.error('[Auth] Logout error:', error);
     res.json({ success: true, message: 'Logged out' });
@@ -221,7 +295,13 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
     if (!user) {
-      return res.status(404).json({ success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }});
+      return res.status(404).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.NOT_FOUND, 
+          message: 'We couldn\'t find your account information. Please try logging in again.' 
+        }
+      });
     }
 
     user.lastActive = new Date();
@@ -272,7 +352,13 @@ router.get('/me', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('[Auth] Error fetching user data:', error);
-    res.status(500).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to get user data' }});
+    res.status(500).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'We\'re having trouble loading your account data. Please refresh the page or try again.' 
+      }
+    });
   }
 });
 
@@ -281,14 +367,26 @@ router.post('/refresh', async (req, res) => {
   try {
     const { refreshToken } = req.body || {};
     if (!refreshToken) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.MISSING_REQUIRED_FIELD, message: 'Refresh token required' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD, 
+          message: 'Your session has expired. Please log in again to continue.' 
+        }
+      });
     }
     const decoded = jwt.verify(refreshToken, JWT_SECRET);
     await User.findByIdAndUpdate(decoded.id, { lastActive: new Date(), isOnline: true });
     const newToken = jwt.sign({ id: decoded.id, username: decoded.username, role: decoded.role }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ success: true, data: { token: newToken, refreshToken: newToken }});
   } catch {
-    res.status(401).json({ success: false, error: { code: ERROR_CODES.AUTH_TOKEN_INVALID, message: 'Invalid refresh token' }});
+    res.status(401).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.AUTH_TOKEN_INVALID, 
+        message: 'Your session has expired. Please log in again to continue.' 
+      }
+    });
   }
 });
 
@@ -297,12 +395,30 @@ router.get('/verify-username', async (req, res) => {
   try {
     const username = cleanUsername(req.query.username);
     if (!isValidUsername(username)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid username format' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.VALIDATION_ERROR, 
+          message: 'Usernames must be 3-20 characters and can only contain letters, numbers, periods, underscores, and hyphens.' 
+        }
+      });
     }
     const exists = await User.findOne({ username });
-    res.json({ success: true, data: { available: !exists, message: exists ? 'Username is taken' : 'Username is available' }});
+    res.json({ 
+      success: true, 
+      data: { 
+        available: !exists, 
+        message: exists ? 'This username is already taken. Try adding numbers or underscores!' : 'Great! This username is available.' 
+      }
+    });
   } catch {
-    res.status(500).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to check username' }});
+    res.status(500).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'We couldn\'t check that username right now. Please try again.' 
+      }
+    });
   }
 });
 
@@ -312,22 +428,40 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
     const { code } = req.body || {};
     const configuredCode = process.env.ADMIN_BOOTSTRAP_CODE;
     if (!code) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.MISSING_REQUIRED_FIELD, message: 'Bootstrap code is required' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD, 
+          message: 'Please enter the admin bootstrap code to continue.' 
+        }
+      });
     }
     if (!configuredCode) {
-      return res.status(500).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Server is missing ADMIN_BOOTSTRAP_CODE' }});
+      return res.status(500).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.INTERNAL_ERROR, 
+          message: 'Admin setup hasn\'t been configured yet. Please contact system support.' 
+        }
+      });
     }
 
     const dbUser = await User.findById(req.user.id);
     if (!dbUser) {
-      return res.status(404).json({ success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }});
+      return res.status(404).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.NOT_FOUND, 
+          message: 'We couldn\'t find your account. Please try logging in again.' 
+        }
+      });
     }
 
     if (dbUser.role === 'admin') {
       const token = signToken(dbUser);
       return res.json({
         success: true,
-        message: 'User is already an admin',
+        message: 'You already have administrator privileges!',
         data: {
           user: { id: dbUser._id, username: dbUser.username, email: dbUser.email, role: dbUser.role, tier: dbUser.tier || 'Tease' },
           token,
@@ -340,14 +474,20 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
     if (adminExists) {
       return res.status(409).json({
         success: false,
-        error: { code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS, message: 'Admin already exists. Bootstrap can only be used once.' }
+        error: { 
+          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS, 
+          message: 'An administrator account already exists. The bootstrap code can only be used once.' 
+        }
       });
     }
 
     if (code !== configuredCode) {
       return res.status(403).json({
         success: false,
-        error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Invalid bootstrap code' }
+        error: { 
+          code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, 
+          message: 'That bootstrap code isn\'t correct. Please check it and try again.' 
+        }
       });
     }
 
@@ -357,6 +497,7 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
     const token = signToken(dbUser);
     res.json({
       success: true,
+      message: 'Congratulations! Your account now has administrator privileges.',
       data: {
         user: { id: dbUser._id, username: dbUser.username, email: dbUser.email, role: dbUser.role, tier: dbUser.tier || 'Tease' },
         token,
@@ -365,20 +506,36 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('[Auth] Admin bootstrap error:', error);
-    res.status(500).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to promote user to admin' }});
+    res.status(500).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'We couldn\'t complete the admin setup right now. Please try again later.' 
+      }
+    });
   }
 });
 
-// ===== Password reset routes (unchanged except for helpers) =====
+// ===== Password reset routes =====
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body || {};
     if (!email || !isValidEmail(email)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.MISSING_REQUIRED_FIELD, message: 'Valid email is required' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD, 
+          message: 'Please enter a valid email address to reset your password.' 
+        }
+      });
     }
     const user = await User.findOne({ email: cleanEmail(email) });
     if (!user) {
-      return res.json({ success: true, message: 'If an account exists with this email, a verification code has been sent.' });
+      // Don't reveal if email exists for security
+      return res.json({ 
+        success: true, 
+        message: 'If that email is registered to an account, we\'ve sent you a verification code. Check your inbox!' 
+      });
     }
     await PasswordReset.deleteMany({ email: user.email });
     const resetToken = PasswordReset.generateToken();
@@ -391,10 +548,20 @@ router.post('/forgot-password', async (req, res) => {
     } catch (e) {
       console.error('Failed to send password reset email:', e);
     }
-    res.json({ success: true, message: 'If an account exists with this email, a verification code has been sent.', data: { resetToken, expiresIn: 900 }});
+    res.json({ 
+      success: true, 
+      message: 'If that email is registered to an account, we\'ve sent you a verification code. Check your inbox!', 
+      data: { resetToken, expiresIn: 900 }
+    });
   } catch (error) {
     console.error('Password reset error:', error);
-    res.status(500).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to process password reset request' }});
+    res.status(500).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'We\'re having trouble processing your request. Please try again in a moment.' 
+      }
+    });
   }
 });
 
@@ -402,7 +569,13 @@ router.post('/verify-reset-code', async (req, res) => {
   try {
     const { email, code } = req.body || {};
     if (!email || !code) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.MISSING_REQUIRED_FIELD, message: 'Email and verification code are required' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD, 
+          message: 'Please enter both your email and the verification code we sent you.' 
+        }
+      });
     }
     const resetRequest = await PasswordReset.findOne({ email: cleanEmail(email), verificationCode: code });
     if (!resetRequest) {
@@ -410,18 +583,50 @@ router.post('/verify-reset-code', async (req, res) => {
       if (anyRequest && anyRequest.isValid()) {
         const maxAttempts = await anyRequest.incrementAttempts();
         if (maxAttempts) {
-          return res.status(400).json({ success: false, error: { code: ERROR_CODES.AUTH_TOKEN_INVALID, message: 'Too many failed attempts. Please request a new code.' }});
+          return res.status(400).json({ 
+            success: false, 
+            error: { 
+              code: ERROR_CODES.AUTH_TOKEN_INVALID, 
+              message: 'You\'ve tried too many times. Please request a new verification code.' 
+            }
+          });
         }
       }
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.AUTH_TOKEN_INVALID, message: 'Invalid verification code' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.AUTH_TOKEN_INVALID, 
+          message: 'That verification code doesn\'t match. Please check it and try again.' 
+        }
+      });
     }
     if (!resetRequest.isValid()) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.AUTH_TOKEN_INVALID, message: resetRequest.isExpired() ? 'Verification code has expired' : 'Invalid verification code' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.AUTH_TOKEN_INVALID, 
+          message: resetRequest.isExpired() 
+            ? 'Your verification code has expired. Please request a new one.' 
+            : 'That verification code isn\'t valid. Please check it and try again.' 
+        }
+      });
     }
-    res.json({ success: true, data: { valid: true, message: 'Code verified successfully' }});
+    res.json({ 
+      success: true, 
+      data: { 
+        valid: true, 
+        message: 'Perfect! Your code is verified. You can now set a new password.' 
+      }
+    });
   } catch (error) {
     console.error('Code verification error:', error);
-    res.status(500).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to verify code' }});
+    res.status(500).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'We couldn\'t verify your code right now. Please try again.' 
+      }
+    });
   }
 });
 
@@ -429,18 +634,42 @@ router.post('/reset-password', async (req, res) => {
   try {
     const { email, code, newPassword } = req.body || {};
     if (!email || !code || !newPassword) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.MISSING_REQUIRED_FIELD, message: 'Email, verification code, and new password are required' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD, 
+          message: 'Please provide your email, verification code, and new password.' 
+        }
+      });
     }
     if (!isValidPassword(newPassword)) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Password must be at least 6 characters long' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.VALIDATION_ERROR, 
+          message: 'Your new password needs to be at least 6 characters long for security.' 
+        }
+      });
     }
     const resetRequest = await PasswordReset.findOne({ email: cleanEmail(email), verificationCode: code });
     if (!resetRequest || !resetRequest.isValid()) {
-      return res.status(400).json({ success: false, error: { code: ERROR_CODES.AUTH_TOKEN_INVALID, message: 'Invalid or expired verification code' }});
+      return res.status(400).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.AUTH_TOKEN_INVALID, 
+          message: 'Your verification code has expired or isn\'t valid. Please request a new one.' 
+        }
+      });
     }
     const user = await User.findOne({ email: resetRequest.email });
     if (!user) {
-      return res.status(404).json({ success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }});
+      return res.status(404).json({ 
+        success: false, 
+        error: { 
+          code: ERROR_CODES.NOT_FOUND, 
+          message: 'We couldn\'t find an account with that email. Please check and try again.' 
+        }
+      });
     }
     user.password = newPassword;
     await user.save();
@@ -451,10 +680,19 @@ router.post('/reset-password', async (req, res) => {
     } catch (e) {
       console.error('Failed to send confirmation email:', e);
     }
-    res.json({ success: true, message: 'Password has been reset successfully' });
+    res.json({ 
+      success: true, 
+      message: 'Success! Your password has been reset. You can now log in with your new password.' 
+    });
   } catch (error) {
     console.error('Password reset error:', error);
-    res.status(500).json({ success: false, error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Failed to reset password' }});
+    res.status(500).json({ 
+      success: false, 
+      error: { 
+        code: ERROR_CODES.INTERNAL_ERROR, 
+        message: 'We couldn\'t reset your password right now. Please try again later.' 
+      }
+    });
   }
 });
 

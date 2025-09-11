@@ -30,6 +30,8 @@ export default function LoginPage() {
       loginType: typeof login,
       isAuthReady,
       hasUser: !!user,
+      authError,
+      authLoading
     });
   }
 
@@ -100,14 +102,19 @@ export default function LoginPage() {
     }
   }, [isAuthReady, user, router]);
 
-  // Sync auth errors
+  // Sync auth errors and loading state
   useEffect(() => {
     if (authError) {
       if (isDev) console.log('[Login] Auth error:', authError);
       setError(authError);
+      setIsLoading(false); // IMPORTANT: Clear loading state when error occurs
+    }
+    
+    // Also sync loading state from auth context
+    if (!authLoading && isLoading) {
       setIsLoading(false);
     }
-  }, [authError]);
+  }, [authError, authLoading, isLoading]);
 
   const clearCountdownInterval = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -237,19 +244,31 @@ export default function LoginPage() {
 
       setIsLoading(true);
       setError('');
+      clearError?.();
+      
       try {
         const success = await login(username.trim(), password, role);
+        
+        if (isDev) console.log('[Login] Login result:', success);
+        
         if (!success) {
-          // Auth context should set the error
+          // Login failed - auth context has set the error
+          // Make sure we're not stuck in loading state
           setIsLoading(false);
+          
+          // If auth context didn't provide an error, set a generic one
+          if (!authError) {
+            setError('Invalid username or password');
+          }
         }
+        // If success is true, user will be redirected by the useEffect
       } catch (err) {
         if (isDev) console.error('[Login] login() error:', err);
-        setError('An unexpected error occurred');
+        setError('An unexpected error occurred. Please try again.');
         setIsLoading(false);
       }
     },
-    [username, password, role, login, isRateLimited, isLoading]
+    [username, password, role, login, isRateLimited, authError, clearError]
   );
 
   const handleKeyPress = useCallback(
@@ -269,6 +288,7 @@ export default function LoginPage() {
     setPassword('');
     setRole(null);
     setError('');
+    setIsLoading(false); // Clear loading state when going back
     clearError?.();
   }, [clearError]);
 
