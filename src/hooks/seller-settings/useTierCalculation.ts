@@ -1,18 +1,16 @@
 // src/hooks/seller-settings/useTierCalculation.ts
-
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { TierLevel } from '@/utils/sellerTiers';
 import { sanitizeUsername } from '@/utils/security/sanitization';
 
-// Define TIER_LEVELS locally to match the structure in sellerTiers.ts
 const TIER_LEVELS: Record<TierLevel, { minSales: number; minAmount: number }> = {
-  'None': { minSales: 0, minAmount: 0 },
-  'Tease': { minSales: 0, minAmount: 0 },
-  'Flirt': { minSales: 10, minAmount: 5000 },
-  'Obsession': { minSales: 101, minAmount: 12500 },
-  'Desire': { minSales: 251, minAmount: 75000 },
-  'Goddess': { minSales: 1001, minAmount: 150000 }
+  None: { minSales: 0, minAmount: 0 },
+  Tease: { minSales: 0, minAmount: 0 },
+  Flirt: { minSales: 10, minAmount: 5000 },
+  Obsession: { minSales: 101, minAmount: 12500 },
+  Desire: { minSales: 251, minAmount: 75000 },
+  Goddess: { minSales: 1001, minAmount: 150000 }
 };
 
 const VALID_TIERS: readonly TierLevel[] = ['None', 'Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'] as const;
@@ -33,67 +31,66 @@ interface BackendTierData {
 export function useTierCalculation() {
   const { user, token } = useAuth();
 
-  // State for backend data - NO LOCAL STORAGE
   const [backendTierData, setBackendTierData] = useState<BackendTierData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
-  // Sanitize username to prevent injection
   const sanitizedUsername = user?.username ? sanitizeUsername(user.username) : null;
 
-  // Fetch tier data from backend ONLY
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
     const fetchTierData = async () => {
       if (!sanitizedUsername || !token) {
-        setIsLoading(false);
-        setBackendTierData(null);
+        if (mountedRef.current) {
+          setIsLoading(false);
+          setBackendTierData(null);
+        }
         return;
       }
 
-      setIsLoading(true);
-      setError(null);
+      if (mountedRef.current) {
+        setIsLoading(true);
+        setError(null);
+      }
 
       try {
-        // Get tier progress from the backend
         const response = await fetch(`http://localhost:5000/api/tiers/progress`, {
           method: 'GET',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json'
-          }
+          },
+          signal: controller.signal
         });
 
         if (response.ok) {
           const data = await response.json();
-          console.log('[useTierCalculation] Backend tier data:', data);
-          
-          if (data.success && data.data) {
+          if (data.success && data.data && mountedRef.current) {
             setBackendTierData(data.data);
           }
         } else if (response.status === 403) {
-          // Not a seller, no tier data
-          console.log('[useTierCalculation] User is not a seller');
-          setBackendTierData(null);
+          if (mountedRef.current) setBackendTierData(null);
         } else {
-          console.error('[useTierCalculation] Failed to fetch tier data:', response.status);
-          setError('Failed to load tier information');
+          if (mountedRef.current) setError('Failed to load tier information');
         }
 
-        // Also fetch tier stats
         const statsResponse = await fetch(`http://localhost:5000/api/tiers/stats/${sanitizedUsername}`, {
           method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal
         });
 
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
-          console.log('[useTierCalculation] Backend stats data:', statsData);
-          
-          if (statsData.success && statsData.data) {
-            // Update backend tier data with stats
-            setBackendTierData(prev => ({
+          if (statsData.success && statsData.data && mountedRef.current) {
+            setBackendTierData((prev) => ({
               currentTier: prev?.currentTier || 'Tease',
               nextTier: prev?.nextTier || 'Flirt',
               salesProgress: prev?.salesProgress || 0,
@@ -105,47 +102,55 @@ export function useTierCalculation() {
             }));
           }
         }
-      } catch (error) {
-        console.error('[useTierCalculation] Error fetching tier data:', error);
-        setError('Failed to load tier information');
-        setBackendTierData(null);
+      } catch {
+        if (mountedRef.current) {
+          setError('Failed to load tier information');
+          setBackendTierData(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (mountedRef.current) setIsLoading(false);
       }
     };
 
-    fetchTierData();
+    void fetchTierData();
+    return () => controller.abort();
   }, [sanitizedUsername, token]);
 
-  // Calculate seller tier info from backend data ONLY
   const sellerTierInfo = useMemo(() => {
-    if (!backendTierData?.currentTier) {
-      return null;
-    }
-
-    const tierName = backendTierData.currentTier as TierLevel;
-    if (!VALID_TIERS.includes(tierName)) {
-      return null;
-    }
+    const tierName = backendTierData?.currentTier as TierLevel | undefined;
+    if (!tierName || !VALID_TIERS.includes(tierName)) return null;
 
     const tierInfo = TIER_LEVELS[tierName];
     return {
       tier: tierName,
-      credit: tierInfo.minSales > 0 ? (tierInfo.minSales === 10 ? 0.01 : 
-               tierInfo.minSales === 101 ? 0.02 : 
-               tierInfo.minSales === 251 ? 0.03 : 
-               tierInfo.minSales === 1001 ? 0.05 : 0) : 0,
+      credit:
+        tierInfo.minSales > 0
+          ? tierInfo.minSales === 10
+            ? 0.01
+            : tierInfo.minSales === 101
+            ? 0.02
+            : tierInfo.minSales === 251
+            ? 0.03
+            : tierInfo.minSales === 1001
+            ? 0.05
+            : 0
+          : 0,
       minSales: tierInfo.minSales,
       minAmount: tierInfo.minAmount,
       badgeImage: `/${tierName}_Badge.png`,
-      color: tierName === 'Tease' ? 'gray' : 
-             tierName === 'Flirt' ? 'pink' : 
-             tierName === 'Obsession' ? 'purple' : 
-             tierName === 'Desire' ? 'blue' : 'amber'
+      color:
+        tierName === 'Tease'
+          ? 'gray'
+          : tierName === 'Flirt'
+          ? 'pink'
+          : tierName === 'Obsession'
+          ? 'purple'
+          : tierName === 'Desire'
+          ? 'blue'
+          : 'amber'
     };
   }, [backendTierData]);
 
-  // Use backend stats ONLY
   const userStats = useMemo(() => {
     if (backendTierData?.stats) {
       return {
@@ -156,34 +161,21 @@ export function useTierCalculation() {
     return { totalSales: 0, totalRevenue: 0 };
   }, [backendTierData]);
 
-  // Get next tier info
   const getNextTier = (currentTier: TierLevel): TierLevel => {
-    // Use backend data if available
-    if (backendTierData?.nextTier) {
-      const nextTier = backendTierData.nextTier as TierLevel;
-      if (VALID_TIERS.includes(nextTier)) {
-        return nextTier;
-      }
+    if (backendTierData?.nextTier && VALID_TIERS.includes(backendTierData.nextTier as TierLevel)) {
+      return backendTierData.nextTier as TierLevel;
     }
-
-    // Simple fallback logic
-    if (!VALID_TIERS.includes(currentTier)) {
-      return 'Tease';
-    }
-
     const tiers: TierLevel[] = ['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
-    const currentIndex = tiers.indexOf(currentTier);
-    
-    if (currentIndex === -1 || currentIndex === tiers.length - 1) {
-      return currentTier;
-    }
-    
-    return tiers[currentIndex + 1];
+    const idx = tiers.indexOf(currentTier);
+    if (idx === -1 || idx === tiers.length - 1) return currentTier;
+    return tiers[idx + 1];
   };
 
-  // Get tier progress percentages from backend ONLY
   const getTierProgress = () => {
-    if (backendTierData?.salesProgress !== undefined && backendTierData?.revenueProgress !== undefined) {
+    if (
+      backendTierData?.salesProgress !== undefined &&
+      backendTierData?.revenueProgress !== undefined
+    ) {
       return {
         salesProgress: Math.max(0, Math.min(100, Math.floor(backendTierData.salesProgress))),
         revenueProgress: Math.max(0, Math.min(100, Math.floor(backendTierData.revenueProgress)))
@@ -192,53 +184,37 @@ export function useTierCalculation() {
     return { salesProgress: 0, revenueProgress: 0 };
   };
 
-  // Validate tier level
-  const isValidTier = (tier: string): tier is TierLevel => {
-    return VALID_TIERS.includes(tier as TierLevel);
-  };
+  const isValidTier = (tier: string): tier is TierLevel => VALID_TIERS.includes(tier as TierLevel);
 
-  // Force refresh tier data from backend
   const refreshTierData = async () => {
     if (!sanitizedUsername || !token) return;
-
-    setIsLoading(true);
+    const controller = new AbortController();
     try {
       const response = await fetch(`http://localhost:5000/api/tiers/progress`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        signal: controller.signal
       });
-
       if (response.ok) {
         const data = await response.json();
-        if (data.success && data.data) {
-          setBackendTierData(data.data);
-        }
+        if (data.success && data.data && mountedRef.current) setBackendTierData(data.data);
       }
 
-      // Also refresh stats
       const statsResponse = await fetch(`http://localhost:5000/api/tiers/stats/${sanitizedUsername}`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal
       });
-
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
-        if (statsData.success && statsData.data) {
-          setBackendTierData(prev => ({
-            ...prev!,
-            stats: statsData.data
-          }));
+        if (statsData.success && statsData.data && mountedRef.current) {
+          setBackendTierData((prev) => ({ ...(prev as BackendTierData), stats: statsData.data }));
         }
       }
-    } catch (error) {
-      console.error('[useTierCalculation] Error refreshing tier data:', error);
+    } catch {
+      // swallow
     } finally {
-      setIsLoading(false);
+      controller.abort();
     }
   };
 

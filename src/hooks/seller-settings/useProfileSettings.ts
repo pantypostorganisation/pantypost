@@ -1,5 +1,4 @@
 // src/hooks/seller-settings/useProfileSettings.ts
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useProfileData } from './useProfileData';
@@ -11,17 +10,19 @@ import { securityService } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 const MAX_GALLERY_IMAGES = 20;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const;
+
+type AllowedMime = typeof ALLOWED_IMAGE_TYPES[number];
+const isAllowed = (t: string): t is AllowedMime => (ALLOWED_IMAGE_TYPES as readonly string[]).includes(t);
 
 export function useProfileSettings() {
   const { user, token } = useAuth();
   const rateLimiter = getRateLimiter();
-  
-  // Profile data management
+
   const profileData = useProfileData();
-  
-  // Gallery state - NO LOCAL STORAGE
+
+  // Backend-only gallery state
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [galleryUploading, setGalleryUploading] = useState(false);
@@ -29,132 +30,112 @@ export function useProfileSettings() {
   const [validationError, setValidationError] = useState<string>('');
   const multipleFileInputRef = useRef<HTMLInputElement>(null);
   const profilePicInputRef = useRef<HTMLInputElement>(null);
-  
-  // Profile save management
+  const mountedRef = useRef(true);
+
   const { saveSuccess, saveError, isSaving, handleSave: baseSaveProfile, handleSaveWithGallery } = useProfileSave();
-  
-  // Tier calculation - backend data only
   const tierData = useTierCalculation();
-  
-  // State for tier modal
+
   const [selectedTierDetails, setSelectedTierDetails] = useState<any>(null);
 
-  // Load gallery images from backend ONLY - NO LOCAL STORAGE
   useEffect(() => {
-    const loadGalleryImages = async () => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  // Load gallery images from backend ONLY
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const load = async () => {
       if (!user?.username || !token) {
-        setGalleryImages([]);
+        if (mountedRef.current) setGalleryImages([]);
         return;
       }
 
       try {
-        const response = await fetch(buildApiUrl('/users/:username/profile', { username: user.username }), {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          }
+        const resp = await fetch(buildApiUrl('/users/:username/profile', { username: user.username }), {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal
         });
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.data) {
-            const userData = data.data.profile || data.data;
-            
-            if (userData.galleryImages && Array.isArray(userData.galleryImages)) {
-              const validatedGallery = userData.galleryImages
-                .map((url: string) => {
-                  if (url.startsWith('http://') || url.startsWith('https://')) {
-                    return url;
-                  } else if (url.startsWith('/uploads/')) {
-                    return `${API_BASE_URL}${url}`;
-                  } else {
-                    return sanitizeUrl(url);
-                  }
-                })
-                .filter((url: string | null): url is string => url !== '' && url !== null)
-                .slice(0, MAX_GALLERY_IMAGES);
-              
-              setGalleryImages(validatedGallery);
-            } else {
-              setGalleryImages([]);
-            }
-          }
-        } else {
-          console.error('Failed to load gallery images from backend');
-          setGalleryImages([]);
-        }
-      } catch (error) {
-        console.error('Failed to load gallery images from backend:', error);
-        setGalleryImages([]);
+        if (!resp.ok) throw new Error('Failed to load profile');
+        const data = await resp.json();
+        const userData = data?.data?.profile || data?.data || {};
+        const validated = Array.isArray(userData.galleryImages) ? userData.galleryImages : [];
+
+        const normalized = validated
+          .map((url: string) => {
+            if (!url) return null;
+            if (url.startsWith('http://') || url.startsWith('https://')) return sanitizeUrl(url);
+            if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
+            return sanitizeUrl(url);
+          })
+          .filter((u: string | null): u is string => !!u)
+          .slice(0, MAX_GALLERY_IMAGES);
+
+        if (mountedRef.current) setGalleryImages(normalized);
+      } catch {
+        if (mountedRef.current) setGalleryImages([]);
       }
     };
-    
-    loadGalleryImages();
+
+    void load();
+    return () => controller.abort();
   }, [user?.username, token]);
 
   // Refresh tier data when profile is saved
   useEffect(() => {
     if (saveSuccess && tierData.refreshTierData) {
-      tierData.refreshTierData();
+      void tierData.refreshTierData();
     }
   }, [saveSuccess, tierData.refreshTierData]);
 
-  // Clear validation error when files change
   useEffect(() => {
     setValidationError('');
   }, [selectedFiles]);
 
-  // Validate files
   const validateFiles = (files: File[]): { valid: boolean; error?: string } => {
     if (galleryImages.length + files.length > MAX_GALLERY_IMAGES) {
-      return { 
-        valid: false, 
-        error: `Maximum ${MAX_GALLERY_IMAGES} gallery images allowed. You have ${galleryImages.length} images.` 
+      return {
+        valid: false,
+        error: `Maximum ${MAX_GALLERY_IMAGES} gallery images allowed. You have ${galleryImages.length} images.`
       };
     }
 
     for (const file of files) {
-      const validation = securityService.validateFileUpload(file, {
-        maxSize: MAX_FILE_SIZE,
-        allowedTypes: ALLOWED_IMAGE_TYPES,
-        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp']
-      });
-
-      if (!validation.valid) {
-        return { valid: false, error: validation.error };
+      if (file.size > MAX_FILE_SIZE) {
+        return { valid: false, error: `File "${file.name}" exceeds 10MB.` };
+      }
+      if (!isAllowed(file.type)) {
+        return { valid: false, error: `Unsupported type for "${file.name}". Allowed: JPG, PNG, WEBP.` };
+      }
+      const ext = file.name.split('.').pop()?.toLowerCase();
+      if (!ext || !['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+        return { valid: false, error: `Invalid extension for "${file.name}".` };
       }
     }
-
     return { valid: true };
   };
 
-  // Handle multiple file selection
   const handleMultipleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const newFiles = Array.from(files);
-    
     const validation = validateFiles(newFiles);
     if (!validation.valid) {
       setValidationError(validation.error || 'Invalid files selected');
-      if (multipleFileInputRef.current) {
-        multipleFileInputRef.current.value = '';
-      }
+      if (multipleFileInputRef.current) multipleFileInputRef.current.value = '';
       return;
     }
 
-    setSelectedFiles(prev => [...prev, ...newFiles]);
-    if (multipleFileInputRef.current) {
-      multipleFileInputRef.current.value = '';
-    }
+    setSelectedFiles((prev) => [...prev, ...newFiles]);
+    if (multipleFileInputRef.current) multipleFileInputRef.current.value = '';
   };
 
-  // Remove selected file before upload
   const removeSelectedFile = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Upload gallery images - BACKEND ONLY
   const uploadGalleryImagesAsync = async () => {
     if (selectedFiles.length === 0 || !token) return;
 
@@ -163,7 +144,6 @@ export function useProfileSettings() {
         ...RATE_LIMITS.IMAGE_UPLOAD,
         identifier: user.username
       });
-
       if (!rateLimitResult.allowed) {
         setValidationError(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
         return;
@@ -179,174 +159,148 @@ export function useProfileSettings() {
     setGalleryUploading(true);
     setUploadProgress(0);
     setValidationError('');
-    
+
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => Math.min(prev + 10, 90));
+    }, 200);
+
     try {
       const formData = new FormData();
-      selectedFiles.forEach(file => {
-        // IMPORTANT: backend expects .array('gallery', 20)
-        formData.append('gallery', file);
-      });
-
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => Math.min(prev + 10, 90));
-      }, 200);
+      selectedFiles.forEach((file) => formData.append('gallery', file));
 
       const response = await fetch(buildApiUrl('/upload/gallery'), {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
       });
 
       clearInterval(progressInterval);
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
+        let message = 'Upload failed';
+        try {
+          const err = await response.json();
+          message = err?.error || message;
+        } catch {}
+        throw new Error(message);
       }
 
       const result = await response.json();
-      
-      if (result.success && result.data) {
-        const newGallery = (result.data.gallery || []).map((url: string) => {
-          if (url.startsWith('http://') || url.startsWith('https://')) {
-            return url;
-          } else if (url.startsWith('/uploads/')) {
-            return `${API_BASE_URL}${url}`;
-          } else {
-            return url;
-          }
-        });
-        
+      const newGallery = (result?.data?.gallery || [])
+        .map((url: string) => {
+          if (!url) return null;
+          if (url.startsWith('http://') || url.startsWith('https://')) return sanitizeUrl(url);
+          if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
+          return sanitizeUrl(url);
+        })
+        .filter((u: string | null): u is string => !!u)
+        .slice(0, MAX_GALLERY_IMAGES);
+
+      if (mountedRef.current) {
         setGalleryImages(newGallery);
         setSelectedFiles([]);
         setUploadProgress(100);
-        
-        console.log('Gallery images uploaded successfully:', result.data);
-      } else {
-        throw new Error('Invalid response from server');
+        setTimeout(() => mountedRef.current && setUploadProgress(0), 800);
       }
     } catch (error) {
-      console.error("Error uploading images:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setValidationError(`Failed to upload images: ${errorMessage}`);
+      clearInterval(progressInterval);
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      setValidationError(`Failed to upload images: ${msg}`);
     } finally {
-      setGalleryUploading(false);
-      setTimeout(() => setUploadProgress(0), 1000);
+      if (mountedRef.current) setGalleryUploading(false);
     }
   };
 
-  const uploadGalleryImages = () => {
-    uploadGalleryImagesAsync();
-  };
+  const uploadGalleryImages = () => { void uploadGalleryImagesAsync(); };
 
-  // Remove gallery image - BACKEND ONLY
   const removeGalleryImageAsync = async (index: number) => {
     if (index < 0 || index >= galleryImages.length || !token) return;
-    
+
     try {
       const response = await fetch(buildApiUrl(`/upload/gallery/${index}`), {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to remove image');
+        try {
+          const err = await response.json();
+          throw new Error(err?.error || 'Failed to remove image');
+        } catch {
+          throw new Error('Failed to remove image');
+        }
       }
 
       const result = await response.json();
-      
-      if (result.success && result.data) {
-        const updatedGallery = (result.data.gallery || []).map((url: string) => {
-          if (url.startsWith('http://') || url.startsWith('https://')) {
-            return url;
-          } else if (url.startsWith('/uploads/')) {
-            return `${API_BASE_URL}${url}`;
-          } else {
-            return url;
-          }
-        });
-        
-        setGalleryImages(updatedGallery);
-      }
-    } catch (error) {
-      console.error('Failed to remove image:', error);
-      // Just remove from state if backend fails
-      const updatedGallery = galleryImages.filter((_, i) => i !== index);
-      setGalleryImages(updatedGallery);
+      const updatedGallery = (result?.data?.gallery || [])
+        .map((url: string) => {
+          if (!url) return null;
+          if (url.startsWith('http://') || url.startsWith('https://')) return sanitizeUrl(url);
+          if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
+          return sanitizeUrl(url);
+        })
+        .filter((u: string | null): u is string => !!u)
+        .slice(0, MAX_GALLERY_IMAGES);
+
+      if (mountedRef.current) setGalleryImages(updatedGallery);
+    } catch {
+      // Fallback: optimistic removal if backend fails
+      const updated = galleryImages.filter((_, i) => i !== index);
+      if (mountedRef.current) setGalleryImages(updated);
     }
   };
 
-  const removeGalleryImage = (index: number) => {
-    removeGalleryImageAsync(index);
-  };
+  const removeGalleryImage = (index: number) => { void removeGalleryImageAsync(index); };
 
-  // Clear all gallery images - BACKEND ONLY
   const clearAllGalleryImagesAsync = async () => {
-    if (window.confirm("Are you sure you want to remove all gallery images?")) {
-      if (!token) {
-        setGalleryImages([]);
-        return;
-      }
+    if (typeof window !== 'undefined' && !window.confirm('Are you sure you want to remove all gallery images?')) return;
 
-      try {
-        for (let i = galleryImages.length - 1; i >= 0; i--) {
-          await fetch(buildApiUrl(`/upload/gallery/${i}`), {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
-        }
-        
-        setGalleryImages([]);
-      } catch (error) {
-        console.error('Failed to clear gallery:', error);
-        setGalleryImages([]);
+    if (!token) {
+      if (mountedRef.current) setGalleryImages([]);
+      return;
+    }
+
+    try {
+      // Best-effort: delete by index from end to start
+      for (let i = galleryImages.length - 1; i >= 0; i--) {
+        // eslint-disable-next-line no-await-in-loop
+        await fetch(buildApiUrl(`/upload/gallery/${i}`), {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
       }
+      if (mountedRef.current) setGalleryImages([]);
+    } catch {
+      if (mountedRef.current) setGalleryImages([]);
     }
   };
 
-  const clearAllGalleryImages = () => {
-    clearAllGalleryImagesAsync();
-  };
+  const clearAllGalleryImages = () => { void clearAllGalleryImagesAsync(); };
 
-  // Enhanced save handler
   const handleSave = async () => {
-    const profileDataToSave = {
+    const payload = {
       bio: profileData.bio,
       profilePic: profileData.preview || profileData.profilePic,
       subscriptionPrice: profileData.subscriptionPrice,
-      galleryImages: galleryImages.map(url => {
-        if (url.startsWith(`${API_BASE_URL}/uploads/`)) {
-          return url.replace(API_BASE_URL, '');
-        }
+      galleryImages: galleryImages.map((url) => {
+        // Persist /uploads paths without API_BASE_URL prefix
+        if (url.startsWith(`${API_BASE_URL}/uploads/`)) return url.replace(API_BASE_URL, '');
         return url;
-      }),
+      })
     };
-    
-    await baseSaveProfile(profileDataToSave);
-    
+
+    await baseSaveProfile(payload);
     if (galleryImages.length > 0) {
       await handleSaveWithGallery(galleryImages);
     }
-    
-    // Refresh tier data after save
-    if (tierData.refreshTierData) {
-      await tierData.refreshTierData();
-    }
-    
+    if (tierData.refreshTierData) await tierData.refreshTierData();
     return saveSuccess;
   };
 
   return {
     // User
     user,
-    
+
     // Profile data
     bio: profileData.bio,
     setBio: profileData.setBio,
@@ -358,8 +312,8 @@ export function useProfileSettings() {
     handleProfilePicChange: profileData.handleProfilePicChange,
     removeProfilePic: profileData.removeProfilePic,
     profilePicInputRef,
-    
-    // Gallery - NO LOCAL STORAGE
+
+    // Gallery - Backend only
     galleryImages,
     selectedFiles,
     galleryUploading,
@@ -371,8 +325,8 @@ export function useProfileSettings() {
     removeGalleryImage,
     clearAllGalleryImages,
     validationError,
-    
-    // Tier info - BACKEND ONLY
+
+    // Tier info
     sellerTierInfo: tierData.sellerTierInfo,
     userStats: tierData.userStats,
     getTierProgress: tierData.getTierProgress,
@@ -381,8 +335,8 @@ export function useProfileSettings() {
     setSelectedTierDetails,
     isTierLoading: tierData.isLoading,
     tierError: tierData.error,
-    
-    // Save functionality
+
+    // Save
     saveSuccess,
     saveError,
     isSaving,
