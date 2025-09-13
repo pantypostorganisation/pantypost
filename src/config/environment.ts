@@ -85,7 +85,7 @@ export const appConfig = {
 
 // API configuration
 export const apiConfig = {
-  baseUrl: getEnvVar('NEXT_PUBLIC_API_URL', 'http://localhost:5000/api'),
+  baseUrl: getEnvVar('NEXT_PUBLIC_API_URL', 'https://api.pantypost.com/api'),
   timeout: getEnvNumber('NEXT_PUBLIC_API_TIMEOUT', 30000),
   retryAttempts: getEnvNumber('NEXT_PUBLIC_API_RETRY_ATTEMPTS', 3),
   retryDelay: 1000,
@@ -242,7 +242,7 @@ export const limits = {
 // WebSocket configuration - ENHANCED FOR BETTER DEBUGGING
 export const websocketConfig = {
   enabled: true, // Force enable WebSocket
-  url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000'),
+  url: getEnvVar('NEXT_PUBLIC_WS_URL', 'wss://api.pantypost.com'),
   path: getEnvVar('NEXT_PUBLIC_WS_PATH', '/socket.io'),
   reconnectAttempts: 5,
   reconnectInterval: 3000,

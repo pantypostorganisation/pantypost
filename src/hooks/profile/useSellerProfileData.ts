@@ -12,7 +12,7 @@ import {
 } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com/api';
 
 export const useSellerProfileData = (username: string | undefined) => {
   const { user } = useAuth();

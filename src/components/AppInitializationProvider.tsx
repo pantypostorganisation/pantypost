@@ -31,7 +31,7 @@ interface AppInitializationContextType {
 const AppInitializationContext = createContext<AppInitializationContextType | undefined>(undefined);
 
 // ---------- Helpers ----------
-const DEFAULT_BASE = 'http://localhost:5000';
+const DEFAULT_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
 const DEFAULT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT ?? 10000);
 
 function normalizeBaseUrl(url?: string | null) {

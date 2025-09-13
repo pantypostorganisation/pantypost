@@ -80,7 +80,7 @@ const BASE_HOST = (() => {
     // API_BASE_URL can be "http://localhost:5000" or "http://localhost:5000/api"
     return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
   } catch {
-    return 'http://localhost:5000';
+    return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
   }
 })();
 

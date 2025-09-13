@@ -6,7 +6,7 @@ import { useListings } from '@/context/ListingContext';
 import { sanitizeUsername } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com/api';
 
 export function useSellerSubscription(
   username: string,
