@@ -1,15 +1,15 @@
 // src/hooks/useBanManagement.ts
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useBans } from '@/context/BanContext';
 import { useAuth } from '@/context/AuthContext';
-import { BanEntry } from '@/types/ban';
+import { BanEntry, BanStats, FilterOptions } from '@/types/ban';
 import { sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 export const useBanManagement = () => {
   const { user } = useAuth();
   const rateLimiter = getRateLimiter();
-
+  
   let banContext;
   try {
     banContext = useBans();
@@ -17,10 +17,10 @@ export const useBanManagement = () => {
     console.error('BanContext error:', error);
     banContext = null;
   }
-
-  const {
-    getActiveBans = () => [],
-    getExpiredBans = () => [],
+  
+  const { 
+    getActiveBans = () => [], 
+    getExpiredBans = () => [], 
     getBanStats = () => ({
       totalActiveBans: 0,
       temporaryBans: 0,
@@ -34,20 +34,20 @@ export const useBanManagement = () => {
         scam: 0,
         underage: 0,
         payment_fraud: 0,
-        other: 0,
+        other: 0
       },
       appealStats: {
         totalAppeals: 0,
         pendingAppeals: 0,
         approvedAppeals: 0,
-        rejectedAppeals: 0,
-      },
-    }),
-    unbanUser = async () => false,
-    reviewAppeal = async () => false,
+        rejectedAppeals: 0
+      }
+    }), 
+    unbanUser = async () => false, 
+    reviewAppeal = () => false,
     banHistory = [],
     updateExpiredBans = () => {},
-    refreshBanData = async () => {},
+    refreshBanData = async () => {}
   } = banContext || {};
 
   const [selectedBan, setSelectedBan] = useState<BanEntry | null>(null);
@@ -60,46 +60,50 @@ export const useBanManagement = () => {
 
   // Auto-update expired bans every minute
   useEffect(() => {
-    if (!updateExpiredBans) return;
-
-    // Update immediately on mount
-    updateExpiredBans();
-
-    // Then update every minute
-    const interval = setInterval(() => {
-      console.log('[useBanManagement] Auto-updating expired bans');
+    if (updateExpiredBans) {
+      // Update immediately on mount
       updateExpiredBans();
-    }, 60000);
-
-    return () => {
-      clearInterval(interval);
-    };
+      
+      // Then update every minute
+      const interval = setInterval(() => {
+        console.log('[useBanManagement] Auto-updating expired bans');
+        updateExpiredBans();
+      }, 60000);
+      
+      return () => clearInterval(interval);
+    }
+    // Return undefined for the case where updateExpiredBans is falsy
+    return undefined;
   }, [updateExpiredBans]);
 
   // Listen for ban expiration and update events
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleBanExpired = (event: Event) => {
-      console.log('[useBanManagement] Ban expired event:', (event as CustomEvent).detail);
-      refreshBanData?.();
+    const handleBanExpired = (event: CustomEvent) => {
+      console.log('[useBanManagement] Ban expired event:', event.detail);
+      // Force refresh when a ban expires
+      if (refreshBanData) {
+        refreshBanData();
+      }
     };
 
-    const handleBanUpdated = (event: Event) => {
-      console.log('[useBanManagement] Ban updated event:', (event as CustomEvent).detail);
-      refreshBanData?.();
+    const handleBanUpdated = (event: CustomEvent) => {
+      console.log('[useBanManagement] Ban updated event:', event.detail);
+      // Force refresh when a ban is updated
+      if (refreshBanData) {
+        refreshBanData();
+      }
     };
 
     window.addEventListener('banExpired', handleBanExpired as EventListener);
     window.addEventListener('banUpdated', handleBanUpdated as EventListener);
-
+    
     return () => {
       window.removeEventListener('banExpired', handleBanExpired as EventListener);
       window.removeEventListener('banUpdated', handleBanUpdated as EventListener);
     };
   }, [refreshBanData]);
 
-  // Memoized wrappers (avoid re-renders from context re-creation)
+  // Memoize the function calls to prevent re-renders
   const memoizedGetActiveBans = useCallback(() => {
     if (!banContext) return [];
     return getActiveBans();
@@ -125,130 +129,140 @@ export const useBanManagement = () => {
           scam: 0,
           underage: 0,
           payment_fraud: 0,
-          other: 0,
+          other: 0
         },
         appealStats: {
           totalAppeals: 0,
           pendingAppeals: 0,
           approvedAppeals: 0,
-          rejectedAppeals: 0,
-        },
+          rejectedAppeals: 0
+        }
       };
     }
     return getBanStats();
   }, [banContext, getBanStats]);
 
-  // Secure unban handler with rate limiting - async with identifier
-  const secureUnbanUser = useCallback(
-    async (username: string, adminUsername: string, reason?: string): Promise<boolean> => {
-      setRateLimitError(null);
+  // Secure unban handler with rate limiting - now properly async
+  const secureUnbanUser = useCallback(async (username: string, adminUsername: string, reason?: string): Promise<boolean> => {
+    // Clear previous error
+    setRateLimitError(null);
 
-      const identifier = (user?.username || adminUsername || 'system') + ':UNBAN';
-      const rateLimitResult = rateLimiter.check('BAN_USER', { ...RATE_LIMITS.BAN_USER, identifier });
-      if (!rateLimitResult.allowed) {
-        setRateLimitError(`Too many ban operations. Please wait ${rateLimitResult.waitTime} seconds.`);
-        return false;
+    // Check rate limit
+    const rateLimitResult = rateLimiter.check('BAN_USER', RATE_LIMITS.BAN_USER);
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many ban operations. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return false;
+    }
+
+    // Sanitize inputs
+    const sanitizedUsername = sanitize.username(username);
+    const sanitizedAdminUsername = sanitize.username(adminUsername);
+    const sanitizedReason = reason ? sanitize.strict(reason) : undefined;
+
+    if (!sanitizedUsername) {
+      console.error('Invalid username provided for unban');
+      return false;
+    }
+
+    setIsLoading(true);
+    try {
+      // Call the async unbanUser function
+      const result = await unbanUser(sanitizedUsername, sanitizedAdminUsername, sanitizedReason);
+      
+      if (result) {
+        console.log('[useBanManagement] User unbanned successfully');
+        // The BanContext will dispatch a banUpdated event, which will trigger a refresh
       }
-
-      // Sanitize inputs
-      const sanitizedUsername = sanitize.username(username);
-      const sanitizedAdminUsername = sanitize.username(adminUsername);
-      const sanitizedReason = reason ? sanitize.strict(reason) : undefined;
-
-      if (!sanitizedUsername) {
-        console.error('Invalid username provided for unban');
-        return false;
-      }
-
-      setIsLoading(true);
-      try {
-        const result = await unbanUser(sanitizedUsername, sanitizedAdminUsername, sanitizedReason);
-        if (result) {
-          console.log('[useBanManagement] User unbanned successfully');
-        }
-        return !!result;
-      } catch (error) {
-        console.error('Error unbanning user:', error);
-        return false;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [unbanUser, rateLimiter, user?.username],
-  );
+      
+      return result;
+    } catch (error) {
+      console.error('Error unbanning user:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [unbanUser, rateLimiter]);
 
   // Secure appeal review handler
-  const secureReviewAppeal = useCallback(
-    async (
-      appealId: string,
-      decision: 'approve' | 'reject' | 'escalate',
-      adminNotes: string,
-      adminUsername: string,
-    ): Promise<boolean> => {
-      setRateLimitError(null);
+  const secureReviewAppeal = useCallback(async (
+    appealId: string,
+    decision: 'approve' | 'reject' | 'escalate',
+    adminNotes: string,
+    adminUsername: string
+  ): Promise<boolean> => {
+    // Clear previous error
+    setRateLimitError(null);
 
-      const identifier = (user?.username || adminUsername || 'system') + ':REVIEW';
-      const rateLimitResult = rateLimiter.check('REPORT_ACTION', { ...RATE_LIMITS.REPORT_ACTION, identifier });
-      if (!rateLimitResult.allowed) {
-        setRateLimitError(`Too many review operations. Please wait ${rateLimitResult.waitTime} seconds.`);
-        return false;
+    // Check rate limit
+    const rateLimitResult = rateLimiter.check('REPORT_ACTION', RATE_LIMITS.REPORT_ACTION);
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many review operations. Please wait ${rateLimitResult.waitTime} seconds.`);
+      return false;
+    }
+
+    // Sanitize inputs
+    const sanitizedNotes = sanitize.strict(adminNotes);
+    const sanitizedAdminUsername = sanitize.username(adminUsername);
+
+    if (!appealId || !sanitizedNotes) {
+      console.error('Invalid parameters for appeal review');
+      return false;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await reviewAppeal(appealId, decision, sanitizedNotes, sanitizedAdminUsername);
+      
+      if (result && refreshBanData) {
+        // Refresh data after successful review
+        await refreshBanData();
       }
-
-      // Sanitize inputs
-      const sanitizedNotes = sanitize.strict(adminNotes);
-      const sanitizedAdminUsername = sanitize.username(adminUsername);
-
-      if (!appealId || !sanitizedNotes) {
-        console.error('Invalid parameters for appeal review');
-        return false;
-      }
-
-      setIsLoading(true);
-      try {
-        const result = await reviewAppeal(appealId, decision, sanitizedNotes, sanitizedAdminUsername);
-        if (result) {
-          await refreshBanData?.();
-        }
-        return !!result;
-      } catch (error) {
-        console.error('Error reviewing appeal:', error);
-        return false;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [reviewAppeal, rateLimiter, refreshBanData, user?.username],
-  );
+      
+      return result;
+    } catch (error) {
+      console.error('Error reviewing appeal:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [reviewAppeal, rateLimiter, refreshBanData]);
 
   // Secure setter for appeal review notes
   const setAppealReviewNotesSafe = useCallback((notes: string) => {
+    // Allow admins to write detailed notes, but still have a reasonable limit
     const MAX_NOTES_LENGTH = 2000;
-    const truncated = (notes || '').slice(0, MAX_NOTES_LENGTH);
-    // We allow markup-like content but do NOT render it as HTML elsewhere.
+    const truncated = notes.slice(0, MAX_NOTES_LENGTH);
     setAppealReviewNotes(truncated);
   }, []);
 
   // Secure evidence selection
   const setSelectedEvidenceSafe = useCallback((evidence: string[]) => {
-    const validEvidence = (evidence || []).map((u) => sanitize.url(u)).filter((u): u is string => !!u);
+    // Validate evidence URLs
+    const validEvidence = evidence.filter(url => {
+      const sanitized = sanitize.url(url);
+      return sanitized && sanitized.length > 0;
+    });
     setSelectedEvidence(validEvidence);
   }, []);
 
   // Toggle ban expansion with validation
   const toggleBanExpansion = useCallback((banId: string) => {
-    const id = (banId || '').slice(0, 128);
-    setExpandedBans((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
+    setExpandedBans(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(banId)) {
+        newSet.delete(banId);
       } else {
-        if (next.size >= 10) {
-          const first = next.values().next().value;
-          if (first) next.delete(first);
+        // Limit the number of expanded items for performance
+        if (newSet.size >= 10) {
+          // Remove the oldest one (first in the set)
+          const firstKey = newSet.values().next().value;
+          if (firstKey) {
+            newSet.delete(firstKey);
+          }
         }
-        next.add(id);
+        newSet.add(banId);
       }
-      return next;
+      return newSet;
     });
   }, []);
 
@@ -275,6 +289,6 @@ export const useBanManagement = () => {
     evidenceIndex,
     setEvidenceIndex,
     refreshBanData,
-    rateLimitError,
+    rateLimitError
   };
 };
