@@ -2,12 +2,13 @@
 
 import { useState, useCallback } from 'react';
 import { useToast } from '@/context/ToastContext';
-import {
-  deleteFromCloudinary,
+import { 
+  deleteFromCloudinary, 
   batchDeleteFromCloudinary,
+  deleteImageByUrl,
   extractPublicId,
   CloudinaryDeleteResult,
-  BatchDeleteResult
+  BatchDeleteResult 
 } from '@/utils/cloudinary';
 
 interface UseCloudinaryDeleteReturn {
@@ -25,10 +26,10 @@ export function useCloudinaryDelete(): UseCloudinaryDeleteReturn {
   // Delete single image (accepts URL or public ID)
   const deleteImage = useCallback(async (publicIdOrUrl: string): Promise<boolean> => {
     setIsDeleting(true);
-
+    
     try {
       let result: CloudinaryDeleteResult;
-
+      
       // Check if it's a URL or public ID
       if (publicIdOrUrl.includes('cloudinary.com')) {
         // It's a URL, extract public ID
@@ -56,7 +57,7 @@ export function useCloudinaryDelete(): UseCloudinaryDeleteReturn {
     } catch (error) {
       console.error('Delete image error:', error);
       toast.error(
-        'Delete Failed',
+        'Delete Failed', 
         error instanceof Error ? error.message : 'An unexpected error occurred'
       );
       return false;
@@ -68,22 +69,20 @@ export function useCloudinaryDelete(): UseCloudinaryDeleteReturn {
   // Delete multiple images (accepts URLs or public IDs)
   const deleteImages = useCallback(async (publicIdsOrUrls: string[]): Promise<BatchDeleteResult> => {
     setIsDeleting(true);
-
+    
     try {
       // Convert URLs to public IDs if needed
-      const publicIds = publicIdsOrUrls
-        .map(item => {
-          if (item.includes('cloudinary.com')) {
-            const publicId = extractPublicId(item);
-            if (!publicId) {
-              console.warn(`Unable to extract public ID from URL: ${item}`);
-              return null;
-            }
-            return publicId;
+      const publicIds = publicIdsOrUrls.map(item => {
+        if (item.includes('cloudinary.com')) {
+          const publicId = extractPublicId(item);
+          if (!publicId) {
+            console.warn(`Unable to extract public ID from URL: ${item}`);
+            return null;
           }
-          return item;
-        })
-        .filter((id): id is string => id !== null);
+          return publicId;
+        }
+        return item;
+      }).filter((id): id is string => id !== null);
 
       if (publicIds.length === 0) {
         toast.error('No Valid Images', 'No valid images found to delete');
@@ -91,9 +90,9 @@ export function useCloudinaryDelete(): UseCloudinaryDeleteReturn {
       }
 
       const toastId = toast.loading(`Deleting ${publicIds.length} image${publicIds.length > 1 ? 's' : ''}...`);
-
+      
       const result = await batchDeleteFromCloudinary(publicIds);
-
+      
       // Update toast based on results
       if (result.failed.length === 0) {
         toast.updateToast(toastId, {
@@ -120,12 +119,12 @@ export function useCloudinaryDelete(): UseCloudinaryDeleteReturn {
           persistent: false,
         });
       }
-
+      
       return result;
     } catch (error) {
       console.error('Batch delete error:', error);
       toast.error(
-        'Batch Delete Failed',
+        'Batch Delete Failed', 
         error instanceof Error ? error.message : 'An unexpected error occurred'
       );
       return { successful: [], failed: [] };

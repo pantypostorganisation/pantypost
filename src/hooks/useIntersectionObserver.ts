@@ -9,7 +9,7 @@ interface IntersectionObserverOptions extends IntersectionObserverInit {
 export function useIntersectionObserver(
   targetRef: React.RefObject<HTMLElement | null>,
   options: IntersectionObserverOptions
-): IntersectionObserver | null {
+) {
   // Use refs to maintain stable references
   const savedCallback = useRef(options.onIntersect);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -22,11 +22,11 @@ export function useIntersectionObserver(
   // Validate and normalize threshold
   const normalizedThreshold = useCallback(() => {
     const threshold = options.threshold;
-
+    
     if (threshold === undefined || threshold === null) {
       return 0.5;
     }
-
+    
     // Handle array of thresholds
     if (Array.isArray(threshold)) {
       return threshold.map(t => {
@@ -34,7 +34,7 @@ export function useIntersectionObserver(
         return isNaN(num) ? 0.5 : Math.max(0, Math.min(1, num));
       });
     }
-
+    
     // Handle single threshold
     const num = Number(threshold);
     return isNaN(num) ? 0.5 : Math.max(0, Math.min(1, num));
@@ -111,7 +111,7 @@ export function useIntersectionObserverMultiple(
   options: IntersectionObserverOptions & {
     onIntersect: (element: Element, entry: IntersectionObserverEntry) => void;
   }
-): IntersectionObserver | null {
+) {
   const savedCallback = useRef(options.onIntersect);
   const observerRef = useRef<IntersectionObserver | null>(null);
 
