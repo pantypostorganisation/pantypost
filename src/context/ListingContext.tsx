@@ -9,19 +9,27 @@ import {
   ReactNode,
   useCallback,
   useRef,
-  useMemo,
 } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+
 import { useWallet } from './WalletContext';
 import { useAuth } from './AuthContext';
 import { useAuction } from './AuctionContext';
 import { useWebSocket } from './WebSocketContext';
+
 import { WebSocketEvent } from '@/types/websocket';
 import type { Order } from '@/types/order';
-import { v4 as uuidv4 } from 'uuid';
-import { listingsService, usersService, storageService } from '@/services';
-import { ListingDraft } from '@/types/myListings';
+import type { ListingDraft } from '@/types/myListings';
+
+// ✅ import services directly (avoid barrel)
+import { listingsService } from '@/services/listings.service';
+import { usersService } from '@/services/users.service';
+import { storageService } from '@/services/storage.service';
+
 import { securityService, sanitize } from '@/services/security.service';
 import { listingSchemas } from '@/utils/validation/schemas';
+
+// ---------------- Types ----------------
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
@@ -93,7 +101,6 @@ export type Notification = {
 };
 
 export type NotificationItem = string | Notification;
-
 type NotificationStore = Record<string, NotificationItem[]>;
 
 interface SubscriptionData {
@@ -102,7 +109,7 @@ interface SubscriptionData {
   subscribedAt: string;
 }
 
-// ============ Sold-listing dedup manager (browser-safe timers) ============
+// ---------- Sold-listing dedup manager ----------
 class SoldListingDeduplicationManager {
   private processedListings: Map<string, number> = new Map();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
@@ -116,11 +123,11 @@ class SoldListingDeduplicationManager {
   private startCleanup() {
     this.cleanupInterval = setInterval(() => {
       const now = Date.now();
-      const expiredKeys: string[] = [];
-      this.processedListings.forEach((timestamp, listingId) => {
-        if (now - timestamp > this.expiryMs) expiredKeys.push(listingId);
+      const expired: string[] = [];
+      this.processedListings.forEach((ts, id) => {
+        if (now - ts > this.expiryMs) expired.push(id);
       });
-      expiredKeys.forEach((key) => this.processedListings.delete(key));
+      expired.forEach((id) => this.processedListings.delete(id));
     }, 30_000);
   }
 
@@ -131,27 +138,29 @@ class SoldListingDeduplicationManager {
   }
 
   destroy() {
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-      this.cleanupInterval = null;
-    }
+    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
+    this.cleanupInterval = null;
     this.processedListings.clear();
   }
 }
 
+// ---------- Context shape ----------
 type ListingContextType = {
   isAuthReady: boolean;
   listings: Listing[];
+
   addListing: (listing: AddListingInput) => Promise<void>;
   addAuctionListing: (listing: AddListingInput, auctionSettings: AuctionInput) => Promise<void>;
+
   removeListing: (id: string) => Promise<void>;
   updateListing: (
     id: string,
     updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>
   ) => Promise<void>;
+
   purchaseListingAndRemove: (listing: Listing, buyerUsername: string) => Promise<boolean>;
 
-  // Auction functions
+  // Auction
   placeBid: (listingId: string, bidder: string, amount: number) => Promise<boolean>;
   getAuctionListings: () => Listing[];
   getActiveAuctions: () => Listing[];
@@ -159,15 +168,16 @@ type ListingContextType = {
   checkEndedAuctions: () => Promise<void>;
   cancelAuction: (listingId: string) => Promise<boolean>;
 
-  // Draft functions
+  // Drafts
   saveDraft: (draft: ListingDraft) => Promise<boolean>;
   getDrafts: () => Promise<ListingDraft[]>;
   deleteDraft: (draftId: string) => Promise<boolean>;
 
-  // Image functions
+  // Images
   uploadImage: (file: File) => Promise<string | null>;
   deleteImage: (imageUrl: string) => Promise<boolean>;
 
+  // Subscriptions
   subscriptions: { [buyer: string]: string[] };
   subscribeToSeller: (buyer: string, seller: string, price: number) => Promise<boolean>;
   unsubscribeFromSeller: (buyer: string, seller: string) => Promise<void>;
@@ -190,17 +200,20 @@ type ListingContextType = {
 
   users: { [username: string]: any };
 
+  // Wallet/orders
   orderHistory: Order[];
   latestOrder: Order | null;
 
-  // Loading and error states
+  // Loading/error
   isLoading: boolean;
   error: string | null;
+
   refreshListings: () => Promise<void>;
 };
 
 const ListingContext = createContext<ListingContextType | undefined>(undefined);
 
+// ---------------- Provider ----------------
 export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user, updateUser } = useAuth();
   const webSocketContext = useWebSocket();
@@ -217,14 +230,31 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [error, setError] = useState<string | null>(null);
   const [latestOrder, setLatestOrder] = useState<Order | null>(null);
 
+  const { 
+    subscribeToSellerWithPayment,
+    setAddSellerNotificationCallback,
+    purchaseListing,
+    orderHistory,
+    unsubscribeFromSeller: walletUnsubscribeFromSeller,
+  } = useWallet();
+
+  const { placeBid: auctionPlaceBid, cancelAuction: auctionCancelAuction, processEndedAuction } =
+    useAuction();
+
+  // dedup + debounce
+  const DEBOUNCE_TIME = 500;
   const soldListingDeduplicator = useRef(new SoldListingDeduplicationManager());
   const listingUpdateDeduplicator = useRef(new Map<string, number>());
-  const DEBOUNCE_TIME = 500;
 
+  // tiny per-id request cache
   const apiRequestCache = useRef(new Map<string, { timestamp: number; promise: Promise<any> }>());
   const API_CACHE_TIME = 1000;
 
-  // ---------- Notification helpers ----------
+  // listings cache to avoid thrash
+  const listingsCache = useRef<{ timestamp: number; promise: Promise<any> } | null>(null);
+  const LISTINGS_CACHE_TIME = 1000;
+
+  // ---------- Notifications helpers ----------
   const normalizeNotification = (item: NotificationItem): Notification => {
     if (typeof item === 'string') {
       return {
@@ -234,10 +264,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         cleared: false,
       };
     }
-    return {
-      ...item,
-      message: sanitize.strict(item.message),
-    };
+    return { ...item, message: sanitize.strict(item.message) };
   };
 
   const saveNotificationStore = async (store: NotificationStore) => {
@@ -250,15 +277,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const addSellerNotification = useCallback((seller: string, message: string) => {
     const safeSeller = sanitize.username(seller);
-    if (!safeSeller) {
-      console.warn('[ListingContext] Attempted to add notification with invalid seller');
-      return;
-    }
+    if (!safeSeller) return;
 
-    const sanitizedMessage = sanitize.strict(message);
     const newNotification: Notification = {
       id: uuidv4(),
-      message: sanitizedMessage,
+      message: sanitize.strict(message),
       timestamp: new Date().toISOString(),
       cleared: false,
     };
@@ -269,22 +292,10 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         ...prev,
         [safeSeller]: [...sellerNotifications.map(normalizeNotification), newNotification],
       };
-      // fire-and-forget
-      saveNotificationStore(updated);
+      saveNotificationStore(updated); // fire & forget
       return updated;
     });
   }, []);
-
-  const {
-    subscribeToSellerWithPayment,
-    setAddSellerNotificationCallback,
-    purchaseListing,
-    orderHistory,
-    unsubscribeFromSeller: walletUnsubscribeFromSeller,
-  } = useWallet();
-
-  const { placeBid: auctionPlaceBid, cancelAuction: auctionCancelAuction, processEndedAuction } =
-    useAuction();
 
   useEffect(() => {
     if (setAddSellerNotificationCallback) {
@@ -292,7 +303,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [setAddSellerNotificationCallback, addSellerNotification]);
 
-  // ---------- WebSocket: listing sold ----------
+  // ---------- WebSocket: listing sold -> remove locally ----------
   useEffect(() => {
     if (!isConnected || !subscribe) return;
 
@@ -313,9 +324,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         if (typeof window !== 'undefined') {
           setTimeout(() => {
-            window.dispatchEvent(
-              new CustomEvent('listing:removed', { detail: { listingId: id, reason: 'sold' } })
-            );
+            window.dispatchEvent(new CustomEvent('listing:removed', { detail: { listingId: id, reason: 'sold' } }));
           }, 100);
         }
         return filtered;
@@ -347,14 +356,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
   }, [isConnected, subscribe]);
 
-  // Cleanup dedup manager on unmount
+  // Cleanup
   useEffect(() => {
     return () => {
       soldListingDeduplicator.current.destroy();
     };
   }, []);
 
-  // Listen for notification changes (multi-tab)
+  // cross-tab updates for seller notifications
   useEffect(() => {
     function handleStorageChange(e: StorageEvent) {
       if (e.key === 'seller_notifications_store') {
@@ -372,20 +381,18 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const migrateNotifications = (notifications: NotificationItem[]): Notification[] =>
     notifications.map(normalizeNotification);
 
-  // Cached fetch (per listing)
+  // Cache single listing fetch (not used much here, but kept)
   const fetchListingWithCache = useCallback(async (listingId: string) => {
     const now = Date.now();
     const cached = apiRequestCache.current.get(listingId);
-    if (cached && now - cached.timestamp < API_CACHE_TIME) {
-      return cached.promise;
-    }
+    if (cached && now - cached.timestamp < API_CACHE_TIME) return cached.promise;
     const promise = listingsService.getListing(listingId);
     apiRequestCache.current.set(listingId, { timestamp: now, promise });
 
     setTimeout(() => {
       const cleanupTime = Date.now();
-      for (const [key, value] of apiRequestCache.current.entries()) {
-        if (cleanupTime - value.timestamp > API_CACHE_TIME * 2) {
+      for (const [key, val] of apiRequestCache.current.entries()) {
+        if (cleanupTime - val.timestamp > API_CACHE_TIME * 2) {
           apiRequestCache.current.delete(key);
         }
       }
@@ -393,10 +400,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     return promise;
   }, []);
-
-  // Cache for getListings
-  const listingsCache = useRef<{ timestamp: number; promise: Promise<any> } | null>(null);
-  const LISTINGS_CACHE_TIME = 1000;
 
   // ---------- Initial load ----------
   const loadData = useCallback(async () => {
@@ -407,7 +410,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setError(null);
 
     try {
-      // Users (supports array or { users: [] })
+      // users (supports array or { users: [] })
       const usersResult = await usersService.getUsers();
       if (usersResult.success && usersResult.data) {
         const usersMap: { [username: string]: any } = {};
@@ -424,7 +427,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         setUsers(usersMap);
       }
 
-      // Listings
+      // listings
       const now = Date.now();
       let listingsResult;
       if (listingsCache.current && now - listingsCache.current.timestamp < LISTINGS_CACHE_TIME) {
@@ -441,18 +444,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         throw new Error(listingsResult.error?.message || 'Failed to load listings');
       }
 
-      // Subscriptions
-      const storedSubs = await storageService.getItem<{ [buyer: string]: string[] }>(
-        'subscriptions',
-        {}
-      );
+      // subscriptions (local)
+      const storedSubs = await storageService.getItem<{ [buyer: string]: string[] }>('subscriptions', {});
       setSubscriptions(storedSubs);
 
-      // Notifications
-      const storedNotifications = await storageService.getItem<NotificationStore>(
-        'seller_notifications_store',
-        {}
-      );
+      // notifications (local)
+      const storedNotifications = await storageService.getItem<NotificationStore>('seller_notifications_store', {});
       const migrated: NotificationStore = {};
       Object.keys(storedNotifications).forEach((username) => {
         if (Array.isArray(storedNotifications[username])) {
@@ -473,11 +470,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [isLoading]);
 
-  // Debounced mount-load (browser-safe timer types)
   useEffect(() => {
     let mounted = true;
-    let timeoutId: ReturnType<typeof setTimeout>;
-    timeoutId = setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       if (mounted && !isAuthReady && !isLoading) {
         loadData();
       }
@@ -500,9 +495,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (listingsCache.current && now - listingsCache.current.timestamp < LISTINGS_CACHE_TIME) {
       try {
         const result = await listingsCache.current.promise;
-        if (result.success && result.data) {
-          setListings(result.data);
-        }
+        if (result.success && result.data) setListings(result.data);
         return;
       } catch {
         // fall through to fetch fresh
@@ -532,11 +525,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   // ---------- Auction checks ----------
   useEffect(() => {
     checkEndedAuctions();
-    const interval: ReturnType<typeof setInterval> = setInterval(() => {
+    const interval = setInterval(() => {
       checkEndedAuctions();
     }, 60_000);
     return () => clearInterval(interval);
-  }, [listings]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listings]);
 
   // ---------- Create listing ----------
   const addListing = async (listing: NewListingInput): Promise<void> => {
@@ -568,10 +562,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
 
     if (!validationResult.success) {
-      alert(
-        'Please check your listing details:\n' +
-          Object.values(validationResult.errors || {}).join('\n')
-      );
+      alert('Please check your listing details:\n' + Object.values(validationResult.errors || {}).join('\n'));
       return;
     }
 
@@ -600,13 +591,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         isVerified: isVerified,
       };
 
-      const result = await listingsService.createListing(sanitizedListing);
+      const result = await listingsService.createListing(sanitizedListing as any);
       if (result.success && result.data) {
         setListings((prev) => [...prev, result.data!]);
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('listingCreated', { detail: { listing: result.data } })
-          );
+          window.dispatchEvent(new CustomEvent('listingCreated', { detail: { listing: result.data } }));
         }
       } else {
         alert(result.error?.message || 'Failed to create listing. Please try again.');
@@ -618,10 +607,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   };
 
   // ---------- Create auction listing ----------
-  const addAuctionListing = async (
-    listing: AddListingInput,
-    auctionSettings: AuctionInput
-  ): Promise<void> => {
+  const addAuctionListing = async (listing: AddListingInput, auctionSettings: AuctionInput): Promise<void> => {
     if (!user || user.role !== 'seller') {
       alert('You must be logged in as a seller to create auction listings.');
       return;
@@ -650,10 +636,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
 
     if (!listingValidation.success) {
-      alert(
-        'Please check your listing details:\n' +
-          Object.values(listingValidation.errors || {}).join('\n')
-      );
+      alert('Please check your listing details:\n' + Object.values(listingValidation.errors || {}).join('\n'));
       return;
     }
 
@@ -703,10 +686,9 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         auction: auctionSettings,
       };
 
-      const result = await listingsService.createListing(sanitizedListing);
+      const result = await listingsService.createListing(sanitizedListing as any);
       if (result.success && result.data) {
         setListings((prev) => [...prev, result.data!]);
-
         addSellerNotification(
           user.username,
           `🔨 You've created a new auction: "${sanitizedListing.title}" starting at $${auctionSettings.startingPrice.toFixed(
@@ -714,9 +696,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           )}`
         );
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('listingCreated', { detail: { listing: result.data } })
-          );
+          window.dispatchEvent(new CustomEvent('listingCreated', { detail: { listing: result.data } }));
         }
       } else {
         alert(result.error?.message || 'Failed to create auction listing. Please try again.');
@@ -727,17 +707,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // ---------- Remove listing ----------
+  // ---------- Remove listing (seller/admin only) ----------
   const removeListing = async (id: string): Promise<void> => {
     try {
       const result = await listingsService.deleteListing(id);
       if (result.success) {
         setListings((prev) => prev.filter((l) => l.id !== id));
-
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('listing:removed', { detail: { listingId: id, reason: 'deleted' } })
-          );
+          window.dispatchEvent(new CustomEvent('listing:removed', { detail: { listingId: id, reason: 'deleted' } }));
           window.dispatchEvent(new CustomEvent('listingDeleted', { detail: { listingId: id } }));
         }
       } else {
@@ -749,15 +726,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // ---------- Purchase + remove ----------
-  const purchaseListingAndRemove = async (
-    listing: Listing,
-    buyerUsername: string
-  ): Promise<boolean> => {
+  // ---------- Purchase + local remove (NO backend delete here) ----------
+  const purchaseListingAndRemove = async (listing: Listing, buyerUsername: string): Promise<boolean> => {
     try {
       const sanitizedBuyer = sanitize.username(buyerUsername);
       if (!sanitizedBuyer) return false;
 
+      // payload shaped for wallet/order service
       const listingForWallet = {
         id: listing.id,
         title: listing.title,
@@ -789,8 +764,16 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       const success = await purchaseListing(listingForWallet as any, sanitizedBuyer);
       if (success) {
+        // ✅ DO NOT call delete endpoint (403 for buyer). The backend already marks as SOLD and emits websocket.
+        // Optimistically remove from local list to update UI immediately:
         soldListingDeduplicator.current.isDuplicate(listing.id);
-        await removeListing(listing.id);
+        setListings((prev) => prev.filter((l) => l.id !== listing.id));
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('listing:removed', { detail: { listingId: listing.id, reason: 'sold' } })
+          );
+        }
       }
       return success;
     } catch (error) {
@@ -806,10 +789,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   ): Promise<void> => {
     try {
       const sanitizedUpdate: any = { ...updatedListing };
-
       if (updatedListing.title) sanitizedUpdate.title = sanitize.strict(updatedListing.title);
-      if (updatedListing.description)
-        sanitizedUpdate.description = sanitize.strict(updatedListing.description);
+      if (updatedListing.description) sanitizedUpdate.description = sanitize.strict(updatedListing.description);
       if (Array.isArray(updatedListing.tags)) {
         sanitizedUpdate.tags = updatedListing.tags.map((tag) => sanitize.strict(tag));
       }
@@ -826,7 +807,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
-  // ---------- Bidding ----------
+  // ---------- Auction: place bid ----------
   const placeBid = useCallback(
     async (listingId: string, bidder: string, amount: number): Promise<boolean> => {
       try {
@@ -876,7 +857,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const getEndedAuctions = (): Listing[] =>
     listings.filter((l) => l.auction?.isAuction && l.auction.status === 'ended');
 
-  // Only sellers/admins check ended auctions
+  // ---------- Ended auctions enforcement ----------
   const checkEndedAuctions = async (): Promise<void> => {
     if (!user || (user.role !== 'seller' && user.role !== 'admin')) return;
 
@@ -900,6 +881,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           );
 
           if (listing.auction.highestBidder) {
+            // remove from list (sold)
             soldListingDeduplicator.current.isDuplicate(listing.id);
             setListings((prev) => prev.filter((l) => l.id !== listing.id));
 
@@ -947,10 +929,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           l.id === listingId ? { ...l, auction: { ...l.auction!, status: 'cancelled' } } : l
         )
       );
-
-      addSellerNotification(listing.seller, `🛑 You cancelled your auction: "${listing.title}". All bidders have been refunded.`);
+      addSellerNotification(
+        listing.seller,
+        `🛑 You cancelled your auction: "${listing.title}". All bidders have been refunded.`
+      );
     }
-
     return success;
   };
 
@@ -1061,10 +1044,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       });
 
       const subscriptionDetails =
-        (await storageService.getItem<Record<string, SubscriptionData[]>>(
-          'subscription_details',
-          {}
-        )) || {};
+        (await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {})) || {};
       const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
       const filtered = buyerSubs.filter((sub) => sub.seller !== sanitizedSeller);
       filtered.push({ seller: sanitizedSeller, price, subscribedAt: new Date().toISOString() });
@@ -1096,19 +1076,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
             ...prev,
             [sanitizedBuyer]: (prev[sanitizedBuyer] || []).filter((s) => s !== sanitizedSeller),
           };
-        storageService.setItem('subscriptions', updated);
+          storageService.setItem('subscriptions', updated);
           return updated;
         });
 
         const subscriptionDetails =
-          (await storageService.getItem<Record<string, SubscriptionData[]>>(
-            'subscription_details',
-            {}
-          )) || {};
+          (await storageService.getItem<Record<string, SubscriptionData[]>>('subscription_details', {})) || {};
         const buyerSubs = subscriptionDetails[sanitizedBuyer] || [];
-        subscriptionDetails[sanitizedBuyer] = buyerSubs.filter(
-          (sub) => sub.seller !== sanitizedSeller
-        );
+        subscriptionDetails[sanitizedBuyer] = buyerSubs.filter((sub) => sub.seller !== sanitizedSeller);
         await storageService.setItem('subscription_details', subscriptionDetails);
 
         addSellerNotification(sanitizedSeller, `${sanitizedBuyer} unsubscribed from your content`);
@@ -1139,7 +1114,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const clearSellerNotification = (notificationId: string | number) => {
     if (!user || user.role !== 'seller') return;
-
     const username = sanitize.username(user.username);
     if (!username) return;
 
@@ -1200,8 +1174,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const requestVerification = async (docs: VerificationDocs): Promise<void> => {
     if (!user) return;
 
-    const code =
-      docs.code || `VERIF-${user.username}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const code = docs.code || `VERIF-${user.username}-${Math.floor(100000 + Math.random() * 900000)}`;
 
     try {
       const result = await usersService.requestVerification(user.username, { ...docs, code });
@@ -1237,7 +1210,6 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     status: VerificationStatus,
     rejectionReason?: string
   ): Promise<void> => {
-    // client gate: admin only
     if (!user || user.role !== 'admin') {
       console.warn('[ListingContext] setVerificationStatus blocked: admin only');
       return;
@@ -1298,36 +1270,47 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       value={{
         isAuthReady,
         listings,
+
         addListing,
         addAuctionListing,
+
         removeListing,
         updateListing,
+
         purchaseListingAndRemove,
+
         placeBid,
         getAuctionListings,
         getActiveAuctions,
         getEndedAuctions,
         checkEndedAuctions,
         cancelAuction,
+
         saveDraft,
         getDrafts,
         deleteDraft,
+
         uploadImage,
         deleteImage,
+
         subscriptions,
         subscribeToSeller,
         unsubscribeFromSeller,
         isSubscribed,
+
         sellerNotifications,
         addSellerNotification,
         clearSellerNotification,
         restoreSellerNotification,
         permanentlyDeleteSellerNotification,
+
         requestVerification,
         setVerificationStatus,
+
         users,
         orderHistory,
         latestOrder,
+
         isLoading,
         error,
         refreshListings,
@@ -1338,6 +1321,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   );
 };
 
+// ---------------- Hook ----------------
 export const useListings = () => {
   const context = useContext(ListingContext);
   if (!context) throw new Error('useListings must be used within a ListingProvider');

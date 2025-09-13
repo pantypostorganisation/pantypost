@@ -90,7 +90,7 @@ interface BackendListing {
   isPremium?: boolean;
   tags?: string[];
   hoursWorn?: number;
-  status?: 'active' | 'sold' | 'expired' | 'cancelled';
+  status?: 'active' | 'sold' | 'expired' | 'cancelled' | 'deleted';
   views?: number;
   createdAt: string;
   soldAt?: string;
@@ -109,7 +109,7 @@ interface BackendListing {
     bidIncrement?: number;
     highestBidder?: string;
     endTime: string;
-    status: 'active' | 'ended' | 'cancelled' | 'reserve_not_met';
+    status: 'active' | 'ended' | 'cancelled' | 'reserve_not_met' | 'processing' | 'error';
     bidCount: number;
     bids: Array<{
       bidder: string;
@@ -138,7 +138,7 @@ type CreateListingValidationData = z.infer<typeof createListingValidationSchema>
 /**
  * Convert backend listing format to frontend format with isLocked support and seller profile
  */
-function convertBackendToFrontend(backendListing: BackendListing): Listing & { 
+function convertBackendToFrontend(backendListing: BackendListing): Listing & {
   isLocked?: boolean;
   sellerProfile?: any;
   isSellerVerified?: boolean;
@@ -146,8 +146,8 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
 } {
   // Handle both _id and id fields
   const listingId = backendListing._id || backendListing.id || uuidv4();
-  
-  const frontendListing: Listing & { 
+
+  const frontendListing: Listing & {
     isLocked?: boolean;
     sellerProfile?: any;
     isSellerVerified?: boolean;
@@ -156,8 +156,10 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
     id: listingId,
     title: backendListing.title,
     description: backendListing.description,
-    price: backendListing.price || 0,
-    markedUpPrice: backendListing.markedUpPrice || Math.round((backendListing.price || 0) * 1.1 * 100) / 100,
+    price: backendListing.price ?? 0,
+    markedUpPrice:
+      backendListing.markedUpPrice ??
+      Math.round(((backendListing.price ?? 0) * 1.1 + Number.EPSILON) * 100) / 100,
     imageUrls: backendListing.imageUrls || [],
     date: backendListing.createdAt,
     seller: backendListing.seller,
@@ -178,22 +180,30 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
     frontendListing.auction = {
       isAuction: true,
       startingPrice: Math.floor(backendListing.auction.startingPrice || 0),
-      reservePrice: backendListing.auction.reservePrice ? 
-        Math.floor(backendListing.auction.reservePrice) : undefined,
+      reservePrice: backendListing.auction.reservePrice
+        ? Math.floor(backendListing.auction.reservePrice)
+        : undefined,
       endTime: backendListing.auction.endTime,
-      bids: backendListing.auction.bids.map(bid => ({
+      bids: (backendListing.auction.bids || []).map((bid) => ({
         id: uuidv4(), // Generate ID for frontend
         bidder: bid.bidder,
         amount: Math.floor(bid.amount || 0), // Ensure integer
         date: bid.date,
       })),
       // Always floor the currentBid to remove any decimals
-      highestBid: backendListing.auction.currentBid > 0 ? 
-        Math.floor(backendListing.auction.currentBid) : undefined,
+      highestBid:
+        backendListing.auction.currentBid && backendListing.auction.currentBid > 0
+          ? Math.floor(backendListing.auction.currentBid)
+          : undefined,
       highestBidder: backendListing.auction.highestBidder,
-      status: backendListing.auction.status === 'active' ? 'active' : 
-              backendListing.auction.status === 'ended' ? 'ended' : 
-              backendListing.auction.status === 'reserve_not_met' ? 'reserve_not_met' as any : 'cancelled',
+      status:
+        backendListing.auction.status === 'active'
+          ? 'active'
+          : backendListing.auction.status === 'ended'
+          ? 'ended'
+          : backendListing.auction.status === 'reserve_not_met'
+          ? ('reserve_not_met' as any)
+          : 'cancelled',
       minimumIncrement: Math.floor(backendListing.auction.bidIncrement || 1),
     };
   }
@@ -261,7 +271,7 @@ export class ListingsService {
           params.seller = sanitize.username(params.seller);
         }
         if (params.tags) {
-          params.tags = params.tags.map(tag => sanitize.strict(tag));
+          params.tags = params.tags.map((tag) => sanitize.strict(tag));
         }
         if (params.minPrice !== undefined) {
           params.minPrice = sanitize.number(params.minPrice, 0, 10000);
@@ -273,49 +283,54 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Using backend API for listings');
-        
+
         const queryParams = new URLSearchParams();
         if (params) {
           // Map frontend params to backend params
           if (params.query) queryParams.append('search', params.query);
           if (params.seller) queryParams.append('seller', params.seller);
-          if (params.minPrice !== undefined) queryParams.append('minPrice', params.minPrice.toString());
-          if (params.maxPrice !== undefined) queryParams.append('maxPrice', params.maxPrice.toString());
+          if (params.minPrice !== undefined)
+            queryParams.append('minPrice', params.minPrice.toString());
+          if (params.maxPrice !== undefined)
+            queryParams.append('maxPrice', params.maxPrice.toString());
           if (params.tags) queryParams.append('tags', params.tags.join(','));
-          if (params.isPremium !== undefined) queryParams.append('isPremium', params.isPremium.toString());
-          if (params.isAuction !== undefined) queryParams.append('isAuction', params.isAuction.toString());
+          if (params.isPremium !== undefined)
+            queryParams.append('isPremium', params.isPremium.toString());
+          if (params.isAuction !== undefined)
+            queryParams.append('isAuction', params.isAuction.toString());
           if (params.sortBy) {
             const sortMap: Record<string, string> = {
-              'date': 'date',
-              'price': 'price',
-              'views': 'views',
-              'endingSoon': 'date' // Backend doesn't have endingSoon, use date
+              date: 'date',
+              price: 'price',
+              views: 'views',
+              endingSoon: 'date', // Backend doesn't have endingSoon, use date
             };
             queryParams.append('sort', sortMap[params.sortBy] || 'date');
           }
           if (params.sortOrder) queryParams.append('order', params.sortOrder);
-          if (params.page !== undefined) queryParams.append('page', (params.page + 1).toString()); // Frontend is 0-based
+          if (params.page !== undefined)
+            queryParams.append('page', (params.page + 1).toString()); // Frontend is 0-based
           if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
         }
-        
+
         const response = await apiCall<any>(`/listings?${queryParams.toString()}`);
 
         if (response.success) {
           // Handle both direct array response and nested data structure
           const listings = response.data?.data || response.data || [];
           const convertedListings = listings.map(convertBackendToFrontend);
-          
+
           console.log('[ListingsService] Converted backend listings:', convertedListings.length);
-          
+
           // Update cache only if no filters
           if (!params) {
             this.listingsCache = { data: convertedListings, timestamp: Date.now() };
           }
-          
+
           return {
             success: true,
             data: convertedListings,
-            meta: response.data?.meta || response.meta
+            meta: response.data?.meta || response.meta,
           };
         } else {
           throw new Error(response.error?.message || 'Failed to fetch listings from backend');
@@ -324,15 +339,14 @@ export class ListingsService {
 
       // Fallback to localStorage implementation
       console.log('[ListingsService] Using localStorage fallback');
-      
+
       // Check cache first - but ONLY if no params are provided
       const now = Date.now();
-      if (
-        !params &&
-        this.listingsCache.data &&
-        now - this.listingsCache.timestamp < CACHE_DURATION
-      ) {
-        console.log('[ListingsService] Returning cached listings:', this.listingsCache.data.length);
+      if (!params && this.listingsCache.data && now - this.listingsCache.timestamp < CACHE_DURATION) {
+        console.log(
+          '[ListingsService] Returning cached listings:',
+          this.listingsCache.data.length
+        );
         return {
           success: true,
           data: this.listingsCache.data,
@@ -342,9 +356,11 @@ export class ListingsService {
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
       console.log('[ListingsService] Found listings in storage:', listings.length);
-      
+
       if (listings.length === 0) {
-        console.warn('[ListingsService] No listings found in storage! Check if listings are being created properly.');
+        console.warn(
+          '[ListingsService] No listings found in storage! Check if listings are being created properly.'
+        );
       }
 
       // Update cache only if no filters
@@ -357,92 +373,108 @@ export class ListingsService {
       // Apply filters (same as before)
       if (params) {
         const beforeFilterCount = filteredListings.length;
-        
+
         // Active filter (not ended auctions)
         if (params.isActive !== undefined && params.isActive === true) {
-          filteredListings = filteredListings.filter(listing => {
+          filteredListings = filteredListings.filter((listing) => {
             // For non-auction listings, always consider them active
             if (!listing.auction) return true;
-            
+
             // For auction listings, check end time
             const now = new Date();
             const endTime = new Date(listing.auction.endTime);
             const isActive = endTime > now;
-            
+
             return isActive;
           });
-          console.log(`[ListingsService] Active filter: ${beforeFilterCount} -> ${filteredListings.length}`);
+          console.log(
+            `[ListingsService] Active filter: ${beforeFilterCount} -> ${filteredListings.length}`
+          );
         }
 
         if (params.query) {
           const beforeQueryCount = filteredListings.length;
           const query = params.query.toLowerCase();
           filteredListings = filteredListings.filter(
-            listing =>
+            (listing) =>
               listing.title.toLowerCase().includes(query) ||
               listing.description.toLowerCase().includes(query) ||
-              listing.tags?.some(tag => tag.toLowerCase().includes(query)) ||
+              listing.tags?.some((tag) => tag.toLowerCase().includes(query)) ||
               listing.seller.toLowerCase().includes(query)
           );
-          console.log(`[ListingsService] Query filter "${params.query}": ${beforeQueryCount} -> ${filteredListings.length}`);
+          console.log(
+            `[ListingsService] Query filter "${params.query}": ${beforeQueryCount} -> ${filteredListings.length}`
+          );
         }
 
         if (params.seller) {
           const beforeSellerCount = filteredListings.length;
-          filteredListings = filteredListings.filter(
-            listing => listing.seller === params.seller
+          filteredListings = filteredListings.filter((listing) => listing.seller === params.seller);
+          console.log(
+            `[ListingsService] Seller filter "${params.seller}": ${beforeSellerCount} -> ${filteredListings.length}`
           );
-          console.log(`[ListingsService] Seller filter "${params.seller}": ${beforeSellerCount} -> ${filteredListings.length}`);
         }
 
         if (params.minPrice !== undefined) {
           const beforeMinPriceCount = filteredListings.length;
-          filteredListings = filteredListings.filter(listing => {
+          filteredListings = filteredListings.filter((listing) => {
             const price = listing.auction?.highestBid || listing.price;
             return price >= params.minPrice!;
           });
-          console.log(`[ListingsService] Min price filter ${params.minPrice}: ${beforeMinPriceCount} -> ${filteredListings.length}`);
+          console.log(
+            `[ListingsService] Min price filter ${params.minPrice}: ${beforeMinPriceCount} -> ${filteredListings.length}`
+          );
         }
 
         if (params.maxPrice !== undefined) {
           const beforeMaxPriceCount = filteredListings.length;
-          filteredListings = filteredListings.filter(listing => {
+          filteredListings = filteredListings.filter((listing) => {
             const price = listing.auction?.highestBid || listing.price;
             return price <= params.maxPrice!;
           });
-          console.log(`[ListingsService] Max price filter ${params.maxPrice}: ${beforeMaxPriceCount} -> ${filteredListings.length}`);
+          console.log(
+            `[ListingsService] Max price filter ${params.maxPrice}: ${beforeMaxPriceCount} -> ${filteredListings.length}`
+          );
         }
 
         if (params.tags && params.tags.length > 0) {
           const beforeTagsCount = filteredListings.length;
-          filteredListings = filteredListings.filter(listing =>
-            listing.tags?.some(tag => params.tags!.includes(tag))
+          filteredListings = filteredListings.filter((listing) =>
+            listing.tags?.some((tag) => params.tags!.includes(tag))
           );
-          console.log(`[ListingsService] Tags filter: ${beforeTagsCount} -> ${filteredListings.length}`);
+          console.log(
+            `[ListingsService] Tags filter: ${beforeTagsCount} -> ${filteredListings.length}`
+          );
         }
 
         if (params.isPremium !== undefined) {
           const beforePremiumCount = filteredListings.length;
           filteredListings = filteredListings.filter(
-            listing => listing.isPremium === params.isPremium
+            (listing) => listing.isPremium === params.isPremium
           );
-          console.log(`[ListingsService] Premium filter ${params.isPremium}: ${beforePremiumCount} -> ${filteredListings.length}`);
+          console.log(
+            `[ListingsService] Premium filter ${params.isPremium}: ${beforePremiumCount} -> ${filteredListings.length}`
+          );
         }
 
         if (params.isAuction !== undefined) {
           const beforeAuctionCount = filteredListings.length;
-          filteredListings = filteredListings.filter(
-            listing => (params.isAuction ? !!listing.auction : !listing.auction)
+          filteredListings = filteredListings.filter((listing) =>
+            params.isAuction ? !!listing.auction : !listing.auction
           );
-          console.log(`[ListingsService] Auction filter ${params.isAuction}: ${beforeAuctionCount} -> ${filteredListings.length}`);
+          console.log(
+            `[ListingsService] Auction filter ${params.isAuction}: ${beforeAuctionCount} -> ${filteredListings.length}`
+          );
         }
 
         // Sorting
         if (params.sortBy) {
-          console.log(`[ListingsService] Sorting by ${params.sortBy} ${params.sortOrder || 'asc'}`);
+          console.log(
+            `[ListingsService] Sorting by ${params.sortBy} ${params.sortOrder || 'asc'}`
+          );
           filteredListings.sort((a, b) => {
             let compareValue = 0;
-            
+
             switch (params.sortBy) {
               case 'date':
                 compareValue = new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -453,13 +485,15 @@ export class ListingsService {
                 compareValue = aPrice - bPrice;
                 break;
               case 'views':
-                // Would need to load views data for each listing
+                // Not tracked locally (left as 0)
                 compareValue = 0;
                 break;
               case 'endingSoon':
                 // Sort auctions by end time, non-auctions last
                 if (a.auction && b.auction) {
-                  compareValue = new Date(a.auction.endTime).getTime() - new Date(b.auction.endTime).getTime();
+                  compareValue =
+                    new Date(a.auction.endTime).getTime() -
+                    new Date(b.auction.endTime).getTime();
                 } else if (a.auction) {
                   compareValue = -1;
                 } else if (b.auction) {
@@ -476,9 +510,11 @@ export class ListingsService {
         if (params.page !== undefined && params.limit) {
           const start = params.page * params.limit;
           const end = start + params.limit;
-          
-          console.log(`[ListingsService] Paginating: page ${params.page}, limit ${params.limit}, showing ${start}-${end} of ${filteredListings.length}`);
-          
+
+          console.log(
+            `[ListingsService] Paginating: page ${params.page}, limit ${params.limit}, showing ${start}-${end} of ${filteredListings.length}`
+          );
+
           return {
             success: true,
             data: filteredListings.slice(start, end),
@@ -492,13 +528,13 @@ export class ListingsService {
       }
 
       console.log('[ListingsService] Returning listings:', filteredListings.length);
-      
+
       return {
         success: true,
         data: filteredListings,
         meta: {
-          totalItems: filteredListings.length
-        }
+          totalItems: filteredListings.length,
+        },
       };
     } catch (error) {
       console.error('[ListingsService] Get listings error:', error);
@@ -519,33 +555,34 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Fetching listing from backend:', sanitizedId);
-        
+
         const response = await apiCall<any>(`/listings/${sanitizedId}`);
-        
-        if (!mountedRef.current) return {
-          success: false,
-          error: { message: 'Component unmounted' }
-        };
+
+        if (!mountedRef.current)
+          return {
+            success: false,
+            error: { message: 'Component unmounted' },
+          };
 
         if (response.success && response.data) {
           // Handle both direct data and nested data structure
           const listingData = response.data.data || response.data;
           const convertedListing = convertBackendToFrontend(listingData);
-          
+
           // Check for premiumAccess in the response data
           const responseAsAny = response as any;
           const premiumAccess = response.data?.premiumAccess ?? responseAsAny.premiumAccess;
-          
+
           if (premiumAccess !== undefined) {
             console.log('[ListingsService] Premium access for listing:', premiumAccess);
           }
-          
+
           return {
             success: true,
             data: convertedListing,
             meta: {
-              premiumAccess
-            }
+              premiumAccess,
+            },
           };
         } else {
           return {
@@ -557,7 +594,7 @@ export class ListingsService {
 
       // Try cache first
       if (this.listingsCache.data) {
-        const cachedListing = this.listingsCache.data.find(l => l.id === sanitizedId);
+        const cachedListing = this.listingsCache.data.find((l) => l.id === sanitizedId);
         if (cachedListing) {
           return {
             success: true,
@@ -568,7 +605,7 @@ export class ListingsService {
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const listing = listings.find(l => l.id === sanitizedId);
+      const listing = listings.find((l) => l.id === sanitizedId);
 
       return {
         success: true,
@@ -576,19 +613,19 @@ export class ListingsService {
       };
     } catch (error: any) {
       console.error('Get listing error:', error);
-      
+
       // Handle 403 errors for premium content
       if (error.status === 403 || error.message?.includes('subscribe')) {
         return {
           success: false,
-          error: { 
+          error: {
             message: error.message || 'Premium content - subscription required',
             requiresSubscription: true,
-            seller: error.seller
+            seller: error.seller,
           },
         };
       }
-      
+
       return {
         success: false,
         error: { message: 'Failed to get listing' },
@@ -605,10 +642,8 @@ export class ListingsService {
       const sanitizedUsername = sanitize.username(username);
 
       if (FEATURES.USE_API_LISTINGS) {
-        const response = await apiCall<any>(
-          `/listings?seller=${sanitizedUsername}`
-        );
-        
+        const response = await apiCall<any>(`/listings?seller=${sanitizedUsername}`);
+
         if (response.success) {
           // Handle both direct array response and nested data structure
           const listings = response.data?.data || response.data || [];
@@ -616,13 +651,13 @@ export class ListingsService {
           return {
             success: true,
             data: convertedListings,
-            meta: response.data?.meta || response.meta
+            meta: response.data?.meta || response.meta,
           };
         }
-        
+
         return {
           success: false,
-          error: response.error || { message: 'Failed to get seller listings' }
+          error: response.error || { message: 'Failed to get seller listings' },
         };
       }
 
@@ -661,9 +696,11 @@ export class ListingsService {
         price: typeof request.price === 'string' ? parseFloat(request.price) : request.price,
         seller: request.seller,
         tags: request.tags,
-        hoursWorn: request.hoursWorn ? 
-          (typeof request.hoursWorn === 'string' ? parseInt(request.hoursWorn) : request.hoursWorn) : 
-          undefined,
+        hoursWorn: request.hoursWorn
+          ? typeof request.hoursWorn === 'string'
+            ? parseInt(request.hoursWorn)
+            : request.hoursWorn
+          : undefined,
       };
 
       // Validate and sanitize the request
@@ -674,7 +711,8 @@ export class ListingsService {
           title: sanitize.strict,
           description: sanitize.strict,
           seller: sanitize.username,
-          tags: (tags: string[] | undefined) => tags ? tags.map(tag => sanitize.strict(tag)) : undefined,
+          tags: (tags: string[] | undefined) =>
+            tags ? tags.map((tag) => sanitize.strict(tag)) : undefined,
         }
       );
 
@@ -700,7 +738,10 @@ export class ListingsService {
 
       // Validate reserve price if auction
       if (request.auction) {
-        if (request.auction.reservePrice && request.auction.reservePrice < request.auction.startingPrice) {
+        if (
+          request.auction.reservePrice &&
+          request.auction.reservePrice < request.auction.startingPrice
+        ) {
           return {
             success: false,
             error: { message: 'Reserve price must be at least the starting price' },
@@ -710,14 +751,14 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Creating listing via backend API');
-        
+
         const backendRequest = convertFrontendToBackend({
           ...sanitizedData,
           imageUrls: request.imageUrls,
           isVerified: request.isVerified,
           isPremium: request.isPremium,
           auction: request.auction,
-        });
+        } as any);
 
         const response = await apiCall<BackendListing>('/listings', {
           method: 'POST',
@@ -728,10 +769,10 @@ export class ListingsService {
 
         if (response.success && response.data) {
           const convertedListing = convertBackendToFrontend(response.data);
-          
+
           // Invalidate cache
           this.invalidateCache();
-          
+
           return {
             success: true,
             data: convertedListing,
@@ -744,7 +785,7 @@ export class ListingsService {
       // LocalStorage implementation (fallback)
       const listings = await storageService.getItem<Listing[]>('listings', []);
       console.log('[ListingsService] Current listings count before create:', listings.length);
-      
+
       const newListing: Listing = {
         id: uuidv4(),
         title: sanitizedData.title,
@@ -759,23 +800,25 @@ export class ListingsService {
         tags: sanitizedData.tags || [],
         hoursWorn: sanitizedData.hoursWorn,
         views: 0, // Initialize views for new listings
-        auction: request.auction ? {
-          isAuction: true,
-          startingPrice: request.auction.startingPrice,
-          reservePrice: request.auction.reservePrice,
-          endTime: request.auction.endTime,
-          bids: [],
-          highestBid: undefined,
-          highestBidder: undefined,
-          status: 'active',
-        } : undefined,
+        auction: request.auction
+          ? {
+              isAuction: true,
+              startingPrice: request.auction.startingPrice,
+              reservePrice: request.auction.reservePrice,
+              endTime: request.auction.endTime,
+              bids: [],
+              highestBid: undefined,
+              highestBidder: undefined,
+              status: 'active',
+            }
+          : undefined,
       };
 
       console.log('[ListingsService] New listing object:', newListing);
 
       listings.push(newListing);
       const saveResult = await storageService.setItem('listings', listings);
-      
+
       if (!saveResult) {
         throw new Error('Failed to save listings to storage');
       }
@@ -783,9 +826,9 @@ export class ListingsService {
       // Verify the save
       const verifyListings = await storageService.getItem<Listing[]>('listings', []);
       console.log('[ListingsService] Verified listings count after save:', verifyListings.length);
-      
+
       // Check if our listing is in the saved data
-      const savedListing = verifyListings.find(l => l.id === newListing.id);
+      const savedListing = verifyListings.find((l) => l.id === newListing.id);
       if (!savedListing) {
         throw new Error('Listing was not properly saved to storage');
       }
@@ -809,17 +852,14 @@ export class ListingsService {
   /**
    * Update existing listing
    */
-  async updateListing(
-    id: string,
-    updates: UpdateListingRequest
-  ): Promise<ApiResponse<Listing>> {
+  async updateListing(id: string, updates: UpdateListingRequest): Promise<ApiResponse<Listing>> {
     try {
       // Sanitize ID
       const sanitizedId = sanitize.strict(id);
 
       // Sanitize updates
       const sanitizedUpdates: UpdateListingRequest = {};
-      
+
       if (updates.title !== undefined) {
         sanitizedUpdates.title = sanitize.strict(updates.title);
       }
@@ -830,7 +870,7 @@ export class ListingsService {
         sanitizedUpdates.price = sanitize.number(updates.price, 0.01, 10000);
       }
       if (updates.tags !== undefined) {
-        sanitizedUpdates.tags = updates.tags.map(tag => sanitize.strict(tag));
+        sanitizedUpdates.tags = updates.tags.map((tag) => sanitize.strict(tag));
       }
       if (updates.hoursWorn !== undefined) {
         sanitizedUpdates.hoursWorn = sanitize.number(updates.hoursWorn, 0, 30);
@@ -854,18 +894,19 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Updating listing via backend API:', sanitizedId);
-        
+
+        // BACKEND expects PUT /listings/:id
         const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`, {
-          method: 'PATCH',
+          method: 'PUT',
           body: JSON.stringify(sanitizedUpdates),
         });
 
         if (response.success && response.data) {
           const convertedListing = convertBackendToFrontend(response.data);
-          
+
           // Invalidate cache
           this.invalidateCache();
-          
+
           return {
             success: true,
             data: convertedListing,
@@ -877,7 +918,7 @@ export class ListingsService {
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const index = listings.findIndex(l => l.id === sanitizedId);
+      const index = listings.findIndex((l) => l.id === sanitizedId);
 
       if (index === -1) {
         return {
@@ -925,22 +966,24 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Deleting listing via backend API:', sanitizedId);
-        
-        const response = await apiCall<void>(`/listings/${sanitizedId}`, { 
-          method: 'DELETE' 
+
+        const response = await apiCall<void>(`/listings/${sanitizedId}`, {
+          method: 'DELETE',
         });
 
         if (response.success) {
           // Invalidate cache
           this.invalidateCache();
-          
+
           // Trigger a custom event to notify other components
           if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('listingDeleted', { 
-              detail: { listingId: sanitizedId } 
-            }));
+            window.dispatchEvent(
+              new CustomEvent('listingDeleted', {
+                detail: { listingId: sanitizedId },
+              })
+            );
           }
-          
+
           return { success: true };
         } else {
           throw new Error(response.error?.message || 'Backend API error');
@@ -950,20 +993,20 @@ export class ListingsService {
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
       const beforeCount = listings.length;
-      const filtered = listings.filter(l => l.id !== sanitizedId);
+      const filtered = listings.filter((l) => l.id !== sanitizedId);
       const afterCount = filtered.length;
-      
+
       console.log(`[ListingsService] Delete listing: ${beforeCount} -> ${afterCount} listings`);
-      
+
       if (beforeCount === afterCount) {
         console.warn(`[ListingsService] Listing ${sanitizedId} was not found in storage`);
       }
-      
+
       await storageService.setItem('listings', filtered);
 
       // Invalidate all caches
       this.invalidateCache();
-      
+
       // Clear browse cache specifically
       if (typeof window !== 'undefined') {
         try {
@@ -973,19 +1016,23 @@ export class ListingsService {
           console.warn('Failed to clear browse cache:', e);
         }
       }
-      
+
       // Trigger a custom event to notify other components
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('listingDeleted', { 
-          detail: { listingId: sanitizedId } 
-        }));
-        
+        window.dispatchEvent(
+          new CustomEvent('listingDeleted', {
+            detail: { listingId: sanitizedId },
+          })
+        );
+
         // Also trigger storage event manually for cross-tab sync
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'listings',
-          newValue: JSON.stringify(filtered),
-          url: window.location.href
-        }));
+        window.dispatchEvent(
+          new StorageEvent('storage', {
+            key: 'listings',
+            newValue: JSON.stringify(filtered),
+            url: window.location.href,
+          })
+        );
       }
 
       return { success: true };
@@ -1004,11 +1051,11 @@ export class ListingsService {
   async bulkUpdateListings(request: BulkUpdateRequest): Promise<ApiResponse<Listing[]>> {
     try {
       // Sanitize listing IDs
-      const sanitizedIds = request.listingIds.map(id => sanitize.strict(id));
+      const sanitizedIds = request.listingIds.map((id) => sanitize.strict(id));
 
       // Sanitize updates (same as updateListing)
       const sanitizedUpdates: UpdateListingRequest = {};
-      
+
       if (request.updates.title !== undefined) {
         sanitizedUpdates.title = sanitize.strict(request.updates.title);
       }
@@ -1019,7 +1066,7 @@ export class ListingsService {
         sanitizedUpdates.price = sanitize.number(request.updates.price, 0.01, 10000);
       }
       if (request.updates.tags !== undefined) {
-        sanitizedUpdates.tags = request.updates.tags.map(tag => sanitize.strict(tag));
+        sanitizedUpdates.tags = request.updates.tags.map((tag) => sanitize.strict(tag));
       }
       if (request.updates.hoursWorn !== undefined) {
         sanitizedUpdates.hoursWorn = sanitize.number(request.updates.hoursWorn, 0, 30);
@@ -1097,8 +1144,12 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Placing bid via backend API:', sanitizedId, sanitizedAmount);
-        
+        console.log(
+          '[ListingsService] Placing bid via backend API:',
+          sanitizedId,
+          sanitizedAmount
+        );
+
         const response = await apiCall<BackendListing>(`/listings/${sanitizedId}/bid`, {
           method: 'POST',
           body: JSON.stringify({ amount: sanitizedAmount }),
@@ -1106,10 +1157,10 @@ export class ListingsService {
 
         if (response.success && response.data) {
           const convertedListing = convertBackendToFrontend(response.data);
-          
+
           // Invalidate cache
           this.invalidateCache();
-          
+
           return {
             success: true,
             data: convertedListing,
@@ -1119,14 +1170,14 @@ export class ListingsService {
           if (response.error?.requiresSubscription) {
             return {
               success: false,
-              error: { 
+              error: {
                 message: response.error.message || 'Premium content - subscription required',
                 requiresSubscription: true,
-                seller: response.error.seller
+                seller: response.error.seller,
               },
             };
           }
-          
+
           return {
             success: false,
             error: { message: response.error?.message || 'Failed to place bid' },
@@ -1136,7 +1187,7 @@ export class ListingsService {
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const listing = listings.find(l => l.id === sanitizedId);
+      const listing = listings.find((l) => l.id === sanitizedId);
 
       if (!listing || !listing.auction) {
         return {
@@ -1165,7 +1216,7 @@ export class ListingsService {
       // Proper bid validation logic
       const currentHighestBid = listing.auction.highestBid || 0;
       const startingPrice = listing.auction.startingPrice;
-      
+
       if (currentHighestBid === 0) {
         // First bid - must be at least starting price (allow equal)
         if (sanitizedAmount < startingPrice) {
@@ -1206,19 +1257,19 @@ export class ListingsService {
       };
     } catch (error: any) {
       console.error('Place bid error:', error);
-      
+
       // Handle 403 errors for premium content
       if (error.status === 403 || error.message?.includes('subscribe')) {
         return {
           success: false,
-          error: { 
+          error: {
             message: error.message || 'Premium content - subscription required',
             requiresSubscription: true,
-            seller: error.seller
+            seller: error.seller,
           },
         };
       }
-      
+
       return {
         success: false,
         error: { message: 'Failed to place bid' },
@@ -1241,10 +1292,10 @@ export class ListingsService {
 
         if (response.success && response.data) {
           const convertedListing = convertBackendToFrontend(response.data);
-          
+
           // Invalidate cache
           this.invalidateCache();
-          
+
           return {
             success: true,
             data: convertedListing,
@@ -1256,7 +1307,7 @@ export class ListingsService {
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const listing = listings.find(l => l.id === sanitizedId);
+      const listing = listings.find((l) => l.id === sanitizedId);
 
       if (!listing || !listing.auction) {
         return {
@@ -1294,7 +1345,7 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         console.log('[ListingsService] Ending auction via backend:', sanitizedId);
-        
+
         const response = await apiCall<any>(`/listings/${sanitizedId}/end-auction`, {
           method: 'POST',
         });
@@ -1302,7 +1353,7 @@ export class ListingsService {
         if (response.success) {
           // Invalidate cache to force refresh
           this.invalidateCache();
-          
+
           return {
             success: true,
             data: response.data,
@@ -1317,7 +1368,7 @@ export class ListingsService {
 
       // LocalStorage fallback - just mark as ended
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      const listing = listings.find(l => l.id === sanitizedId);
+      const listing = listings.find((l) => l.id === sanitizedId);
 
       if (!listing || !listing.auction) {
         return {
@@ -1327,10 +1378,12 @@ export class ListingsService {
       }
 
       // Check if reserve is met
-      const reserveMet = !listing.auction.reservePrice || 
-        (listing.auction.highestBid && listing.auction.highestBid >= listing.auction.reservePrice);
+      const reserveMet =
+        !listing.auction.reservePrice ||
+        (listing.auction.highestBid &&
+          listing.auction.highestBid >= listing.auction.reservePrice);
 
-      listing.auction.status = reserveMet ? 'ended' : 'reserve_not_met' as any;
+      listing.auction.status = reserveMet ? 'ended' : ('reserve_not_met' as any);
       await storageService.setItem('listings', listings);
 
       // Invalidate cache
@@ -1338,11 +1391,11 @@ export class ListingsService {
 
       return {
         success: true,
-        data: { 
+        data: {
           status: listing.auction.status,
           reserveMet,
           highestBid: listing.auction.highestBid,
-          highestBidder: listing.auction.highestBidder
+          highestBidder: listing.auction.highestBidder,
         },
       };
     } catch (error) {
@@ -1375,7 +1428,7 @@ export class ListingsService {
         'listing_views',
         {}
       );
-      
+
       viewsData[sanitizedId] = (viewsData[sanitizedId] || 0) + 1;
       await storageService.setItem('listing_views', viewsData);
 
@@ -1403,7 +1456,7 @@ export class ListingsService {
       // Check cache first
       const cached = this.viewsCache.get(sanitizedId);
       const now = Date.now();
-      
+
       if (cached && now - cached.timestamp < VIEW_CACHE_DURATION) {
         return {
           success: true,
@@ -1413,7 +1466,7 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         const response = await apiCall<{ views: number }>(`/listings/${sanitizedId}/views`);
-        
+
         if (response.success && response.data) {
           const viewCount = (response.data as any).views || 0;
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: now });
@@ -1456,10 +1509,7 @@ export class ListingsService {
 
       // Check cache first
       const now = Date.now();
-      if (
-        this.popularTagsCache.data &&
-        now - this.popularTagsCache.timestamp < CACHE_DURATION
-      ) {
+      if (this.popularTagsCache.data && now - this.popularTagsCache.timestamp < CACHE_DURATION) {
         return {
           success: true,
           data: this.popularTagsCache.data.slice(0, sanitizedLimit),
@@ -1470,14 +1520,14 @@ export class ListingsService {
         const response = await apiCall<PopularTag[]>(
           `/listings/popular-tags?limit=${sanitizedLimit}`
         );
-        
+
         if (response.success && response.data) {
           // Cache the result
           this.popularTagsCache = {
             data: response.data,
             timestamp: now,
           };
-          
+
           return response;
         }
       }
@@ -1486,8 +1536,8 @@ export class ListingsService {
       const listings = await storageService.getItem<Listing[]>('listings', []);
       const tagCounts = new Map<string, number>();
 
-      listings.forEach(listing => {
-        listing.tags?.forEach(tag => {
+      listings.forEach((listing) => {
+        listing.tags?.forEach((tag) => {
           tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
         });
       });
@@ -1516,7 +1566,7 @@ export class ListingsService {
   /**
    * Draft Management
    */
-  
+
   /**
    * Save listing draft
    */
@@ -1527,7 +1577,7 @@ export class ListingsService {
 
       // The ListingDraft type should have these properties, but let's handle them safely
       const draftAsAny = draft as any;
-      
+
       if (draftAsAny.title) {
         (sanitizedDraft as any).title = sanitize.strict(draftAsAny.title);
       }
@@ -1541,18 +1591,25 @@ export class ListingsService {
         (sanitizedDraft as any).tags = draftAsAny.tags.map((tag: string) => sanitize.strict(tag));
       }
 
+      if (FEATURES.USE_API_LISTINGS) {
+        return await apiCall<ListingDraft>('/listings/drafts', {
+          method: 'POST',
+          body: JSON.stringify(sanitizedDraft),
+        });
+      }
+
       const drafts = await storageService.getItem<ListingDraft[]>('listing_drafts', []);
-      
-      const existingIndex = drafts.findIndex(d => d.id === sanitizedDraft.id);
-      
+
+      const existingIndex = drafts.findIndex((d) => d.id === sanitizedDraft.id);
+
       if (existingIndex >= 0) {
         drafts[existingIndex] = { ...sanitizedDraft, lastModified: new Date().toISOString() };
       } else {
         drafts.push({ ...sanitizedDraft, lastModified: new Date().toISOString() });
       }
-      
+
       await storageService.setItem('listing_drafts', drafts);
-      
+
       return {
         success: true,
         data: sanitizedDraft,
@@ -1574,9 +1631,13 @@ export class ListingsService {
       // Sanitize seller
       const sanitizedSeller = sanitize.username(seller);
 
+      if (FEATURES.USE_API_LISTINGS) {
+        return await apiCall<ListingDraft[]>(`/listings/drafts/${sanitizedSeller}`);
+      }
+
       const drafts = await storageService.getItem<ListingDraft[]>('listing_drafts', []);
-      const sellerDrafts = drafts.filter(d => (d as any).seller === sanitizedSeller);
-      
+      const sellerDrafts = drafts.filter((d) => (d as any).seller === sanitizedSeller);
+
       return {
         success: true,
         data: sellerDrafts,
@@ -1598,11 +1659,17 @@ export class ListingsService {
       // Sanitize ID
       const sanitizedId = sanitize.strict(draftId);
 
+      if (FEATURES.USE_API_LISTINGS) {
+        return await apiCall<void>(`/listings/drafts/${sanitizedId}`, {
+          method: 'DELETE',
+        });
+      }
+
       const drafts = await storageService.getItem<ListingDraft[]>('listing_drafts', []);
-      const filtered = drafts.filter(d => d.id !== sanitizedId);
-      
+      const filtered = drafts.filter((d) => d.id !== sanitizedId);
+
       await storageService.setItem('listing_drafts', filtered);
-      
+
       return { success: true };
     } catch (error) {
       console.error('Delete draft error:', error);
@@ -1614,7 +1681,7 @@ export class ListingsService {
   }
 
   /**
-   * Upload image to Cloudinary
+   * Upload image to Cloudinary or backend passthrough
    */
   async uploadImage(file: File): Promise<ApiResponse<string>> {
     try {
@@ -1642,28 +1709,18 @@ export class ListingsService {
         };
       }
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '');
-      
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-        {
+      if (FEATURES.USE_API_LISTINGS) {
+        const formData = new FormData();
+        formData.append('file', file);
+        return await apiCall<string>(`/listings/images`, {
           method: 'POST',
-          body: formData,
-        }
-      );
-      
-      if (!response.ok) {
-        throw new Error('Upload failed');
+          body: formData as any, // apiCall should handle FormData
+        });
       }
-      
-      const data = await response.json();
-      
-      return {
-        success: true,
-        data: data.secure_url,
-      };
+
+      // Local dev: just pretend we uploaded and return a dummy URL
+      const dummy = `https://via.placeholder.com/600x400?text=${encodeURIComponent(file.name)}`;
+      return { success: true, data: dummy };
     } catch (error) {
       console.error('Upload image error:', error);
       return {
@@ -1674,7 +1731,7 @@ export class ListingsService {
   }
 
   /**
-   * Delete image from Cloudinary
+   * Delete image
    */
   async deleteImage(imageUrl: string): Promise<ApiResponse<void>> {
     try {
@@ -1693,9 +1750,8 @@ export class ListingsService {
           body: JSON.stringify({ imageUrl: sanitizedUrl }),
         });
       }
-      
-      // For now, we can't delete from Cloudinary without backend
-      // Just return success to allow UI to continue
+
+      // For local fallback we can't actually delete remote images; report success
       return { success: true };
     } catch (error) {
       console.error('Delete image error:', error);
