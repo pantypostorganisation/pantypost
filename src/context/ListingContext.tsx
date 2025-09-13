@@ -729,21 +729,42 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   // ---------- Remove listing ----------
   const removeListing = async (id: string): Promise<void> => {
+    // helper to update local state + fire events
+    const finishLocalRemoval = () => {
+      setListings((prev) => prev.filter((l) => l.id !== id));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('listing:removed', { detail: { listingId: id, reason: 'deleted' } })
+        );
+        window.dispatchEvent(new CustomEvent('listingDeleted', { detail: { listingId: id } }));
+      }
+    };
+
     try {
+      const target = listings.find((l) => l.id === id);
+      const isAdmin = user?.role === 'admin';
+      const isOwner = !!target && user?.username === target.seller;
+
+      // Buyers/others: do not call backend DELETE; just remove locally
+      if (!isAdmin && !isOwner) {
+        finishLocalRemoval();
+        return;
+      }
+
       const result = await listingsService.deleteListing(id);
       if (result.success) {
-        setListings((prev) => prev.filter((l) => l.id !== id));
-
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('listing:removed', { detail: { listingId: id, reason: 'deleted' } })
-          );
-          window.dispatchEvent(new CustomEvent('listingDeleted', { detail: { listingId: id } }));
-        }
+        finishLocalRemoval();
       } else {
         throw new Error(result.error?.message || 'Failed to delete listing');
       }
     } catch (error: any) {
+      // Treat 403 from backend as a no-op success (already handled by purchase flow)
+      const message = error?.message || '';
+      if (message.includes('Not authorized to delete')) {
+        finishLocalRemoval();
+        return;
+      }
+
       console.error('Error removing listing:', error);
       alert(error?.message || 'Failed to remove listing');
     }
@@ -976,7 +997,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const result = await listingsService.saveDraft(sanitizedDraft);
       return !!result.success;
     } catch (error) {
-      console.error('Error saving draft:', error);
+      console.error('Save draft error:', error);
       return false;
     }
   };
@@ -987,7 +1008,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const result = await listingsService.getDrafts(user.username);
       return result.success && result.data ? result.data : [];
     } catch (error) {
-      console.error('Error getting drafts:', error);
+      console.error('Get drafts error:', error);
       return [];
     }
   };
@@ -997,7 +1018,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       const result = await listingsService.deleteDraft(draftId);
       return !!result.success;
     } catch (error) {
-      console.error('Error deleting draft:', error);
+      console.error('Delete draft error:', error);
       return false;
     }
   };

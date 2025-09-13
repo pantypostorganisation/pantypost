@@ -72,7 +72,8 @@ const listingSchema = new mongoose.Schema({
   // Listing status
   status: {
     type: String,
-    enum: ['active', 'sold', 'expired', 'cancelled'],
+    // ✅ Add 'deleted' so soft-deletes pass validation
+    enum: ['active', 'sold', 'expired', 'cancelled', 'deleted'],
     default: 'active'
   },
   
