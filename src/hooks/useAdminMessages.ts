@@ -1,4 +1,3 @@
-// src/hooks/useAdminMessages.ts
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -8,24 +7,22 @@ import { Message } from '@/types/message';
 import { sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
-const MAX_MESSAGE_LENGTH = 2000;
-
 export const useAdminMessages = () => {
   const { user } = useAuth();
   const { users } = useListings();
-  const {
-    messages,
-    sendMessage,
-    markMessagesAsRead,
-    blockUser,
-    unblockUser,
-    reportUser,
-    isBlocked,
+  const { 
+    messages, 
+    sendMessage, 
+    markMessagesAsRead, 
+    blockUser, 
+    unblockUser, 
+    reportUser, 
+    isBlocked, 
     hasReported,
     getThreadsForUser,
-    getAllThreadsInfo,
+    getAllThreadsInfo
   } = useMessages();
-
+  
   const [selectedUser, setSelectedUser] = useState<string>('');
   const [content, setContent] = useState<string>('');
   const [activeThread, setActiveThread] = useState<string | null>(null);
@@ -37,52 +34,39 @@ export const useAdminMessages = () => {
   const [showUserDirectory, setShowUserDirectory] = useState(false);
   const [directorySearchQuery, setDirectorySearchQuery] = useState('');
   const [rateLimitError, setRateLimitError] = useState<string | null>(null);
-
+  
   const readThreadsRef = useRef<Set<string>>(new Set());
   const rateLimiter = getRateLimiter();
-  const mountedRef = useRef(true);
-
+  
   const isAdmin = !!user && user.role === 'admin';
   const username = user?.username || '';
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   // Load views data with error handling
   const loadViews = useCallback(async () => {
     try {
       if (typeof window !== 'undefined') {
         const data = await storageService.getItem<Record<string, number>>('listing_views', {});
-        if (mountedRef.current) setViewsData(data);
+        setViewsData(data);
       }
     } catch (error) {
       console.error('Failed to load views data:', error);
-      if (mountedRef.current) setViewsData({});
+      setViewsData({});
     }
   }, []);
 
   // Load views and handle localStorage events
   useEffect(() => {
     loadViews();
-
-    const handleStorageChange = () => {
-      void loadViews();
+    
+    const handleStorageChange = () => loadViews();
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleStorageChange);
     };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', handleStorageChange);
-      window.addEventListener('focus', handleStorageChange);
-      return () => {
-        window.removeEventListener('storage', handleStorageChange);
-        window.removeEventListener('focus', handleStorageChange);
-      };
-    }
-
-    return () => {};
   }, [loadViews]);
 
   // Load previously read threads
@@ -94,62 +78,64 @@ export const useAdminMessages = () => {
           const readThreads = await storageService.getItem<string[]>(readThreadsKey, []);
           if (Array.isArray(readThreads)) {
             readThreadsRef.current = new Set(readThreads);
-            if (mountedRef.current) setMessageUpdate((prev) => prev + 1);
+            setMessageUpdate(prev => prev + 1);
           }
         }
       } catch (error) {
         console.error('Failed to load read threads:', error);
       }
     };
-
-    void loadReadThreads();
+    
+    loadReadThreads();
   }, [user]);
 
-  // Derive threads + counts + last messages + profiles
+  // UPDATED: Use new helper functions from MessageContext
   const { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount } = useMemo(() => {
-    if (!user) {
-      return {
-        threads: {},
-        unreadCounts: {},
-        lastMessages: {},
-        userProfiles: {},
-        activeMessages: [],
-        totalUnreadCount: 0,
-      };
-    }
-
+    if (!user) return { 
+      threads: {}, 
+      unreadCounts: {}, 
+      lastMessages: {}, 
+      userProfiles: {}, 
+      activeMessages: [],
+      totalUnreadCount: 0 
+    };
+    
+    // Use the new helper functions (no role filter for admin - sees all)
     const threads = getThreadsForUser(user.username);
     const threadInfos = getAllThreadsInfo(user.username);
-
+    
     const unreadCounts: { [userKey: string]: number } = {};
     const lastMessages: { [userKey: string]: Message } = {};
-    const userProfiles: { [userKey: string]: { pic: string | null; verified: boolean; role: string } } = {};
+    const userProfiles: { [userKey: string]: { pic: string | null, verified: boolean, role: string } } = {};
     let totalUnreadCount = 0;
-
+    
     Object.entries(threadInfos).forEach(([userKey, info]) => {
       unreadCounts[userKey] = info.unreadCount;
       lastMessages[userKey] = info.lastMessage as Message;
-
+      
+      // Get user profile picture and verification status
       try {
         const userInfo = users?.[userKey];
-        const isVerified = Boolean(userInfo?.verified || userInfo?.verificationStatus === 'verified');
+        const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
         const role = userInfo?.role || 'unknown';
-
-        userProfiles[userKey] = {
-          pic: null, // Load via approved channels only
+        
+        userProfiles[userKey] = { 
+          pic: null,
           verified: isVerified,
-          role,
+          role: role
         };
       } catch (error) {
         console.error(`Error processing user profile for ${userKey}:`, error);
         userProfiles[userKey] = { pic: null, verified: false, role: 'unknown' };
       }
-
+      
+      // Only add to total if not in readThreadsRef
       if (!readThreadsRef.current.has(userKey) && info.unreadCount > 0) {
         totalUnreadCount += 1;
       }
     });
-
+    
+    // Get active messages
     let activeMessages: Message[] = [];
     if (activeThread) {
       activeMessages = threads[activeThread] || [];
@@ -158,145 +144,129 @@ export const useAdminMessages = () => {
     return { threads, unreadCounts, lastMessages, userProfiles, activeMessages, totalUnreadCount };
   }, [user, messages, activeThread, users, messageUpdate, getThreadsForUser, getAllThreadsInfo]);
 
-  // Get all users for directory (exclude current admin and any admin accounts)
+  // Get all users for directory (exclude the current admin and any admin accounts)
   const allUsers = useMemo(() => {
     const allUsersList = Object.entries(users || {})
-      .filter(
-        ([uname, userInfo]) =>
-          uname !== user?.username && // exclude current admin
-          userInfo?.role !== 'admin', // exclude admins
+      .filter(([uname, userInfo]) => 
+        uname !== user?.username && // Exclude current admin user
+        userInfo?.role !== 'admin'    // Exclude any admin accounts
       )
       .map(([uname, userInfo]) => {
-        const isVerified = Boolean(userInfo?.verified || userInfo?.verificationStatus === 'verified');
+        const isVerified = userInfo?.verified || userInfo?.verificationStatus === 'verified';
+        
         return {
           username: uname,
           role: userInfo?.role || 'unknown',
           verified: isVerified,
-          pic: null, // handled elsewhere
+          pic: null // Profile pics should be loaded through proper channels
         };
       });
-
+    
     return allUsersList;
   }, [users, user]);
 
   // Mark messages as read when thread is selected
   useEffect(() => {
     const markThreadAsRead = async () => {
-      if (!activeThread || !user) return;
-
-      const hasUnreadMessages = (threads[activeThread] || []).some(
-        (msg) => !msg.read && msg.sender === activeThread && msg.receiver === user.username,
-      );
-
-      if (hasUnreadMessages) {
-        markMessagesAsRead(user.username, activeThread);
-
-        if (!readThreadsRef.current.has(activeThread)) {
-          readThreadsRef.current.add(activeThread);
-
-          if (typeof window !== 'undefined') {
-            const readThreadsKey = `panty_read_threads_${user.username}`;
-            await storageService.setItem(readThreadsKey, Array.from(readThreadsRef.current));
-
-            const event = new CustomEvent('readThreadsUpdated', {
-              detail: { threads: Array.from(readThreadsRef.current), username: user.username },
-            });
-            window.dispatchEvent(event);
+      if (activeThread && user) {
+        const hasUnreadMessages = threads[activeThread]?.some(
+          msg => !msg.read && msg.sender === activeThread && msg.receiver === user.username
+        );
+        
+        if (hasUnreadMessages) {
+          markMessagesAsRead(user.username, activeThread);
+          
+          if (!readThreadsRef.current.has(activeThread)) {
+            readThreadsRef.current.add(activeThread);
+            
+            if (typeof window !== 'undefined') {
+              const readThreadsKey = `panty_read_threads_${user.username}`;
+              await storageService.setItem(readThreadsKey, Array.from(readThreadsRef.current));
+              
+              const event = new CustomEvent('readThreadsUpdated', { 
+                detail: { threads: Array.from(readThreadsRef.current), username: user.username }
+              });
+              window.dispatchEvent(event);
+            }
+            
+            setMessageUpdate(prev => prev + 1);
           }
-
-          if (mountedRef.current) setMessageUpdate((prev) => prev + 1);
+        }
+        
+        if (typeof window !== 'undefined') {
+          const event = new CustomEvent('threadSelected', { 
+            detail: { thread: activeThread, username: user.username }
+          });
+          window.dispatchEvent(event);
         }
       }
-
-      if (typeof window !== 'undefined') {
-        const event = new CustomEvent('threadSelected', {
-          detail: { thread: activeThread, username: user.username },
-        });
-        window.dispatchEvent(event);
-      }
     };
-
-    void markThreadAsRead();
+    
+    markThreadAsRead();
   }, [activeThread, user, threads, markMessagesAsRead]);
 
-  // Save read threads to localStorage (persist)
+  // Save read threads to localStorage
   useEffect(() => {
     const saveReadThreads = async () => {
       if (user && readThreadsRef.current.size > 0 && typeof window !== 'undefined') {
         const readThreadsKey = `panty_read_threads_${user.username}`;
         const threadsArray = Array.from(readThreadsRef.current);
         await storageService.setItem(readThreadsKey, threadsArray);
-
-        const event = new CustomEvent('readThreadsUpdated', {
-          detail: { threads: threadsArray, username: user.username },
+        
+        const event = new CustomEvent('readThreadsUpdated', { 
+          detail: { threads: threadsArray, username: user.username }
         });
         window.dispatchEvent(event);
       }
     };
-
-    void saveReadThreads();
+    
+    saveReadThreads();
   }, [messageUpdate, user]);
 
   const handleSend = useCallback(() => {
-    if (!activeThread) {
-      alert('Please select a conversation.');
-      return;
-    }
-    if (!username) {
-      alert('Please log in to send messages.');
-      return;
-    }
-
-    // Sanitize & validate content
-    const raw = typeof content === 'string' ? content : '';
-    const sanitizedContent = sanitize.strict(raw).trim();
-
-    if (!sanitizedContent && !selectedImage) {
+    if (!activeThread || (!content.trim() && !selectedImage)) {
       alert('Please enter a message.');
       return;
     }
-    if (sanitizedContent.length > MAX_MESSAGE_LENGTH) {
-      alert(`Messages must be ${MAX_MESSAGE_LENGTH} characters or fewer.`);
-      return;
-    }
 
-    // Clear prior rate limit error
+    // Clear rate limit error
     setRateLimitError(null);
 
-    // Rate limit per-sender
-    const rl = rateLimiter.check('MESSAGE_SEND', { ...RATE_LIMITS.MESSAGE_SEND, identifier: username });
-    if (!rl.allowed) {
-      setRateLimitError(`Too many messages sent. Please wait ${rl.waitTime} seconds.`);
+    // Check rate limit
+    const rateLimitResult = rateLimiter.check('MESSAGE_SEND', RATE_LIMITS.MESSAGE_SEND);
+    if (!rateLimitResult.allowed) {
+      setRateLimitError(`Too many messages sent. Please wait ${rateLimitResult.waitTime} seconds.`);
       return;
     }
 
-    // Validate/sanitize image URL if provided
-    let imageUrl: string | undefined;
+    // Sanitize message content
+    const sanitizedContent = sanitize.strict(content.trim());
+
+    // Validate image URL if provided
     if (selectedImage) {
       const sanitizedImageUrl = sanitize.url(selectedImage);
       if (!sanitizedImageUrl) {
         alert('Invalid image URL');
         return;
       }
-      imageUrl = sanitizedImageUrl;
     }
 
-    // Send using sanitized values only
     sendMessage(username, activeThread, sanitizedContent, {
-      type: imageUrl ? 'image' : 'normal',
-      meta: imageUrl ? { imageUrl } : undefined,
+      type: selectedImage ? 'image' : 'normal',
+      meta: selectedImage ? { imageUrl: selectedImage } : undefined,
     });
-
+    
     setContent('');
     setSelectedImage(null);
   }, [activeThread, content, selectedImage, username, sendMessage, rateLimiter]);
 
   const handleBlockToggle = useCallback(() => {
-    if (!activeThread || !username) return;
-
-    const rl = rateLimiter.check('REPORT_ACTION', { ...RATE_LIMITS.REPORT_ACTION, identifier: username });
-    if (!rl.allowed) {
-      alert(`Please wait ${rl.waitTime} seconds before performing this action.`);
+    if (!activeThread) return;
+    
+    // Rate limit block/unblock actions
+    const rateLimitResult = rateLimiter.check('REPORT_ACTION', RATE_LIMITS.REPORT_ACTION);
+    if (!rateLimitResult.allowed) {
+      alert(`Please wait ${rateLimitResult.waitTime} seconds before performing this action.`);
       return;
     }
 
@@ -308,55 +278,55 @@ export const useAdminMessages = () => {
   }, [activeThread, username, isBlocked, unblockUser, blockUser, rateLimiter]);
 
   const handleReport = useCallback(() => {
-    if (!activeThread || !username) return;
-
-    const rl = rateLimiter.check('REPORT_ACTION', { ...RATE_LIMITS.REPORT_ACTION, identifier: username });
-    if (!rl.allowed) {
-      alert(`Please wait ${rl.waitTime} seconds before reporting.`);
-      return;
-    }
-
-    if (!hasReported(username, activeThread)) {
+    if (activeThread && !hasReported(username, activeThread)) {
+      // Rate limit report actions
+      const rateLimitResult = rateLimiter.check('REPORT_ACTION', RATE_LIMITS.REPORT_ACTION);
+      if (!rateLimitResult.allowed) {
+        alert(`Please wait ${rateLimitResult.waitTime} seconds before reporting.`);
+        return;
+      }
+      
       reportUser(username, activeThread);
     }
   }, [activeThread, username, hasReported, reportUser, rateLimiter]);
 
-  const handleThreadSelect = useCallback(
-    (userId: string) => {
-      const sanitizedUserId = sanitize.username(userId);
-      if (activeThread === sanitizedUserId) return;
-      setActiveThread(sanitizedUserId);
-      setShowUserDirectory(false);
-    },
-    [activeThread],
-  );
+  const handleThreadSelect = useCallback((userId: string) => {
+    // Sanitize username
+    const sanitizedUserId = sanitize.username(userId);
+    
+    if (activeThread === sanitizedUserId) return;
+    setActiveThread(sanitizedUserId);
+    setShowUserDirectory(false);
+  }, [activeThread]);
 
   const handleStartConversation = useCallback((targetUsername: string) => {
+    // Sanitize username
     const sanitizedUsername = sanitize.username(targetUsername);
+    
     setActiveThread(sanitizedUsername);
     setShowUserDirectory(false);
   }, []);
 
-  // Sanitized search setters with basic length guard
+  // Create enhanced search setters that sanitize input
   const setSearchQuerySafe = useCallback((value: string | ((prev: string) => string)) => {
     if (typeof value === 'function') {
-      setSearchQuery((prev) => {
-        const v = (value as (p: string) => string)(prev);
-        return sanitize.searchQuery(v).slice(0, 200);
+      setSearchQuery(prev => {
+        const newValue = value(prev);
+        return sanitize.searchQuery(newValue);
       });
     } else {
-      setSearchQuery(sanitize.searchQuery(value).slice(0, 200));
+      setSearchQuery(sanitize.searchQuery(value));
     }
   }, []);
 
   const setDirectorySearchQuerySafe = useCallback((value: string | ((prev: string) => string)) => {
     if (typeof value === 'function') {
-      setDirectorySearchQuery((prev) => {
-        const v = (value as (p: string) => string)(prev);
-        return sanitize.searchQuery(v).slice(0, 200);
+      setDirectorySearchQuery(prev => {
+        const newValue = value(prev);
+        return sanitize.searchQuery(newValue);
       });
     } else {
-      setDirectorySearchQuery(sanitize.searchQuery(value).slice(0, 200));
+      setDirectorySearchQuery(sanitize.searchQuery(value));
     }
   }, []);
 
@@ -376,7 +346,7 @@ export const useAdminMessages = () => {
     isAdmin,
     username,
     allUsers,
-
+    
     // Messages & Threads
     threads,
     unreadCounts,
@@ -384,16 +354,16 @@ export const useAdminMessages = () => {
     userProfiles,
     activeMessages,
     totalUnreadCount,
-
+    
     // State
     selectedUser,
     setSelectedUser,
     content,
-    setContent, // keep raw setter (we sanitize on send)
+    setContent, // Keep the original setter for compatibility
     activeThread,
     setActiveThread,
     searchQuery,
-    setSearchQuery: setSearchQuerySafe,
+    setSearchQuery: setSearchQuerySafe, // Use the safe setter
     selectedImage,
     setSelectedImage,
     filterBy,
@@ -401,22 +371,22 @@ export const useAdminMessages = () => {
     showUserDirectory,
     setShowUserDirectory,
     directorySearchQuery,
-    setDirectorySearchQuery: setDirectorySearchQuerySafe,
-
+    setDirectorySearchQuery: setDirectorySearchQuerySafe, // Use the safe setter
+    
     // Computed
     isUserBlocked,
     isUserReported,
-
+    
     // Handlers
     handleSend,
     handleBlockToggle,
     handleReport,
     handleThreadSelect,
     handleStartConversation,
-
+    
     // Other
     viewsData,
     messageUpdate,
-    rateLimitError,
+    rateLimitError
   };
 };
