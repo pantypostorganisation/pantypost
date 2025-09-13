@@ -7,18 +7,31 @@ import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useToast } from '@/context/ToastContext';
+import { formatMoney } from '@/utils/format';
+import { Money } from '@/types/common';
 import { Listing } from '@/context/ListingContext';
+import { DeliveryAddress } from '@/types/order';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface PurchaseSectionProps {
   listing: Listing;
-  user: any; // { username: string; role: 'buyer' | 'seller' | 'admin' } expected
-  handlePurchase: () => void; // kept for compatibility with existing props
+  user: any;
+  handlePurchase: () => void; // kept for compatibility
   isProcessing: boolean;
   isFavorited: boolean;
   toggleFavorite: () => void;
   onSubscribeClick: () => void;
 }
+
+// Mock delivery address for now - in production you'd get this from user profile
+const DEFAULT_DELIVERY_ADDRESS: DeliveryAddress = {
+  fullName: 'John Doe',
+  addressLine1: '123 Main St',
+  city: 'New York',
+  state: 'NY',
+  postalCode: '10001',
+  country: 'US',
+};
 
 export default function PurchaseSection({
   listing,
@@ -30,34 +43,29 @@ export default function PurchaseSection({
   onSubscribeClick,
 }: PurchaseSectionProps) {
   const router = useRouter();
-
-  // ✅ Use ListingContext for purchase + remove flow
-  const { listings, purchaseListingAndRemove } = useListings();
-
-  // Wallet still used for balance checks + reload
-  const { getBuyerBalance, reloadData, orderHistory } = useWallet();
-
+  const { listings } = useListings();
+  const { getBuyerBalance, purchaseListing, reloadData, orderHistory } = useWallet();
   const { showToast } = useToast();
-
   const [isPurchasing, setIsPurchasing] = useState(false);
+  
+  // CRITICAL FIX: Add state to track if purchase was successful
   const [purchaseCompleted, setPurchaseCompleted] = useState(false);
 
   const isSeller = user?.username === listing.seller;
   const isAdmin = user?.role === 'admin';
 
-  // Server-driven lock flag (do not infer on client)
+  // FIXED: Use the server's isLocked field directly instead of doing client-side checks
   const isPremiumLocked = listing.isLocked === true;
 
-  // If a listing is missing from active listings, we treat it as sold/removed
-  const isListingStillActive = listings.some((l) => l.id === listing.id);
-
-  // If the current user already has an order for this listing, mark as complete
+  // FIX: Check if listing still exists in active listings (if not, it's been sold)
+  const isListingStillActive = listings.some(l => l.id === listing.id);
+  
+  // FIX: Check if current user has this item in their order history
   useEffect(() => {
     if (user?.username && orderHistory) {
-      const userPurchasedThis = orderHistory.some(
-        (order) =>
-          order.buyer === user.username &&
-          (order.listingId === listing.id || order.title === listing.title)
+      const userPurchasedThis = orderHistory.some(order => 
+        order.buyer === user.username && 
+        (order.listingId === listing.id || order.title === listing.title)
       );
       if (userPurchasedThis) {
         setPurchaseCompleted(true);
@@ -65,27 +73,31 @@ export default function PurchaseSection({
     }
   }, [user?.username, orderHistory, listing.id, listing.title]);
 
-  // Use cents to avoid floating-point comparison issues
+  // FIX: Use cents for comparison to avoid floating-point issues
   const buyerBalanceInCents = user ? Math.round(getBuyerBalance(user.username) * 100) : 0;
-  const purchasePriceInCents = Math.round(((listing.markedUpPrice ?? listing.price) || 0) * 100);
-
+  const purchasePriceInCents = Math.round((listing.markedUpPrice || listing.price) * 100);
+  
+  // Compare in cents (integers) to avoid floating-point issues
   const canAfford = buyerBalanceInCents >= purchasePriceInCents;
+  
+  // FIX: Calculate the actual difference in dollars
   const balanceNeeded = Math.max(0, (purchasePriceInCents - buyerBalanceInCents) / 100);
+  
+  // CRITICAL FIX: Don't show warning if purchase completed or listing not active
+  const shouldShowInsufficientBalance = !canAfford && 
+                                        balanceNeeded > 0.01 &&
+                                        !isSeller && 
+                                        !purchaseCompleted && 
+                                        !isPurchasing && 
+                                        !isProcessing &&
+                                        isListingStillActive &&
+                                        !isPremiumLocked;
 
-  const shouldShowInsufficientBalance =
-    !canAfford &&
-    balanceNeeded > 0.01 &&
-    !isSeller &&
-    !purchaseCompleted &&
-    !isPurchasing &&
-    !isProcessing &&
-    isListingStillActive &&
-    !isPremiumLocked;
-
-  // ✅ Real purchase handler — uses ListingContext.purchaseListingAndRemove
+  // Real purchase handler with validation and admin guardrails
   const handleRealPurchase = async () => {
     if (!user || isPurchasing || isProcessing || purchaseCompleted || !isListingStillActive) return;
 
+    // Admins cannot act as buyers
     if (isAdmin) {
       showToast({
         type: 'error',
@@ -99,11 +111,12 @@ export default function PurchaseSection({
       return;
     }
 
+    // FIXED: Check for premium content using server's isLocked field
     if (isPremiumLocked) {
-      showToast({
-        type: 'error',
-        title: 'Premium content locked',
-        message: 'You must be subscribed to this seller to purchase premium content',
+      showToast({ 
+        type: 'error', 
+        title: 'Premium content locked', 
+        message: 'You must be subscribed to this seller to purchase premium content' 
       });
       return;
     }
@@ -117,60 +130,65 @@ export default function PurchaseSection({
     setIsPurchasing(true);
 
     try {
-      /**
-       * ✅ Critical change:
-       * This performs the backend purchase (with listingId),
-       * marks it sold server-side, removes it from global listings state,
-       * and dispatches events / websocket notifications to keep Browse & My Listings in sync.
-       */
-      const ok = await purchaseListingAndRemove(listing, user.username);
+      // Include isPremium flag in purchase request
+      await purchaseListing(
+        {
+          id: listing.id,
+          title: listing.title,
+          description: listing.description,
+          price: listing.price,
+          markedUpPrice: purchasePriceInCents / 100,
+          imageUrls: listing.imageUrls,
+          seller: listing.seller,
+          tags: listing.tags || [],
+          isPremium: listing.isPremium,
+        } as any,
+        user.username
+      );
 
-      if (ok) {
-        setPurchaseCompleted(true);
-        await reloadData?.();
+      // FIX: Mark purchase as completed to prevent warning from showing
+      setPurchaseCompleted(true);
+      
+      showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
 
-        showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
+      // Reload wallet/orders
+      await reloadData();
+      
+      // Small delay to ensure state updates are visible
+      await new Promise((r) => setTimeout(r, 500));
 
-        // Small delay so UI updates are visible
-        await new Promise((r) => setTimeout(r, 300));
-
-        router.push('/buyers/my-orders');
-      } else {
-        setPurchaseCompleted(false);
-        showToast({ type: 'error', title: 'Purchase failed. Please try again.' });
-      }
+      router.push('/buyers/my-orders');
     } catch (error: any) {
-      setPurchaseCompleted(false);
-
-      let errorMessage = 'Purchase failed. Please try again.';
-
-      if (error?.message?.includes('subscribe') || error?.requiresSubscription) {
-        errorMessage = 'You must be subscribed to this seller to purchase premium content.';
-        showToast({ type: 'error', title: errorMessage });
-        setTimeout(() => router.push(`/sellers/${listing.seller}`), 1500);
-      } else if (error?.message?.includes('Missing required fields')) {
-        errorMessage = 'Order creation failed due to missing information. Please try again.';
-        showToast({ type: 'error', title: errorMessage });
-      } else if (error?.message?.includes('Insufficient balance')) {
-        errorMessage = 'Insufficient balance. Please add funds to your wallet.';
-        showToast({ type: 'error', title: errorMessage });
-        setTimeout(() => router.push('/wallet/buyer'), 1200);
-      } else if (error?.message?.includes('Rate limit exceeded')) {
-        errorMessage = 'Too many requests. Please wait a moment and try again.';
-        showToast({ type: 'error', title: errorMessage });
-      } else {
-        errorMessage = error?.message || errorMessage;
-        showToast({ type: 'error', title: errorMessage });
-      }
-    } finally {
       setIsPurchasing(false);
+      setPurchaseCompleted(false);
+      
+      let errorMessage = 'Purchase failed. Please try again.';
+      
+      // Handle premium content errors
+      if (error.message?.includes('subscribe') || error.requiresSubscription) {
+        errorMessage = 'You must be subscribed to this seller to purchase premium content.';
+        setTimeout(() => {
+          router.push(`/sellers/${listing.seller}`);
+        }, 2000);
+      } else if (error.message?.includes('Missing required fields')) {
+        errorMessage = 'Order creation failed due to missing information. Please try again.';
+      } else if (error.message?.includes('Insufficient balance')) {
+        errorMessage = 'Insufficient balance. Please add funds to your wallet.';
+        setTimeout(() => router.push('/wallet/buyer'), 1500);
+      } else if (error.message?.includes('Rate limit exceeded')) {
+        errorMessage = 'Too many requests. Please wait a moment and try again.';
+      } else {
+        errorMessage = error.message || errorMessage;
+      }
+      
+      showToast({ type: 'error', title: errorMessage });
     }
   };
 
-  // Auctions handle their own purchase flow
+  // If auction is active, purchase controls are handled by AuctionSection instead
   if (listing.auction && listing.auction.status === 'active') return null;
 
-  // If listing is already gone and user didn’t buy it, show sold message
+  // If listing is no longer in active listings and user didn't purchase it
   if (!isListingStillActive && !purchaseCompleted) {
     return (
       <div className="bg-gray-900 rounded-lg p-6 space-y-4">
@@ -218,7 +236,7 @@ export default function PurchaseSection({
         )}
       </div>
 
-      {/* Premium lock notice (server-driven) */}
+      {/* Premium content lock message with server-side indication */}
       {isPremiumLocked && (
         <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
@@ -227,30 +245,24 @@ export default function PurchaseSection({
               <p className="text-yellow-500 font-semibold">Premium Content Locked</p>
               <p className="text-sm text-yellow-400 mt-1">
                 This content is restricted. Subscribe to{' '}
-                <SecureMessageDisplay
-                  content={listing.seller}
-                  allowBasicFormatting={false}
-                  className="inline font-semibold"
-                />{' '}
-                to unlock and purchase.
+                <SecureMessageDisplay content={listing.seller} allowBasicFormatting={false} className="inline font-semibold" /> to unlock and purchase.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Insufficient balance */}
+      {/* FIX: Only show insufficient balance warning if truly insufficient and listing active */}
       {user && !isAdmin && shouldShowInsufficientBalance && (
         <div className="bg-red-900/20 border border-red-600 rounded-lg p-4 mb-2">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
             <div className="flex-1">
               <p className="text-red-500 font-semibold">Insufficient Balance</p>
-              <p className="text-sm text-red-400 mt-1">You need ${balanceNeeded.toFixed(2)} more to purchase this item</p>
-              <button
-                onClick={() => router.push('/wallet/buyer')}
-                className="text-sm text-[#ff950e] hover:underline mt-2"
-              >
+              <p className="text-sm text-red-400 mt-1">
+                You need ${balanceNeeded.toFixed(2)} more to purchase this item
+              </p>
+              <button onClick={() => router.push('/wallet/buyer')} className="text-sm text-[#ff950e] hover:underline mt-2">
                 Add funds to wallet →
               </button>
             </div>
@@ -258,20 +270,22 @@ export default function PurchaseSection({
         </div>
       )}
 
-      {/* Success state */}
+      {/* FIX: Show success state if purchase completed */}
       {purchaseCompleted && (
         <div className="bg-green-900/20 border border-green-600 rounded-lg p-4 mb-2">
           <div className="flex items-center gap-3">
             <ShoppingBag className="w-5 h-5 text-green-500" />
             <div className="flex-1">
               <p className="text-green-500 font-semibold">Purchase Complete!</p>
-              <p className="text-sm text-green-400 mt-1">You own this item</p>
+              <p className="text-sm text-green-400 mt-1">
+                You own this item
+              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* CTA section */}
+      {/* Call-to-action */}
       {!user ? (
         <button
           onClick={() => router.push('/login')}
@@ -281,17 +295,11 @@ export default function PurchaseSection({
           Login to Purchase
         </button>
       ) : isSeller ? (
-        <button
-          disabled
-          className="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-semibold cursor-not-allowed"
-        >
+        <button disabled className="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-semibold cursor-not-allowed">
           Your Listing
         </button>
       ) : isAdmin ? (
-        <button
-          disabled
-          className="w-full bg-purple-900/40 text-purple-300 py-3 rounded-lg font-semibold cursor-not-allowed"
-        >
+        <button disabled className="w-full bg-purple-900/40 text-purple-300 py-3 rounded-lg font-semibold cursor-not-allowed">
           Admin accounts cannot purchase
         </button>
       ) : isPremiumLocked ? (
