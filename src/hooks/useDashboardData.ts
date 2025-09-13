@@ -2,12 +2,10 @@
 
 import { useState, useEffect, useMemo, createElement } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { storageService } from '@/services';
-import { listingsService } from '@/services/listings.service';
+import { storageService, listingsService } from '@/services';
 import { DashboardStats, SubscriptionInfo, RecentActivity } from '@/types/dashboard';
 import { Package, MessageCircle, Crown } from 'lucide-react';
 import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
-import { securityService } from '@/services/security.service';
 import { walletService } from '@/services/wallet.service';
 import { ordersService } from '@/services/orders.service';
 import { tipService } from '@/services/tip.service';
@@ -260,7 +258,7 @@ export const useDashboardData = () => {
         const activeSellersSet = new Set<string>();
         const sellerLatestAmount: Record<string, number> = {};
         const sellerLatestDate: Record<string, number> = {};
-        subsTx.forEach((t) => {
+        subsTx.forEach((t: any) => {
           const from = t.from ? sanitizeStrict(String(t.from)) : '';
           const to = t.to ? sanitizeStrict(String(t.to)) : '';
           const createdAtMs = t.createdAt ? Date.parse(String(t.createdAt)) : NaN;
