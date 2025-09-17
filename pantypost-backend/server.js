@@ -69,7 +69,14 @@ connectDB();
 // CORS Configuration
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://192.168.0.21:3000', 'http://127.0.0.1:3000'],
+    origin: [
+      'http://localhost:3000', 
+      'http://192.168.0.21:3000', 
+      'http://127.0.0.1:3000',
+      'https://pantypost.com',           // Add this
+      'https://www.pantypost.com',       // Add this if you use www
+      'https://api.pantypost.com'        // Add this for API self-referencing
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
