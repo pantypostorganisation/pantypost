@@ -579,28 +579,26 @@ export const useMyListings = () => {
 
   // Handle cancel auction
   const handleCancelAuction = useCallback(async (listingId: string) => {
-    if (confirm('Are you sure you want to cancel this auction? This action cannot be undone.')) {
-      try {
-        const success = await cancelAuction(listingId);
-        if (!success) {
-          setError('Failed to cancel auction');
-        }
-      } catch (error) {
-        console.error('Error cancelling auction:', error);
+    // Remove confirmation here - it's handled in the component
+    try {
+      const success = await cancelAuction(listingId);
+      if (!success) {
         setError('Failed to cancel auction');
       }
+    } catch (error) {
+      console.error('Error cancelling auction:', error);
+      setError('Failed to cancel auction');
     }
   }, [cancelAuction]);
 
-  // Handle delete listing
+  // Handle delete listing - FIXED: Removed duplicate confirmation
   const handleRemoveListing = useCallback(async (listingId: string) => {
-    if (confirm('Are you sure you want to remove this listing?')) {
-      try {
-        await removeListing(listingId);
-      } catch (error) {
-        console.error('Error removing listing:', error);
-        setError('Failed to remove listing');
-      }
+    // No confirmation here - it's already handled in the ListingCard component
+    try {
+      await removeListing(listingId);
+    } catch (error) {
+      console.error('Error removing listing:', error);
+      setError('Failed to remove listing');
     }
   }, [removeListing]);
 
