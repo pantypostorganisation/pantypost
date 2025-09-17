@@ -66,17 +66,28 @@ global.webSocketService = webSocketService;
 // Connect to MongoDB
 connectDB();
 
-// CORS Configuration
+// CORS Configuration - Replace lines 68-90 in your server.js
 app.use(
   cors({
-    origin: [
-      'http://localhost:3000', 
-      'http://192.168.0.21:3000', 
-      'http://127.0.0.1:3000',
-      'https://pantypost.com',           // Add this
-      'https://www.pantypost.com',       // Add this if you use www
-      'https://api.pantypost.com'        // Add this for API self-referencing
-    ],
+    origin: function(origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      const allowedOrigins = [
+        'http://localhost:3000',
+        'http://192.168.0.21:3000',
+        'http://127.0.0.1:3000',
+        'https://pantypost.com',
+        'https://www.pantypost.com',
+        'https://api.pantypost.com'
+      ];
+      
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
