@@ -1,3 +1,4 @@
+// src/components/wallet/buyer/AddFundsSection.tsx
 'use client';
 
 import { PlusCircle, CreditCard, CheckCircle, AlertCircle, Zap } from 'lucide-react';
@@ -27,171 +28,159 @@ export default function AddFundsSection({
   onAmountChange,
   onKeyPress,
   onAddFunds,
-  onQuickAmountSelect
+  onQuickAmountSelect,
 }: AddFundsSectionProps) {
   const [amountError, setAmountError] = useState<string>('');
 
-  // Handle amount change with validation
   const handleAmountChange = (value: string) => {
-    // Clear any previous errors
     setAmountError('');
-
-    // Allow empty string or valid number format
     if (value === '') {
-      // Create synthetic event to maintain compatibility
       const syntheticEvent = { target: { value: '' } } as React.ChangeEvent<HTMLInputElement>;
       onAmountChange(syntheticEvent);
       return;
     }
-
-    // Check if it's a valid number format (including decimals)
     const regex = /^\d*\.?\d{0,2}$/;
     if (!regex.test(value)) {
       setAmountError('Please enter a valid amount');
       return;
     }
-
     const numValue = parseFloat(value);
-
-    // Validate amount range
     if (!isNaN(numValue)) {
-      if (numValue < 5) {
-        setAmountError('Minimum amount is $5.00');
-      } else if (numValue > 5000) {
-        setAmountError('Maximum amount is $5,000.00');
-      }
+      if (numValue < 5) setAmountError('Minimum amount is $5.00');
+      else if (numValue > 5000) setAmountError('Maximum amount is $5,000.00');
     }
-
-    // Create synthetic event to maintain compatibility
     const syntheticEvent = { target: { value } } as React.ChangeEvent<HTMLInputElement>;
     onAmountChange(syntheticEvent);
   };
 
-  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Final validation before submission
     const numValue = parseFloat(amountToAdd);
-    if (isNaN(numValue) || numValue < 5 || numValue > 5000) {
-      return;
-    }
-
+    if (isNaN(numValue) || numValue < 5 || numValue > 5000) return;
     onAddFunds();
   };
 
-  // Sanitize amount for display
   const displayAmount = amountToAdd ? sanitizeCurrency(amountToAdd).toFixed(2) : '0.00';
 
   const messageClasses =
     messageType === 'success'
-      ? 'bg-green-500/10 text-green-400 border border-green-500/30'
+      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
       : messageType === 'error'
       ? 'bg-red-500/10 text-red-400 border border-red-500/30'
       : 'bg-gray-700/20 text-gray-300 border border-gray-600/30';
 
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800 hover:border-gray-700 transition-all duration-300 mb-8 relative overflow-hidden group">
-      {/* Background gradient effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+    <section className="bg-[#141414] rounded-2xl border border-gray-800/80 hover:border-gray-700 transition-colors relative overflow-hidden mb-8">
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 to-transparent" />
 
-      <div className="relative z-10">
-        <h2 className="text-2xl font-bold mb-6 flex items-center text-white">
-          <div className="bg-gradient-to-r from-[#ff950e] to-orange-600 p-2 rounded-lg mr-3 shadow-lg shadow-orange-500/20">
-            <PlusCircle className="w-6 h-6 text-white" />
-          </div>
-          Add Funds
-        </h2>
+      <div className="relative z-10 px-5 py-5 md:px-6 md:py-6">
+        {/* Header row */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <h2 className="text-xl font-semibold flex items-center text-white">
+            <div className="bg-gradient-to-r from-[#ff950e] to-orange-600 p-2 rounded-lg mr-2 shadow-md shadow-orange-500/15">
+              <PlusCircle className="w-5 h-5 text-white" />
+            </div>
+            Add Funds
+          </h2>
 
+          <span className="inline-flex items-center gap-1.5 self-start md:self-center rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs text-blue-300">
+            <Zap className="w-3.5 h-3.5" />
+            Instant Processing
+          </span>
+        </div>
+
+        {/* Divider */}
+        <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-gray-800 to-transparent" />
+
+        {/* Form */}
         <SecureForm
           onSubmit={handleSubmit}
           rateLimitKey="deposit"
           rateLimitConfig={RATE_LIMITS.DEPOSIT}
-          className="mb-6"
+          className="mt-6 space-y-6"
         >
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-600/10 to-cyan-600/10 border border-blue-500/30 rounded-xl">
-            <div className="flex items-start">
-              <div className="bg-blue-500/20 p-2 rounded-lg mr-3">
-                <Zap className="w-5 h-5 text-blue-400" />
-              </div>
-              <div className="text-sm">
-                <p className="font-semibold text-blue-300 mb-1">Instant Processing</p>
-                <p className="text-blue-200/80">Funds are added immediately and ready to use for any purchase</p>
-              </div>
-            </div>
+          <SecureInput
+            id="amount"
+            type="text"
+            inputMode="decimal"
+            pattern="^\d*\.?\d{0,2}$"
+            label="Amount to add (USD)"
+            value={amountToAdd}
+            onChange={handleAmountChange}
+            onKeyDown={onKeyPress}
+            placeholder="0.00"
+            error={amountError}
+            touched={!!amountToAdd}
+            disabled={isLoading}
+            className="text-lg"
+            sanitize={false}
+            helpText="Minimum $5.00, Maximum $5,000.00"
+          />
+
+          {/* Quick amount buttons */}
+          <div className="grid grid-cols-4 gap-3">
+            {[25, 50, 100, 200].map((quickAmount) => (
+              <button
+                key={quickAmount}
+                type="button"
+                onClick={() => onQuickAmountSelect(quickAmount.toString())}
+                className="py-2.5 px-3 rounded-lg bg-black/40 hover:bg-black/60 border border-gray-700 hover:border-[#ff950e]/50 text-gray-300 hover:text-white transition-all duration-200 text-sm font-medium disabled:opacity-50"
+                disabled={isLoading}
+              >
+                ${quickAmount}
+              </button>
+            ))}
           </div>
 
-          <div className="space-y-6">
-            <div>
-              <SecureInput
-                id="amount"
-                type="text"
-                inputMode="decimal"
-                pattern="^\d*\.?\d{0,2}$"
-                label="Amount to add (USD)"
-                value={amountToAdd}
-                onChange={handleAmountChange}
-                onKeyDown={onKeyPress}
-                placeholder="0.00"
-                error={amountError}
-                touched={!!amountToAdd}
-                disabled={isLoading}
-                className="text-lg"
-                sanitize={false} // We handle sanitization in handleAmountChange
-                helpText="Minimum $5.00, Maximum $5,000.00"
-              />
+          {/* Submit */}
+          <div className="flex justify-center">
+            <button
+              type="submit"
+              className="relative overflow-hidden px-10 py-3.5 rounded-full font-semibold flex items-center justify-center
+                         bg-gradient-to-r from-[#ff950e] via-orange-500 to-orange-600
+                         text-black shadow-md shadow-orange-500/30
+                         transition-all duration-300
+                         hover:scale-105 hover:shadow-orange-500/50
+                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              disabled={
+                isLoading ||
+                !amountToAdd ||
+                Number.isNaN(parseFloat(amountToAdd)) ||
+                parseFloat(amountToAdd) <= 0 ||
+                !!amountError
+              }
+            >
+              {/* Shimmer overlay */}
+              <span className="absolute inset-0 rounded-full bg-gradient-to-r from-white/0 via-white/20 to-white/0 
+                               translate-x-[-100%] animate-[shimmer_2s_infinite] pointer-events-none" />
 
-              {/* Quick amount buttons */}
-              <div className="grid grid-cols-4 gap-3 mt-4">
-                {[25, 50, 100, 200].map((quickAmount) => (
-                  <button
-                    key={quickAmount}
-                    type="button"
-                    onClick={() => onQuickAmountSelect(quickAmount.toString())}
-                    className="py-3 px-4 bg-black/50 hover:bg黑/70 border border-gray-700 hover:border-[#ff950e]/50 text-gray-300 hover:text-white rounded-xl transition-all duration-200 font-medium"
-                    disabled={isLoading}
-                  >
-                    ${quickAmount}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex justify-center">
-              <button
-                type="submit"
-                className="px-8 py-3 rounded-xl font-semibold flex items-center justify-center bg-gradient-to-r from-[#ff950e] to-orange-600 hover:from-[#e88800] hover:to-orange-700 text-black shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none transition-all duration-300"
-                disabled={
-                  isLoading || !amountToAdd || Number.isNaN(parseFloat(amountToAdd)) || parseFloat(amountToAdd) <= 0 || !!amountError
-                }
-              >
-                {isLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
-                    Processing Transaction...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-4 h-4 mr-2" />
-                    Add ${displayAmount} to Wallet
-                  </>
-                )}
-              </button>
-            </div>
+              {isLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Deposit ${displayAmount}
+                </>
+              )}
+            </button>
           </div>
         </SecureForm>
 
+        {/* Message */}
         {message && (
-          <div className={`mt-6 p-4 rounded-xl flex items-start ${messageClasses}`}>
+          <div className={`mt-6 p-4 rounded-lg flex items-start text-sm ${messageClasses}`}>
             {messageType === 'success' ? (
-              <CheckCircle className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
+              <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
             ) : messageType === 'error' ? (
-              <AlertCircle className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
             ) : null}
-            <SecureMessageDisplay content={message} allowBasicFormatting={false} className="text-sm font-medium" />
+            <SecureMessageDisplay content={message} allowBasicFormatting={false} className="font-medium" />
           </div>
         )}
       </div>
-    </div>
+    </section>
   );
 }
