@@ -66,7 +66,9 @@ export function useSellerMessages() {
     hasReported,
     clearMessageNotifications,
     getMessagesForUsers,
-    refreshMessages
+    refreshMessages,
+    isLoading: messagesLoading,
+    isInitialized
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest, markRequestAsPaid, getRequestById } = useRequests();
   const { getBuyerBalance, purchaseCustomRequest } = useWallet();
@@ -74,6 +76,8 @@ export function useSellerMessages() {
   
   // Add state to track message updates
   const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const [initialLoadAttempted, setInitialLoadAttempted] = useState(false);
   
   // Track optimistic messages locally
   const [optimisticMessages, setOptimisticMessages] = useState<{ [threadId: string]: OptimisticMessage[] }>({});
@@ -125,6 +129,27 @@ export function useSellerMessages() {
   const lastActiveThread = useRef<string | null>(null);
   
   const isAdmin = user?.role === 'admin';
+  
+  // CRITICAL FIX: Force refresh messages on mount if needed
+  useEffect(() => {
+    const initializeMessages = async () => {
+      if (user && !initialLoadAttempted) {
+        setInitialLoadAttempted(true);
+        console.log('[useSellerMessages] Initializing messages...');
+        
+        // Always refresh on mount to ensure we have the latest data
+        if (!isInitialized || Object.keys(messages).length === 0) {
+          console.log('[useSellerMessages] Refreshing messages...');
+          await refreshMessages();
+        }
+        
+        setMounted(true);
+        console.log('[useSellerMessages] Initialization complete');
+      }
+    };
+    
+    initializeMessages();
+  }, [user, isInitialized, messages, refreshMessages, initialLoadAttempted]);
   
   // CRITICAL: Listen for new messages and handle optimistic updates
   useEffect(() => {
@@ -279,16 +304,17 @@ export function useSellerMessages() {
   // Handle URL thread parameter with validation
   useEffect(() => {
     const threadParam = searchParams.get('thread');
-    if (threadParam && !activeThread && user) {
+    if (threadParam && !activeThread && user && mounted) {
       // Sanitize and validate thread parameter
       const sanitizedThread = sanitizeStrict(threadParam);
       if (sanitizedThread && sanitizedThread.length <= 100) {
+        console.log('[useSellerMessages] Setting active thread from URL:', sanitizedThread);
         setActiveThread(sanitizedThread);
       }
     }
-  }, [searchParams, user, activeThread]);
+  }, [searchParams, user, activeThread, mounted]);
   
-  // ENHANCED: Merge real messages with optimistic messages
+  // ENHANCED: Merge real messages with optimistic messages - FIXED to not require initialization
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
@@ -301,6 +327,7 @@ export function useSellerMessages() {
     }
     
     console.log('[SellerMessages] Processing messages for seller:', user.username);
+    console.log('[SellerMessages] Total conversation keys:', Object.keys(messages).length);
     
     // Process all conversations to find ones involving the seller
     Object.entries(messages).forEach(([conversationKey, msgs]) => {
@@ -318,9 +345,14 @@ export function useSellerMessages() {
       
       // Check if other party is a buyer (skip seller-to-seller conversations)
       const otherUser = users?.[otherParty];
-      if (otherUser?.role === 'seller' || otherUser?.role === 'admin') {
+      // If we don't know the role, assume they're a buyer (better to show than hide)
+      const isOtherSeller = otherUser?.role === 'seller' || otherUser?.role === 'admin';
+      if (isOtherSeller) {
+        console.log('[SellerMessages] Skipping conversation with seller/admin:', otherParty);
         return;
       }
+      
+      console.log('[SellerMessages] Including conversation with buyer:', otherParty);
       
       // Validate messages
       const validMessages = msgs.filter(msg => {
@@ -377,6 +409,8 @@ export function useSellerMessages() {
         verified: isVerified || false
       };
     });
+    
+    console.log('[SellerMessages] Final thread count:', Object.keys(threads).length);
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
   }, [user?.username, messages, users, optimisticMessages, messageUpdateCounter]);

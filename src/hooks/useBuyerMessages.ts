@@ -62,7 +62,9 @@ export const useBuyerMessages = () => {
     unblockUser, 
     reportUser, 
     markMessagesAsRead,
-    refreshMessages 
+    refreshMessages,
+    isLoading: messagesLoading,
+    isInitialized
   } = useMessages();
   
   // Use useContext directly to check if wallet context is available
@@ -74,6 +76,7 @@ export const useBuyerMessages = () => {
   const threadParam = searchParams.get('thread');
   const [activeThread, setActiveThread] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   
   // Add state to track message updates
   const [messageUpdateCounter, setMessageUpdateCounter] = useState(0);
@@ -142,6 +145,25 @@ export const useBuyerMessages = () => {
   const hasMarkedReadRef = useRef<string | null>(null);
   
   const isAdmin = user?.role === 'admin';
+  
+  // CRITICAL FIX: Ensure messages are loaded on mount
+  useEffect(() => {
+    const loadInitialData = async () => {
+      if (user && !initialLoadComplete) {
+        console.log('[useBuyerMessages] Loading initial data...');
+        
+        // If messages context is not initialized, refresh
+        if (!isInitialized) {
+          await refreshMessages();
+        }
+        
+        setInitialLoadComplete(true);
+        setMounted(true);
+      }
+    };
+    
+    loadInitialData();
+  }, [user, isInitialized, refreshMessages, initialLoadComplete]);
   
   // Handle wallet context availability
   const getBuyerBalance = useCallback((username: string) => {
@@ -301,6 +323,7 @@ export const useBuyerMessages = () => {
   const threads = useMemo(() => {
     const result: { [seller: string]: Message[] } = {};
     
+    // Process messages even if not fully initialized to show loading state properly
     if (user) {
       // Get all messages for the user
       Object.values(messages).forEach((msgs) => {
@@ -435,7 +458,9 @@ export const useBuyerMessages = () => {
       setSellerProfiles(profiles);
     };
     
-    loadSellerProfiles();
+    if (Object.keys(threads).length > 0) {
+      loadSellerProfiles();
+    }
   }, [threads, users]);
   
   const { unreadCounts, lastMessages, totalUnreadCount } = useMemo(() => {
@@ -525,17 +550,12 @@ export const useBuyerMessages = () => {
   
   // Handle thread initialization
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || !initialLoadComplete) return;
     
     if (threadParam && user) {
       setActiveThread(threadParam);
     }
-  }, [threadParam, user, mounted]);
-  
-  // Set mounted state
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  }, [threadParam, user, mounted, initialLoadComplete]);
   
   // Handle clicks outside the emoji picker to close it
   useEffect(() => {
@@ -927,6 +947,8 @@ export const useBuyerMessages = () => {
     
     // Force update
     setMessageUpdateCounter(prev => prev + 1);
+    
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [editRequestId, user, activeThread, editTitle, editPrice, editTags, editMessage, buyerRequests, sendMessage, respondToRequest]);
   
   // Handle pay now with better error handling and debugging
@@ -1276,6 +1298,123 @@ export const useBuyerMessages = () => {
   const isUserReported = useCallback((username: string) => {
     return user ? reportedUsers[user.username]?.includes(username) || false : false;
   }, [user, reportedUsers]);
+  
+  // Return proper state regardless of initialization status
+  // This allows the component to render with loading state
+  if (!mounted || !user) {
+    return {
+      // Auth & context
+      user: null,
+      users: {},
+      wallet: {},
+      isAdmin: false,
+      
+      // Messages & threads
+      threads: {},
+      unreadCounts: {},
+      uiUnreadCounts: {},
+      lastMessages: {},
+      sellerProfiles: {},
+      totalUnreadCount: 0,
+      activeThread: null,
+      setActiveThread: () => {},
+      buyerRequests: [],
+      
+      // UI State
+      mounted: false,
+      searchQuery: '',
+      setSearchQuery: () => {},
+      activeTab: 'messages' as const,
+      setActiveTab: () => {},
+      filterBy: 'all' as const,
+      setFilterBy: () => {},
+      previewImage: null,
+      setPreviewImage: () => {},
+      showEmojiPicker: false,
+      setShowEmojiPicker: () => {},
+      recentEmojis: [],
+      observerReadMessages: new Set(),
+      setObserverReadMessages: () => {},
+      
+      // Message input
+      replyMessage: '',
+      setReplyMessage: () => {},
+      selectedImage: null,
+      setSelectedImage: () => {},
+      isImageLoading: false,
+      setIsImageLoading: () => {},
+      imageError: null,
+      setImageError: () => {},
+      
+      // Custom requests
+      showCustomRequestModal: false,
+      setShowCustomRequestModal: () => {},
+      customRequestForm: {
+        title: '',
+        description: '',
+        price: '',
+        tags: '',
+        hoursWorn: '24'
+      },
+      setCustomRequestForm: () => {},
+      customRequestErrors: {},
+      isSubmittingRequest: false,
+      editRequestId: null,
+      setEditRequestId: () => {},
+      editPrice: '',
+      setEditPrice: () => {},
+      editTitle: '',
+      setEditTitle: () => {},
+      editTags: '',
+      setEditTags: () => {},
+      editMessage: '',
+      setEditMessage: () => {},
+      
+      // Payment
+      showPayModal: false,
+      setShowPayModal: () => {},
+      payingRequest: null,
+      setPayingRequest: () => {},
+      
+      // Tips
+      showTipModal: false,
+      setShowTipModal: () => {},
+      tipAmount: '',
+      setTipAmount: () => {},
+      tipResult: null,
+      setTipResult: () => {},
+      
+      // Refs
+      fileInputRef,
+      emojiPickerRef,
+      messagesEndRef,
+      messagesContainerRef,
+      inputRef,
+      lastManualScrollTime,
+      
+      // Actions
+      handleReply: () => {},
+      handleBlockToggle: () => {},
+      handleReport: () => {},
+      handleAccept: () => {},
+      handleDecline: () => {},
+      handleEditRequest: () => {},
+      handleEditSubmit: () => {},
+      handlePayNow: () => {},
+      handleConfirmPay: () => {},
+      handleImageSelect: () => {},
+      handleMessageVisible: () => {},
+      handleEmojiClick: () => {},
+      handleSendTip: () => {},
+      handleCustomRequestSubmit: () => {},
+      closeCustomRequestModal: () => {},
+      validateCustomRequest: () => false,
+      
+      // Status checks
+      isUserBlocked: () => false,
+      isUserReported: () => false,
+    };
+  }
   
   return {
     // Auth & context
