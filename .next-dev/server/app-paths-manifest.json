@@ -1,7 +1,9 @@
 {
   "/_not-found/page": "app/_not-found/page.js",
-  "/icon.png/route": "app/icon.png/route.js",
+  "/browse/page": "app/browse/page.js",
+  "/buyers/messages/page": "app/buyers/messages/page.js",
   "/login/page": "app/login/page.js",
   "/page": "app/page.js",
-  "/wallet/buyer/page": "app/wallet/buyer/page.js"
+  "/sellers/messages/page": "app/sellers/messages/page.js",
+  "/sellers/my-listings/page": "app/sellers/my-listings/page.js"
 }

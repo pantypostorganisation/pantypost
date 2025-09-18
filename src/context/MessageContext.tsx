@@ -59,6 +59,7 @@ type MessageOptions = {
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
   isLoading: boolean;
+  isInitialized: boolean; // ADD THIS
   sendMessage: (sender: string, receiver: string, content: string, options?: MessageOptions) => Promise<void>;
   sendCustomRequest: (
     buyer: string,
@@ -85,7 +86,7 @@ type MessageContextType = {
   reportLogs: any[];
   messageNotifications: { [seller: string]: MessageNotification[] };
   clearMessageNotifications: (seller: string, buyer: string) => void;
-  refreshMessages: () => void;
+  refreshMessages: () => Promise<void>; // CHANGE TO ASYNC
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -109,6 +110,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [reportLogs, setReportLogs] = useState<any[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false); // ADD THIS
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
   const wsContext = useWebSocket ? useWebSocket() : null;
@@ -129,11 +131,13 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     const loadData = async () => {
       if (typeof window === 'undefined') {
         setIsLoading(false);
+        setIsInitialized(true);
         return;
       }
       
       try {
         setIsLoading(true);
+        console.log('[MessageContext] Loading initial data...');
 
         // Load all data from API through the service
         const [threadsResponse, blockedResponse, notificationsResponse] = await Promise.all([
@@ -150,6 +154,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
               processedMessages[thread.id] = thread.messages;
             }
           });
+          console.log('[MessageContext] Loaded messages for', Object.keys(processedMessages).length, 'conversations');
           setMessages(processedMessages);
         }
 
@@ -177,7 +182,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
 
       } catch (err) {
-        console.error('Error loading message data from API:', err);
+        console.error('[MessageContext] Error loading message data from API:', err);
         // Don't load from localStorage - just show empty state
         setMessages({});
         setBlockedUsers({});
@@ -186,6 +191,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         setMessageNotifications({});
       } finally {
         setIsLoading(false);
+        setIsInitialized(true); // ADD THIS
+        console.log('[MessageContext] Initialization complete');
       }
     };
     
@@ -576,9 +583,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (reportResult.success) {
           console.log('[MessageContext] Report submitted successfully');
           
-          // Skip the /messages/report endpoint since it has field mapping issues
-          // The main report system is sufficient
-          
           // Update local state
           setReportedUsers((prev) => {
             const list = prev[cleanReporter] || [];
@@ -637,8 +641,24 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return reportLogs.filter((r) => !r.processed).length;
   }, [reportLogs]);
 
-  const refreshMessages = useCallback(() => {
-    setUpdateTrigger((n) => n + 1);
+  // CHANGE refreshMessages to async and reload data
+  const refreshMessages = useCallback(async () => {
+    console.log('[MessageContext] Refreshing messages...');
+    try {
+      const threadsResponse = await messagesService.getThreads('');
+      if (threadsResponse.success && threadsResponse.data) {
+        const processedMessages: { [key: string]: Message[] } = {};
+        threadsResponse.data.forEach((thread: ServiceMessageThread) => {
+          if (thread.messages && thread.messages.length > 0) {
+            processedMessages[thread.id] = thread.messages;
+          }
+        });
+        setMessages(processedMessages);
+        setUpdateTrigger((n) => n + 1);
+      }
+    } catch (error) {
+      console.error('[MessageContext] Error refreshing messages:', error);
+    }
   }, []);
 
   return (
@@ -646,6 +666,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       value={{
         messages,
         isLoading,
+        isInitialized, // ADD THIS
         sendMessage,
         sendCustomRequest,
         getMessagesForUsers,
