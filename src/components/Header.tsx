@@ -104,6 +104,7 @@ export default function Header(): React.ReactElement | null {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
 
@@ -122,7 +123,10 @@ export default function Header(): React.ReactElement | null {
   const username = user?.username ? sanitizeStrict(user.username) : '';
 
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
-  useClickOutside(mobileMenuRef, () => setMobileMenuOpen(false));
+  useClickOutside(mobileMenuRef, () => {
+    setMobileMenuOpen(false);
+    setShowMobileNotifications(false);
+  });
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -475,93 +479,301 @@ export default function Header(): React.ReactElement | null {
     if (showNotifDropdown) setActiveNotifTab('active');
   }, [showNotifDropdown]);
 
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
+
   const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
     <Link
       href={href}
-      className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-colors"
+      className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1"
       onClick={() => setMobileMenuOpen(false)}
       style={{ touchAction: 'manipulation' }}
     >
-      {icon}
-      <span>{label}</span>
-      {badge && badge > 0 && <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 ml-auto">{badge}</span>}
+      <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg">
+        {icon}
+      </div>
+      <span className="flex-1">{label}</span>
+      {badge && badge > 0 && (
+        <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
+          {badge}
+        </span>
+      )}
     </Link>
   );
 
-  const MobileMenu = () => (
-    <div className={`mobile-menu fixed inset-0 z-50 lg:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}>
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
-      <div
-        ref={mobileMenuRef}
-        className="fixed top-0 left-0 w-64 h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-r border-[#ff950e]/30 overflow-y-auto overscroll-contain"
-        style={{ touchAction: 'pan-y' }}
-      >
-        <div className="p-4 border-b border-[#ff950e]/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <img src="/logo.png" alt="PantyPost" className="w-8 h-auto" />
-              <span className="text-[#ff950e] font-bold">PantyPost</span>
-            </div>
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="text-[#ff950e] hover:text-white"
-              aria-label="Close menu"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
+  const MobileNotificationsPanel = () => (
+    <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a] to-[#111] z-10 flex flex-col">
+      <div className="flex items-center gap-2 p-4 border-b border-[#ff950e]/30">
+        <button
+          onClick={() => setShowMobileNotifications(false)}
+          className="text-[#ff950e] hover:text-white transition-colors"
+          aria-label="Back to menu"
+        >
+          <RotateCcw className="w-5 h-5" />
+        </button>
+        <h3 className="text-[#ff950e] font-bold flex-1">Notifications</h3>
+        {activeNotifTab === 'active' && processedNotifications.active.length > 0 && (
+          <button
+            onClick={clearAllNotifications}
+            disabled={clearingNotifications}
+            className="text-xs text-white hover:text-[#ff950e] px-2 py-1 rounded bg-black/20 hover:bg-[#ff950e]/10 border border-white/20 hover:border-[#ff950e]/30"
+          >
+            Clear All
+          </button>
+        )}
+      </div>
 
-        <nav className="p-4 space-y-2">
-          {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
+      <div className="flex border-b border-gray-800">
+        <button
+          onClick={() => setActiveNotifTab('active')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
+            activeNotifTab === 'active' ? 'text-[#ff950e] bg-[#ff950e]/10' : 'text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          Active ({processedNotifications.active.length})
+          {activeNotifTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]" />}
+        </button>
+        <button
+          onClick={() => setActiveNotifTab('cleared')}
+          className={`flex-1 px-4 py-3 text-sm font-medium transition-colors relative ${
+            activeNotifTab === 'cleared' ? 'text-[#ff950e] bg-[#ff950e]/10' : 'text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          Cleared ({processedNotifications.cleared.length})
+          {activeNotifTab === 'cleared' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]" />}
+        </button>
+      </div>
 
-          {isAdminUser && (
-            <>
-              <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/20 rounded-lg">
-                <Crown className="w-4 h-4 text-purple-400" />
-                <span className="text-purple-300 font-bold">ADMIN</span>
+      <div className="flex-1 overflow-y-auto">
+        {activeNotifTab === 'active' ? (
+          processedNotifications.active.length === 0 ? (
+            <div className="p-6 text-center text-gray-400">No active notifications</div>
+          ) : (
+            processedNotifications.active.map((notification, i) => (
+              <div key={notification.id || i} className="p-4 border-b border-gray-800 hover:bg-[#222]/50 transition-colors">
+                <SecureMessageDisplay content={notification.message} className="text-gray-200 text-sm leading-relaxed" allowBasicFormatting={false} />
+                {notification.timestamp && (
+                  <div className="text-xs text-gray-500 mt-2">{new Date(notification.timestamp).toLocaleString()}</div>
+                )}
+                <button
+                  onClick={() => handleClearOne(notification)}
+                  className="text-xs text-[#ff950e] hover:text-[#ff6b00] font-bold mt-2"
+                >
+                  Clear
+                </button>
               </div>
-              {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
-              {renderMobileLink('/wallet/admin', <WalletIcon className="w-5 h-5" />, `Wallet: $${platformBalance.toFixed(2)}`)}
-            </>
-          )}
-
-          {role === 'seller' && !isAdminUser && (
-            <>
-              {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
-              {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
-              {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
-              {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
-              {renderMobileLink('/wallet/seller', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
-            </>
-          )}
-
-          {role === 'buyer' && !isAdminUser && (
-            <>
-              {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
-              {renderMobileLink('/buyers/my-orders', <Package className="w-5 h-5" />, 'My Orders')}
-              {renderMobileLink('/buyers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
-              {renderMobileLink('/wallet/buyer', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
-            </>
-          )}
-
-          {user && (
-            <button
-              onClick={() => {
-                setMobileMenuOpen(false);
-                logout();
-              }}
-              className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-colors w-full text-left"
-              style={{ touchAction: 'manipulation' }}
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Log out</span>
-            </button>
-          )}
-        </nav>
+            ))
+          )
+        ) : processedNotifications.cleared.length === 0 ? (
+          <div className="p-6 text-center text-gray-400">No cleared notifications</div>
+        ) : (
+          processedNotifications.cleared.map((notification, i) => (
+            <div key={notification.id || `cleared-${i}`} className="p-4 border-b border-gray-800 hover:bg-[#222]/50 transition-colors">
+              <SecureMessageDisplay content={notification.message} className="text-gray-400 text-sm leading-relaxed" allowBasicFormatting={false} />
+              {notification.timestamp && (
+                <div className="text-xs text-gray-600 mt-2">{new Date(notification.timestamp).toLocaleString()}</div>
+              )}
+              <div className="flex gap-3 mt-2">
+                <button
+                  onClick={() => handleRestoreOne(notification)}
+                  className="text-xs text-green-400 hover:text-green-300 font-bold flex items-center gap-1"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Restore
+                </button>
+                <button
+                  onClick={() => handleDeleteOne(notification)}
+                  className="text-xs text-red-400 hover:text-red-300 font-bold flex items-center gap-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
+  );
+
+  const MobileMenu = () => (
+    <>
+      {/* Backdrop */}
+      <div 
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${
+          mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setMobileMenuOpen(false)}
+      />
+      
+      {/* Menu Panel */}
+      <div
+        ref={mobileMenuRef}
+        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-50 lg:hidden transform transition-transform duration-300 ease-in-out ${
+          mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        style={{ touchAction: 'pan-y' }}
+      >
+        {showMobileNotifications && role === 'seller' ? (
+          <MobileNotificationsPanel />
+        ) : (
+          <>
+            {/* Header */}
+            <div className="p-4 border-b border-[#ff950e]/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <img src="/logo.png" alt="PantyPost" className="w-8 h-auto" />
+                  <span className="text-[#ff950e] font-bold">PantyPost</span>
+                </div>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="text-[#ff950e] hover:text-white transition-colors p-2"
+                  aria-label="Close menu"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* User Info Section */}
+            {user && (
+              <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
+                    {role === 'seller' && <Heart className="w-5 h-5 text-[#ff950e]" />}
+                    {role === 'buyer' && <ShoppingBag className="w-5 h-5 text-[#ff950e]" />}
+                    {isAdminUser && <Crown className="w-5 h-5 text-purple-400" />}
+                  </div>
+                  <div>
+                    <div className="text-[#ff950e] font-bold">{username}</div>
+                    <div className="text-gray-400 text-xs capitalize">{isAdminUser ? 'Admin' : role}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Navigation Links */}
+            <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+              {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
+
+              {isAdminUser && (
+                <>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/20 rounded-lg mt-4 mb-2">
+                    <Crown className="w-4 h-4 text-purple-400" />
+                    <span className="text-purple-300 font-bold text-sm">ADMIN PANEL</span>
+                  </div>
+                  {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
+                  {renderMobileLink('/admin/bans', <Ban className="w-5 h-5" />, 'Bans')}
+                  {renderMobileLink('/admin/resolved', <ShieldCheck className="w-5 h-5" />, 'Resolved')}
+                  {renderMobileLink('/admin/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
+                  {renderMobileLink('/admin/verification-requests', <ClipboardCheck className="w-5 h-5" />, 'Verify')}
+                  {renderMobileLink('/admin/wallet-management', <DollarSign className="w-5 h-5" />, 'Wallets')}
+                  {renderMobileLink('/wallet/admin', <WalletIcon className="w-5 h-5" />, `Platform: $${platformBalance.toFixed(2)}`)}
+                </>
+              )}
+
+              {role === 'seller' && !isAdminUser && (
+                <>
+                  <div className="pt-2 pb-1">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Seller Menu</span>
+                  </div>
+                  {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
+                  {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
+                  {renderMobileLink('/sellers/verify', <ShieldCheck className="w-5 h-5 text-green-400" />, 'Get Verified')}
+                  {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
+                  {renderMobileLink('/sellers/subscribers', <Users className="w-5 h-5" />, 'Analytics')}
+                  {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
+                  {renderMobileLink('/wallet/seller', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
+                  
+                  {/* Notifications for Sellers */}
+                  <button
+                    onClick={() => setShowMobileNotifications(true)}
+                    className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1 w-full"
+                    style={{ touchAction: 'manipulation' }}
+                  >
+                    <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg relative">
+                      <Bell className="w-5 h-5" />
+                      {processedNotifications.active.length > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-[#ff950e] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[16px] text-center font-bold">
+                          {processedNotifications.active.length}
+                        </span>
+                      )}
+                    </div>
+                    <span className="flex-1">Notifications</span>
+                    {processedNotifications.active.length > 0 && (
+                      <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
+                        {processedNotifications.active.length}
+                      </span>
+                    )}
+                  </button>
+                </>
+              )}
+
+              {role === 'buyer' && !isAdminUser && (
+                <>
+                  <div className="pt-2 pb-1">
+                    <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Buyer Menu</span>
+                  </div>
+                  {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
+                  {renderMobileLink('/buyers/my-orders', <Package className="w-5 h-5" />, 'My Orders')}
+                  {renderMobileLink('/buyers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
+                  {renderMobileLink('/wallet/buyer', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
+                </>
+              )}
+
+              {!user && (
+                <>
+                  <div className="pt-4 space-y-2">
+                    <Link
+                      href="/login"
+                      className="block text-center bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Log In
+                    </Link>
+                    <Link
+                      href="/signup"
+                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Sign Up
+                    </Link>
+                  </div>
+                </>
+              )}
+
+              {user && (
+                <div className="pt-4 mt-4 border-t border-[#ff950e]/20">
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      logout();
+                    }}
+                    className="flex items-center gap-3 text-red-400 hover:bg-red-900/20 p-3 rounded-lg transition-all duration-200 w-full"
+                    style={{ touchAction: 'manipulation' }}
+                  >
+                    <div className="flex items-center justify-center w-8 h-8 bg-red-900/20 rounded-lg">
+                      <LogOut className="w-5 h-5" />
+                    </div>
+                    <span>Log out</span>
+                  </button>
+                </div>
+              )}
+            </nav>
+          </>
+        )}
+      </div>
+    </>
   );
 
   if (pathname === '/login' || pathname === '/signup') return null;
@@ -579,9 +791,8 @@ export default function Header(): React.ReactElement | null {
         {isMobile && (
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="lg:hidden flex items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-colors"
+            className="lg:hidden flex items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
             aria-label="Open menu"
-            style={{ touchAction: 'manipulation' }}
           >
             <Menu className="w-6 h-6" />
           </button>
