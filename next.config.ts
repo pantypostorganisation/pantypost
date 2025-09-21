@@ -2,14 +2,14 @@
 import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from "next";
 
-// Content Security Policy - Enhanced for production
+// Content Security Policy - Enhanced for production and network access
 const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' *.google-analytics.com *.googletagmanager.com *.sentry.io *.sentry-cdn.com https://www.googletagmanager.com https://www.google-analytics.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  img-src 'self' blob: data: https: *.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* http://127.0.0.1:* http://192.168.*:*' : ''};
+  img-src 'self' blob: data: https: *.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* http://127.0.0.1:* http://192.168.*:* http://10.*:*' : ''};
   media-src 'self' https://res.cloudinary.com;
-  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:5000 ws://localhost:5000' : ''};
+  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:5000 ws://localhost:5000 http://192.168.*:5000 ws://192.168.*:5000 http://10.*:5000 ws://10.*:5000' : ''};
   font-src 'self' https://fonts.gstatic.com;
   object-src 'none';
   base-uri 'self';
@@ -21,8 +21,17 @@ const ContentSecurityPolicy = `
   ${process.env.NODE_ENV === 'production' ? 'upgrade-insecure-requests;' : ''}
 `.replace(/\s{2,}/g, ' ').trim();
 
-// Enhanced security headers
-const securityHeaders = [
+// Enhanced security headers - Modified for development network access
+const securityHeaders = process.env.NODE_ENV === 'development' ? [
+  { key: 'X-DNS-Prefetch-Control', value: 'on' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  // Relaxed CORS for development
+  { key: 'Access-Control-Allow-Origin', value: '*' },
+  { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
+  { key: 'Access-Control-Allow-Headers', value: '*' },
+] : [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   { key: 'X-XSS-Protection', value: '1; mode=block' },
@@ -96,6 +105,12 @@ const nextConfig: NextConfig = {
         hostname: '192.168.*',
         port: '5000',
         pathname: '/uploads/**',
+      },
+      {
+        protocol: 'http',
+        hostname: '10.*',
+        port: '5000',
+        pathname: '/uploads/**',
       }
     ],
     formats: ['image/webp', 'image/avif'],
@@ -107,7 +122,7 @@ const nextConfig: NextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
 
-  // Turbopack configuration (moved from experimental)
+  // Turbopack configuration
   turbopack: {
     rules: {
       '*.svg': {
@@ -121,6 +136,7 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizeCss: true,
     optimizePackageImports: ['lucide-react', 'framer-motion', 'react-icons'],
+    // Remove allowedDevOrigins as it doesn't exist in TypeScript types
   },
 
   // Security and performance headers
@@ -223,3 +239,4 @@ const sentryOptions = {
 export default process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_ENABLE_ERROR_TRACKING === 'true'
   ? withSentryConfig(nextConfig, sentryOptions)
   : nextConfig;
+  

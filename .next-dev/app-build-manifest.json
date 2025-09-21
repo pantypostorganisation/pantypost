@@ -95,7 +95,7 @@
       "static/chunks/_a0ff3932._.js",
       "static/chunks/turbopack-_cdba956c._.js"
     ],
-    "/sellers/my-listings/page": [
+    "/signup/page": [
       "static/chunks/node_modules_next_dist_8db7fb1f._.js",
       "static/chunks/src_app_icon_png_mjs_3156d20d._.js",
       "static/chunks/[root-of-the-server]__181ad7d0._.css",
@@ -115,9 +115,9 @@
       "static/chunks/src_app_not-found_tsx_a81e080a._.js",
       "static/chunks/src_app_global-error_tsx_8e7553f5._.js",
       "static/chunks/src_app_global-error_tsx_a81e080a._.js",
-      "static/chunks/src_a467a7ee._.js",
-      "static/chunks/node_modules_lucide-react_dist_esm_icons_1cf181ea._.js",
-      "static/chunks/src_app_sellers_my-listings_page_tsx_a81e080a._.js",
+      "static/chunks/src_90bc44ec._.js",
+      "static/chunks/node_modules_lucide-react_dist_esm_icons_4e1b2609._.js",
+      "static/chunks/src_app_signup_page_tsx_a81e080a._.js",
       "static/chunks/[turbopack]_browser_dev_hmr-client_hmr-client_ts_57d40746._.js",
       "static/chunks/node_modules_next_dist_compiled_react-dom_1e674e59._.js",
       "static/chunks/node_modules_next_dist_compiled_next-devtools_index_a9cb0712.js",

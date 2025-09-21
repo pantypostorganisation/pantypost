@@ -3,5 +3,5 @@
   "/icon.png/route": "app/icon.png/route.js",
   "/login/page": "app/login/page.js",
   "/page": "app/page.js",
-  "/sellers/my-listings/page": "app/sellers/my-listings/page.js"
+  "/signup/page": "app/signup/page.js"
 }

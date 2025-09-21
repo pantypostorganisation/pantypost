@@ -14,8 +14,32 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 export { isDevelopment };
 export const isProduction = !isDevelopment();
 
-// Use environment configuration correctly
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+// Dynamic API URL based on current hostname
+function getApiBaseUrl(): string {
+  // Server-side rendering - use environment variable or default
+  if (typeof window === 'undefined') {
+    return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+  }
+  
+  // Client-side - dynamically determine based on current hostname
+  const hostname = window.location.hostname;
+  
+  // If accessing from localhost, use localhost
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000';
+  }
+  
+  // If accessing from network IP, use the same IP for backend
+  if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+    return `http://${hostname}:5000`;
+  }
+  
+  // Fallback to environment variable or default
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+}
+
+export const API_BASE_URL = getApiBaseUrl();
+
 export const FEATURES = {
   USE_API_AUTH: process.env.NEXT_PUBLIC_USE_API_AUTH !== 'false',
   USE_API_LISTINGS: process.env.NEXT_PUBLIC_USE_API_LISTINGS !== 'false',

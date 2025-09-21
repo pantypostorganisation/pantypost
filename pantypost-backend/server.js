@@ -66,25 +66,49 @@ global.webSocketService = webSocketService;
 // Connect to MongoDB
 connectDB();
 
-// CORS Configuration
-app.use(
-  cors({
-    origin: ['http://localhost:3000', 'http://192.168.0.21:3000', 'http://127.0.0.1:3000'],
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-CSRF-Token',
-      'X-Client-Version',
-      'X-App-Name',
-      'X-Content-Type-Options',
-      'X-Frame-Options',
-      'X-XSS-Protection',
-      'X-Request-ID',
-    ],
-  })
-);
+// CORS Configuration - UPDATED for dynamic network access
+const corsOptions = {
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+    
+    // List of allowed origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'http://192.168.0.106:3000',
+      'http://192.168.0.21:3000'
+    ];
+    
+    // Check if the origin is in the allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } 
+    // Allow any local network IP on port 3000
+    else if (origin.match(/^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)\d+\.\d+:3000$/)) {
+      callback(null, true);
+    }
+    else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-CSRF-Token',
+    'X-Client-Version',
+    'X-App-Name',
+    'X-Content-Type-Options',
+    'X-Frame-Options',
+    'X-XSS-Protection',
+    'X-Request-ID',
+  ],
+  optionsSuccessStatus: 200 // For legacy browser support
+};
+
+app.use(cors(corsOptions));
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -1107,9 +1131,30 @@ async function initializeStorageSystem() {
   }
 }
 
-// Start server
-server.listen(PORT, async () => {
-  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+// Start server - UPDATED TO LISTEN ON ALL INTERFACES
+const HOST = '0.0.0.0'; // Listen on all network interfaces
+const os = require('os');
+
+// Function to get network IP
+function getNetworkIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal and non-IPv4 addresses
+      if (!iface.internal && iface.family === 'IPv4') {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+server.listen(PORT, HOST, async () => {
+  const networkIP = getNetworkIP();
+  
+  console.log(`🚀 Backend server running on:`);
+  console.log(`   - Local: http://localhost:${PORT}`);
+  console.log(`   - Network: http://${networkIP}:${PORT}`);
   console.log(`🔌 WebSocket server ready for connections`);
 
   await initializeTierSystem();

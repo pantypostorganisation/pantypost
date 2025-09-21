@@ -41,17 +41,30 @@ function normalizeBaseUrl(url?: string | null) {
 }
 
 /**
- * Build the health URL robustly regardless of whether the env contains '/api' already.
- * Priority: NEXT_PUBLIC_API_URL (kept for backward-compat), then NEXT_PUBLIC_API_BASE_URL.
+ * Build the health URL dynamically based on current hostname
  */
 function buildHealthUrl() {
+  // If we're on the client side, determine URL based on current hostname
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    
+    // Use the same hostname as the frontend is accessed from
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000/api/health';
+    }
+    
+    // For network access, use the network IP
+    if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+      return `http://${hostname}:5000/api/health`;
+    }
+  }
+  
+  // Server-side or fallback
   const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
   const rawApiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? '').trim();
 
-  // Prefer API_URL if provided; otherwise fallback to API_BASE_URL; otherwise default.
   const base = normalizeBaseUrl(rawApiUrl || rawApiBase || DEFAULT_BASE);
 
-  // If base already ends with '/api', just add '/health'; otherwise add '/api/health'.
   if (base.toLowerCase().endsWith('/api')) {
     return `${base}/health`;
   }
@@ -84,6 +97,12 @@ function InitializationLoader(): React.ReactElement {
 
 // Error component
 function InitializationError({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
+  // Extract hostname for debugging
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+  const expectedBackendUrl = typeof window !== 'undefined' 
+    ? `http://${hostname}:5000` 
+    : 'http://localhost:5000';
+
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-gray-900 rounded-lg p-8 text-center">
@@ -94,13 +113,29 @@ function InitializationError({ error, onRetry }: { error: Error; onRetry: () => 
         </div>
         <h1 className="text-2xl font-bold mb-2">Connection Error</h1>
         <p className="text-gray-400 mb-4">{error.message || 'Failed to connect to the server'}</p>
+        
+        {hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.') ? (
+          <div className="text-sm text-gray-500 mb-4 text-left bg-black/50 p-3 rounded">
+            <p className="mb-2">Network access detected. Please ensure:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>Backend is running on port 5000</li>
+              <li>Backend is listening on 0.0.0.0</li>
+              <li>Expected URL: {expectedBackendUrl}</li>
+              <li>Windows Firewall allows Node.js</li>
+            </ul>
+          </div>
+        ) : null}
+        
         <button onClick={onRetry} className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
           Retry Connection
         </button>
+        
         {process.env.NODE_ENV === 'development' && (
           <details className="mt-4 text-left">
             <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-300">Technical details</summary>
-            <pre className="mt-2 text-xs bg-black/50 p-3 rounded overflow-auto max-h-48">{error.stack}</pre>
+            <pre className="mt-2 text-xs bg-black/50 p-3 rounded overflow-auto max-h-48">
+              {`Hostname: ${hostname}\nExpected Backend: ${expectedBackendUrl}\nError: ${error.stack}`}
+            </pre>
           </details>
         )}
       </div>
@@ -164,7 +199,14 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         DEFAULT_TIMEOUT_MS
       ).catch((err) => {
         console.error('[AppInitializer] Health check fetch failed:', err);
-        throw new Error('Cannot connect to backend server. Please ensure the API is running.');
+        
+        // Provide more helpful error message based on access type
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
+        if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+          throw new Error(`Cannot connect to backend at ${healthUrl}. Please ensure the backend server is running and accessible from your network.`);
+        } else {
+          throw new Error('Cannot connect to backend server. Please ensure the API is running on port 5000.');
+        }
       });
 
       if (!res || !res.ok) {
@@ -201,7 +243,11 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         sessionStorage.setItem('app_health_status', JSON.stringify(health));
       }
 
-      console.log('[AppInitializer] Initialization complete:', { initialized: true, health });
+      console.log('[AppInitializer] Initialization complete:', { 
+        initialized: true, 
+        health,
+        accessedFrom: typeof window !== 'undefined' ? window.location.hostname : 'server'
+      });
     } catch (err) {
       console.error('[AppInitializer] Initialization failed:', err);
       setError(err instanceof Error ? err : new Error('Initialization failed'));

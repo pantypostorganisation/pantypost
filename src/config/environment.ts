@@ -239,15 +239,28 @@ export const limits = {
   platformFeePercentage: getEnvNumber('NEXT_PUBLIC_PLATFORM_FEE_PERCENTAGE', 10),
 } as const;
 
-// WebSocket configuration - ENHANCED FOR BETTER DEBUGGING
+// WebSocket configuration - ENHANCED FOR NETWORK ACCESS
 export const websocketConfig = {
-  enabled: true, // Force enable WebSocket
-  url: getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000'),
+  enabled: true,
+  url: (() => {
+    // Dynamic WebSocket URL based on current hostname
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'ws://localhost:5000';
+      }
+      // For network access, use the network IP
+      if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+        return `ws://${hostname}:5000`;
+      }
+    }
+    return getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000');
+  })(),
   path: getEnvVar('NEXT_PUBLIC_WS_PATH', '/socket.io'),
   reconnectAttempts: 5,
   reconnectInterval: 3000,
   heartbeatInterval: 30000,
-  debug: getEnvBool('NEXT_PUBLIC_DEBUG_WEBSOCKET', false), // Added for WebSocket debugging
+  debug: getEnvBool('NEXT_PUBLIC_DEBUG_WEBSOCKET', false),
 } as const;
 
 // Cache configuration - ENHANCED WITH WALLET-SPECIFIC CACHE
@@ -523,10 +536,17 @@ export function getAllConfig() {
 
 // Log configuration in development
 if (isDevelopment() && typeof window !== 'undefined') {
+  const hostname = window.location.hostname;
+  const expectedApiUrl = hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')
+    ? `http://${hostname}:5000`
+    : 'http://localhost:5000';
+  
   console.log('[Environment] Current configuration:', getAllConfig());
   console.log('[Environment] API Base URL:', apiConfig.baseUrl);
-  console.log('[Environment] Debug Mode:', debugConfig.enabled);
+  console.log('[Environment] Expected API URL:', expectedApiUrl);
   console.log('[Environment] WebSocket URL:', websocketConfig.url);
+  console.log('[Environment] Accessing from:', hostname);
+  console.log('[Environment] Debug Mode:', debugConfig.enabled);
   
   const validation = validateConfiguration();
   if (!validation.valid) {
