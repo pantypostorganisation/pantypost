@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Search, Calendar, DollarSign } from 'lucide-react';
+import { Search, Filter, Calendar, DollarSign, Package } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { sanitizeSearchQuery } from '@/utils/security/sanitization';
 
@@ -26,58 +26,73 @@ export default function OrderFilters({
   onToggleSort,
 }: OrderFiltersProps) {
   return (
-    <div className="bg-gray-800/50 rounded-2xl p-5 mb-8 border border-[#ff950e]/40">
-      <div className="flex flex-col lg:flex-row gap-3">
-        {/* Search (secured) */}
+    <div className="bg-gradient-to-r from-[#1a1a1a] to-[#151515] rounded-2xl p-5 mb-6 border border-gray-800/50 backdrop-blur">
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* Search */}
         <div className="flex-1">
           <div className="relative group">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-600 w-4 h-4 group-focus-within:text-[#ff950e] transition-colors duration-300" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 w-4 h-4 group-focus-within:text-[#ff950e] transition-colors" />
             <SecureInput
               type="text"
-              placeholder="Search orders..."
+              placeholder="Search by title, seller, or tags..."
               value={searchQuery}
               onChange={(v) => onSearchChange(v)}
               sanitizer={sanitizeSearchQuery}
-              className="w-full pl-11 pr-4 py-3 !bg-black/30 !border !border-gray-800/50 rounded-xl !text-white placeholder-gray-600 focus:!border-[#ff950e]/50 focus:!bg-black/50 focus:!outline-none focus:placeholder-gray-500 transition-all duration-300"
+              className="w-full pl-11 pr-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white placeholder-gray-600 focus:border-[#ff950e]/50 focus:bg-black/60 focus:outline-none transition-all"
               maxLength={100}
             />
           </div>
         </div>
 
-        {/* Filters Group */}
-        <div className="flex gap-2">
-          <select
-            className="px-4 py-3 bg-black/30 border border-gray-800/50 rounded-xl text-gray-300 focus:text-white focus:border-[#ff950e]/50 focus:outline-none transition-all duration-300 cursor-pointer hover:bg-black/50"
-            value={filterStatus}
-            onChange={(e) => onFilterStatusChange(e.target.value as 'all' | 'pending' | 'processing' | 'shipped')}
+        {/* Status Filter */}
+        <select
+          className="px-4 py-3 bg-black/40 border border-gray-800 rounded-xl text-white focus:border-[#ff950e]/50 focus:outline-none transition-all cursor-pointer hover:bg-black/60"
+          value={filterStatus}
+          onChange={(e) => onFilterStatusChange(e.target.value as any)}
+        >
+          <option value="all">📦 All Orders</option>
+          <option value="pending">⏳ Pending</option>
+          <option value="processing">🔄 Processing</option>
+          <option value="shipped">✈️ Shipped</option>
+        </select>
+
+        {/* Sort Options */}
+        <div className="flex bg-black/40 rounded-xl p-1 border border-gray-800">
+          <button
+            onClick={() => onToggleSort('date')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+              sortBy === 'date' 
+                ? 'bg-[#ff950e] text-black shadow-lg' 
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+            }`}
           >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="shipped">Shipped</option>
-          </select>
+            <Calendar className="w-3.5 h-3.5" />
+            Date
+          </button>
 
-          <div className="flex bg-black/30 rounded-xl p-1 border border-gray-800/50">
-            <button
-              onClick={() => onToggleSort('date')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all duration-300 text-sm font-medium ${
-                sortBy === 'date' ? 'bg-[#ff950e] text-black shadow-md' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Date</span>
-            </button>
+          <button
+            onClick={() => onToggleSort('price')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+              sortBy === 'price' 
+                ? 'bg-[#ff950e] text-black shadow-lg' 
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+            }`}
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+            Price
+          </button>
 
-            <button
-              onClick={() => onToggleSort('price')}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all duration-300 text-sm font-medium ${
-                sortBy === 'price' ? 'bg-[#ff950e] text-black shadow-md' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <DollarSign className="w-3.5 h-3.5" />
-              <span>Price</span>
-            </button>
-          </div>
+          <button
+            onClick={() => onToggleSort('status')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+              sortBy === 'status' 
+                ? 'bg-[#ff950e] text-black shadow-lg' 
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            Status
+          </button>
         </div>
       </div>
     </div>

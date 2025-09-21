@@ -1,7 +1,7 @@
 // src/components/buyers/my-orders/OrderSections.tsx
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ShoppingBag, Settings, Gavel } from 'lucide-react';
 import OrderCard from './OrderCard';
 import { Order } from '@/context/WalletContext';
@@ -23,88 +23,149 @@ export default function OrderSections({
   onToggleExpanded,
   onOpenAddressModal,
 }: OrderSectionsProps) {
+  const [activeTab, setActiveTab] = useState<'all' | 'purchases' | 'custom' | 'auctions'>('all');
+  
+  // Combine all orders
+  const allOrders = [...directOrders, ...customRequestOrders, ...auctionOrders];
+
+  if (allOrders.length === 0) {
+    return (
+      <div className="text-center py-16">
+        <ShoppingBag className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-gray-300 mb-2">No orders yet</h3>
+        <p className="text-gray-500">Your purchases will appear here</p>
+      </div>
+    );
+  }
+
+  // Determine which orders to show based on active tab
+  const shouldShowOrder = (type: 'direct' | 'custom' | 'auction') => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'purchases' && type === 'direct') return true;
+    if (activeTab === 'custom' && type === 'custom') return true;
+    if (activeTab === 'auctions' && type === 'auction') return true;
+    return false;
+  };
+
   return (
-    <>
-      {/* Direct Purchases - TOP PRIORITY */}
-      <section className="mb-8">
-        <h2 className="text-xl md:text-2xl font-semibold mb-4 flex items-center text-white">
-          <div className="bg-gradient-to-r from-[#ff950e] to-[#e0850d] p-1.5 rounded-md mr-2.5 shadow-md">
-            <ShoppingBag className="w-5 h-5 text-black" />
-          </div>
-          <span className="leading-none">Direct Purchases ({directOrders.length})</span>
-        </h2>
-
-        {directOrders.length === 0 ? (
-          <div className="text-center py-10 bg-gray-900/30 rounded-xl border border-gray-800">
-            <ShoppingBag className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-400 text-base mb-1">No direct purchases yet</p>
-            <p className="text-gray-500 text-sm">Items you buy directly from the browse page will appear here</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-            {directOrders.map((order) => (
-              <OrderCard
-                key={`${order.id}-${order.date}`}
-                order={order}
-                type="direct"
-                isExpanded={expandedOrder === order.id}
-                onToggleExpanded={onToggleExpanded}
-                onOpenAddressModal={onOpenAddressModal}
-              />
-            ))}
-          </div>
+    <div className="space-y-8">
+      {/* Tab-style navigation */}
+      <div className="flex gap-6 border-b border-gray-800 pb-4">
+        <button 
+          onClick={() => setActiveTab('all')}
+          className={`font-medium pb-2 transition-colors ${
+            activeTab === 'all' 
+              ? 'text-white border-b-2 border-[#ff950e]' 
+              : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          All Orders ({allOrders.length})
+        </button>
+        
+        {directOrders.length > 0 && (
+          <button 
+            onClick={() => setActiveTab('purchases')}
+            className={`font-medium pb-2 transition-colors ${
+              activeTab === 'purchases' 
+                ? 'text-white border-b-2 border-[#ff950e]' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Purchases ({directOrders.length})
+          </button>
         )}
-      </section>
+        
+        {customRequestOrders.length > 0 && (
+          <button 
+            onClick={() => setActiveTab('custom')}
+            className={`font-medium pb-2 transition-colors ${
+              activeTab === 'custom' 
+                ? 'text-white border-b-2 border-[#ff950e]' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Custom ({customRequestOrders.length})
+          </button>
+        )}
+        
+        {auctionOrders.length > 0 && (
+          <button 
+            onClick={() => setActiveTab('auctions')}
+            className={`font-medium pb-2 transition-colors ${
+              activeTab === 'auctions' 
+                ? 'text-white border-b-2 border-[#ff950e]' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            Auctions ({auctionOrders.length})
+          </button>
+        )}
+      </div>
 
-      {/* Custom Request Orders Section - SECOND */}
-      {customRequestOrders.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-xl md:text-2xl font-semibold mb-4 flex items-center text-white">
-            <div className="bg-gradient-to-r from-blue-600 to-cyan-500 p-1.5 rounded-md mr-2.5 shadow-md">
-              <Settings className="w-5 h-5 text-white" />
-            </div>
-            <span className="leading-none">Custom Request Orders ({customRequestOrders.length})</span>
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-            {customRequestOrders.map((order) => (
-              <OrderCard
-                key={`${order.id}-${order.date}`}
-                order={order}
-                type="custom"
-                isExpanded={expandedOrder === order.id}
-                onToggleExpanded={onToggleExpanded}
-                onOpenAddressModal={onOpenAddressModal}
-              />
-            ))}
+      {/* Orders List */}
+      <div className="space-y-4">
+        {/* Direct Purchases */}
+        {shouldShowOrder('direct') && directOrders.map((order) => (
+          <div 
+            key={`${order.id}-${order.date}`}
+            className="bg-gradient-to-br from-black via-[#080808]/90 via-[#0a0a0a]/80 via-[#0c0c0c]/70 to-[#111111] rounded-lg hover:from-[#030303] hover:via-[#0a0a0a] hover:to-[#131313] transition-all"
+          >
+            <OrderCard
+              order={order}
+              type="direct"
+              isExpanded={expandedOrder === order.id}
+              onToggleExpanded={onToggleExpanded}
+              onOpenAddressModal={onOpenAddressModal}
+            />
           </div>
-        </section>
-      )}
+        ))}
 
-      {/* Auction Purchases Section - LAST */}
-      {auctionOrders.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-xl md:text-2xl font-semibold mb-4 flex items-center text-white">
-            <div className="bg-gradient-to-r from-purple-600 to-purple-500 p-1.5 rounded-md mr-2.5 shadow-md">
-              <Gavel className="w-5 h-5 text-white" />
+        {/* Custom Requests */}
+        {shouldShowOrder('custom') && customRequestOrders.map((order) => (
+          <div 
+            key={`${order.id}-${order.date}`}
+            className="bg-gradient-to-br from-black via-[#080808]/90 via-[#0a0a0a]/80 via-[#0c0c0c]/70 to-[#111111] rounded-lg hover:from-[#030303] hover:via-[#0a0a0a] hover:to-[#131313] transition-all relative"
+          >
+            <div className="absolute top-3 right-3 z-10">
+              <span className="px-2 py-1 bg-blue-500/10 text-blue-400 text-xs rounded-full font-medium backdrop-blur-sm">
+                Custom Request
+              </span>
             </div>
-            <span className="leading-none">Auction Purchases ({auctionOrders.length})</span>
-          </h2>
+            <OrderCard
+              order={order}
+              type="custom"
+              isExpanded={expandedOrder === order.id}
+              onToggleExpanded={onToggleExpanded}
+              onOpenAddressModal={onOpenAddressModal}
+            />
+          </div>
+        ))}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
-            {auctionOrders.map((order) => (
+        {/* Auction Wins */}
+        {shouldShowOrder('auction') && auctionOrders.map((order) => (
+          <div 
+            key={`${order.id}-${order.date}`}
+            className="bg-gradient-to-br from-black via-[#080808]/90 via-[#0a0a0a]/80 via-[#0c0c0c]/70 to-[#111111] rounded-lg hover:from-[#030303] hover:via-[#0a0a0a] hover:to-[#131313] transition-all relative overflow-hidden"
+          >
+            {order.wasAuction && !order.deliveryAddress && (
+              <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-green-950/30 to-emerald-950/20 border-b border-green-900/30 px-4 py-2 backdrop-blur-sm">
+                <p className="text-green-400 text-sm font-medium">
+                  🏆 Auction Won - Add delivery address
+                </p>
+              </div>
+            )}
+            <div className={order.wasAuction && !order.deliveryAddress ? 'pt-8' : ''}>
               <OrderCard
-                key={`${order.id}-${order.date}`}
                 order={order}
                 type="auction"
                 isExpanded={expandedOrder === order.id}
                 onToggleExpanded={onToggleExpanded}
                 onOpenAddressModal={onOpenAddressModal}
               />
-            ))}
+            </div>
           </div>
-        </section>
-      )}
-    </>
+        ))}
+      </div>
+    </div>
   );
 }
