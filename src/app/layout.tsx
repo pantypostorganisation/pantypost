@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-// NO 'use client' here!
+
 
 import { Inter } from 'next/font/google';
 import './globals.css';

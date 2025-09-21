@@ -12,7 +12,10 @@ import {
 } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+// Dynamic API URL that works on local network
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname.match(/192\.168\.|10\.|172\./)
+  ? `http://${window.location.hostname}:5000/api`
+  : 'http://localhost:5000/api';
 
 export const useSellerProfileData = (username: string | undefined) => {
   const { user } = useAuth();

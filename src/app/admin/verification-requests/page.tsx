@@ -18,15 +18,27 @@ import { sanitizeStrict } from '@/utils/security/sanitization';
 import { Shield, AlertCircle, Loader2 } from 'lucide-react';
 import { FEATURES } from '@/services/api.config';
 
-// Get backend URL from environment
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+// Get backend URL from environment or detect network access
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || (
+  typeof window !== 'undefined' && window.location.hostname.match(/192\.168\.|10\.|172\./)
+    ? `http://${window.location.hostname}:5000`
+    : 'http://localhost:5000'
+);
 
 // Helper to convert relative URL to absolute backend URL
 const toAbsoluteUrl = (url?: string): string | undefined => {
   if (!url) return undefined;
   
-  // If it's already an absolute URL or data URL, return as is
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+  // If it's already an absolute URL or data URL, return as is (but update localhost if on network)
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    // Update localhost URLs if on network
+    if (typeof window !== 'undefined' && window.location.hostname.match(/192\.168\.|10\.|172\./) && url.includes('localhost')) {
+      return url.replace(/localhost/, window.location.hostname);
+    }
+    return url;
+  }
+  
+  if (url.startsWith('data:')) {
     return url;
   }
   

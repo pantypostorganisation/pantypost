@@ -57,7 +57,7 @@ function getEnvNumber(key: string, defaultValue: number): number {
   return isNaN(num) ? defaultValue : num;
 }
 
-// Debug configuration - ADDED FOR WALLET CONTEXT DEBUGGING
+// Debug configuration
 export const debugConfig = {
   enabled: getEnvBool('NEXT_PUBLIC_DEBUG', isDevelopment()),
   logWebSocket: getEnvBool('NEXT_PUBLIC_DEBUG_WEBSOCKET', false),
@@ -83,9 +83,9 @@ export const appConfig = {
   },
 } as const;
 
-// API configuration
+// API configuration - FIXED to use empty string in development
 export const apiConfig = {
-  baseUrl: getEnvVar('NEXT_PUBLIC_API_URL', 'http://localhost:5000/api'),
+  baseUrl: isDevelopment() ? '' : getEnvVar('NEXT_PUBLIC_API_URL', 'https://api.pantypost.com'),
   timeout: getEnvNumber('NEXT_PUBLIC_API_TIMEOUT', 30000),
   retryAttempts: getEnvNumber('NEXT_PUBLIC_API_RETRY_ATTEMPTS', 3),
   retryDelay: 1000,
@@ -165,7 +165,7 @@ export const errorReportingConfig = {
   sentryDsn: getEnvVar('NEXT_PUBLIC_SENTRY_DSN', ''),
 } as const;
 
-// Feature toggles - Combined old and new features
+// Feature toggles
 export const features = {
   subscriptions: getEnvBool('NEXT_PUBLIC_ENABLE_SUBSCRIPTIONS', true),
   auctions: getEnvBool('NEXT_PUBLIC_ENABLE_AUCTIONS', true),
@@ -204,6 +204,7 @@ export const FEATURES = {
   USE_API_SUBSCRIPTIONS: true,
   USE_API_USERS: apiConfig.features.useUsers,
   USE_MOCK_DATA: apiConfig.features.useMockApi,
+  USE_BACKEND_STORAGE: getEnvBool('NEXT_PUBLIC_USE_BACKEND_STORAGE', true),
   ENABLE_WEBSOCKET: features.websocket,
   ENABLE_NOTIFICATIONS: features.notifications,
   ENABLE_ANALYTICS: analyticsConfig.enabled,
@@ -239,22 +240,31 @@ export const limits = {
   platformFeePercentage: getEnvNumber('NEXT_PUBLIC_PLATFORM_FEE_PERCENTAGE', 10),
 } as const;
 
-// WebSocket configuration - ENHANCED FOR NETWORK ACCESS
+// WebSocket configuration - FIXED for dynamic network access
 export const websocketConfig = {
   enabled: true,
   url: (() => {
     // Dynamic WebSocket URL based on current hostname
     if (typeof window !== 'undefined') {
       const hostname = window.location.hostname;
-      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      
+      // In development, always use the same hostname as the frontend
+      if (isDevelopment()) {
+        // If accessing from network IP, use that IP for WebSocket too
+        if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
+          return `${protocol}//${hostname}:5000`;
+        }
+        // Otherwise use localhost
         return 'ws://localhost:5000';
       }
-      // For network access, use the network IP
-      if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
-        return `ws://${hostname}:5000`;
-      }
+      
+      // Production WebSocket URL
+      return getEnvVar('NEXT_PUBLIC_WS_URL', 'wss://api.pantypost.com');
     }
-    return getEnvVar('NEXT_PUBLIC_WS_URL', 'ws://localhost:5000');
+    
+    // Server-side default
+    return isDevelopment() ? 'ws://localhost:5000' : getEnvVar('NEXT_PUBLIC_WS_URL', 'wss://api.pantypost.com');
   })(),
   path: getEnvVar('NEXT_PUBLIC_WS_PATH', '/socket.io'),
   reconnectAttempts: 5,
@@ -263,7 +273,7 @@ export const websocketConfig = {
   debug: getEnvBool('NEXT_PUBLIC_DEBUG_WEBSOCKET', false),
 } as const;
 
-// Cache configuration - ENHANCED WITH WALLET-SPECIFIC CACHE
+// Cache configuration
 export const cacheConfig = {
   enabled: getEnvBool('NEXT_PUBLIC_ENABLE_CACHE', true),
   ttlSeconds: getEnvNumber('NEXT_PUBLIC_CACHE_TTL_SECONDS', 300),
@@ -330,7 +340,7 @@ export const tierConfig = {
   },
 } as const;
 
-// Performance optimization configuration - ADDED FOR ADMIN DASHBOARD
+// Performance optimization configuration
 export const performanceConfig = {
   debounceDelay: getEnvNumber('NEXT_PUBLIC_DEBOUNCE_DELAY', 300),
   throttleDelay: getEnvNumber('NEXT_PUBLIC_THROTTLE_DELAY', 1000),
@@ -376,7 +386,7 @@ export const API_ENDPOINTS = {
     BY_SELLER: '/listings/seller/:username',
   },
   
-  // Messages - FIXED endpoints
+  // Messages
   MESSAGES: {
     THREADS: '/messages/threads',
     THREAD: '/messages/threads/:threadId',
@@ -398,7 +408,7 @@ export const API_ENDPOINTS = {
     DISPUTE: '/orders/:id/dispute',
   },
   
-  // Wallet - ENHANCED WITH ADMIN ENDPOINTS
+  // Wallet
   WALLET: {
     BALANCE: '/wallet/balance',
     TRANSACTIONS: '/wallet/transactions',
@@ -446,14 +456,14 @@ export const API_ENDPOINTS = {
     STATS: '/tiers/stats',
   },
   
-  // Tips - ADDED FOR TIP FUNCTIONALITY
+  // Tips
   TIPS: {
     SEND: '/tips/send',
     HISTORY: '/tips/history',
   },
 };
 
-// Build API URL helper
+// Build API URL helper - FIXED to work with relative URLs
 export const buildApiUrl = (endpoint: string, params?: Record<string, string>): string => {
   let url = endpoint;
   
@@ -464,9 +474,15 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
     });
   }
   
-  // Prepend base URL if not already included
+  // In development, return relative URL
+  if (isDevelopment()) {
+    return `/api${url}`;
+  }
+  
+  // In production, prepend base URL if not already included
   if (!url.startsWith('http')) {
-    url = `${apiConfig.baseUrl}${url}`;
+    const baseUrl = apiConfig.baseUrl || 'https://api.pantypost.com';
+    url = `${baseUrl}${url}`;
   }
   
   return url;
@@ -476,14 +492,15 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
 export function validateConfiguration(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  // Validate required configurations
-  if (!appConfig.url) {
-    errors.push('NEXT_PUBLIC_APP_URL is required');
-  }
+  // Don't validate API URL in development (using proxy)
+  if (!isDevelopment()) {
+    if (!appConfig.url) {
+      errors.push('NEXT_PUBLIC_APP_URL is required in production');
+    }
 
-  // Validate API configuration
-  if (!apiConfig.features.useMockApi && !apiConfig.baseUrl) {
-    errors.push('NEXT_PUBLIC_API_URL is required when not using mock API');
+    if (!apiConfig.features.useMockApi && !apiConfig.baseUrl) {
+      errors.push('NEXT_PUBLIC_API_URL is required when not using mock API in production');
+    }
   }
 
   // Validate Cloudinary in production
@@ -502,7 +519,7 @@ export function validateConfiguration(): { valid: boolean; errors: string[] } {
   };
 }
 
-// Environment validation - backward compatibility
+// Environment validation
 export const validateEnvironment = (): void => {
   const validation = validateConfiguration();
   if (!validation.valid && isProduction()) {
@@ -537,15 +554,12 @@ export function getAllConfig() {
 // Log configuration in development
 if (isDevelopment() && typeof window !== 'undefined') {
   const hostname = window.location.hostname;
-  const expectedApiUrl = hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')
-    ? `http://${hostname}:5000`
-    : 'http://localhost:5000';
   
-  console.log('[Environment] Current configuration:', getAllConfig());
-  console.log('[Environment] API Base URL:', apiConfig.baseUrl);
-  console.log('[Environment] Expected API URL:', expectedApiUrl);
+  console.log('[Environment] Development Mode Configuration:');
+  console.log('[Environment] Frontend accessing from:', hostname);
+  console.log('[Environment] API Mode: Using Next.js proxy (relative URLs)');
+  console.log('[Environment] API Base URL:', apiConfig.baseUrl || '(using proxy)');
   console.log('[Environment] WebSocket URL:', websocketConfig.url);
-  console.log('[Environment] Accessing from:', hostname);
   console.log('[Environment] Debug Mode:', debugConfig.enabled);
   
   const validation = validateConfiguration();

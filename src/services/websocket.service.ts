@@ -19,8 +19,13 @@ class WebSocketService {
   private reconnectAttempts = 0;
 
   constructor(options: Partial<WebSocketOptions> = {}) {
+    // Dynamic URL that works on local network
+    const defaultUrl = typeof window !== 'undefined' && window.location.hostname.match(/192\.168\.|10\.|172\./)
+      ? `http://${window.location.hostname}:5000`
+      : 'http://localhost:5000';
+
     this.options = {
-      url: options.url || '',
+      url: options.url || defaultUrl,
       autoConnect: options.autoConnect ?? true,
       reconnect: options.reconnect ?? true,
       reconnectAttempts: options.reconnectAttempts ?? 5,

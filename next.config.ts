@@ -9,7 +9,7 @@ const ContentSecurityPolicy = `
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
   img-src 'self' blob: data: https: *.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* http://127.0.0.1:* http://192.168.*:* http://10.*:*' : ''};
   media-src 'self' https://res.cloudinary.com;
-  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:5000 ws://localhost:5000 http://192.168.*:5000 ws://192.168.*:5000 http://10.*:5000 ws://10.*:5000' : ''};
+  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* ws://localhost:* http://192.168.*:* ws://192.168.*:* http://10.*:* ws://10.*:*' : ''};
   font-src 'self' https://fonts.gstatic.com;
   object-src 'none';
   base-uri 'self';
@@ -27,10 +27,6 @@ const securityHeaders = process.env.NODE_ENV === 'development' ? [
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  // Relaxed CORS for development
-  { key: 'Access-Control-Allow-Origin', value: '*' },
-  { key: 'Access-Control-Allow-Methods', value: 'GET, POST, PUT, DELETE, OPTIONS' },
-  { key: 'Access-Control-Allow-Headers', value: '*' },
 ] : [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
@@ -136,7 +132,6 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizeCss: true,
     optimizePackageImports: ['lucide-react', 'framer-motion', 'react-icons'],
-    // Remove allowedDevOrigins as it doesn't exist in TypeScript types
   },
 
   // Security and performance headers
@@ -174,9 +169,39 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Enhanced rewrites for clean URLs
+  // PERMANENT FIX: Proxy API requests in development to avoid CORS
   async rewrites() {
+    // Get backend URL from environment or detect dynamically
+    const getBackendUrl = () => {
+      // If explicitly set, use that
+      if (process.env.BACKEND_URL) {
+        return process.env.BACKEND_URL;
+      }
+      
+      // Otherwise use localhost (the backend will be listening on 0.0.0.0)
+      return 'http://localhost:5000';
+    };
+
+    const backendUrl = getBackendUrl();
+    
+    // Only proxy in development
+    const apiRewrites = process.env.NODE_ENV === 'development' 
+      ? [
+          // Proxy all /api requests to backend
+          {
+            source: '/api/:path*',
+            destination: `${backendUrl}/api/:path*`,
+          },
+          // Also proxy uploads for images
+          {
+            source: '/uploads/:path*',
+            destination: `${backendUrl}/uploads/:path*`,
+          },
+        ]
+      : [];
+
     return [
+      ...apiRewrites,
       { source: '/sitemap.xml', destination: '/api/sitemap' },
     ];
   },

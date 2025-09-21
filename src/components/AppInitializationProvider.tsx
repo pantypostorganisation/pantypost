@@ -31,51 +31,32 @@ interface AppInitializationContextType {
 const AppInitializationContext = createContext<AppInitializationContextType | undefined>(undefined);
 
 // ---------- Helpers ----------
-const DEFAULT_BASE = 'http://localhost:5000';
 const DEFAULT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT ?? 10000);
 
-function normalizeBaseUrl(url?: string | null) {
-  const s = (url ?? '').trim();
-  if (!s) return DEFAULT_BASE;
-  return s.replace(/\/+$/, ''); // strip trailing slash(es)
-}
-
 /**
- * Build the health URL dynamically based on current hostname
+ * Build the health URL - use relative URL in development for proxy
  */
 function buildHealthUrl() {
-  // If we're on the client side, determine URL based on current hostname
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    
-    // Use the same hostname as the frontend is accessed from
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:5000/api/health';
-    }
-    
-    // For network access, use the network IP
-    if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
-      return `http://${hostname}:5000/api/health`;
-    }
+  // In development, ALWAYS use relative URL to go through Next.js proxy
+  if (process.env.NODE_ENV === 'development') {
+    return '/api/health';
   }
   
-  // Server-side or fallback
-  const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
-  const rawApiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? '').trim();
-
-  const base = normalizeBaseUrl(rawApiUrl || rawApiBase || DEFAULT_BASE);
-
-  if (base.toLowerCase().endsWith('/api')) {
-    return `${base}/health`;
-  }
-  return `${base}/api/health`;
+  // Production - use full URL
+  const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
+  return `${apiUrl}/health`;
 }
 
 async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), Math.max(3000, timeoutMs)); // minimum 3s
   try {
-    const res = await fetch(input, { ...init, signal: controller.signal, credentials: 'omit', mode: 'cors' });
+    const res = await fetch(input, { 
+      ...init, 
+      signal: controller.signal, 
+      credentials: 'include', // Use include for development cookies
+      mode: 'cors' 
+    });
     return res;
   } finally {
     clearTimeout(id);
@@ -99,9 +80,7 @@ function InitializationLoader(): React.ReactElement {
 function InitializationError({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
   // Extract hostname for debugging
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
-  const expectedBackendUrl = typeof window !== 'undefined' 
-    ? `http://${hostname}:5000` 
-    : 'http://localhost:5000';
+  const isDev = process.env.NODE_ENV === 'development';
 
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
@@ -114,14 +93,18 @@ function InitializationError({ error, onRetry }: { error: Error; onRetry: () => 
         <h1 className="text-2xl font-bold mb-2">Connection Error</h1>
         <p className="text-gray-400 mb-4">{error.message || 'Failed to connect to the server'}</p>
         
-        {hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.') ? (
+        {isDev ? (
           <div className="text-sm text-gray-500 mb-4 text-left bg-black/50 p-3 rounded">
-            <p className="mb-2">Network access detected. Please ensure:</p>
+            <p className="mb-2">Development mode detected. Please ensure:</p>
             <ul className="list-disc list-inside space-y-1">
-              <li>Backend is running on port 5000</li>
-              <li>Backend is listening on 0.0.0.0</li>
-              <li>Expected URL: {expectedBackendUrl}</li>
-              <li>Windows Firewall allows Node.js</li>
+              <li>Backend is running: npm run dev (in pantypost-backend folder)</li>
+              <li>Backend is on port 5000</li>
+              <li>Frontend is on port 3000</li>
+              {hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.') ? (
+                <li>Accessing from network IP: {hostname}</li>
+              ) : (
+                <li>Accessing from: {hostname}</li>
+              )}
             </ul>
           </div>
         ) : null}
@@ -130,11 +113,11 @@ function InitializationError({ error, onRetry }: { error: Error; onRetry: () => 
           Retry Connection
         </button>
         
-        {process.env.NODE_ENV === 'development' && (
+        {isDev && (
           <details className="mt-4 text-left">
             <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-300">Technical details</summary>
             <pre className="mt-2 text-xs bg-black/50 p-3 rounded overflow-auto max-h-48">
-              {`Hostname: ${hostname}\nExpected Backend: ${expectedBackendUrl}\nError: ${error.stack}`}
+              {`Hostname: ${hostname}\nEnvironment: ${process.env.NODE_ENV}\nHealth URL: ${buildHealthUrl()}\nError: ${error.stack}`}
             </pre>
           </details>
         )}
@@ -200,25 +183,24 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
       ).catch((err) => {
         console.error('[AppInitializer] Health check fetch failed:', err);
         
-        // Provide more helpful error message based on access type
-        const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
-        if (hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.')) {
-          throw new Error(`Cannot connect to backend at ${healthUrl}. Please ensure the backend server is running and accessible from your network.`);
+        // Provide helpful error message
+        if (process.env.NODE_ENV === 'development') {
+          throw new Error('Cannot connect to backend server. Please ensure the backend is running on port 5000.');
         } else {
-          throw new Error('Cannot connect to backend server. Please ensure the API is running on port 5000.');
+          throw new Error('Cannot connect to server. Please try again later.');
         }
       });
 
       if (!res || !res.ok) {
         const statusText = res ? `${res.status} ${res.statusText}` : 'no response';
-        throw new Error(`Backend server is not responding correctly (${statusText})`);
+        throw new Error(`Backend server error (${statusText})`);
       }
 
       let data: any = null;
       try {
         data = await res.json();
       } catch {
-        throw new Error('Backend server is not responding correctly (invalid JSON)');
+        throw new Error('Invalid response from server');
       }
 
       console.log('[AppInitializer] API health check response:', data);

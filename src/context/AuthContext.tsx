@@ -358,9 +358,27 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Get API base URL from environment config
-const API_BASE_URL =
-  apiConfig?.baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+// Get API base URL - FIXED for network access
+const API_BASE_URL = (() => {
+  // In development, detect the network IP and use it
+  if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    // Use the same hostname but port 5000 for backend
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    // Network IP - use it directly
+    return `http://${hostname}:5000`;
+  }
+  
+  // Server-side development
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:5000';
+  }
+  
+  // Production
+  return apiConfig?.baseUrl || process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
+})();
 
 // Enhanced Token storage with WebSocket event support
 class TokenStorage {

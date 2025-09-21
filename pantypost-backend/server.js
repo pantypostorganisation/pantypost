@@ -66,29 +66,28 @@ global.webSocketService = webSocketService;
 // Connect to MongoDB
 connectDB();
 
-// CORS Configuration - UPDATED for dynamic network access
+// CORS Configuration - FIXED for development network access
 const corsOptions = {
   origin: function(origin, callback) {
+    // In development, allow ALL origins (this fixes network IP access)
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // In production, use a whitelist
+    const allowedOrigins = [
+      'https://pantypost.com',
+      'https://www.pantypost.com',
+      // Add any other production domains here
+    ];
+    
     // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return callback(null, true);
-    
-    // List of allowed origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      'http://192.168.0.106:3000',
-      'http://192.168.0.21:3000'
-    ];
     
     // Check if the origin is in the allowed list
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
-    } 
-    // Allow any local network IP on port 3000
-    else if (origin.match(/^http:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)\d+\.\d+:3000$/)) {
-      callback(null, true);
-    }
-    else {
+    } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -107,6 +106,8 @@ const corsOptions = {
   ],
   optionsSuccessStatus: 200 // For legacy browser support
 };
+
+app.use(cors(corsOptions));
 
 app.use(cors(corsOptions));
 
