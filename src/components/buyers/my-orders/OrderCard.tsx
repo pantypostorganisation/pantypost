@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Order } from '@/types/order'; // Use the existing Order type from your types
+import { Order } from '@/types/order';
 import { useListings } from '@/context/ListingContext';
 import { getUserProfilePic } from '@/utils/profileUtils';
 import OrderHeader from './OrderHeader';
@@ -48,26 +48,24 @@ export default function OrderCard({
     loadProfilePic();
   }, [order.seller]);
 
-  // CRITICAL FIX: Ensure order has an ID (handle both _id and id fields from backend)
+  // CRITICAL FIX: Ensure order has an ID
   const orderId = order.id || (order as any)._id || `order-${Date.now()}`;
 
   // Show special status for auction orders without address
   const needsAddress = order.wasAuction && !hasDeliveryAddress;
 
   return (
-    <div
-      className={`relative border rounded-2xl bg-gradient-to-br overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 ${styles.gradientStyle} ${styles.borderStyle}`}
-    >
-      {/* Auction Won Badge */}
+    <div className="relative border border-white/5 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:border-white/10 transition-all duration-200">
+      {/* Auction Won Badge - Better contrast */}
       {order.wasAuction && needsAddress && (
         <div className="absolute top-4 right-4 z-10">
-          <div className="bg-green-500 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+          <div className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
             🏆 Won! Add Address
           </div>
         </div>
       )}
 
-      {/* Order Header */}
+      {/* Order Header with consistent padding */}
       <div className="p-6">
         <OrderHeader
           order={order}
