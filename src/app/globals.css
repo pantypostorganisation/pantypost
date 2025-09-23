@@ -1,3 +1,5 @@
+/* src/app/globals.css */
+
 @import "tailwindcss";
 
 :root {
@@ -193,14 +195,422 @@ a:hover {
   background: rgba(26, 26, 26, 1);
 }
 
-/* ... (other styles remain unchanged) ... */
-
-/* ======== NEW: Breathing green hover for Verify button text ======== */
-@keyframes breathe-green {
-  0%, 100% { color: black; }
-  50% { color: #22c55e; } /* Tailwind green-500 */
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .mobile-stack {
+    flex-direction: column;
+  }
+  
+  .modal-actions {
+    padding: 0.75rem;
+  }
+  
+  .document-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.breathe-green-hover:hover {
-  animation: breathe-green 2s ease-in-out infinite;
+/* ======== ENHANCED HOMEPAGE ANIMATIONS ======== */
+
+/* Enhanced pulse animation for trust badge */
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-slow { 
+  animation: pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+  will-change: opacity;
+}
+
+/* Enhanced shimmer effect for loading states */
+.loading-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Perspective for 3D hover effects with GPU acceleration */
+.perspective { 
+  perspective: 1000px; 
+  transform-style: preserve-3d;
+}
+
+/* Enhanced smooth scroll behavior with better performance */
+html { 
+  scroll-behavior: smooth; 
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Enhanced custom focus styles with better accessibility */
+*:focus-visible {
+  outline: 2px solid #ff950e;
+  outline-offset: 2px;
+  border-radius: 4px;
+  box-shadow: 
+    0 0 0 4px rgba(255, 149, 14, 0.1),
+    0 0 0 2px rgba(255, 149, 14, 0.3);
+  transition: box-shadow 0.2s ease;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+button:focus-visible, a:focus-visible {
+  transform: scale(1.02);
+  transition: transform 0.1s ease, box-shadow 0.2s ease;
+}
+
+/* Enhanced custom spinning animations with GPU acceleration */
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-slow { 
+  animation: spin-slow 25s linear infinite; 
+  will-change: transform;
+  transform-origin: center;
+}
+
+@keyframes spin-slow-reverse {
+  to { transform: rotate(-360deg); }
+}
+
+.animate-spin-slow-reverse { 
+  animation: spin-slow-reverse 20s linear infinite; 
+  will-change: transform;
+  transform-origin: center;
+}
+
+@keyframes spin-medium {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin-medium { 
+  animation: spin-medium 35s linear infinite; 
+  will-change: transform;
+  transform-origin: center;
+}
+
+@keyframes spin-medium-reverse {
+  to { transform: rotate(-360deg); }
+}
+
+.animate-spin-medium-reverse { 
+  animation: spin-medium-reverse 30s linear infinite; 
+  will-change: transform;
+  transform-origin: center;
+}
+
+/* Enhanced radial gradient utility with fallbacks */
+.bg-gradient-radial {
+  background-image: radial-gradient(circle, var(--tw-gradient-stops));
+  background-image: -webkit-radial-gradient(circle, var(--tw-gradient-stops));
+}
+
+/* ======== NEW ENHANCED LOADING AND ERROR STATES ======== */
+
+/* Enhanced loading skeleton animations */
+@keyframes skeleton-pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.animate-skeleton {
+  animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  will-change: opacity;
+}
+
+/* Stagger delays for skeleton animations */
+.animate-pulse.delay-75 {
+  animation-delay: 75ms;
+}
+
+.animate-pulse.delay-150 {
+  animation-delay: 150ms;
+}
+
+.animate-pulse.delay-300 {
+  animation-delay: 300ms;
+}
+
+.animate-skeleton.delay-75 {
+  animation-delay: 75ms;
+}
+
+.animate-skeleton.delay-150 {
+  animation-delay: 150ms;
+}
+
+.animate-skeleton.delay-300 {
+  animation-delay: 300ms;
+}
+
+/* Enhanced error state styles */
+.error-state {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(127, 29, 29, 0.05));
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  transition: all 0.3s ease;
+}
+
+.error-state:hover {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(127, 29, 29, 0.08));
+  border-color: rgba(220, 38, 38, 0.3);
+}
+
+/* Enhanced performance optimizations */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Enhanced reduced motion handling for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-spin-slow,
+  .animate-spin-slow-reverse,
+  .animate-spin-medium,
+  .animate-spin-medium-reverse,
+  .animate-pulse-slow,
+  .loading-shimmer,
+  .animate-skeleton {
+    animation: none !important;
+  }
+  
+  .perspective {
+    perspective: none !important;
+    transform-style: flat !important;
+  }
+}
+
+/* Enhanced focus management for keyboard navigation */
+.focus-ring {
+  transition: box-shadow 0.2s ease;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 
+    0 0 0 2px var(--color-primary),
+    0 0 0 4px rgba(255, 149, 14, 0.2);
+}
+
+/* Enhanced button hover effects */
+.btn-enhanced {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.btn-enhanced::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.btn-enhanced:hover::before {
+  left: 100%;
+}
+
+/* Enhanced card hover effects */
+.card-enhanced {
+  transition: all 0.3s ease;
+  will-change: transform, box-shadow;
+}
+
+.card-enhanced:hover {
+  transform: translateY(-4px);
+  box-shadow: 
+    0 10px 25px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 149, 14, 0.1);
+}
+
+/* Performance optimizations for animations */
+.will-change-transform {
+  will-change: transform;
+}
+
+.will-change-opacity {
+  will-change: opacity;
+}
+
+.gpu-accelerated {
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .error-state {
+    border: 2px solid #dc2626;
+    background: rgba(220, 38, 38, 0.2);
+  }
+  
+  *:focus-visible {
+    outline: 3px solid #ff950e;
+    outline-offset: 3px;
+  }
+}
+
+/* Print styles */
+@media print {
+  .animate-spin-slow,
+  .animate-spin-slow-reverse,
+  .animate-spin-medium,
+  .animate-spin-medium-reverse,
+  .animate-pulse-slow,
+  .loading-shimmer,
+  .animate-skeleton {
+    animation: none !important;
+  }
+  
+  .error-state {
+    border: 1px solid #666;
+    background: #f5f5f5;
+  }
+}
+
+/* ======== BROWSE PAGE ANIMATIONS ======== */
+
+/* Smooth fade in animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-from-bottom {
+  from {
+    transform: translateY(1rem);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-bottom-4 {
+  animation-name: fade-in, slide-in-from-bottom;
+}
+
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+.delay-100 {
+  animation-delay: 100ms;
+}
+
+.delay-200 {
+  animation-delay: 200ms;
+}
+
+/* Prevent layout shift for images */
+.listing-image-container {
+  aspect-ratio: 1 / 1;
+  background-color: #1a1a1a;
+  overflow: hidden;
+}
+
+/* Smooth skeleton loading */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #1a1a1a 0%,
+    #2a2a2a 50%,
+    #1a1a1a 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Subtle skeleton animation for browse page */
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.1;
+  }
+}
+
+/* Override skeleton colors for browse page */
+.browse-loading-skeleton {
+  background-color: rgba(31, 41, 55, 0.3); /* Very subtle gray */
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+/* Even more subtle version */
+.browse-loading-skeleton-invisible {
+  background-color: transparent;
+  border: 1px solid rgba(31, 41, 55, 0.2);
+  animation: subtle-pulse 2s ease-in-out infinite;
+}
+
+/* ======== MESSAGE NOTIFICATIONS ======== */
+
+/* Message notification animation */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+/* Optional: Add a fade-out animation for when notifications are dismissed */
+@keyframes fade-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+.animate-fade-out {
+  animation: fade-out 0.2s ease-out forwards;
+}
+
+/* Optional: Add a subtle pulse animation for new notifications */
+.animate-pulse-once {
+  animation: pulse 1.5s;
 }

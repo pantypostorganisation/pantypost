@@ -1,3 +1,4 @@
+// src/app/sellers/my-listings/page.tsx
 'use client';
 
 import { Crown, Sparkles, Gavel, BarChart2, Lock, ShieldCheck } from 'lucide-react';
@@ -6,6 +7,7 @@ import BanCheck from '@/components/BanCheck';
 import RequireAuth from '@/components/RequireAuth';
 import ListingCard from '@/components/myListings/ListingCard';
 import ListingForm from '@/components/myListings/ListingForm';
+import RecentSales from '@/components/myListings/RecentSales';
 import { useMyListings } from '@/hooks/useMyListings';
 
 const AUCTION_TIPS = [
@@ -22,8 +24,10 @@ const PREMIUM_TIPS = [
   'Premium listings can often command higher prices due to their exclusive nature.',
 ];
 
+// Separate the main content into its own component
 function MyListingsContent() {
   const {
+    // State
     user,
     showForm,
     formState,
@@ -34,11 +38,13 @@ function MyListingsContent() {
     isVerified,
     myListings,
     atLimit,
-    maxListings,
+    maxListings, // kept in case the UI references it later
     auctionCount,
     premiumCount,
     standardCount,
+    sellerOrders,
 
+    // Actions
     setShowForm,
     updateFormState,
     resetForm,
@@ -72,42 +78,42 @@ function MyListingsContent() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
-          {/* Left: form + active listings */}
+          {/* Left side: form + active listings */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Stats */}
+            {/* Stats Overview */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-[#1a1a1a] p-6 rounded-2xl shadow-lg border border-white/10">
+              <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-gray-800">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="text-lg font-semibold text-white/80">Standard Listings</h3>
+                    <h3 className="text-lg font-semibold text-gray-300">Standard Listings</h3>
                     <span className="text-4xl font-bold text-white">{standardCount ?? 0}</span>
                   </div>
-                  <Sparkles className="w-10 h-10 text-white/30" />
+                  <Sparkles className="w-10 h-10 text-gray-600" />
                 </div>
               </div>
-              <div className="bg-[#1a1a1a] p-6 rounded-2xl shadow-lg border border-[#ff950e]/60">
+              <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-[#ff950e]">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="text-lg font-semibold text-white/80">Premium Listings</h3>
+                    <h3 className="text-lg font-semibold text-gray-300">Premium Listings</h3>
                     <span className="text-4xl font-bold text-[#ff950e]">{premiumCount ?? 0}</span>
                   </div>
                   <Crown className="w-10 h-10 text-[#ff950e]" />
                 </div>
               </div>
-              <div className="bg-[#1a1a1a] p-6 rounded-2xl shadow-lg border border-purple-700/70">
+              <div className="bg-[#1a1a1a] p-6 rounded-xl shadow-lg border border-purple-700">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h3 className="text-lg font-semibold text-white/80">Auction Listings</h3>
-                    <span className="text-4xl font-bold text-purple-400">{auctionCount ?? 0}</span>
+                    <h3 className="text-lg font-semibold text-gray-300">Auction Listings</h3>
+                    <span className="text-4xl font-bold text-purple-500">{auctionCount ?? 0}</span>
                   </div>
-                  <Gavel className="w-10 h-10 text-purple-400" />
+                  <Gavel className="w-10 h-10 text-purple-500" />
                 </div>
               </div>
             </div>
 
-            {/* Limit notice */}
+            {/* Listing Limit Message */}
             {atLimit && !editingState.isEditing && (
-              <div className="bg-yellow-950/60 border border-yellow-700/70 text-yellow-100 rounded-xl p-4 my-4 text-center font-semibold">
+              <div className="bg-yellow-900 border border-yellow-700 text-yellow-200 rounded-lg p-4 my-4 text-center font-semibold">
                 {isVerified ? (
                   <>You have reached the maximum of <span className="text-[#ff950e] font-bold">25</span> listings for verified sellers.</>
                 ) : (
@@ -127,31 +133,23 @@ function MyListingsContent() {
               </div>
             )}
 
-            {/* Create Listing CTA */}
+            {/* Create Listing Button or Form */}
             {!showForm && !editingState.isEditing && (
               <div className="flex justify-center">
                 <button
                   onClick={() => setShowForm(true)}
-                  className="
-                    px-8 py-3 rounded-2xl font-semibold text-lg
-                    bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00]
-                    text-black shadow-lg transition-all duration-300
-                    hover:scale-105 hover:shadow-orange-400/50 hover:ring-2 hover:ring-orange-400
-                    focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-black
-                    flex items-center gap-2
-                  "
+                  className="px-8 py-3 rounded-full bg-[#ff950e] text-black font-bold text-lg shadow-lg hover:bg-[#e0850d] transition flex items-center gap-2"
                   disabled={atLimit}
                   style={atLimit ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-                  aria-label="Create New Listing"
                 >
                   <Sparkles className="w-5 h-5" />
-                  <span className="text-black">Create New Listing</span>
+                  Create New Listing
                 </button>
               </div>
             )}
 
             {(showForm || editingState.isEditing) && (
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-white/10">
+              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
                 <ListingForm
                   formState={formState}
                   isEditing={editingState.isEditing}
@@ -172,13 +170,13 @@ function MyListingsContent() {
             )}
 
             {/* Active Listings */}
-            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-white/10">
+            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-gray-800">
               <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
                 Your Active Listings
                 <BarChart2 className="w-6 h-6 text-[#ff950e]" />
               </h2>
               {(myListings?.length ?? 0) === 0 ? (
-                <div className="text-center py-10 bg-black rounded-xl border border-dashed border-white/10 text-white/60">
+                <div className="text-center py-10 bg-black rounded-lg border border-dashed border-gray-700 text-gray-400">
                   <p className="text-lg mb-2">You haven't created any listings yet.</p>
                   <p className="text-sm">Use the button above to add your first listing.</p>
                 </div>
@@ -199,17 +197,18 @@ function MyListingsContent() {
             </div>
           </div>
 
-          {/* Right: verification banner + tips */}
+          {/* Right side: verification banner, tips, and order history */}
           <div className="space-y-8">
+            {/* Verification Banner */}
             {!isVerified && (
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-yellow-700/70">
+              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-yellow-700">
                 <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
                   <ShieldCheck className="text-yellow-500 w-6 h-6" />
                   Get Verified
                 </h2>
                 <div className="mb-5">
-                  <p className="text-white/80 mb-3">Verified sellers get these exclusive benefits:</p>
-                  <ul className="space-y-2 text-white/80 text-sm">
+                  <p className="text-gray-300 mb-3">Verified sellers get these exclusive benefits:</p>
+                  <ul className="space-y-2 text-gray-300 text-sm">
                     <li className="flex items-start gap-2">
                       <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
                       <span>Post up to <span className="text-yellow-500 font-bold">25 listings</span> (vs only 2 for unverified)</span>
@@ -232,48 +231,36 @@ function MyListingsContent() {
                     </li>
                   </ul>
                 </div>
-
-                {/* Verify CTA with breathing text */}
                 <Link
                   href="/sellers/verify"
-                  aria-label="Verify My Account"
-                  className="
-                    group w-full px-6 py-3 rounded-2xl font-bold text-lg
-                    flex items-center justify-center gap-2
-                    bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00]
-                    text-black shadow-xl transition-all duration-300
-                    hover:scale-105 hover:shadow-green-500/40 hover:ring-2 hover:ring-green-500
-                    focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-black
-                  "
+                  className="w-full bg-yellow-600 text-white px-6 py-3 rounded-lg hover:bg-yellow-500 font-bold text-lg transition flex items-center justify-center gap-2"
                 >
-                  <ShieldCheck className="w-5 h-5 text-black transition-transform duration-300 group-hover:rotate-12" />
-                  <span className="tracking-wide text-black breathe-green-hover">
-                    Verify My Account
-                  </span>
+                  <ShieldCheck className="w-5 h-5" />
+                  Verify My Account
                 </Link>
               </div>
             )}
 
-            {/* Auction Tips */}
-            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-purple-700/70">
+            {/* Auction Seller Tips */}
+            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-purple-700">
               <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
-                <Gavel className="text-purple-400 w-6 h-6" />
+                <Gavel className="text-purple-500 w-6 h-6" />
                 Auction Tips
               </h2>
-              <ul className="space-y-4 text-white/80 text-sm">
+              <ul className="space-y-4 text-gray-300 text-sm">
                 {AUCTION_TIPS.map((tip, index) => (
                   <li key={index} className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold text-lg leading-none">•</span>
+                    <span className="text-purple-500 font-bold text-lg leading-none">•</span>
                     <span>{tip}</span>
                   </li>
                 ))}
               </ul>
               {!isVerified && (
-                <div className="mt-5 pt-4 border-t border-white/10">
+                <div className="mt-5 pt-4 border-t border-gray-700">
                   <div className="flex items-center gap-2">
                     <Lock className="text-yellow-500 w-5 h-5" />
-                    <p className="text-yellow-300 text-sm">
-                      <Link href="/sellers/verify" className="underline hover:text-yellow-200">
+                    <p className="text-yellow-400 text-sm">
+                      <Link href="/sellers/verify" className="underline hover:text-yellow-300">
                         Get verified
                       </Link>{' '}
                       to unlock auction listings!
@@ -283,13 +270,13 @@ function MyListingsContent() {
               )}
             </div>
 
-            {/* Premium Tips */}
-            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-[#ff950e]/60">
+            {/* Premium Seller Tips */}
+            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-xl shadow-lg border border-[#ff950e]">
               <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
                 <Crown className="text-[#ff950e] w-6 h-6" />
                 Premium Seller Tips
               </h2>
-              <ul className="space-y-4 text-white/80 text-sm">
+              <ul className="space-y-4 text-gray-300 text-sm">
                 {PREMIUM_TIPS.map((tip, index) => (
                   <li key={index} className="flex items-start gap-2">
                     <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
@@ -299,7 +286,8 @@ function MyListingsContent() {
               </ul>
             </div>
 
-            {/* Recent Sales removed */}
+            {/* Recent Sales */}
+            <RecentSales orders={sellerOrders || []} />
           </div>
         </div>
       </div>
@@ -307,6 +295,7 @@ function MyListingsContent() {
   );
 }
 
+// Main page component with proper provider wrapping
 export default function MyListingsPage() {
   return (
     <BanCheck>
