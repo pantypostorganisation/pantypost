@@ -6,7 +6,6 @@ import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import OrdersHeader from '@/components/buyers/my-orders/OrdersHeader';
 import OrderStats from '@/components/buyers/my-orders/OrderStats';
-import OrderFilters from '@/components/buyers/my-orders/OrderFilters';
 import OrderSections from '@/components/buyers/my-orders/OrderSections';
 import EmptyOrdersState from '@/components/buyers/my-orders/EmptyOrdersState';
 import AddressConfirmationModal from '@/components/AddressConfirmationModal';
@@ -17,8 +16,6 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 function OrdersError({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a]">
-      {/* top accent */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#ff7a00] via-[#ff950e] to-[#ffbd59]" />
       <div className="p-6 md:p-10">
         <div className="max-w-md mx-auto text-center pt-20">
           <div className="mx-auto mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-red-500/10 to-red-600/10 ring-1 ring-red-500/20 backdrop-blur-sm">
@@ -42,8 +39,6 @@ function OrdersError({ error, onRetry }: { error: string; onRetry: () => void })
 function OrdersLoading() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a]">
-      {/* top accent */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#ff7a00] via-[#ff950e] to-[#ffbd59] animate-pulse" />
       <div className="p-6 md:p-10">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-20">
@@ -70,13 +65,6 @@ function MyOrdersContent() {
     stats,
 
     // UI State
-    searchQuery,
-    setSearchQuery,
-    sortBy,
-    setSortBy,
-    sortOrder,
-    filterStatus,
-    setFilterStatus,
     expandedOrder,
     setExpandedOrder,
     addressModalOpen,
@@ -86,7 +74,6 @@ function MyOrdersContent() {
     // Handlers
     handleOpenAddressModal,
     handleConfirmAddress,
-    toggleSort,
     getSelectedOrderAddress,
   } = useMyOrders();
 
@@ -104,74 +91,50 @@ function MyOrdersContent() {
   };
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a]">
-      {/* top accent bar */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#ff7a00] via-[#ff950e] to-[#ffbd59]" />
-      
-      {/* Main content container with better spacing */}
-      <div className="px-4 sm:px-6 lg:px-8 py-6 md:py-10">
-        <div className="max-w-7xl mx-auto space-y-6 md:space-y-8">
-          
-          {/* Page Header - Enhanced styling */}
-          <section className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.03] to-transparent backdrop-blur-md p-6 md:p-8 lg:p-10">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 via-transparent to-transparent pointer-events-none" />
-            <div className="relative z-10">
-              <OrdersHeader />
+    <main className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a] p-4 md:p-10">
+      <div className="max-w-7xl mx-auto space-y-6 md:space-y-8">
+        
+        {/* Page Header - Enhanced styling */}
+        <section className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.03] to-transparent backdrop-blur-md p-6 md:p-8 lg:p-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 via-transparent to-transparent pointer-events-none" />
+          <div className="relative z-10">
+            <OrdersHeader />
+          </div>
+        </section>
+
+        {/* Stats Cards - Better responsive grid */}
+        <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 md:p-6 backdrop-blur-sm">
+          <OrderStats stats={safeStats} />
+        </section>
+
+        {/* Orders Section - Enhanced card layout */}
+        <section className="rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.02] to-transparent p-4 md:p-6">
+          {safeUserOrders.length === 0 ? (
+            <div className="rounded-xl bg-black/30 backdrop-blur-sm border border-white/5 p-8 md:p-12">
+              <EmptyOrdersState />
             </div>
-          </section>
+          ) : (
+            <OrderSections
+              directOrders={safeDirectOrders}
+              customRequestOrders={safeCustomRequestOrders}
+              auctionOrders={safeAuctionOrders}
+              expandedOrder={expandedOrder}
+              onToggleExpanded={setExpandedOrder}
+              onOpenAddressModal={handleOpenAddressModal}
+            />
+          )}
+        </section>
 
-          {/* Stats Cards - Better responsive grid */}
-          <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 md:p-6 backdrop-blur-sm">
-            <OrderStats stats={safeStats} />
-          </section>
-
-          {/* Filters Section - Improved sticky behavior */}
-          <section
-            className="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 bg-black/80 backdrop-blur-xl border-y border-white/5"
-            aria-label="Order filters"
-          >
-            <div className="mx-auto max-w-7xl">
-              <OrderFilters
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-                filterStatus={filterStatus}
-                onFilterStatusChange={setFilterStatus}
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onToggleSort={toggleSort}
-              />
-            </div>
-          </section>
-
-          {/* Orders Section - Enhanced card layout */}
-          <section className="rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.02] to-transparent p-4 md:p-6">
-            {safeUserOrders.length === 0 ? (
-              <div className="rounded-xl bg-black/30 backdrop-blur-sm border border-white/5 p-8 md:p-12">
-                <EmptyOrdersState />
-              </div>
-            ) : (
-              <OrderSections
-                directOrders={safeDirectOrders}
-                customRequestOrders={safeCustomRequestOrders}
-                auctionOrders={safeAuctionOrders}
-                expandedOrder={expandedOrder}
-                onToggleExpanded={setExpandedOrder}
-                onOpenAddressModal={handleOpenAddressModal}
-              />
-            )}
-          </section>
-
-          {/* Address Modal */}
-          <AddressConfirmationModal
-            isOpen={addressModalOpen}
-            onClose={() => {
-              setAddressModalOpen(false);
-            }}
-            onConfirm={handleConfirmAddress}
-            existingAddress={getSelectedOrderAddress()}
-            orderId={selectedOrder || ''}
-          />
-        </div>
+        {/* Address Modal */}
+        <AddressConfirmationModal
+          isOpen={addressModalOpen}
+          onClose={() => {
+            setAddressModalOpen(false);
+          }}
+          onConfirm={handleConfirmAddress}
+          existingAddress={getSelectedOrderAddress()}
+          orderId={selectedOrder || ''}
+        />
       </div>
     </main>
   );
