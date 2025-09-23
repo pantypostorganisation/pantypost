@@ -13,22 +13,22 @@ import AddressConfirmationModal from '@/components/AddressConfirmationModal';
 import { useMyOrders } from '@/hooks/useMyOrders';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
-// Error component (UI-only styling tweaks)
+// Error component (Enhanced UI styling)
 function OrdersError({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a]">
       {/* top accent */}
       <div className="h-1 w-full bg-gradient-to-r from-[#ff7a00] via-[#ff950e] to-[#ffbd59]" />
-      <div className="p-4 md:p-10">
-        <div className="max-w-md mx-auto text-center pt-16">
-          <div className="mx-auto mb-5 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/10 ring-1 ring-red-500/20">
-            <AlertCircle className="w-8 h-8 text-red-400" />
+      <div className="p-6 md:p-10">
+        <div className="max-w-md mx-auto text-center pt-20">
+          <div className="mx-auto mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-red-500/10 to-red-600/10 ring-1 ring-red-500/20 backdrop-blur-sm">
+            <AlertCircle className="w-10 h-10 text-red-400" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white mb-2">Error loading orders</h1>
-          <p className="text-sm text-gray-400 mb-6">{error}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-white mb-3">Error loading orders</h1>
+          <p className="text-base text-gray-400 mb-8">{error}</p>
           <button
             onClick={onRetry}
-            className="px-6 py-3 rounded-xl bg-[#ff950e] text-black font-medium hover:bg-[#ff7a00] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50"
+            className="px-8 py-3.5 rounded-xl bg-gradient-to-r from-[#ff950e] to-[#ff7a00] text-black font-semibold hover:from-[#ff7a00] hover:to-[#ff950e] transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50 transform hover:scale-105 active:scale-95"
           >
             Try again
           </button>
@@ -38,19 +38,19 @@ function OrdersError({ error, onRetry }: { error: string; onRetry: () => void })
   );
 }
 
-// Loading component (UI-only styling tweaks)
+// Loading component (Enhanced UI)
 function OrdersLoading() {
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a]">
       {/* top accent */}
-      <div className="h-1 w-full bg-gradient-to-r from-[#ff7a00] via-[#ff950e] to-[#ffbd59]" />
-      <div className="p-4 md:p-10">
+      <div className="h-1 w-full bg-gradient-to-r from-[#ff7a00] via-[#ff950e] to-[#ffbd59] animate-pulse" />
+      <div className="p-6 md:p-10">
         <div className="max-w-7xl mx-auto">
           <div className="text-center py-20">
-            <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#ff950e]/10 ring-1 ring-[#ff950e]/20">
-              <Loader2 className="w-6 h-6 text-[#ff950e] animate-spin" />
+            <div className="mx-auto mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#ff950e]/10 to-[#ff950e]/5 ring-1 ring-[#ff950e]/20 backdrop-blur-sm">
+              <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin" />
             </div>
-            <p className="text-gray-400">Loading your orders…</p>
+            <p className="text-gray-300 text-lg">Loading your orders…</p>
           </div>
         </div>
       </div>
@@ -58,7 +58,7 @@ function OrdersLoading() {
   );
 }
 
-// Inner component that uses the hooks after providers are ready (UI-only layout polish)
+// Inner component that uses the hooks after providers are ready (Enhanced layout)
 function MyOrdersContent() {
   const {
     // Data
@@ -104,27 +104,33 @@ function MyOrdersContent() {
   };
 
   return (
-    <main className="min-h-screen bg-black">
-      {/* top accent */}
+    <main className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a]">
+      {/* top accent bar */}
       <div className="h-1 w-full bg-gradient-to-r from-[#ff7a00] via-[#ff950e] to-[#ffbd59]" />
-      <div className="p-4 md:p-10">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Page Header */}
-          <section className="rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-transparent p-4 md:p-6">
-            <OrdersHeader />
+      
+      {/* Main content container with better spacing */}
+      <div className="px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+        <div className="max-w-7xl mx-auto space-y-6 md:space-y-8">
+          
+          {/* Page Header - Enhanced styling */}
+          <section className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.03] to-transparent backdrop-blur-md p-6 md:p-8 lg:p-10">
+            <div className="absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 via-transparent to-transparent pointer-events-none" />
+            <div className="relative z-10">
+              <OrdersHeader />
+            </div>
           </section>
 
-          {/* Stats */}
-          <section className="rounded-2xl border border-white/5 bg-white/5 p-4 md:p-6 backdrop-blur supports-[backdrop-filter]:bg-white/5">
+          {/* Stats Cards - Better responsive grid */}
+          <section className="rounded-2xl border border-white/5 bg-white/[0.02] p-4 md:p-6 backdrop-blur-sm">
             <OrderStats stats={safeStats} />
           </section>
 
-          {/* Sticky Filters */}
+          {/* Filters Section - Improved sticky behavior */}
           <section
-            className="sticky top-0 z-20 -mx-4 md:-mx-6 lg:-mx-8 xl:-mx-10 border-y border-white/5 bg-black/70 backdrop-blur supports-[backdrop-filter]:bg-black/60"
+            className="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-4 bg-black/80 backdrop-blur-xl border-y border-white/5"
             aria-label="Order filters"
           >
-            <div className="mx-auto max-w-7xl px-4 md:px-6 py-3">
+            <div className="mx-auto max-w-7xl">
               <OrderFilters
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
@@ -137,10 +143,10 @@ function MyOrdersContent() {
             </div>
           </section>
 
-          {/* Sections */}
-          <section className="rounded-2xl border border-white/5 bg-white/[0.04] p-2 md:p-4">
+          {/* Orders Section - Enhanced card layout */}
+          <section className="rounded-2xl border border-white/5 bg-gradient-to-br from-white/[0.02] to-transparent p-4 md:p-6">
             {safeUserOrders.length === 0 ? (
-              <div className="rounded-xl border border-white/5 bg-black/30 p-6 md:p-10">
+              <div className="rounded-xl bg-black/30 backdrop-blur-sm border border-white/5 p-8 md:p-12">
                 <EmptyOrdersState />
               </div>
             ) : (
@@ -171,7 +177,7 @@ function MyOrdersContent() {
   );
 }
 
-// Main page component with provider readiness check and error boundary (unchanged logic)
+// Main page component with provider readiness check and error boundary
 export default function MyOrdersPage() {
   const [mounted, setMounted] = useState(false);
   const [hasError, setHasError] = useState(false);
