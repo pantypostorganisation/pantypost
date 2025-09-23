@@ -1,4 +1,3 @@
-// src/app/sellers/my-listings/page.tsx
 'use client';
 
 import { Crown, Sparkles, Gavel, BarChart2, Lock, ShieldCheck } from 'lucide-react';
@@ -128,7 +127,7 @@ function MyListingsContent() {
               </div>
             )}
 
-            {/* Create Listing CTA (refreshed style) */}
+            {/* Create Listing CTA */}
             {!showForm && !editingState.isEditing && (
               <div className="flex justify-center">
                 <button
@@ -137,8 +136,8 @@ function MyListingsContent() {
                     px-8 py-3 rounded-2xl font-semibold text-lg
                     bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00]
                     text-black shadow-lg transition-all duration-300
-                    hover:scale-105 hover:shadow-[#ff950e]/50
-                    focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black
+                    hover:scale-105 hover:shadow-orange-400/50 hover:ring-2 hover:ring-orange-400
+                    focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-black
                     flex items-center gap-2
                   "
                   disabled={atLimit}
@@ -202,7 +201,6 @@ function MyListingsContent() {
 
           {/* Right: verification banner + tips */}
           <div className="space-y-8">
-            {/* Verification Banner */}
             {!isVerified && (
               <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-yellow-700/70">
                 <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
@@ -235,7 +233,7 @@ function MyListingsContent() {
                   </ul>
                 </div>
 
-                {/* Verify CTA with guaranteed black text */}
+                {/* Verify CTA with breathing text */}
                 <Link
                   href="/sellers/verify"
                   aria-label="Verify My Account"
@@ -244,12 +242,14 @@ function MyListingsContent() {
                     flex items-center justify-center gap-2
                     bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00]
                     text-black shadow-xl transition-all duration-300
-                    hover:scale-105 hover:shadow-[#ff950e]/60
-                    focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black
+                    hover:scale-105 hover:shadow-green-500/40 hover:ring-2 hover:ring-green-500
+                    focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-black
                   "
                 >
                   <ShieldCheck className="w-5 h-5 text-black transition-transform duration-300 group-hover:rotate-12" />
-                  <span className="tracking-wide text-black">Verify My Account</span>
+                  <span className="tracking-wide text-black breathe-green-hover">
+                    Verify My Account
+                  </span>
                 </Link>
               </div>
             )}
