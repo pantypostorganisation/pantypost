@@ -43,6 +43,8 @@ const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
 const banRoutes = require('./routes/ban.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+// NEW
+const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -107,9 +109,7 @@ const corsOptions = {
   optionsSuccessStatus: 200 // For legacy browser support
 };
 
-app.use(cors(corsOptions));
-
-app.use(cors(corsOptions));
+app.use(cors(corsOptions)); // (duplicate removed)
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -158,8 +158,10 @@ app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
+// NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
+app.use('/api/profilebuyer', profileBuyerRoutes);
+
 // ---------------------- Storage API Routes ----------------------
-// Backend storage for critical data - replaces localStorage for production
 app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params;
@@ -663,7 +665,6 @@ setInterval(async () => {
 }, 5 * 60 * 1000); // Every 5 minutes
 
 // INSTANT AUCTION PROCESSOR - Checks every second for just-expired auctions
-// This ensures auctions are processed within 1 second of expiring
 setInterval(async () => {
   try {
     const now = new Date();
@@ -699,7 +700,6 @@ setInterval(async () => {
 }, 1000); // Check every second for instant processing
 
 // Main auction processor - catches anything the instant processor misses
-// Reduced to 3 seconds for faster processing but less aggressive than instant
 setInterval(async () => {
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
@@ -707,7 +707,6 @@ setInterval(async () => {
     if (results.processed > 0) {
       console.log(`[Auction System] Processed ${results.processed} expired auctions`);
       
-      // Notify admins of auction processing results if there were any errors
       if (results.errors.length > 0 && global.webSocketService) {
         global.webSocketService.emitToAdmins('auction:processing_errors', {
           processed: results.processed,
@@ -719,7 +718,6 @@ setInterval(async () => {
   } catch (error) {
     console.error('[Auction System] Critical error in scheduled task:', error);
     
-    // Notify admins of critical error
     if (global.webSocketService) {
       global.webSocketService.emitToAdmins('system:critical_error', {
         system: 'auction',
@@ -767,7 +765,6 @@ app.get('/api/auctions/check/:id', async (req, res) => {
     const needsProcessing = isExpired && listing.auction.status === 'active';
     
     if (needsProcessing) {
-      // Trigger immediate processing
       console.log(`[Auction] Frontend triggered check for expired auction ${listing._id}`);
       
       AuctionSettlementService.processEndedAuction(listing._id)
@@ -1197,5 +1194,6 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Analytics:     /api/analytics/*');
   console.log('  - Auctions:      /api/auctions/*');
   console.log('  - Storage:       /api/storage/*');
-  console.log('\n💸 Go get you that lambo fuh nigga!\n');
+  console.log('  - ProfileBuyer:  /api/profilebuyer');
+  console.log('\n💸 What rarri we driving today?\n');
 });
