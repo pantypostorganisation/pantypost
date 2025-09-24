@@ -1,9 +1,10 @@
 // src/app/buyers/profile/page.tsx
 'use client';
 
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { getGlobalAuthToken } from '@/context/AuthContext';
+import { buildApiUrl } from '@/services/api.config';
 
 type MeProfile = {
   username: string;
@@ -13,13 +14,18 @@ type MeProfile = {
   country: string;
 };
 
-function getApiBase() {
-  const base = (process.env.NEXT_PUBLIC_API_BASE_URL || '/api').replace(/\/+$/, '');
-  return base;
-}
-
+// Upload endpoint (kept as-is, only used for file POST)
 function getUploadEndpoint() {
   return (process.env.NEXT_PUBLIC_UPLOAD_ENDPOINT || '/api/upload').replace(/\/+$/, '');
+}
+
+// Always read the latest token right before calls
+function getToken(): string {
+  try {
+    return getGlobalAuthToken?.() || '';
+  } catch {
+    return '';
+  }
 }
 
 /* Country helpers */
@@ -101,28 +107,34 @@ export default function BuyerSelfProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
 
-  const token = useMemo(() => getGlobalAuthToken?.() || '', []);
-
+  // GET current buyer profile
   const fetchMe = useCallback(async () => {
+    const token = getToken();
     setLoading(true);
     setError(null);
     setSuccess(null);
     try {
-      const resp = await fetch(`${getApiBase()}/profilebuyer`, {
+      const url = buildApiUrl('/profilebuyer'); // << unified builder
+      const resp = await fetch(url, {
+        method: 'GET',
+        credentials: 'include', // allow cookie-based auth too
         headers: {
-          'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
 
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok || json?.success === false) {
-        setError(json?.error?.message || 'Failed to load your profile.');
+        if (resp.status === 401) {
+          setError('You need to be logged in to view this page.');
+        } else {
+          setError(json?.error?.message || 'Failed to load your profile.');
+        }
         setLoading(false);
         return;
       }
 
-      const data = json.data as MeProfile;
+      const data = (json.data || json) as MeProfile;
       setForm({
         username: data.username,
         role: data.role,
@@ -135,10 +147,24 @@ export default function BuyerSelfProfilePage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
+  // Wait briefly for token on first mount to avoid race-caused 401/404
   useEffect(() => {
-    fetchMe();
+    let cancelled = false;
+    let tries = 0;
+
+    (async () => {
+      while (!cancelled && !getToken() && tries < 10) {
+        await new Promise((r) => setTimeout(r, 150));
+        tries++;
+      }
+      if (!cancelled) fetchMe();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [fetchMe]);
 
   const broadcastProfileUpdate = (payload: Partial<MeProfile> & { username: string }) => {
@@ -151,12 +177,15 @@ export default function BuyerSelfProfilePage() {
 
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    const token = getToken();
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const resp = await fetch(`${getApiBase()}/profilebuyer`, {
+      const url = buildApiUrl('/profilebuyer'); // << unified builder
+      const resp = await fetch(url, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -172,7 +201,7 @@ export default function BuyerSelfProfilePage() {
       if (!resp.ok || json?.success === false) {
         setError(json?.error?.message || 'Failed to update your profile.');
       } else {
-        const d = json.data as MeProfile;
+        const d = (json.data || json) as MeProfile;
         setForm({
           username: d.username,
           role: d.role,
@@ -195,8 +224,10 @@ export default function BuyerSelfProfilePage() {
     }
   };
 
+  // Upload handler (unchanged; uses separate upload endpoint)
   const onUpload = async (file: File | null) => {
     if (!file) return;
+    const token = getToken();
     setUploading(true);
     setUploadErr(null);
     try {
@@ -204,6 +235,7 @@ export default function BuyerSelfProfilePage() {
       fd.append('file', file);
       const resp = await fetch(getUploadEndpoint(), {
         method: 'POST',
+        credentials: 'include',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
@@ -248,6 +280,16 @@ export default function BuyerSelfProfilePage() {
             <div className="rounded-xl border border-red-700 bg-red-900/10 p-4">
               <div className="text-red-400 font-semibold mb-1">Could not load buyer profile</div>
               <div className="text-red-200 text-sm">{error}</div>
+              {error.includes('logged in') && (
+                <div className="mt-3">
+                  <a
+                    href="/login"
+                    className="inline-block px-3 py-2 rounded-md bg-[#ff950e] hover:bg-[#e0850d] text-black font-medium"
+                  >
+                    Go to Login
+                  </a>
+                </div>
+              )}
             </div>
           ) : (
             <form onSubmit={onSave} className="space-y-6">
@@ -328,6 +370,7 @@ export default function BuyerSelfProfilePage() {
                     {uploadErr}
                   </div>
                 )}
+                <p className="text-xs text-gray-500">After the upload finishes, click <b>Save</b> to apply.</p>
               </div>
 
               {/* Actions */}
