@@ -1,8 +1,8 @@
 // src/components/homepage/FeaturesSection.tsx
 'use client';
 
-import { motion } from 'framer-motion';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, useInView } from 'framer-motion';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { itemVariants, containerVariants, shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { PLATFORM_FEATURES } from '@/utils/homepage-constants';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -28,11 +28,13 @@ const FeatureCard = ({
   index,
   isLoaded,
   onRetry,
+  skipAnimation,
 }: {
   feature: any;
   index: number;
   isLoaded: boolean;
   onRetry?: () => void;
+  skipAnimation?: boolean;
 }) => {
   const [iconError, setIconError] = useState(false);
 
@@ -87,6 +89,45 @@ const FeatureCard = ({
   const sanitizedTitle = sanitizeStrict(feature.title);
   const sanitizedDesc = sanitizeStrict(feature.desc);
 
+  // If animation should be skipped (already in view on mount), render without motion
+  if (skipAnimation) {
+    return (
+      <div
+        className="group relative bg-[#131313] rounded-xl p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
+        role="article"
+        aria-labelledby={`feature-title-${index}`}
+      >
+        {/* Enhanced shine effect */}
+        <div className="absolute inset-0 rounded-xl overflow-hidden">
+          <div className="absolute inset-0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
+        </div>
+
+        <div className="relative">
+          <div className="w-12 h-12 bg-gradient-to-br from-[#ff950e]/10 to-[#ff950e]/5 rounded-full flex items-center justify-center mb-5 border border-[#ff950e]/20 group-hover:scale-110 transition-transform duration-300">
+            {iconError || !feature.icon ? (
+              <FallbackIcon />
+            ) : (
+              <feature.icon
+                className="h-6 w-6 text-[#ff950e]"
+                onError={() => setIconError(true)}
+                aria-hidden="true"
+              />
+            )}
+          </div>
+          <h3
+            id={`feature-title-${index}`}
+            className="text-xl font-semibold text-white mb-3 group-hover:text-[#ff950e] transition-colors duration-300"
+          >
+            {sanitizedTitle}
+          </h3>
+          <p className="text-gray-400 text-sm leading-relaxed group-hover:text-gray-300 transition-colors duration-300">
+            {sanitizedDesc}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <motion.div
       className="group relative bg-[#131313] rounded-xl p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
@@ -105,7 +146,7 @@ const FeatureCard = ({
           {iconError || !feature.icon ? (
             <FallbackIcon />
           ) : (
-            <feature.icon
+              <feature.icon
               className="h-6 w-6 text-[#ff950e]"
               onError={() => setIconError(true)}
               aria-hidden="true"
@@ -130,6 +171,38 @@ export default function FeaturesSection() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [validFeatures, setValidFeatures] = useState<any[]>([]);
   const [sectionError, setSectionError] = useState<string | null>(null);
+  
+  // FIXED: Add ref to track the container element
+  const containerRef = useRef(null);
+  const isInView = useInView(containerRef, { once: true, amount: 0.3 });
+  const [hasAnimated, setHasAnimated] = useState(false);
+  
+  // FIXED: Check if already in view on mount (for page refresh while scrolled)
+  const [skipAnimation, setSkipAnimation] = useState(false);
+  
+  useEffect(() => {
+    // Check if the element is already in view on mount
+    if (containerRef.current) {
+      const rect = (containerRef.current as HTMLElement).getBoundingClientRect();
+      const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+      
+      // If more than 30% of the element is already visible on mount, skip animation
+      const visibleHeight = Math.min(rect.bottom, windowHeight) - Math.max(rect.top, 0);
+      const visiblePercentage = visibleHeight / rect.height;
+      
+      if (visiblePercentage > 0.3) {
+        setSkipAnimation(true);
+        setHasAnimated(true);
+      }
+    }
+  }, []);
+  
+  // Track when animation has been triggered
+  useEffect(() => {
+    if (isInView && !hasAnimated) {
+      setHasAnimated(true);
+    }
+  }, [isInView, hasAnimated]);
 
   // Simplified feature loading with basic validation
   const loadFeatures = useCallback(async () => {
@@ -238,6 +311,9 @@ export default function FeaturesSection() {
 
   const structuredData = getStructuredData();
 
+  // Determine animation behavior
+  const shouldAnimate = !skipAnimation && (isInView || hasAnimated);
+
   return (
     <div className="bg-gradient-to-b from-black to-[#101010] pt-16 pb-16 md:pt-20 md:pb-20 relative z-30 overflow-hidden">
       {/* Enhanced SEO structured data - secured */}
@@ -251,12 +327,11 @@ export default function FeaturesSection() {
       )}
 
       {/* Content container */}
-      <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10" ref={containerRef}>
         <motion.h2
           className="text-3xl md:text-4xl lg:text-5xl font-bold text-center text-white mb-16 tracking-tight"
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, amount: 0.5 }}
+          initial={skipAnimation ? false : "hidden"}
+          animate={shouldAnimate ? "visible" : "hidden"}
           variants={itemVariants}
         >
           How <span className="text-[#ff950e]">PantyPost</span> Works
@@ -287,10 +362,9 @@ export default function FeaturesSection() {
         ) : (
           <motion.div
             className="grid grid-cols-1 md:grid-cols-3 gap-8"
-            initial="hidden"
-            whileInView="visible"
-            viewport={VIEWPORT_CONFIG}
-            variants={containerVariants}
+            initial={skipAnimation ? false : "hidden"}
+            animate={shouldAnimate ? "visible" : "hidden"}
+            variants={skipAnimation ? {} : containerVariants}
             role="region"
             aria-label="Platform features"
           >
@@ -301,6 +375,7 @@ export default function FeaturesSection() {
                 index={index}
                 isLoaded={isLoaded}
                 onRetry={() => handleFeatureRetry(index)}
+                skipAnimation={skipAnimation}
               />
             ))}
           </motion.div>
@@ -310,9 +385,8 @@ export default function FeaturesSection() {
       {/* Shape Divider 2 (Background Glow) */}
       <motion.div
         className="absolute -bottom-48 right-[-20%] md:right-[-10%] w-[120%] md:w-[80%] h-96 pointer-events-none z-0"
-        initial="hidden"
-        whileInView="visible"
-        viewport={{ once: true, amount: 0.2 }}
+        initial={skipAnimation ? false : "hidden"}
+        animate={shouldAnimate ? "visible" : "hidden"}
         variants={shapeVariants}
         role="presentation"
         aria-hidden="true"
