@@ -112,26 +112,63 @@ export default function BuyerSelfProfilePage() {
     setError(null);
     setSuccess(null);
     try {
-      const resp = await fetch(`${getApiBase()}/users/me/profile`, {
+      // 1) Try detailed profile first
+      const profileResp = await fetch(`${getApiBase()}/users/me/profile`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
-      const json = await resp.json().catch(() => ({}));
-      if (!resp.ok || json?.success === false) {
-        setError(json?.error?.message || 'Failed to load your profile.');
+
+      // If profile exists -> use it
+      if (profileResp.ok) {
+        const json = await profileResp.json().catch(() => ({}));
+        const data = (json?.data || json) as MeProfile;
+        setForm({
+          username: data.username,
+          role: data.role,
+          bio: data.bio || '',
+          profilePic: data.profilePic || '',
+          country: data.country || '',
+        });
         setLoading(false);
         return;
       }
-      const data = json.data as MeProfile;
-      setForm({
-        username: data.username,
-        role: data.role,
-        bio: data.bio || '',
-        profilePic: data.profilePic || '',
-        country: data.country || '',
-      });
+
+      // 2) If 404 (Profile not found), fall back to /users/me to get username/role
+      if (profileResp.status === 404) {
+        const userResp = await fetch(`${getApiBase()}/users/me`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+        if (userResp.ok) {
+          const ujson = await userResp.json().catch(() => ({}));
+          const u = ujson?.data || ujson || {};
+          setForm({
+            username: u.username || '',
+            role: (u.role as MeProfile['role']) || 'buyer',
+            bio: '',
+            profilePic: '',
+            country: '',
+          });
+          // Friendly hint instead of error
+          setSuccess('Create your profile and hit Save to set it up.');
+          setLoading(false);
+          return;
+        }
+
+        // /users/me also failed
+        const msg = (await userResp.json().catch(() => ({})))?.error?.message || 'Unable to fetch user.';
+        setError(msg);
+        setLoading(false);
+        return;
+      }
+
+      // Other non-OK (e.g., 401/500)
+      const errJson = await profileResp.json().catch(() => ({}));
+      setError(errJson?.error?.message || 'Failed to load your profile.');
     } catch {
       setError('Failed to load your profile.');
     } finally {
@@ -250,8 +287,9 @@ export default function BuyerSelfProfilePage() {
               <div className="h-12 bg-neutral-800 rounded" />
             </div>
           ) : error ? (
-            <div className="rounded-xl border border-red-700 bg-red-900/10 p-4 text-red-300">
-              {error}
+            <div className="rounded-xl border border-red-700 bg-red-900/10 p-4">
+              <div className="text-red-400 font-semibold mb-1">Could not load buyer profile</div>
+              <div className="text-red-200 text-sm">{error}</div>
             </div>
           ) : (
             <form onSubmit={onSave} className="space-y-6">
@@ -381,7 +419,7 @@ export default function BuyerSelfProfilePage() {
                     </div>
                   )}
                   <p className="text-xs text-gray-500">
-                    After the upload finishes, click <b>Save</b> to apply it to your profile.
+                    After the upload finishes, click <b>Save</b> to apply.
                   </p>
                 </div>
               </div>
@@ -399,7 +437,7 @@ export default function BuyerSelfProfilePage() {
               </div>
 
               <div className="text-xs text-gray-500">
-                Safety: don’t paste secrets in your bio. We sanitize text on display.
+                Safety: don’t paste secrets in your bio.
               </div>
             </form>
           )}
