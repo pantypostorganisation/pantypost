@@ -59,30 +59,133 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/users/:username/ban-status - Check user ban status (PUBLIC - users can check their own status)
+//
+// ⭐ IMPORTANT: "ME" ROUTES MUST COME BEFORE ANY "/:username" ROUTES
+//
+
+// GET /api/users/me/profile (auth) — self profile (safe fields only)
+router.get('/me/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.user.username }).select('-password');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
+      });
+    }
+    res.json({
+      success: true,
+      data: {
+        username: user.username,
+        role: user.role,
+        bio: user.bio || '',
+        profilePic: user.profilePic || null,
+        country: user?.settings?.country || ''
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
+    });
+  }
+});
+
+// PATCH /api/users/me/profile (auth) — update bio, profilePic, country only
+router.patch('/me/profile', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.user.username });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
+      });
+    }
+
+    const { bio, profilePic, country } = req.body || {};
+
+    // Validate bio
+    if (typeof bio !== 'undefined') {
+      if (typeof bio !== 'string' || bio.length > 500) {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Bio must be <= 500 characters' }
+        });
+      }
+      user.bio = bio;
+    }
+
+    // Validate profilePic (allow empty, http(s), or /uploads, or placeholder)
+    if (typeof profilePic !== 'undefined') {
+      const pic = profilePic;
+      if (
+        pic === null ||
+        pic === '' ||
+        (typeof pic === 'string' &&
+          (pic.startsWith('http://') ||
+           pic.startsWith('https://') ||
+           pic.startsWith('/uploads/') ||
+           pic.includes('placeholder')))
+      ) {
+        user.profilePic = pic;
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid profile picture URL' }
+        });
+      }
+    }
+
+    // Validate country
+    if (typeof country !== 'undefined') {
+      if (typeof country !== 'string' || country.length > 56) {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid country value' }
+        });
+      }
+      user.settings = user.settings || {};
+      user.settings.country = country;
+    }
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile updated',
+      data: {
+        username: user.username,
+        role: user.role,
+        bio: user.bio || '',
+        profilePic: user.profilePic || null,
+        country: user?.settings?.country || ''
+      }
+    });
+  } catch (error) {
+    console.error('Profile (me) update error:', error);
+    res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
+    });
+  }
+});
+
+//
+// ROUTES WITH "/:username" COME AFTER THE "/me" ROUTES
+//
+
+// GET /api/users/:username/ban-status - Check user ban status (PUBLIC)
 router.get('/:username/ban-status', async (req, res) => {
   try {
     const { username } = req.params;
-    
-    // Find active ban for this user
-    const ban = await Ban.findOne({ 
-      username, 
-      active: true 
-    });
+    const ban = await Ban.findOne({ username, active: true });
     
     if (ban) {
-      // Check if temporary ban has expired
       if (!ban.isPermanent && ban.expiresAt && new Date(ban.expiresAt) < new Date()) {
-        // Ban has expired, mark it as inactive
         ban.active = false;
         await ban.save();
-        
-        return res.json({
-          success: true,
-          data: { isBanned: false }
-        });
+        return res.json({ success: true, data: { isBanned: false } });
       }
-      
       return res.json({
         success: true,
         data: {
@@ -98,10 +201,7 @@ router.get('/:username/ban-status', async (req, res) => {
       });
     }
     
-    return res.json({
-      success: true,
-      data: { isBanned: false }
-    });
+    return res.json({ success: true, data: { isBanned: false } });
   } catch (error) {
     console.error('Error checking ban status:', error);
     res.status(500).json({
@@ -111,54 +211,28 @@ router.get('/:username/ban-status', async (req, res) => {
   }
 });
 
-// GET /api/users/:username/profile - Get public profile (PUBLIC for sellers, optional auth)
+// GET /api/users/:username/profile - Public/limited profile
+// Sellers => public
+// Buyers  => visible to ANY authenticated user (token required)
 router.get('/:username/profile', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })
-      .select('-password -email -phoneNumber -settings -verificationData');
+      .select('-password -email -phoneNumber -verificationData'); // keep settings to read country
     
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
-    // IMPORTANT FIX: Sellers' profiles are public to everyone
-    // Buyers' profiles remain private (only viewable by themselves or admins if authenticated)
     if (user.role === 'buyer') {
-      // Check if user is authenticated
-      const token = req.headers.authorization?.replace('Bearer ', '');
-      if (token) {
-        try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          req.user = decoded;
-          
-          // Buyer profiles are private
-          if (req.user.username !== req.params.username && req.user.role !== 'admin') {
-            return res.status(403).json({
-              success: false,
-              error: {
-                code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-                message: 'You can only view your own buyer profile'
-              }
-            });
-          }
-        } catch (err) {
-          // Invalid token for buyer profile
-          return res.status(403).json({
-            success: false,
-            error: {
-              code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-              message: 'Authentication required to view buyer profiles'
-            }
-          });
-        }
-      } else {
-        // No auth for buyer profile
+      const authHeader = req.headers.authorization;
+      const token = authHeader && authHeader.startsWith('Bearer ')
+        ? authHeader.slice(7)
+        : null;
+
+      if (!token) {
         return res.status(403).json({
           success: false,
           error: {
@@ -167,8 +241,20 @@ router.get('/:username/profile', async (req, res) => {
           }
         });
       }
+
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+      } catch (err) {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+            message: 'Invalid or expired token'
+          }
+        });
+      }
     }
-    // If user is a seller, allow anyone to view (no auth check needed)
     
     res.json({
       success: true,
@@ -176,6 +262,7 @@ router.get('/:username/profile', async (req, res) => {
         username: user.username,
         bio: user.bio,
         profilePic: user.profilePic,
+        country: user?.settings?.country || null,
         isVerified: user.isVerified,
         tier: user.tier,
         subscriptionPrice: user.subscriptionPrice,
@@ -191,15 +278,12 @@ router.get('/:username/profile', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
 
-// GET /api/users/:username/profile/full - Get full profile (auth required, but public for sellers)
+// GET /api/users/:username/profile/full - Get full profile (auth required; buyers self/admin)
 router.get('/:username/profile/full', authMiddleware, async (req, res) => {
   try {
     const targetUser = await User.findOne({ username: req.params.username })
@@ -208,15 +292,10 @@ router.get('/:username/profile/full', authMiddleware, async (req, res) => {
     if (!targetUser) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
-    // For sellers, allow any authenticated user to view their full profile
-    // For buyers, only they themselves or admin can view
     if (targetUser.role === 'buyer') {
       if (req.user.username !== req.params.username && req.user.role !== 'admin') {
         return res.status(403).json({
@@ -228,7 +307,6 @@ router.get('/:username/profile/full', authMiddleware, async (req, res) => {
         });
       }
     }
-    // If target is a seller, continue to show full profile to any authenticated user
     
     res.json({
       success: true,
@@ -237,72 +315,14 @@ router.get('/:username/profile/full', authMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
 
-// GET /api/users/:username/settings/preferences - Get user preferences (auth required, seller profiles public)
-router.get('/:username/settings/preferences', authMiddleware, async (req, res) => {
-  try {
-    const targetUser = await User.findOne({ username: req.params.username });
-    
-    if (!targetUser) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
-      });
-    }
-    
-    // For sellers, allow any authenticated user to view preferences
-    // For buyers, only they themselves or admin can view
-    if (targetUser.role === 'buyer') {
-      if (req.user.username !== req.params.username && req.user.role !== 'admin') {
-        return res.status(403).json({
-          success: false,
-          error: {
-            code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-            message: 'You can only view your own preferences'
-          }
-        });
-      }
-    }
-    
-    // Return user preferences/settings
-    res.json({
-      success: true,
-      data: {
-        preferences: targetUser.settings || {},
-        notifications: targetUser.notificationSettings || {
-          email: true,
-          push: true,
-          orders: true,
-          messages: true,
-          marketing: false
-        }
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
-    });
-  }
-});
-
-// PATCH /api/users/:username/profile - Update profile
+// PATCH /api/users/:username/profile - Update profile (self or admin)
 router.patch('/:username/profile', authMiddleware, async (req, res) => {
   try {
-    // Only user themselves or admin can update profile
     if (req.user.username !== req.params.username && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -317,14 +337,10 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
-    // Fields that can be updated
     const allowedFields = [
       'bio', 
       'profilePic', 
@@ -334,33 +350,28 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
       'settings'
     ];
     
-    // Only sellers can update subscription price and gallery
     if (user.role !== 'seller') {
-      const sellerOnlyFields = ['subscriptionPrice', 'galleryImages'];
-      sellerOnlyFields.forEach(field => {
+      ['subscriptionPrice', 'galleryImages'].forEach(field => {
         if (req.body[field] !== undefined) {
           delete req.body[field];
         }
       });
     }
     
-    // Update allowed fields
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
-        // Special handling for subscriptionPrice - convert string to number
         if (field === 'subscriptionPrice') {
           const price = parseFloat(req.body[field]);
           if (!isNaN(price) && price >= 0.01 && price <= 999.99) {
             user[field] = price;
           }
         } else if (field === 'profilePic') {
-          // Allow both URLs and placeholder images
           const pic = req.body[field];
           if (pic === null || pic === '' || 
               pic.startsWith('http://') || 
               pic.startsWith('https://') || 
               pic.startsWith('/uploads/') ||
-              pic.includes('placeholder')) {  // More flexible placeholder handling
+              pic.includes('placeholder')) {
             user[field] = pic;
           }
         } else {
@@ -369,7 +380,6 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
       }
     });
     
-    // Validate bio length
     if (req.body.bio && req.body.bio.length > 500) {
       return res.status(400).json({
         success: false,
@@ -380,7 +390,6 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
       });
     }
     
-    // Validate gallery images
     if (req.body.galleryImages) {
       if (!Array.isArray(req.body.galleryImages)) {
         return res.status(400).json({
@@ -391,7 +400,6 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
           }
         });
       }
-      
       if (req.body.galleryImages.length > 20) {
         return res.status(400).json({
           success: false,
@@ -401,8 +409,6 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
           }
         });
       }
-      
-      // Validate each image URL
       const validUrls = req.body.galleryImages.every(url => {
         return typeof url === 'string' && (
           url.startsWith('http://') || 
@@ -410,7 +416,6 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
           url.startsWith('/uploads/')
         );
       });
-      
       if (!validUrls) {
         return res.status(400).json({
           success: false,
@@ -432,18 +437,14 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
     console.error('Profile update error:', error);
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
 
-// POST /api/users/:username/verification - Submit verification request
+// POST /api/users/:username/verification - Submit verification request (auth)
 router.post('/:username/verification', authMiddleware, async (req, res) => {
   try {
-    // Check if user is updating their own verification
     const isOwnProfile = req.user.username === req.params.username;
     const isAdmin = req.user.role === 'admin';
     
@@ -461,14 +462,10 @@ router.post('/:username/verification', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
-    // Seller submitting verification
     if (isOwnProfile && !isAdmin) {
       const { codePhoto, idFront, idBack, code } = req.body;
       
@@ -496,13 +493,9 @@ router.post('/:username/verification', authMiddleware, async (req, res) => {
       res.json({
         success: true,
         message: 'Verification submitted successfully',
-        data: {
-          verificationStatus: user.verificationStatus
-        }
+        data: { verificationStatus: user.verificationStatus }
       });
-    } 
-    // Admin reviewing verification
-    else if (isAdmin) {
+    } else if (isAdmin) {
       const { status, rejectionReason, adminUsername } = req.body;
       
       if (!['verified', 'rejected'].includes(status)) {
@@ -549,10 +542,7 @@ router.post('/:username/verification', authMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
@@ -560,7 +550,6 @@ router.post('/:username/verification', authMiddleware, async (req, res) => {
 // POST /api/users/:username/ban - Ban a user (admin only)
 router.post('/:username/ban', authMiddleware, async (req, res) => {
   try {
-    // Check if admin
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -587,14 +576,10 @@ router.post('/:username/ban', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
-    // Can't ban admins
     if (user.role === 'admin') {
       return res.status(400).json({
         success: false,
@@ -630,10 +615,7 @@ router.post('/:username/ban', authMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
@@ -641,7 +623,6 @@ router.post('/:username/ban', authMiddleware, async (req, res) => {
 // POST /api/users/:username/unban - Unban a user (admin only)
 router.post('/:username/unban', authMiddleware, async (req, res) => {
   try {
-    // Check if admin
     if (req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -656,20 +637,14 @@ router.post('/:username/unban', authMiddleware, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
     if (!user.isBanned) {
       return res.status(400).json({
         success: false,
-        error: {
-          code: ERROR_CODES.ACTION_NOT_ALLOWED,
-          message: 'User is not banned'
-        }
+        error: { code: ERROR_CODES.ACTION_NOT_ALLOWED, message: 'User is not banned' }
       });
     }
     
@@ -691,10 +666,7 @@ router.post('/:username/unban', authMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
@@ -705,28 +677,17 @@ router.post('/activity', authMiddleware, async (req, res) => {
     const { action, metadata } = req.body;
     const username = req.user.username;
     
-    // Find the user
     const user = await User.findOne({ username });
-    
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
-    // Update last active timestamp
     user.lastActive = new Date();
+    if (!user.activityLog) user.activityLog = [];
     
-    // Store activity log if the user has an activity array
-    if (!user.activityLog) {
-      user.activityLog = [];
-    }
-    
-    // Add the new activity
     user.activityLog.push({
       action: action || 'page_view',
       metadata: metadata || {},
@@ -735,32 +696,24 @@ router.post('/activity', authMiddleware, async (req, res) => {
       userAgent: req.headers['user-agent']
     });
     
-    // Keep only last 100 activities to prevent unbounded growth
     if (user.activityLog.length > 100) {
       user.activityLog = user.activityLog.slice(-100);
     }
     
     await user.save();
     
-    res.json({
-      success: true,
-      message: 'Activity tracked successfully'
-    });
+    res.json({ success: true, message: 'Activity tracked successfully' });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
 
-// GET /api/users/:username/activity - Get user activity log (admin only)
+// GET /api/users/:username/activity - Get user activity log (auth; self/admin)
 router.get('/:username/activity', authMiddleware, async (req, res) => {
   try {
-    // Only admin or the user themselves can view activity
     if (req.user.username !== req.params.username && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -772,14 +725,10 @@ router.get('/:username/activity', authMiddleware, async (req, res) => {
     }
     
     const user = await User.findOne({ username: req.params.username });
-    
     if (!user) {
       return res.status(404).json({
         success: false,
-        error: {
-          code: ERROR_CODES.NOT_FOUND,
-          message: 'User not found'
-        }
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
       });
     }
     
@@ -793,13 +742,9 @@ router.get('/:username/activity', authMiddleware, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: error.message
-      }
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: error.message }
     });
   }
 });
 
-// Export the router
 module.exports = router;
