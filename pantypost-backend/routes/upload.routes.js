@@ -1,340 +1,347 @@
 // pantypost-backend/routes/upload.routes.js
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth.middleware');
-const { uploadConfigs, handleUploadError, deleteFile, getFileUrl } = require('../config/upload.config');
-const User = require('../models/User');
-const Listing = require('../models/Listing');
+
 const path = require('path');
 const fs = require('fs');
 
-// ============= UPLOAD ROUTES =============
+const authMiddleware = require('../middleware/auth.middleware');
+const User = require('../models/User');
+const Listing = require('../models/Listing'); // currently unused here, but kept for future-proofing
 
-// POST /api/upload/profile-pic - Upload profile picture
-router.post('/profile-pic', authMiddleware, (req, res) => {
-  uploadConfigs.profilePic(req, res, async (err) => {
-    if (err) {
-      return handleUploadError(err, req, res);
-    }
-    
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'No file uploaded'
-      });
-    }
-    
-    try {
-      // Get user
-      const user = await User.findOne({ username: req.user.username });
-      if (!user) {
-        // Delete uploaded file
-        await deleteFile(req.file.path);
-        return res.status(404).json({
-          success: false,
-          error: 'User not found'
-        });
-      }
-      
-      // Delete old profile picture if it exists and is stored locally
-      if (user.profilePic && user.profilePic.includes('/uploads/')) {
-        const oldPath = user.profilePic.split('/uploads/')[1];
-        await deleteFile(path.join('uploads', oldPath)).catch(() => {});
-      }
-      
-      // Update user with new profile picture URL
-      const fileUrl = getFileUrl(req, req.file.path);
-      user.profilePic = fileUrl;
-      await user.save();
-      
-      res.json({
-        success: true,
-        data: {
-          url: fileUrl,
-          filename: req.file.filename,
-          size: req.file.size
-        }
-      });
-    } catch (error) {
-      // Delete uploaded file on error
-      await deleteFile(req.file.path).catch(() => {});
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  });
-});
+// Upload utilities (multer configs + helpers)
+const {
+  uploadConfigs,
+  handleUploadError,
+  deleteFile,
+  getFileUrl,
+} = require('../config/upload.config');
 
-// POST /api/upload/listing-images - Upload listing images
-router.post('/listing-images', authMiddleware, (req, res) => {
-  // Only sellers can upload listing images
-  if (req.user.role !== 'seller' && req.user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      error: 'Only sellers can upload listing images'
-    });
-  }
-  
-  uploadConfigs.listingImages(req, res, async (err) => {
-    if (err) {
-      return handleUploadError(err, req, res);
-    }
-    
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No files uploaded'
-      });
-    }
-    
-    try {
-      // Generate URLs for all uploaded files
-      const fileUrls = req.files.map(file => ({
-        url: getFileUrl(req, file.path),
-        filename: file.filename,
-        size: file.size
-      }));
-      
-      res.json({
-        success: true,
-        data: {
-          files: fileUrls,
-          count: fileUrls.length
-        }
-      });
-    } catch (error) {
-      // Delete all uploaded files on error
-      for (const file of req.files) {
-        await deleteFile(file.path).catch(() => {});
-      }
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  });
-});
-
-// POST /api/upload/verification - Upload verification documents
-router.post('/verification', authMiddleware, (req, res) => {
-  // Only sellers can upload verification docs
-  if (req.user.role !== 'seller') {
-    return res.status(403).json({
-      success: false,
-      error: 'Only sellers can upload verification documents'
-    });
-  }
-  
-  uploadConfigs.verification(req, res, async (err) => {
-    if (err) {
-      return handleUploadError(err, req, res);
-    }
-    
-    if (!req.files || Object.keys(req.files).length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No files uploaded'
-      });
-    }
-    
-    try {
-      const uploadedFiles = {};
-      
-      // Process each uploaded file
-      for (const fieldname in req.files) {
-        const file = req.files[fieldname][0];
-        uploadedFiles[fieldname] = {
-          url: getFileUrl(req, file.path),
-          filename: file.filename,
-          size: file.size
-        };
-      }
-      
-      res.json({
-        success: true,
-        data: uploadedFiles
-      });
-    } catch (error) {
-      // Delete all uploaded files on error
-      for (const fieldname in req.files) {
-        const file = req.files[fieldname][0];
-        await deleteFile(file.path).catch(() => {});
-      }
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  });
-});
-
-// POST /api/upload/gallery - Upload gallery images for sellers
-router.post('/gallery', authMiddleware, (req, res) => {
-  // Only sellers can upload gallery images
-  if (req.user.role !== 'seller' && req.user.role !== 'admin') {
-    return res.status(403).json({
-      success: false,
-      error: 'Only sellers can upload gallery images'
-    });
-  }
-  
-  uploadConfigs.gallery(req, res, async (err) => {
-    if (err) {
-      return handleUploadError(err, req, res);
-    }
-    
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'No files uploaded'
-      });
-    }
-    
-    try {
-      // Get user
-      const user = await User.findOne({ username: req.user.username });
-      if (!user) {
-        // Delete uploaded files
-        for (const file of req.files) {
-          await deleteFile(file.path).catch(() => {});
-        }
-        return res.status(404).json({
-          success: false,
-          error: 'User not found'
-        });
-      }
-      
-      // Generate URLs for uploaded files
-      const newImageUrls = req.files.map(file => getFileUrl(req, file.path));
-      
-      // Add to existing gallery (up to 20 images total)
-      const updatedGallery = [...(user.galleryImages || []), ...newImageUrls].slice(0, 20);
-      user.galleryImages = updatedGallery;
-      await user.save();
-      
-      res.json({
-        success: true,
-        data: {
-          newImages: newImageUrls,
-          totalImages: updatedGallery.length,
-          gallery: updatedGallery
-        }
-      });
-    } catch (error) {
-      // Delete uploaded files on error
-      for (const file of req.files) {
-        await deleteFile(file.path).catch(() => {});
-      }
-      res.status(500).json({
-        success: false,
-        error: error.message
-      });
-    }
-  });
-});
-
-// DELETE /api/upload/gallery/:index - Remove image from gallery
-router.delete('/gallery/:index', authMiddleware, async (req, res) => {
+/* -------------------------------------------------------
+ * Helper: best-effort delete for local files referenced by URL
+ * Only deletes if URL contains '/uploads/' and the file exists locally.
+ * ----------------------------------------------------- */
+async function safeDeleteLocalFromUrl(urlOrPath) {
   try {
-    const index = parseInt(req.params.index);
-    
-    // Get user
-    const user = await User.findOne({ username: req.user.username });
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
+    if (!urlOrPath || typeof urlOrPath !== 'string') return;
+
+    if (urlOrPath.includes('/uploads/')) {
+      // Extract the local part after /uploads/
+      const localRel = urlOrPath.split('/uploads/')[1];
+      if (!localRel) return;
+      const localPath = path.join('uploads', localRel);
+      await deleteFile(localPath).catch(() => {});
+    } else if (fs.existsSync(urlOrPath)) {
+      // If a raw filesystem path was passed
+      await deleteFile(urlOrPath).catch(() => {});
     }
-    
-    // Check if index is valid
-    if (index < 0 || index >= (user.galleryImages || []).length) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid image index'
-      });
-    }
-    
-    // Get the image URL to delete
-    const imageUrl = user.galleryImages[index];
-    
-    // Remove from array
-    user.galleryImages.splice(index, 1);
-    await user.save();
-    
-    // Try to delete the file if it's stored locally
-    if (imageUrl && imageUrl.includes('/uploads/')) {
-      const filepath = imageUrl.split('/uploads/')[1];
-      await deleteFile(path.join('uploads', filepath)).catch(() => {});
-    }
-    
-    res.json({
-      success: true,
-      data: {
-        removedImage: imageUrl,
-        gallery: user.galleryImages
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+  } catch {
+    // swallow
   }
+}
+
+/* =======================================================
+ * GET /api/upload/test
+ * Simple health-check for the upload router.
+ * ===================================================== */
+router.get('/test', (_req, res) => {
+  res.json({
+    success: true,
+    message: 'Upload routes are working!',
+    endpoints: [
+      'POST /api/upload                (single file -> returns URL only)',
+      'POST /api/upload/single         (single file -> returns URL only)',
+      'POST /api/upload/profile-pic    (single file -> updates user.profilePic and returns URL)',
+      'POST /api/upload/listing-images (multi file -> returns URLs)',
+      'POST /api/upload/verification   (multi field -> returns URLs per field)',
+      'POST /api/upload/gallery        (multi file -> stores to user.galleryImages)',
+      'DELETE /api/upload/gallery/:index',
+    ],
+  });
 });
 
-// POST /api/upload/single - General single file upload
-router.post('/single', authMiddleware, (req, res) => {
+/* =======================================================
+ * POST /api/upload
+ * Generic single-file upload (field: "file") -> returns URL only.
+ * No DB mutation; suitable for “upload then save” flows.
+ * ===================================================== */
+router.post('/', authMiddleware, (req, res) => {
   uploadConfigs.single(req, res, async (err) => {
-    if (err) {
-      return handleUploadError(err, req, res);
-    }
-    
+    if (err) return handleUploadError(err, req, res);
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: 'No file uploaded'
+        error: 'No file uploaded',
       });
     }
-    
+
     try {
       const fileUrl = getFileUrl(req, req.file.path);
-      
-      res.json({
+
+      return res.json({
         success: true,
         data: {
           url: fileUrl,
           filename: req.file.filename,
           size: req.file.size,
-          mimetype: req.file.mimetype
-        }
+          mimetype: req.file.mimetype,
+        },
+        url: fileUrl, // convenience
       });
     } catch (error) {
-      // Delete uploaded file on error
       await deleteFile(req.file.path).catch(() => {});
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
-        error: error.message
+        error: error.message || 'Upload failed',
       });
     }
   });
 });
 
-// GET /api/upload/test - Test endpoint to check if uploads are working
-router.get('/test', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Upload routes are working!',
-    endpoints: [
-      'POST /api/upload/profile-pic',
-      'POST /api/upload/listing-images',
-      'POST /api/upload/verification',
-      'POST /api/upload/gallery',
-      'DELETE /api/upload/gallery/:index',
-      'POST /api/upload/single'
-    ]
+/* =======================================================
+ * POST /api/upload/single
+ * Same as root '/', kept for backward-compat.
+ * ===================================================== */
+router.post('/single', authMiddleware, (req, res) => {
+  uploadConfigs.single(req, res, async (err) => {
+    if (err) return handleUploadError(err, req, res);
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded',
+      });
+    }
+
+    try {
+      const fileUrl = getFileUrl(req, req.file.path);
+
+      return res.json({
+        success: true,
+        data: {
+          url: fileUrl,
+          filename: req.file.filename,
+          size: req.file.size,
+          mimetype: req.file.mimetype,
+        },
+        url: fileUrl,
+      });
+    } catch (error) {
+      await deleteFile(req.file.path).catch(() => {});
+      return res.status(500).json({
+        success: false,
+        error: error.message || 'Upload failed',
+      });
+    }
   });
+});
+
+/* =======================================================
+ * POST /api/upload/profile-pic
+ * Upload + immediately persist to the authenticated user's profilePic.
+ * (Field: "file")
+ * ===================================================== */
+router.post('/profile-pic', authMiddleware, (req, res) => {
+  uploadConfigs.profilePic(req, res, async (err) => {
+    if (err) return handleUploadError(err, req, res);
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded',
+      });
+    }
+
+    try {
+      const user = await User.findOne({ username: req.user.username });
+      if (!user) {
+        await deleteFile(req.file.path).catch(() => {});
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      // If existing profilePic is local, remove it
+      await safeDeleteLocalFromUrl(user.profilePic);
+
+      const fileUrl = getFileUrl(req, req.file.path);
+      user.profilePic = fileUrl;
+      await user.save();
+
+      return res.json({
+        success: true,
+        data: { url: fileUrl, filename: req.file.filename, size: req.file.size },
+        url: fileUrl,
+      });
+    } catch (error) {
+      await deleteFile(req.file.path).catch(() => {});
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+});
+
+/* =======================================================
+ * POST /api/upload/listing-images
+ * Sellers/Admins only. Multi-file upload (field strategy defined
+ * in uploadConfigs.listingImages). Returns array of file URLs.
+ * ===================================================== */
+router.post('/listing-images', authMiddleware, (req, res) => {
+  if (req.user.role !== 'seller' && req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Only sellers can upload listing images',
+    });
+  }
+
+  uploadConfigs.listingImages(req, res, async (err) => {
+    if (err) return handleUploadError(err, req, res);
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: 'No files uploaded' });
+    }
+
+    try {
+      const fileUrls = req.files.map((file) => ({
+        url: getFileUrl(req, file.path),
+        filename: file.filename,
+        size: file.size,
+      }));
+
+      return res.json({
+        success: true,
+        data: { files: fileUrls, count: fileUrls.length },
+      });
+    } catch (error) {
+      // Cleanup on failure
+      await Promise.all(
+        (req.files || []).map((f) => deleteFile(f.path).catch(() => {}))
+      );
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+});
+
+/* =======================================================
+ * POST /api/upload/verification
+ * Sellers only. Multi-field upload (defined by uploadConfigs.verification).
+ * Returns a map { fieldName: { url, filename, size } }.
+ * ===================================================== */
+router.post('/verification', authMiddleware, (req, res) => {
+  if (req.user.role !== 'seller') {
+    return res.status(403).json({
+      success: false,
+      error: 'Only sellers can upload verification documents',
+    });
+  }
+
+  uploadConfigs.verification(req, res, async (err) => {
+    if (err) return handleUploadError(err, req, res);
+
+    if (!req.files || Object.keys(req.files).length === 0) {
+      return res.status(400).json({ success: false, error: 'No files uploaded' });
+    }
+
+    try {
+      const uploadedFiles = {};
+
+      for (const fieldname in req.files) {
+        const file = req.files[fieldname][0];
+        uploadedFiles[fieldname] = {
+          url: getFileUrl(req, file.path),
+          filename: file.filename,
+          size: file.size,
+        };
+      }
+
+      return res.json({ success: true, data: uploadedFiles });
+    } catch (error) {
+      // Cleanup on failure
+      await Promise.all(
+        Object.values(req.files).map(([file]) => deleteFile(file.path).catch(() => {}))
+      );
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+});
+
+/* =======================================================
+ * POST /api/upload/gallery
+ * Sellers/Admins only. Multi-file. Appends to user.galleryImages
+ * (max 20 images retained).
+ * ===================================================== */
+router.post('/gallery', authMiddleware, (req, res) => {
+  if (req.user.role !== 'seller' && req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Only sellers can upload gallery images',
+    });
+  }
+
+  uploadConfigs.gallery(req, res, async (err) => {
+    if (err) return handleUploadError(err, req, res);
+
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: 'No files uploaded' });
+    }
+
+    try {
+      const user = await User.findOne({ username: req.user.username });
+      if (!user) {
+        // cleanup
+        await Promise.all((req.files || []).map((f) => deleteFile(f.path).catch(() => {})));
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      const newImageUrls = req.files.map((file) => getFileUrl(req, file.path));
+      const existing = Array.isArray(user.galleryImages) ? user.galleryImages : [];
+      const updated = [...existing, ...newImageUrls].slice(0, 20);
+
+      user.galleryImages = updated;
+      await user.save();
+
+      return res.json({
+        success: true,
+        data: {
+          newImages: newImageUrls,
+          totalImages: updated.length,
+          gallery: updated,
+        },
+      });
+    } catch (error) {
+      await Promise.all((req.files || []).map((f) => deleteFile(f.path).catch(() => {})));
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+});
+
+/* =======================================================
+ * DELETE /api/upload/gallery/:index
+ * Remove indexed image from the authenticated user's gallery.
+ * If the image is local (/uploads/...), attempt local delete.
+ * ===================================================== */
+router.delete('/gallery/:index', authMiddleware, async (req, res) => {
+  try {
+    const idx = Number.parseInt(req.params.index, 10);
+
+    const user = await User.findOne({ username: req.user.username });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const gallery = Array.isArray(user.galleryImages) ? user.galleryImages : [];
+    if (!Number.isInteger(idx) || idx < 0 || idx >= gallery.length) {
+      return res.status(400).json({ success: false, error: 'Invalid image index' });
+    }
+
+    const [removed] = gallery.splice(idx, 1);
+    user.galleryImages = gallery;
+    await user.save();
+
+    await safeDeleteLocalFromUrl(removed);
+
+    return res.json({ success: true, data: { removedImage: removed, gallery } });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 module.exports = router;
