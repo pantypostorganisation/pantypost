@@ -43,6 +43,8 @@ const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
 const banRoutes = require('./routes/ban.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+// NEW
+const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -66,43 +68,48 @@ global.webSocketService = webSocketService;
 // Connect to MongoDB
 connectDB();
 
-// CORS Configuration - Replace lines 68-90 in your server.js
-app.use(
-  cors({
-    origin: function(origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) return callback(null, true);
-      
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://192.168.0.21:3000',
-        'http://127.0.0.1:3000',
-        'https://pantypost.com',
-        'https://www.pantypost.com',
-        'https://api.pantypost.com'
-      ];
-      
-      if (allowedOrigins.indexOf(origin) !== -1) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-CSRF-Token',
-      'X-Client-Version',
-      'X-App-Name',
-      'X-Content-Type-Options',
-      'X-Frame-Options',
-      'X-XSS-Protection',
-      'X-Request-ID',
-    ],
-  })
-);
+// CORS Configuration - FIXED for development network access
+const corsOptions = {
+  origin: function(origin, callback) {
+    // In development, allow ALL origins (this fixes network IP access)
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // In production, use a whitelist
+    const allowedOrigins = [
+      'https://pantypost.com',
+      'https://www.pantypost.com',
+      // Add any other production domains here
+    ];
+    
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+    
+    // Check if the origin is in the allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-CSRF-Token',
+    'X-Client-Version',
+    'X-App-Name',
+    'X-Content-Type-Options',
+    'X-Frame-Options',
+    'X-XSS-Protection',
+    'X-Request-ID',
+  ],
+  optionsSuccessStatus: 200 // For legacy browser support
+};
+
+app.use(cors(corsOptions)); // (duplicate removed)
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -151,8 +158,10 @@ app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
+// NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
+app.use('/api/profilebuyer', profileBuyerRoutes);
+
 // ---------------------- Storage API Routes ----------------------
-// Backend storage for critical data - replaces localStorage for production
 app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params;
@@ -656,7 +665,6 @@ setInterval(async () => {
 }, 5 * 60 * 1000); // Every 5 minutes
 
 // INSTANT AUCTION PROCESSOR - Checks every second for just-expired auctions
-// This ensures auctions are processed within 1 second of expiring
 setInterval(async () => {
   try {
     const now = new Date();
@@ -692,7 +700,6 @@ setInterval(async () => {
 }, 1000); // Check every second for instant processing
 
 // Main auction processor - catches anything the instant processor misses
-// Reduced to 3 seconds for faster processing but less aggressive than instant
 setInterval(async () => {
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
@@ -700,7 +707,6 @@ setInterval(async () => {
     if (results.processed > 0) {
       console.log(`[Auction System] Processed ${results.processed} expired auctions`);
       
-      // Notify admins of auction processing results if there were any errors
       if (results.errors.length > 0 && global.webSocketService) {
         global.webSocketService.emitToAdmins('auction:processing_errors', {
           processed: results.processed,
@@ -712,7 +718,6 @@ setInterval(async () => {
   } catch (error) {
     console.error('[Auction System] Critical error in scheduled task:', error);
     
-    // Notify admins of critical error
     if (global.webSocketService) {
       global.webSocketService.emitToAdmins('system:critical_error', {
         system: 'auction',
@@ -760,7 +765,6 @@ app.get('/api/auctions/check/:id', async (req, res) => {
     const needsProcessing = isExpired && listing.auction.status === 'active';
     
     if (needsProcessing) {
-      // Trigger immediate processing
       console.log(`[Auction] Frontend triggered check for expired auction ${listing._id}`);
       
       AuctionSettlementService.processEndedAuction(listing._id)
@@ -1125,9 +1129,30 @@ async function initializeStorageSystem() {
   }
 }
 
-// Start server
-server.listen(PORT, async () => {
-  console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+// Start server - UPDATED TO LISTEN ON ALL INTERFACES
+const HOST = '0.0.0.0'; // Listen on all network interfaces
+const os = require('os');
+
+// Function to get network IP
+function getNetworkIP() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Skip internal and non-IPv4 addresses
+      if (!iface.internal && iface.family === 'IPv4') {
+        return iface.address;
+      }
+    }
+  }
+  return 'localhost';
+}
+
+server.listen(PORT, HOST, async () => {
+  const networkIP = getNetworkIP();
+  
+  console.log(`🚀 Backend server running on:`);
+  console.log(`   - Local: http://localhost:${PORT}`);
+  console.log(`   - Network: http://${networkIP}:${PORT}`);
   console.log(`🔌 WebSocket server ready for connections`);
 
   await initializeTierSystem();
@@ -1169,5 +1194,6 @@ server.listen(PORT, async () => {
   console.log('  - Analytics:     /api/analytics/*');
   console.log('  - Auctions:      /api/auctions/*');
   console.log('  - Storage:       /api/storage/*');
-  console.log('\n💸 Go get you that lambo fuh nigga!\n');
+  console.log('  - ProfileBuyer:  /api/profilebuyer');
+  console.log('\n💸 What rarri we driving today?\n');
 });
