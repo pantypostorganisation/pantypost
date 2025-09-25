@@ -1,6 +1,0 @@
-{
-  "/_not-found/page": "app/_not-found/page.js",
-  "/buyers/my-orders/page": "app/buyers/my-orders/page.js",
-  "/icon.png/route": "app/icon.png/route.js",
-  "/login/page": "app/login/page.js"
-}
