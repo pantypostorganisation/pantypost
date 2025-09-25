@@ -6,7 +6,6 @@ import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
 import BalanceCard from '@/components/wallet/buyer/BalanceCard';
-// Removed: TotalSpentCard import
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import EmptyState from '@/components/wallet/buyer/EmptyState';
@@ -27,7 +26,6 @@ function BuyerWalletContent() {
     // Computed values
     buyerPurchases,
     recentPurchases,
-    // Removed: totalSpent (unused now)
 
     // Actions
     handleAddFunds,
@@ -40,39 +38,41 @@ function BuyerWalletContent() {
   const recentArray = Array.isArray(recentPurchases) ? recentPurchases : [];
 
   return (
-    <main className="min-h-screen bg-black text-white p-4 md:p-10">
-      {/* Background Pattern - Updated */}
-      <div className="fixed inset-0 opacity-5 pointer-events-none">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `radial-gradient(circle at 20% 80%, rgba(255, 149, 14, 0.3) 0%, transparent 50%),
-                          radial-gradient(circle at 80% 20%, rgba(255, 149, 14, 0.2) 0%, transparent 50%),
-                          radial-gradient(circle at 40% 40%, rgba(255, 149, 14, 0.15) 0%, transparent 50%)`,
-          }}
-        />
+    <main className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#0a0a0a] text-white p-4 md:p-10">
+      {/* Enhanced Background Pattern */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute inset-0 opacity-[0.015]">
+          <div className="absolute top-0 -left-4 w-96 h-96 bg-[#ff950e] rounded-full mix-blend-screen filter blur-[128px]" />
+          <div className="absolute top-1/2 -right-4 w-96 h-96 bg-orange-600 rounded-full mix-blend-screen filter blur-[128px]" />
+          <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-[#ff950e] rounded-full mix-blend-screen filter blur-[128px]" />
+        </div>
       </div>
 
       <div className="max-w-7xl mx-auto relative z-10">
         {/* Header */}
         <WalletHeader />
 
-        {/* Balance Card (Total Spent removed for this page) */}
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
-          <BalanceCard balance={balance} />
-        </div>
+        {/* Main Grid Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Balance Card - Spans 1 column */}
+          <div className="lg:col-span-1">
+            <BalanceCard balance={balance} />
+          </div>
 
-        {/* Add Funds Section */}
-        <AddFundsSection
-          amountToAdd={amountToAdd}
-          message={message}
-          messageType={messageType}
-          isLoading={isLoading}
-          onAmountChange={handleAmountChange}
-          onKeyPress={handleKeyPress}
-          onAddFunds={handleAddFunds}
-          onQuickAmountSelect={handleQuickAmountSelect}
-        />
+          {/* Add Funds Section - Spans 2 columns on large screens */}
+          <div className="lg:col-span-2">
+            <AddFundsSection
+              amountToAdd={amountToAdd}
+              message={message}
+              messageType={messageType}
+              isLoading={isLoading}
+              onAmountChange={handleAmountChange}
+              onKeyPress={handleKeyPress}
+              onAddFunds={handleAddFunds}
+              onQuickAmountSelect={handleQuickAmountSelect}
+            />
+          </div>
+        </div>
 
         {/* Recent Purchases or Empty State */}
         {purchasesArray.length > 0 ? (
@@ -85,7 +85,7 @@ function BuyerWalletContent() {
   );
 }
 
-// Wrapper to ensure proper auth flow
+// Wrapper to ensure proper auth flow (unchanged)
 function BuyerWalletWrapper() {
   const { user, isAuthReady } = useAuth();
   const router = useRouter();
@@ -141,3 +141,4 @@ export default function BuyerWalletPage() {
     </BanCheck>
   );
 }
+
