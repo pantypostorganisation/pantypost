@@ -1,7 +1,7 @@
 // src/components/wallet/buyer/BalanceCard.tsx
 'use client';
 
-import { DollarSign, TrendingUp, Wallet } from 'lucide-react';
+import { DollarSign, AlertCircle, ShieldCheck, Zap } from 'lucide-react';
 
 interface BalanceCardProps {
   balance: number;
@@ -9,67 +9,67 @@ interface BalanceCardProps {
 
 export default function BalanceCard({ balance }: BalanceCardProps) {
   const safeBalance = Math.max(0, balance);
-  const isLowBalance = safeBalance < 20 && safeBalance > 0;
 
   return (
     <section
       aria-label="Current balance"
-      className="h-full bg-gradient-to-br from-[#1a1a1a] to-[#0f0f0f] rounded-2xl border border-white/5 relative overflow-hidden group hover:border-white/10 transition-all duration-300"
+      className="bg-[#141414] rounded-2xl border border-gray-800/80 hover:border-gray-700 transition-colors relative overflow-hidden"
     >
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#ff950e]/10 via-transparent to-transparent" />
-      </div>
+      {/* subtle background wash */}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 to-transparent" />
 
-      <div className="relative z-10 p-6 h-full flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-gradient-to-r from-[#ff950e]/20 to-orange-600/20 backdrop-blur-sm">
-              <Wallet className="w-5 h-5 text-[#ff950e]" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-white">Available Balance</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Ready to spend</p>
-            </div>
+      <div className="relative z-10 px-5 py-5 md:px-6 md:py-6">
+        {/* Top row: title + icon */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-sm font-medium text-gray-300">Current Balance</h2>
+            <span className="text-xs text-gray-500">Available for purchases</span>
+          </div>
+
+          <div className="bg-gradient-to-r from-[#ff950e] to-orange-600 p-2.5 rounded-xl shadow-lg shadow-orange-500/15">
+            <DollarSign className="w-5 h-5 text-white" />
           </div>
         </div>
 
-        {/* Balance Display */}
-        <div className="flex-1 flex flex-col justify-center">
-          <div className={`transition-all duration-300 ${isLowBalance ? 'scale-95' : ''}`}>
-            <div className="flex items-baseline gap-2">
-              <span className="text-4xl lg:text-5xl font-bold text-white tabular-nums">
-                ${safeBalance.toFixed(2)}
-              </span>
-              <span className="text-sm text-gray-500 font-medium">USD</span>
-            </div>
+        {/* Divider */}
+        <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-gray-800 to-transparent" />
 
-            {/* Low Balance Warning */}
-            {isLowBalance && (
-              <div className="mt-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                <p className="text-xs text-yellow-400 font-medium">
-                  Low balance • Add funds to continue
-                </p>
-              </div>
-            )}
-
-            {/* Balance OK Indicator */}
-            {!isLowBalance && safeBalance > 0 && (
-              <div className="mt-4 flex items-center gap-2 text-emerald-400">
-                <TrendingUp className="w-4 h-4" />
-                <p className="text-xs font-medium">Balance healthy</p>
-              </div>
-            )}
+        {/* Content grid */}
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-center">
+          {/* Amount */}
+          <div className="flex items-end gap-3">
+            <span className="text-4xl md:text-5xl font-extrabold tracking-tight text-white tabular-nums">
+              ${safeBalance.toFixed(2)}
+            </span>
+            <span className="pb-2 text-xs md:text-sm text-gray-400">USD</span>
           </div>
-        </div>
 
-        {/* Footer Info */}
-        <div className="pt-4 border-t border-white/5">
-          <p className="text-[11px] text-gray-500">
-            Instant deposits • No waiting period
+          {/* Status / badges */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
+              <Zap className="w-3.5 h-3.5" />
+              Instant deposits
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-700 px-2.5 py-1 text-gray-400">
+              <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+              No waiting period
+            </span>
+          </div>
+
+          {/* Meta / fine print */}
+          <p className="text-[11px] md:text-xs text-gray-500 leading-relaxed lg:text-right">
+            Each transaction includes a <span className="text-gray-300 font-medium">10% platform fee</span> for secure
+            processing.
           </p>
         </div>
+
+        {/* Low balance notice */}
+        {safeBalance < 20 && safeBalance > 0 && (
+          <div className="mt-4 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-sm text-yellow-300">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span>Low balance — add funds to continue shopping.</span>
+          </div>
+        )}
       </div>
     </section>
   );

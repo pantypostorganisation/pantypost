@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { MessageCircle, Package, CreditCard } from 'lucide-react';
+import { MessageCircle, DollarSign, Tag, ExternalLink } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeUsername } from '@/utils/security/sanitization';
@@ -16,143 +16,93 @@ interface ExpandedOrderContentProps {
   isSellerVerified: boolean;
 }
 
-/**
- * Safely extract a tracking number from various possible shapes without
- * requiring changes to the global Order type.
- * Supported shapes:
- *  - order.trackingNumber: string
- *  - order.shipping?.trackingNumber: string
- */
-function getTrackingNumber(o: unknown): string | null {
-  if (!o || typeof o !== 'object') return null;
-
-  const anyOrder = o as Record<string, any>;
-
-  // Direct property (some code paths may attach it here)
-  if (typeof anyOrder.trackingNumber === 'string' && anyOrder.trackingNumber.trim().length > 0) {
-    return anyOrder.trackingNumber.trim();
-  }
-
-  // Nested under shipping
-  if (
-    anyOrder.shipping &&
-    typeof anyOrder.shipping === 'object' &&
-    typeof anyOrder.shipping.trackingNumber === 'string' &&
-    anyOrder.shipping.trackingNumber.trim().length > 0
-  ) {
-    return anyOrder.shipping.trackingNumber.trim();
-  }
-
-  return null;
-}
-
 export default function ExpandedOrderContent({
   order,
   type,
   sellerProfilePic,
   isSellerVerified,
 }: ExpandedOrderContentProps) {
+  const isCustom = type === 'custom';
   const sanitizedUsername = sanitizeUsername(order.seller);
-  const trackingNumber = getTrackingNumber(order);
 
   return (
-    <div className="px-6 pb-6 space-y-6 animate-in slide-in-from-top-2 duration-200">
-      {/* Seller Info - Cleaner layout */}
-      <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
+    <div className="border-t border-gray-700 bg-black/20 p-6">
+      {/* Seller Info */}
+      <div className="flex items-center justify-between mb-6">
         <Link
           href={`/sellers/${sanitizedUsername}`}
-          className="flex items-center gap-3 group"
+          className="flex items-center gap-3 text-white hover:text-[#ff950e] group transition-colors"
         >
           {sellerProfilePic ? (
             <SecureImage
               src={sellerProfilePic}
               alt={order.seller}
-              className="w-12 h-12 rounded-full object-cover ring-2 ring-white/10 group-hover:ring-[#ff950e]/50 transition-all"
+              className="w-10 h-10 rounded-full object-cover border-2 border-gray-600 group-hover:border-[#ff950e] transition-colors"
               fallbackSrc="/placeholder-avatar.png"
             />
           ) : (
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-white font-bold ring-2 ring-white/10 group-hover:ring-[#ff950e]/50 transition-all">
+            <div className="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-white font-bold border-2 border-gray-600 group-hover:border-[#ff950e] transition-colors">
               {order.seller ? order.seller.charAt(0).toUpperCase() : '?'}
             </div>
           )}
           <div>
-            <div className="font-semibold text-white group-hover:text-[#ff950e] transition-colors flex items-center gap-2">
-              <SecureMessageDisplay
+            <div className="font-semibold">
+              <SecureMessageDisplay 
                 content={order.seller}
                 allowBasicFormatting={false}
                 as="span"
               />
-              {isSellerVerified && (
-                <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />
-              )}
             </div>
-            <div className="text-xs text-gray-500">View Profile</div>
+            <div className="text-xs text-gray-400">View seller profile</div>
           </div>
+          
+          {isSellerVerified && (
+            <div className="ml-2">
+              <img src="/verification_badge.png" alt="Verified" className="w-5 h-5" />
+            </div>
+          )}
+          
+          <ExternalLink className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
         </Link>
-
+        
         <Link
           href={`/buyers/messages?thread=${sanitizedUsername}`}
-          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all text-sm font-medium"
+          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold px-4 py-2 rounded-lg transition-all shadow-lg"
         >
           <MessageCircle className="w-4 h-4" />
-          Message
+          Message Seller
         </Link>
       </div>
 
-      {/* Info Grid - Cleaner presentation */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Order Info */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
-            <Package className="w-4 h-4" />
-            ORDER DETAILS
-          </h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Order ID</span>
-              <span className="text-gray-300 font-mono">
-                {order.id ? `${order.id.slice(0, 12)}...` : '—'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Type</span>
-              <span className="text-gray-300 capitalize">{type} Purchase</span>
-            </div>
-            {trackingNumber && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Tracking</span>
-                <span className="text-gray-300 font-mono">{trackingNumber}</span>
-              </div>
-            )}
+      {/* Price Breakdown */}
+      <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700">
+        <h4 className="font-semibold text-white mb-3 flex items-center">
+          <DollarSign className="w-5 h-5 mr-2 text-[#ff950e]" />
+          Payment Details
+        </h4>
+        
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-300">Item Price:</span>
+            <span className="text-white font-semibold">${order.price.toFixed(2)}</span>
           </div>
-        </div>
-
-        {/* Payment Summary */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
-            <CreditCard className="w-4 h-4" />
-            PAYMENT SUMMARY
-          </h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Item Price</span>
-              <span className="text-gray-300">${order.price.toFixed(2)}</span>
+          
+          <div className="flex justify-between items-center">
+            <span className="text-gray-300">Platform Fee (10%):</span>
+            <span className="text-gray-300">${((order.markedUpPrice || order.price) - order.price).toFixed(2)}</span>
+          </div>
+          
+          {order.tierCreditAmount && order.tierCreditAmount > 0 && (
+            <div className="flex justify-between items-center text-green-400">
+              <span>Seller Tier Bonus:</span>
+              <span>+${order.tierCreditAmount.toFixed(2)}</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Platform Fee</span>
-              <span className="text-gray-300">
-                ${((order.markedUpPrice || order.price) - order.price).toFixed(2)}
-              </span>
-            </div>
-            {order.tierCreditAmount && order.tierCreditAmount > 0 && (
-              <div className="flex justify-between text-green-400">
-                <span>Bonus Credit</span>
-                <span>+${order.tierCreditAmount.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex justify-between pt-2 border-t border-white/5 font-semibold">
-              <span className="text-white">Total</span>
-              <span className="text-[#ff950e]">
+          )}
+          
+          <div className="border-t border-gray-600 pt-2 mt-2">
+            <div className="flex justify-between items-center">
+              <span className="text-white font-semibold">Total Paid:</span>
+              <span className="text-[#ff950e] font-bold text-lg">
                 ${(order.markedUpPrice || order.price).toFixed(2)}
               </span>
             </div>
@@ -160,7 +110,31 @@ export default function ExpandedOrderContent({
         </div>
       </div>
 
-      {/* Review Section */}
+      {/* Custom Request Tags */}
+      {isCustom && order.tags && order.tags.length > 0 && (
+        <div className="mt-4">
+          <h4 className="font-semibold text-white mb-2 flex items-center">
+            <Tag className="w-4 h-4 mr-2 text-blue-400" />
+            Request Tags
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {order.tags.map((tag: string, idx: number) => (
+              <span
+                key={idx}
+                className="bg-blue-900/30 text-blue-200 text-xs px-3 py-1 rounded-full border border-blue-700/50"
+              >
+                <SecureMessageDisplay 
+                  content={tag}
+                  allowBasicFormatting={false}
+                  as="span"
+                />
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Review Section - NEW */}
       <ReviewSection order={order} />
     </div>
   );

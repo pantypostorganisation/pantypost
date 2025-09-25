@@ -29,12 +29,15 @@ export default function OrderCard({
   const { users } = useListings();
   const styles = getOrderStyles(type);
   
+  // State for async profile pic
   const [sellerProfilePic, setSellerProfilePic] = useState<string | null>(null);
   
+  // Get seller info
   const sellerUser = users?.[order.seller ?? ''];
   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
   const hasDeliveryAddress = !!order.deliveryAddress;
 
+  // Load seller profile pic asynchronously
   useEffect(() => {
     const loadProfilePic = async () => {
       if (order.seller) {
@@ -45,34 +48,25 @@ export default function OrderCard({
     loadProfilePic();
   }, [order.seller]);
 
+  // CRITICAL FIX: Ensure order has an ID
   const orderId = order.id || (order as any)._id || `order-${Date.now()}`;
+
+  // Show special status for auction orders without address
   const needsAddress = order.wasAuction && !hasDeliveryAddress;
 
   return (
-    <div className={`relative overflow-hidden transition-all duration-300 ${
-      isExpanded 
-        ? 'bg-black/40 backdrop-blur-sm shadow-2xl' 
-        : 'bg-black/20 hover:bg-black/30 shadow-lg hover:shadow-xl'
-    }`}>
-      {/* Subtle type indicator bar */}
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${
-        type === 'auction' ? 'from-purple-500 to-violet-500' :
-        type === 'custom' ? 'from-blue-500 to-cyan-500' :
-        'from-[#ff950e] to-orange-500'
-      }`} />
-
-      {/* Auction Won Badge - Refined */}
+    <div className="relative border border-white/5 rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:border-white/10 transition-all duration-200">
+      {/* Auction Won Badge - Better contrast */}
       {order.wasAuction && needsAddress && (
         <div className="absolute top-4 right-4 z-10">
-          <div className="bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-emerald-400 px-4 py-1.5 rounded-full text-xs font-medium flex items-center gap-2">
-            <span className="text-base">🏆</span>
-            <span>Action Required</span>
+          <div className="bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold animate-pulse">
+            🏆 Won! Add Address
           </div>
         </div>
       )}
 
-      {/* Main Content */}
-      <div className={`p-6 transition-all duration-300 ${isExpanded ? 'pb-0' : ''}`}>
+      {/* Order Header with consistent padding */}
+      <div className="p-6">
         <OrderHeader
           order={order}
           type={type}
@@ -89,7 +83,7 @@ export default function OrderCard({
         />
       </div>
 
-      {/* Expanded Content - Seamless transition */}
+      {/* Expanded Content */}
       {isExpanded && (
         <ExpandedOrderContent
           order={order}
@@ -101,4 +95,3 @@ export default function OrderCard({
     </div>
   );
 }
-
