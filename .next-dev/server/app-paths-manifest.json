@@ -1,1 +1,5 @@
-{}
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/buyers/messages/page": "app/buyers/messages/page.js",
+  "/icon.png/route": "app/icon.png/route.js"
+}
