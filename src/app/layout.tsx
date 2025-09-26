@@ -1,5 +1,4 @@
 // src/app/layout.tsx
-// NO 'use client' here!
 
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -19,10 +18,11 @@ export const metadata: Metadata = {
   robots: 'noindex, nofollow',
 };
 
-// Separate viewport export (fixes the warning)
+// Separate viewport export with viewport-fit=cover for iOS safe areas
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  viewportFit: 'cover',
   themeColor: '#ff950e',
 };
 
@@ -34,6 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
       </head>

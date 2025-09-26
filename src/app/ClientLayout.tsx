@@ -84,10 +84,10 @@ export default function ClientLayout({
       
       <Providers>
         <Suspense fallback={<LoadingFallback />}>
-          <div className="min-h-screen bg-black text-white">
+          <div className="flex flex-col fullscreen md:min-h-screen bg-black text-white">
             <BanCheck>
               {!shouldHideHeader && <Header />}
-              <main className="flex-grow">
+              <main className="flex-1">
                 {children}
               </main>
               <AgeVerificationModal />

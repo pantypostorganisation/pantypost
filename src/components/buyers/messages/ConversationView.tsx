@@ -15,6 +15,12 @@ import {
   Edit3,
   ShoppingBag,
   Package,
+  ChevronLeft,
+  User,
+  MoreVertical,
+  Ban,
+  Flag,
+  CheckCircle
 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import TypingIndicator from '@/components/messaging/TypingIndicator';
@@ -113,8 +119,8 @@ interface ConversationViewProps {
   lastManualScrollTime: React.RefObject<number>;
   setShowCustomRequestModal: (show: boolean) => void;
   setShowTipModal: (show: boolean) => void;
-  mobileHeader?: React.ReactNode;
   isMobile?: boolean;
+  onBack?: () => void;
 }
 
 export default function ConversationView(props: ConversationViewProps) {
@@ -167,8 +173,8 @@ export default function ConversationView(props: ConversationViewProps) {
     lastManualScrollTime,
     setShowCustomRequestModal,
     setShowTipModal,
-    mobileHeader,
     isMobile = false,
+    onBack,
   } = props;
 
   const walletContext = useContext(WalletContext);
@@ -176,7 +182,7 @@ export default function ConversationView(props: ConversationViewProps) {
   const composerRef = useRef<HTMLDivElement>(null);
 
   const [isSellerTyping, setIsSellerTyping] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showDropdown, setShowDropdown] = useState(false);
 
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isTypingRef = useRef(false);
@@ -189,30 +195,33 @@ export default function ConversationView(props: ConversationViewProps) {
 
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
 
-  // Handle iOS keyboard and visual viewport
+  // Prevent scroll outside messages container on mobile
   useEffect(() => {
     if (!isMobile) return;
-    if (!('visualViewport' in window)) return;
-
-    const visualViewport = (window as any).visualViewport;
     
-    const handleViewportChange = () => {
-      // Calculate keyboard height
-      const keyboard = window.innerHeight - visualViewport.height - visualViewport.offsetTop;
-      setKeyboardHeight(Math.max(0, keyboard));
+    const handleTouchMove = (e: TouchEvent) => {
+      // Check if the touch target is within the messages container
+      if (!messagesContainerRef.current?.contains(e.target as Node)) {
+        e.preventDefault();
+      }
     };
-
-    visualViewport.addEventListener('resize', handleViewportChange);
-    visualViewport.addEventListener('scroll', handleViewportChange);
     
-    // Initial check
-    handleViewportChange();
-
+    const handleWheel = (e: WheelEvent) => {
+      // Check if the wheel event target is within the messages container  
+      if (!messagesContainerRef.current?.contains(e.target as Node)) {
+        e.preventDefault();
+      }
+    };
+    
+    // Add listeners with passive: false to allow preventDefault
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('wheel', handleWheel, { passive: false });
+    
     return () => {
-      visualViewport.removeEventListener('resize', handleViewportChange);
-      visualViewport.removeEventListener('scroll', handleViewportChange);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('wheel', handleWheel);
     };
-  }, [isMobile]);
+  }, [isMobile, messagesContainerRef]);
 
   // Auto-scroll to bottom on new messages
   const scrollToBottom = useCallback((behavior: 'instant' | 'smooth' = 'instant') => {
@@ -391,6 +400,120 @@ export default function ConversationView(props: ConversationViewProps) {
     return !!lastMsg && lastMsg.sender === user?.username;
   }
 
+  // Desktop Header Component
+  const renderHeader = () => (
+    <div className="flex items-center justify-between p-3">
+      {/* Left section */}
+      <div className="flex items-center flex-1 min-w-0">
+        {/* Seller Avatar */}
+        <div className="relative mr-3 flex-shrink-0">
+          {sellerProfiles[activeThread]?.pic ? (
+            <SecureImage
+              src={sellerProfiles[activeThread].pic}
+              alt={sanitizeStrict(activeThread)}
+              className="w-10 h-10 rounded-full object-cover"
+              fallbackSrc="/placeholder-avatar.png"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+              {sanitizeStrict(activeThread).charAt(0).toUpperCase()}
+            </div>
+          )}
+          
+          {/* Online indicator */}
+          {activityStatus.isOnline && !isUserBlocked && (
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+          )}
+          
+          {/* Verified badge */}
+          {sellerProfiles[activeThread]?.verified && (
+            <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
+              <CheckCircle className="w-4 h-4 text-blue-500" />
+            </div>
+          )}
+        </div>
+        
+        {/* Seller Name and Status */}
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-white truncate">
+            {sanitizeStrict(activeThread)}
+          </div>
+          <div className={`text-xs ${
+            activityStatus.isOnline && !isUserBlocked ? 'text-green-400' : 'text-gray-400'
+          }`}>
+            {getActivityDisplay()}
+          </div>
+        </div>
+      </div>
+      
+      {/* Actions Dropdown */}
+      <div className="relative">
+        <button
+          onClick={() => setShowDropdown(!showDropdown)}
+          className="p-2 hover:bg-[#222] rounded-lg transition-colors"
+          aria-haspopup="menu"
+          aria-expanded={showDropdown}
+          aria-label="More options"
+        >
+          <MoreVertical className="w-5 h-5 text-gray-400" />
+        </button>
+        
+        {showDropdown && (
+          <>
+            <div 
+              className="fixed inset-0 z-40" 
+              onClick={() => setShowDropdown(false)} 
+            />
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-1 bg-[#222] border border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
+            >
+              <button
+                onClick={() => {
+                  window.location.href = `/sellers/${sanitizeStrict(activeThread)}`;
+                  setShowDropdown(false);
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#333] hover:text-white transition-colors flex items-center gap-2"
+                role="menuitem"
+              >
+                <User className="w-4 h-4" />
+                Visit Profile
+              </button>
+              
+              <div className="my-1 border-t border-gray-700" />
+              
+              {!isUserReported && (
+                <button
+                  onClick={() => {
+                    handleReport();
+                    setShowDropdown(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#333] hover:text-white transition-colors flex items-center gap-2"
+                  role="menuitem"
+                >
+                  <Flag className="w-4 h-4" />
+                  Report
+                </button>
+              )}
+              
+              <button
+                onClick={() => {
+                  handleBlockToggle();
+                  setShowDropdown(false);
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#333] hover:text-white transition-colors flex items-center gap-2"
+                role="menuitem"
+              >
+                <Ban className="w-4 h-4" />
+                {isUserBlocked ? 'Unblock' : 'Block'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   // Render messages list
   const renderMessagesList = () => (
     <>
@@ -497,11 +620,7 @@ export default function ConversationView(props: ConversationViewProps) {
             onChange={handleTypingChange}
             onKeyPress={handleKeyDown}
             onFocus={(e) => {
-              // Prevent page scroll on focus
               e.preventDefault();
-              if (isMobile) {
-                setTimeout(() => scrollToBottom('smooth'), 300);
-              }
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
             className="w-full p-3 pr-12 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
@@ -651,159 +770,215 @@ export default function ConversationView(props: ConversationViewProps) {
     </>
   );
 
-  return (
-    <>
-      {/* Mobile Layout - 3-row grid */}
-      <div className="md:hidden h-[100dvh] bg-[#121212]">
-        <div className="grid grid-rows-[auto,1fr,auto] h-full relative">
-          {/* 1) Sticky header */}
-          <div className="sticky top-0 z-30 bg-[#1a1a1a] border-b border-gray-800 shadow-sm">
-            {mobileHeader}
-          </div>
-
-          {/* 2) The ONLY scroller - messages */}
-          <div
-            ref={messagesContainerRef}
-            className="overflow-y-auto overscroll-contain px-3 py-3 scroll-pt-14"
-            style={{ 
-              WebkitOverflowScrolling: 'touch',
-              scrollPaddingTop: '56px',
-              paddingBottom: keyboardHeight > 0 ? `${keyboardHeight}px` : '12px'
-            }}
-          >
-            <div className="max-w-3xl mx-auto space-y-4">
-              {renderMessagesList()}
-            </div>
-          </div>
-
-          {/* 3) Pinned composer */}
-          <div 
-            ref={composerRef}
-            className="bg-[#111111] border-t border-gray-800 shadow-sm z-20"
-            style={{ 
-              paddingBottom: isMobile ? `calc(8px + env(safe-area-inset-bottom))` : '8px'
-            }}
-          >
-            {!isUserBlocked ? (
-              <div className="relative">
-                {renderComposer()}
-              </div>
-            ) : (
-              <div className="p-4 text-center text-sm text-red-400 flex items-center justify-center">
-                <ShieldAlert size={16} className="mr-2" />
-                You have blocked this seller
+  // Mobile Layout
+  if (isMobile) {
+    return (
+      <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden">
+        {/* Mobile Header with safe area */}
+        <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-sm safe-top">
+          <div className="flex items-center justify-between p-3">
+            {/* Left section */}
+            <div className="flex items-center flex-1 min-w-0">
+              {/* Back button */}
+              {onBack && (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleBlockToggle();
-                  }}
-                  className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
+                  onClick={onBack}
+                  className="p-2 -ml-2 mr-2 hover:bg-[#222] rounded-lg transition-colors"
+                  aria-label="Back to messages"
                 >
-                  Unblock
+                  <ChevronLeft className="w-6 h-6 text-white" />
                 </button>
+              )}
+              
+              {/* Seller Avatar */}
+              <div className="relative mr-3 flex-shrink-0">
+                {sellerProfiles[activeThread]?.pic ? (
+                  <SecureImage
+                    src={sellerProfiles[activeThread].pic}
+                    alt={sanitizeStrict(activeThread)}
+                    className="w-10 h-10 rounded-full object-cover"
+                    fallbackSrc="/placeholder-avatar.png"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
+                    {sanitizeStrict(activeThread).charAt(0).toUpperCase()}
+                  </div>
+                )}
+                
+                {/* Online indicator */}
+                {activityStatus.isOnline && !isUserBlocked && (
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+                )}
+                
+                {/* Verified badge */}
+                {sellerProfiles[activeThread]?.verified && (
+                  <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
+                    <CheckCircle className="w-4 h-4 text-blue-500" />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Desktop Layout - Keep existing */}
-      <div className="hidden md:flex h-full flex-col bg-[#121212]">
-        {/* Desktop conversation header */}
-        <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
-          <div className="flex items-center">
-            <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
-              {sellerProfiles[activeThread]?.pic ? (
-                <SecureImage
-                  src={sellerProfiles[activeThread].pic}
-                  alt={sanitizeUsername(activeThread)}
-                  className="w-full h-full object-cover"
-                  fallbackSrc="/placeholder-avatar.png"
-                />
-              ) : (
-                getInitial(sanitizeUsername(activeThread))
-              )}
-
-              {sellerProfiles[activeThread]?.verified && (
-                <div className="absolute bottom-0 right-0 bg-[#1a1a1a] p-0.5 rounded-full border border-[#ff950e] shadow-sm">
-                  <BadgeCheck size={12} className="text-[#ff950e]" />
+              
+              {/* Seller Name and Status */}
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-white truncate">
+                  {sanitizeStrict(activeThread)}
                 </div>
-              )}
-
-              {activityStatus.isOnline && !isUserBlocked && (
-                <div className="absolute bottom-0 left-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
-              )}
+                <div className={`text-xs ${
+                  activityStatus.isOnline && !isUserBlocked ? 'text-green-400' : 'text-gray-400'
+                }`}>
+                  {getActivityDisplay()}
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="font-bold text-lg text-white">{sanitizeStrict(activeThread)}</h2>
-              <p
-                className={`text-xs flex items-center ${
-                  activityStatus.isOnline && !isUserBlocked ? 'text-[#ff950e]' : 'text-gray-400'
-                }`}
+            
+            {/* Actions Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowDropdown(!showDropdown)}
+                className="p-2 hover:bg-[#222] rounded-lg transition-colors"
+                aria-haspopup="menu"
+                aria-expanded={showDropdown}
+                aria-label="More options"
               >
-                {activityStatus.isOnline && !isUserBlocked && <Sparkles size={12} className="mr-1 text-[#ff950e]" />}
-                {getActivityDisplay()}
-              </p>
+                <MoreVertical className="w-5 h-5 text-gray-400" />
+              </button>
+              
+              {showDropdown && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40" 
+                    onClick={() => setShowDropdown(false)} 
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-1 bg-[#222] border border-gray-700 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
+                  >
+                    <button
+                      onClick={() => {
+                        window.location.href = `/sellers/${sanitizeStrict(activeThread)}`;
+                        setShowDropdown(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#333] hover:text-white transition-colors flex items-center gap-2"
+                      role="menuitem"
+                    >
+                      <User className="w-4 h-4" />
+                      Visit Profile
+                    </button>
+                    
+                    <div className="my-1 border-t border-gray-700" />
+                    
+                    {!isUserReported && (
+                      <button
+                        onClick={() => {
+                          handleReport();
+                          setShowDropdown(false);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#333] hover:text-white transition-colors flex items-center gap-2"
+                        role="menuitem"
+                      >
+                        <Flag className="w-4 h-4" />
+                        Report
+                      </button>
+                    )}
+                    
+                    <button
+                      onClick={() => {
+                        handleBlockToggle();
+                        setShowDropdown(false);
+                      }}
+                      className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-[#333] hover:text-white transition-colors flex items-center gap-2"
+                      role="menuitem"
+                    >
+                      <Ban className="w-4 h-4" />
+                      {isUserBlocked ? 'Unblock' : 'Block'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          </div>
-
-          <div className="flex space-x-2 text-white">
-            <button
-              onClick={handleReport}
-              disabled={isUserReported}
-              className={`px-3 py-1 text-xs border rounded flex items-center ${
-                isUserReported ? 'text-gray-400 border-gray-500' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-              } transition-colors duration-150`}
-            >
-              <AlertTriangle size={12} className="mr-1" />
-              {isUserReported ? 'Reported' : 'Report'}
-            </button>
-            <button
-              onClick={handleBlockToggle}
-              className={`px-3 py-1 text-xs border rounded flex items-center ${
-                isUserBlocked ? 'text-green-500 border-green-500 hover:bg-green-500/10' : 'text-red-500 border-red-500 hover:bg-red-500/10'
-              } transition-colors duration-150`}
-            >
-              <ShieldAlert size={12} className="mr-1" />
-              {isUserBlocked ? 'Unblock' : 'Block'}
-            </button>
           </div>
         </div>
 
-        {/* Desktop Messages */}
-        <div 
-          className="flex-1 overflow-y-auto overscroll-contain bg-[#121212]" 
+        {/* Messages container - flex-1 makes it fill available space */}
+        <div
           ref={messagesContainerRef}
-          style={{ scrollPaddingTop: '20px' }}
+          className="flex-1 overflow-y-auto px-3 py-2"
+          style={{ 
+            WebkitOverflowScrolling: 'touch'
+          }}
         >
-          <div className="max-w-3xl mx-auto space-y-4 p-4">
+          <div className="max-w-3xl mx-auto space-y-3">
             {renderMessagesList()}
           </div>
         </div>
 
-        {/* Desktop Composer */}
-        {!isUserBlocked && (
-          <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
-            {renderComposer()}
-          </div>
-        )}
-
-        {isUserBlocked && (
-          <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
-            <ShieldAlert size={16} className="mr-2" />
-            You have blocked this seller
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleBlockToggle();
-              }}
-              className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
-            >
-              Unblock
-            </button>
-          </div>
-        )}
+        {/* Composer with safe bottom */}
+        <div 
+          ref={composerRef}
+          className="bg-[#111111] border-t border-gray-800 shadow-sm flex-shrink-0 safe-bottom"
+        >
+          {!isUserBlocked ? (
+            <div className="relative">
+              {renderComposer()}
+            </div>
+          ) : (
+            <div className="p-4 text-center text-sm text-red-400 flex items-center justify-center">
+              <ShieldAlert size={16} className="mr-2" />
+              You have blocked this seller
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleBlockToggle();
+                }}
+                className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
+              >
+                Unblock
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+    );
+  }
+
+  // Desktop Layout
+  return (
+    <div className="h-full flex flex-col bg-[#121212]">
+      {/* Desktop Header */}
+      <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-sm">
+        {renderHeader()}
+      </div>
+
+      {/* Desktop Messages */}
+      <div 
+        className="flex-1 overflow-y-auto bg-[#121212]" 
+        ref={messagesContainerRef}
+      >
+        <div className="max-w-3xl mx-auto space-y-4 p-4">
+          {renderMessagesList()}
+        </div>
+      </div>
+
+      {/* Desktop Composer */}
+      {!isUserBlocked ? (
+        <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+          {renderComposer()}
+        </div>
+      ) : (
+        <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+          <ShieldAlert size={16} className="mr-2" />
+          You have blocked this seller
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleBlockToggle();
+            }}
+            className="ml-2 underline text-gray-400 hover:text-white transition-colors duration-150"
+          >
+            Unblock
+          </button>
+        </div>
+      )}
 
       <style jsx global>{`
         .emoji-button::before {
@@ -826,13 +1001,8 @@ export default function ConversationView(props: ConversationViewProps) {
           body {
             overscroll-behavior: none;
           }
-          
-          /* Stabilize scrollbar to prevent layout shift */
-          .messagesScroller {
-            scrollbar-gutter: stable;
-          }
         }
       `}</style>
-    </>
+    </div>
   );
 }

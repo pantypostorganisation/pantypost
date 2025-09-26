@@ -204,3 +204,31 @@ a:hover {
 .breathe-green-hover:hover {
   animation: breathe-green 2s ease-in-out infinite;
 }
+
+/* ======== iOS Safari Safe Area Fixes ======== */
+
+html, body, #__next {
+  height: 100%;
+  background: #000; /* prevents reveal behind toolbars */
+}
+
+/* Fullscreen helper that prefers modern dynamic viewport units */
+.fullscreen {
+  min-height: 100dvh;
+  min-height: 100svh; /* fallback for some engines */
+}
+@supports not (height: 100dvh) {
+  .fullscreen {
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Safe-area utilities */
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-inset { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+
+/* Prevent body overscroll revealing background on iOS */
+@media (max-width: 767px) {
+  body { overscroll-behavior: none; }
+}
