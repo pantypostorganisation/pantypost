@@ -1,3 +1,4 @@
+// next.config.ts
 import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from "next";
 
@@ -6,13 +7,9 @@ const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' *.google-analytics.com *.googletagmanager.com *.sentry.io *.sentry-cdn.com https://www.googletagmanager.com https://www.google-analytics.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  img-src 'self' blob: data: https: *.cloudinary.com ${process.env.NODE_ENV === 'development'
-    ? 'http://localhost:* http://127.0.0.1:* http://192.168.*:* http://10.*:*'
-    : ''};
+  img-src 'self' blob: data: https: *.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* http://127.0.0.1:* http://192.168.*:* http://10.*:*' : ''};
   media-src 'self' https://res.cloudinary.com;
-  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${process.env.NODE_ENV === 'development'
-    ? 'http://localhost:* ws://localhost:* http://192.168.*:* ws://192.168.*:* http://10.*:* ws://10.*:*'
-    : ''};
+  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* ws://localhost:* http://192.168.*:* ws://192.168.*:* http://10.*:* ws://10.*:*' : ''};
   font-src 'self' https://fonts.gstatic.com;
   object-src 'none';
   base-uri 'self';
@@ -24,34 +21,32 @@ const ContentSecurityPolicy = `
   ${process.env.NODE_ENV === 'production' ? 'upgrade-insecure-requests;' : ''}
 `.replace(/\s{2,}/g, ' ').trim();
 
-const securityHeaders = process.env.NODE_ENV === 'development'
-  ? [
-      { key: 'X-DNS-Prefetch-Control', value: 'on' },
-      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-      { key: 'X-Content-Type-Options', value: 'nosniff' },
-      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-    ]
-  : [
-      { key: 'X-DNS-Prefetch-Control', value: 'on' },
-      { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-      { key: 'X-XSS-Protection', value: '1; mode=block' },
-      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-      { key: 'X-Content-Type-Options', value: 'nosniff' },
-      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
-      { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
-      { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-      { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
-      { key: 'Cross-Origin-Embedder-Policy', value: 'unsafe-none' },
-      { key: 'Content-Security-Policy', value: ContentSecurityPolicy },
-    ];
+const securityHeaders = process.env.NODE_ENV === 'development' ? [
+  { key: 'X-DNS-Prefetch-Control', value: 'on' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+] : [
+  { key: 'X-DNS-Prefetch-Control', value: 'on' },
+  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+  { key: 'X-XSS-Protection', value: '1; mode=block' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+  { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+  { key: 'Cross-Origin-Embedder-Policy', value: 'unsafe-none' },
+  { key: 'Content-Security-Policy', value: ContentSecurityPolicy },
+];
 
 const performanceHeaders = [
   { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
 ];
 
 const nextConfig: NextConfig = {
-  // ✅ use default Next.js build folder so PM2 + next start work
+  // ✅ Build to the default folder so next start & PM2 pick it up
   distDir: '.next',
 
   output: 'standalone',
@@ -119,23 +114,25 @@ const nextConfig: NextConfig = {
 
   async rewrites() {
     const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
+    const devRewrites = [
+      { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },
+      { source: '/uploads/:path*', destination: `${backendUrl}/uploads/:path*` },
+    ];
     return process.env.NODE_ENV === 'development'
-      ? [
-          { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },
-          { source: '/uploads/:path*', destination: `${backendUrl}/uploads/:path*` },
-          { source: '/sitemap.xml', destination: '/api/sitemap' },
-        ]
+      ? [...devRewrites, { source: '/sitemap.xml', destination: '/api/sitemap' }]
       : [{ source: '/sitemap.xml', destination: '/api/sitemap' }];
   },
 
   webpack: (config, { dev }) => {
     if (process.env.ANALYZE === 'true') {
       const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
-      config.plugins.push(new BundleAnalyzerPlugin({
-        analyzerMode: 'static',
-        reportFilename: dev ? './analyze/client-dev.html' : './analyze/client.html',
-        openAnalyzer: false,
-      }));
+      config.plugins.push(
+        new BundleAnalyzerPlugin({
+          analyzerMode: 'static',
+          reportFilename: dev ? './analyze/client-dev.html' : './analyze/client.html',
+          openAnalyzer: false,
+        })
+      );
     }
 
     if (!dev) {
