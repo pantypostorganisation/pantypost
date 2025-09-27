@@ -70,23 +70,21 @@ connectDB();
 
 // CORS Configuration - FIXED for development network access
 const corsOptions = {
-  origin: function(origin, callback) {
+  origin: function (origin, callback) {
     // In development, allow ALL origins (this fixes network IP access)
     if (process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
-    
+
     // In production, use a whitelist
     const allowedOrigins = [
       'https://pantypost.com',
       'https://www.pantypost.com',
-      // Add any other production domains here
     ];
-    
+
     // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return callback(null, true);
-    
-    // Check if the origin is in the allowed list
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -105,11 +103,16 @@ const corsOptions = {
     'X-Frame-Options',
     'X-XSS-Protection',
     'X-Request-ID',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
   ],
-  optionsSuccessStatus: 200 // For legacy browser support
+  optionsSuccessStatus: 200
 };
 
-app.use(cors(corsOptions)); // (duplicate removed)
+app.use(cors(corsOptions));
+// Ensure preflight requests get CORS headers (and bypass other middleware)
+app.options('*', cors(corsOptions));
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -133,7 +136,7 @@ app.get('/api/health', (req, res) => {
       bans: true,
       analytics: true,
       auctions: true,
-      storage: true  // Added storage feature flag
+      storage: true
     },
   });
 });
@@ -166,23 +169,21 @@ app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params;
     const userId = req.user.id;
-    
-    // Find the user and get their storage object
+
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    
-    // Initialize storage if it doesn't exist
+
     if (!user.storage) {
       user.storage = {};
     }
-    
+
     const value = user.storage[key] || null;
-    
-    res.json({ 
-      success: true, 
-      data: { value } 
+
+    res.json({
+      success: true,
+      data: { value }
     });
   } catch (error) {
     console.error(`Storage GET error for key ${req.params.key}:`, error);
@@ -194,32 +195,29 @@ app.post('/api/storage/set', authMiddleware, async (req, res) => {
   try {
     const { key, value } = req.body;
     const userId = req.user.id;
-    
-    // Validate input
+
     if (!key || typeof key !== 'string') {
       return res.status(400).json({ success: false, error: 'Invalid key' });
     }
-    
-    // Size limit check (1MB)
+
     const valueSize = JSON.stringify(value).length;
     if (valueSize > 1024 * 1024) {
       return res.status(413).json({ success: false, error: 'Value too large (max 1MB)' });
     }
-    
-    // Update user's storage
+
     const result = await User.findByIdAndUpdate(
       userId,
-      { 
+      {
         [`storage.${key}`]: value,
         'storageUpdatedAt': new Date()
       },
       { new: true }
     );
-    
+
     if (!result) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    
+
     res.json({ success: true });
   } catch (error) {
     console.error(`Storage SET error for key ${req.body.key}:`, error);
@@ -231,21 +229,20 @@ app.delete('/api/storage/delete/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params;
     const userId = req.user.id;
-    
-    // Remove the key from storage
+
     const result = await User.findByIdAndUpdate(
       userId,
-      { 
+      {
         $unset: { [`storage.${key}`]: 1 },
         'storageUpdatedAt': new Date()
       },
       { new: true }
     );
-    
+
     if (!result) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
-    
+
     res.json({ success: true });
   } catch (error) {
     console.error(`Storage DELETE error for key ${req.params.key}:`, error);
@@ -257,23 +254,21 @@ app.post('/api/storage/keys', authMiddleware, async (req, res) => {
   try {
     const { pattern } = req.body;
     const userId = req.user.id;
-    
-    // Get user's storage
+
     const user = await User.findById(userId);
     if (!user || !user.storage) {
       return res.json({ success: true, data: { keys: [] } });
     }
-    
-    // Get all keys, optionally filtered by pattern
+
     let keys = Object.keys(user.storage);
-    
+
     if (pattern) {
       keys = keys.filter(key => key.includes(pattern));
     }
-    
-    res.json({ 
-      success: true, 
-      data: { keys } 
+
+    res.json({
+      success: true,
+      data: { keys }
     });
   } catch (error) {
     console.error('Storage KEYS error:', error);
@@ -285,13 +280,13 @@ app.get('/api/storage/exists/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params;
     const userId = req.user.id;
-    
+
     const user = await User.findById(userId);
     const exists = user && user.storage && key in user.storage;
-    
-    res.json({ 
-      success: true, 
-      data: { exists } 
+
+    res.json({
+      success: true,
+      data: { exists }
     });
   } catch (error) {
     console.error(`Storage EXISTS error for key ${req.params.key}:`, error);
@@ -303,12 +298,11 @@ app.post('/api/storage/clear', authMiddleware, async (req, res) => {
   try {
     const { preserveKeys } = req.body;
     const userId = req.user.id;
-    
+
     if (preserveKeys && preserveKeys.length > 0) {
-      // Get current storage and preserve specified keys
       const user = await User.findById(userId);
       const preserved = {};
-      
+
       if (user && user.storage) {
         preserveKeys.forEach(key => {
           if (key in user.storage) {
@@ -316,20 +310,18 @@ app.post('/api/storage/clear', authMiddleware, async (req, res) => {
           }
         });
       }
-      
-      // Clear and restore preserved keys
-      await User.findByIdAndUpdate(userId, { 
+
+      await User.findByIdAndUpdate(userId, {
         storage: preserved,
         'storageUpdatedAt': new Date()
       });
     } else {
-      // Clear all storage
-      await User.findByIdAndUpdate(userId, { 
+      await User.findByIdAndUpdate(userId, {
         storage: {},
         'storageUpdatedAt': new Date()
       });
     }
-    
+
     res.json({ success: true });
   } catch (error) {
     console.error('Storage CLEAR error:', error);
@@ -340,22 +332,21 @@ app.post('/api/storage/clear', authMiddleware, async (req, res) => {
 app.get('/api/storage/info', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
     const user = await User.findById(userId);
     const storage = user?.storage || {};
-    
-    // Calculate storage size
+
     const used = JSON.stringify(storage).length;
-    const quota = 5 * 1024 * 1024; // 5MB quota per user
-    
-    res.json({ 
-      success: true, 
-      data: { 
-        used, 
+    const quota = 5 * 1024 * 1024; // 5MB
+
+    res.json({
+      success: true,
+      data: {
+        used,
         quota,
         percentage: (used / quota) * 100,
         keys: Object.keys(storage).length
-      } 
+      }
     });
   } catch (error) {
     console.error('Storage INFO error:', error);
@@ -367,24 +358,21 @@ app.get('/api/storage/info', authMiddleware, async (req, res) => {
 app.post('/api/storage/ui-preference', async (req, res) => {
   try {
     const { key, value } = req.body;
-    
-    // If user is authenticated, save to their profile
+
     if (req.headers.authorization) {
       try {
-        // Verify token
         const token = req.headers.authorization.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
-        
+
         await User.findByIdAndUpdate(
           decoded.id,
           { [`uiPreferences.${key}`]: value }
         );
       } catch (err) {
-        // Token invalid, but that's ok for UI preferences
+        // ignore token problems for UI prefs
       }
     }
-    
-    // Always return success for UI preferences
+
     res.json({ success: true });
   } catch (error) {
     console.error('UI preference error:', error);
@@ -395,13 +383,13 @@ app.post('/api/storage/ui-preference', async (req, res) => {
 app.get('/api/storage/ui-preferences', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    
+
     const user = await User.findById(userId);
     const preferences = user?.uiPreferences || {};
-    
-    res.json({ 
-      success: true, 
-      data: { preferences } 
+
+    res.json({
+      success: true,
+      data: { preferences }
     });
   } catch (error) {
     console.error('Get UI preferences error:', error);
@@ -424,7 +412,7 @@ app.get('/api/ws/status', authMiddleware, (req, res) => {
 });
 
 // Add WebSocket methods for admin notifications
-webSocketService.emitToAdmins = function(event, data) {
+webSocketService.emitToAdmins = function (event, data) {
   User.find({ role: 'admin' }).select('username').then(admins => {
     admins.forEach(admin => {
       this.emitToUser(admin.username, event, data);
@@ -548,32 +536,31 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
 
   try {
     const totalAuctions = await Listing.countDocuments({ 'auction.isAuction': true });
-    const activeAuctions = await Listing.countDocuments({ 
+    const activeAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'active'
     });
-    const endedAuctions = await Listing.countDocuments({ 
+    const endedAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'ended'
     });
-    const cancelledAuctions = await Listing.countDocuments({ 
+    const cancelledAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'cancelled'
     });
-    const reserveNotMetAuctions = await Listing.countDocuments({ 
+    const reserveNotMetAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'reserve_not_met'
     });
-    const processingAuctions = await Listing.countDocuments({ 
+    const processingAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'processing'
     });
-    const errorAuctions = await Listing.countDocuments({ 
+    const errorAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'error'
     });
 
-    // Get auctions ending soon (within next hour)
     const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
     const endingSoon = await Listing.find({
       'auction.isAuction': true,
@@ -612,14 +599,13 @@ setInterval(async () => {
   } catch (error) {
     console.error('[Ban System] Error checking expired bans:', error);
   }
-}, 5 * 60 * 1000); // Check every 5 minutes
+}, 5 * 60 * 1000);
 
 // PERMANENT FIX: Cleanup stuck auctions every 5 minutes
 setInterval(async () => {
   try {
-    const oneHourAgo = new Date(Date.now() - 3600000); // 1 hour ago
-    
-    // Reset auctions that have been stuck in processing for over an hour
+    const oneHourAgo = new Date(Date.now() - 3600000);
+
     const resetResult = await Listing.updateMany(
       {
         'auction.isAuction': true,
@@ -630,11 +616,10 @@ setInterval(async () => {
         $set: { 'auction.status': 'active' }
       }
     );
-    
+
     if (resetResult.modifiedCount > 0) {
       console.log(`[Auction] Reset ${resetResult.modifiedCount} stuck auctions`);
-      
-      // Notify admins about stuck auctions being reset
+
       if (global.webSocketService) {
         global.webSocketService.emitToAdmins('auction:stuck_reset', {
           count: resetResult.modifiedCount,
@@ -642,8 +627,7 @@ setInterval(async () => {
         });
       }
     }
-    
-    // Also reset error status auctions older than 30 minutes
+
     const thirtyMinutesAgo = new Date(Date.now() - 1800000);
     const errorResetResult = await Listing.updateMany(
       {
@@ -655,58 +639,52 @@ setInterval(async () => {
         $set: { 'auction.status': 'active' }
       }
     );
-    
+
     if (errorResetResult.modifiedCount > 0) {
       console.log(`[Auction] Reset ${errorResetResult.modifiedCount} error status auctions`);
     }
   } catch (error) {
     console.error('[Auction] Error resetting stuck auctions:', error);
   }
-}, 5 * 60 * 1000); // Every 5 minutes
+}, 5 * 60 * 1000);
 
 // INSTANT AUCTION PROCESSOR - Checks every second for just-expired auctions
 setInterval(async () => {
   try {
     const now = new Date();
     const fiveSecondsAgo = new Date(now - 5000);
-    
-    // Find auctions that JUST expired (within last 5 seconds)
+
     const justExpired = await Listing.findOne({
       'auction.isAuction': true,
       'auction.status': 'active',
-      'auction.endTime': { 
+      'auction.endTime': {
         $lte: now,
         $gte: fiveSecondsAgo
       }
     });
-    
+
     if (justExpired) {
       console.log(`[Auction] Instant processing auction ${justExpired._id} that just expired`);
-      
-      // Process immediately without waiting
+
       AuctionSettlementService.processEndedAuction(justExpired._id)
         .then(result => {
           if (!result.alreadyProcessed) {
             console.log(`[Auction] Instantly processed auction ${justExpired._id}`);
           }
         })
-        .catch(err => {
-          // Don't log - let the main processor handle errors
-        });
+        .catch(() => {});
     }
-  } catch (error) {
-    // Silent catch - main processor will handle any we miss
-  }
-}, 1000); // Check every second for instant processing
+  } catch {}
+}, 1000);
 
 // Main auction processor - catches anything the instant processor misses
 setInterval(async () => {
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
-    
+
     if (results.processed > 0) {
       console.log(`[Auction System] Processed ${results.processed} expired auctions`);
-      
+
       if (results.errors.length > 0 && global.webSocketService) {
         global.webSocketService.emitToAdmins('auction:processing_errors', {
           processed: results.processed,
@@ -717,7 +695,7 @@ setInterval(async () => {
     }
   } catch (error) {
     console.error('[Auction System] Critical error in scheduled task:', error);
-    
+
     if (global.webSocketService) {
       global.webSocketService.emitToAdmins('system:critical_error', {
         system: 'auction',
@@ -726,14 +704,14 @@ setInterval(async () => {
       });
     }
   }
-}, 3000); // Check every 3 seconds as backup
+}, 3000);
 
 // Manual auction processing endpoint (admin only)
 app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
-  
+
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
     res.json({
@@ -752,30 +730,30 @@ app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
 app.get('/api/auctions/check/:id', async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
-    
+
     if (!listing || !listing.auction || !listing.auction.isAuction) {
       return res.status(404).json({
         success: false,
         error: 'Auction not found'
       });
     }
-    
+
     const now = new Date();
     const isExpired = now >= listing.auction.endTime;
     const needsProcessing = isExpired && listing.auction.status === 'active';
-    
+
     if (needsProcessing) {
       console.log(`[Auction] Frontend triggered check for expired auction ${listing._id}`);
-      
+
       AuctionSettlementService.processEndedAuction(listing._id)
-        .then(result => {
+        .then(() => {
           console.log(`[Auction] Frontend-triggered processing completed for ${listing._id}`);
         })
-        .catch(err => {
+        .catch((err) => {
           console.error(`[Auction] Frontend-triggered processing failed for ${listing._id}:`, err);
         });
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -982,7 +960,7 @@ app.use((req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
 });
 
-// Initialize tier system on startup
+// Initialize systems on startup
 async function initializeTierSystem() {
   try {
     const TIER_CONFIG = require('./config/tierConfig');
@@ -995,7 +973,6 @@ async function initializeTierSystem() {
   }
 }
 
-// Initialize notification system on startup
 async function initializeNotificationSystem() {
   try {
     const cutoffDate = new Date();
@@ -1007,7 +984,6 @@ async function initializeNotificationSystem() {
   }
 }
 
-// Initialize verification system on startup
 async function initializeVerificationSystem() {
   try {
     const fs = require('fs').promises;
@@ -1053,20 +1029,18 @@ async function initializeVerificationSystem() {
   }
 }
 
-// Initialize report & ban system on startup
 async function initializeReportSystem() {
   try {
     const Report = require('./models/Report');
     const Ban = require('./models/Ban');
-    
+
     const pendingReports = await Report.countDocuments({ status: 'pending' });
     const activeBans = await Ban.countDocuments({ active: true });
-    
+
     console.log(`✅ Report & Ban system initialized`);
     console.log(`   - ${pendingReports} pending reports`);
     console.log(`   - ${activeBans} active bans`);
-    
-    // Check and expire old bans
+
     const expiredCount = await Ban.checkAndExpireBans();
     if (expiredCount > 0) {
       console.log(`   - Expired ${expiredCount} bans`);
@@ -1076,28 +1050,24 @@ async function initializeReportSystem() {
   }
 }
 
-// Initialize auction system on startup
 async function initializeAuctionSystem() {
   try {
-    // Count active auctions
-    const activeAuctions = await Listing.countDocuments({ 
+    const activeAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'active'
     });
-    
-    // Check for any expired auctions that need processing
+
     const now = new Date();
     const expiredAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
       'auction.status': 'active',
       'auction.endTime': { $lte: now }
     });
-    
+
     console.log(`✅ Auction system initialized`);
     console.log(`   - ${activeAuctions} active auctions`);
     console.log(`   - ${expiredAuctions} expired auctions to process`);
-    
-    // Process any expired auctions on startup
+
     if (expiredAuctions > 0) {
       console.log(`   - Processing ${expiredAuctions} expired auctions...`);
       const results = await AuctionSettlementService.processExpiredAuctions();
@@ -1108,10 +1078,8 @@ async function initializeAuctionSystem() {
   }
 }
 
-// Initialize storage system on startup
 async function initializeStorageSystem() {
   try {
-    // Add storage field to User schema if it doesn't exist
     const usersWithoutStorage = await User.countDocuments({ storage: { $exists: false } });
     if (usersWithoutStorage > 0) {
       console.log(`   - Adding storage field to ${usersWithoutStorage} users...`);
@@ -1120,7 +1088,7 @@ async function initializeStorageSystem() {
         { $set: { storage: {}, uiPreferences: {} } }
       );
     }
-    
+
     console.log(`✅ Storage system initialized`);
     console.log(`   - Backend storage endpoints ready`);
     console.log(`   - UI preferences endpoints ready`);
@@ -1130,15 +1098,13 @@ async function initializeStorageSystem() {
 }
 
 // Start server - UPDATED TO LISTEN ON ALL INTERFACES
-const HOST = '0.0.0.0'; // Listen on all network interfaces
+const HOST = '0.0.0.0';
 const os = require('os');
 
-// Function to get network IP
 function getNetworkIP() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
-      // Skip internal and non-IPv4 addresses
       if (!iface.internal && iface.family === 'IPv4') {
         return iface.address;
       }
@@ -1149,7 +1115,7 @@ function getNetworkIP() {
 
 server.listen(PORT, HOST, async () => {
   const networkIP = getNetworkIP();
-  
+
   console.log(`🚀 Backend server running on:`);
   console.log(`   - Local: http://localhost:${PORT}`);
   console.log(`   - Network: http://${networkIP}:${PORT}`);
@@ -1163,13 +1129,13 @@ server.listen(PORT, HOST, async () => {
 
   await initializeVerificationSystem();
   console.log(`✔️  Verification system ready`);
-  
+
   await initializeReportSystem();
   console.log(`🛡️ Report & Ban system ready`);
-  
+
   await initializeAuctionSystem();
   console.log(`🔨 Auction system ready - instant processing enabled (1s checks)`);
-  
+
   await initializeStorageSystem();
   console.log(`💾 Storage system ready - backend storage enabled`);
 
