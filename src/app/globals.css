@@ -224,11 +224,35 @@ html, body, #__next {
 }
 
 /* Safe-area utilities */
-.safe-top { padding-top: env(safe-area-inset-top); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-.safe-inset { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+.safe-top { 
+  padding-top: env(safe-area-inset-top); 
+}
+.safe-bottom { 
+  padding-bottom: env(safe-area-inset-bottom); 
+}
+.safe-inset { 
+  padding-top: env(safe-area-inset-top); 
+  padding-bottom: env(safe-area-inset-bottom); 
+}
 
 /* Prevent body overscroll revealing background on iOS */
 @media (max-width: 767px) {
-  body { overscroll-behavior: none; }
+  body { 
+    overscroll-behavior: none; 
+  }
+  
+  /* Ensure mobile messages take full height */
+  .mobile-messages-container {
+    height: 100vh;
+    height: 100dvh;
+  }
+  
+  /* Mobile message header styling */
+  .mobile-message-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: #1a1a1a;
+    border-bottom: 1px solid rgba(55, 65, 81, 1);
+  }
 }

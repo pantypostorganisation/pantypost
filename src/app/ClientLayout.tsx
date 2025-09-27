@@ -31,6 +31,7 @@ export default function ClientLayout({
   children: React.ReactNode;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const pathname = usePathname();
 
   const hideHeaderRoutes = [
@@ -42,12 +43,27 @@ export default function ClientLayout({
     '/reset-password-final'
   ];
 
+  // Check if we're on a messages page on mobile
+  const isMessagesPage = pathname === '/buyers/messages' || pathname === '/sellers/messages';
+  
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
-  });
+  }) || (isMessagesPage && isMobile); // Hide header on mobile messages pages
 
   useEffect(() => {
     setMounted(true);
+    
+    // Check if mobile
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+    };
   }, []);
 
   useEffect(() => {
@@ -69,9 +85,11 @@ export default function ClientLayout({
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log('Current pathname:', pathname);
+      console.log('Is mobile:', isMobile);
+      console.log('Is messages page:', isMessagesPage);
       console.log('Should hide header:', shouldHideHeader);
     }
-  }, [pathname, shouldHideHeader]);
+  }, [pathname, shouldHideHeader, isMobile, isMessagesPage]);
 
   if (!mounted) {
     return <LoadingFallback />;

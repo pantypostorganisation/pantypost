@@ -75,6 +75,7 @@ export default function BuyerMessagesPage() {
     setShowPayModal,
     payingRequest,
     setPayingRequest,
+    handleConfirmPay,
     
     // Tips
     showTipModal,
@@ -101,7 +102,6 @@ export default function BuyerMessagesPage() {
     handleEditRequest,
     handleEditSubmit,
     handlePayNow,
-    handleConfirmPay,
     handleImageSelect,
     handleMessageVisible,
     handleEmojiClick,
@@ -127,6 +127,11 @@ export default function BuyerMessagesPage() {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Force re-render when mobile state changes
+  useEffect(() => {
+    console.log('Mobile state changed:', isMobile);
+  }, [isMobile]);
 
   // Ensure wallet is in the correct format
   const walletData = wallet || {};
@@ -196,9 +201,9 @@ export default function BuyerMessagesPage() {
         {/* Desktop padding - hide on mobile */}
         <div className="hidden md:block py-3 bg-black"></div>
         
-        {/* Main container - simplified classes */}
-        <div className={`${isMobile ? 'fixed inset-0' : 'h-screen bg-black flex flex-col'}`}>
-          <div className={`${isMobile ? 'w-full h-full' : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg'} bg-[#121212] flex flex-col md:flex-row overflow-hidden`}>
+        {/* Main container - FIXED for mobile */}
+        <div className={`${isMobile ? 'fixed inset-0 pt-0' : 'h-screen bg-black flex flex-col'}`}>
+          <div className={`${isMobile ? 'w-full h-full flex flex-col' : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg'} bg-[#121212] ${isMobile ? '' : 'flex flex-col md:flex-row'} overflow-hidden`}>
             
             {/* Mobile: Only show ThreadsSidebar when no active thread */}
             <div className={`${activeThread && isMobile ? 'hidden' : 'block'} ${isMobile ? 'w-full h-full' : 'w-full md:w-1/3'}`}>
