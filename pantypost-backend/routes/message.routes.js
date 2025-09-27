@@ -39,7 +39,7 @@ router.get('/user-status/:username', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all threads for a user - FIXED to return proper format
+// Get all threads for a user - ENHANCED WITH PROFILE DATA
 router.get('/threads', authMiddleware, async (req, res) => {
   try {
     const username = req.query.username || req.user.username;
@@ -54,6 +54,7 @@ router.get('/threads', authMiddleware, async (req, res) => {
     
     // Group messages by thread
     const threadsMap = {};
+    const participantSet = new Set();
     
     messages.forEach(msg => {
       const threadId = msg.threadId;
@@ -68,6 +69,11 @@ router.get('/threads', authMiddleware, async (req, res) => {
           unreadCount: 0,
           updatedAt: msg.createdAt
         };
+        
+        // Track all participants to fetch their profiles
+        participants.forEach(p => {
+          if (p !== username) participantSet.add(p);
+        });
       }
       
       // Add message to thread
@@ -107,14 +113,36 @@ router.get('/threads', authMiddleware, async (req, res) => {
       }
     });
     
+    // FETCH PROFILES FOR ALL PARTICIPANTS
+    const participantProfiles = {};
+    if (participantSet.size > 0) {
+      const users = await User.find(
+        { username: { $in: Array.from(participantSet) } },
+        'username profilePic isVerified verificationStatus bio tier subscriberCount'
+      );
+      
+      users.forEach(user => {
+        participantProfiles[user.username] = {
+          username: user.username,
+          profilePic: user.profilePic || null,
+          isVerified: user.isVerified || user.verificationStatus === 'verified' || false,
+          bio: user.bio || '',
+          tier: user.tier || 'Tease',
+          subscriberCount: user.subscriberCount || 0
+        };
+      });
+    }
+    
     // Convert to array and sort by last message date
     const threads = Object.values(threadsMap).sort((a, b) => 
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
     
+    // Include participant profiles in response
     res.json({
       success: true,
-      data: threads
+      data: threads,
+      profiles: participantProfiles
     });
   } catch (error) {
     console.error('Get threads error:', error);
@@ -125,7 +153,7 @@ router.get('/threads', authMiddleware, async (req, res) => {
   }
 });
 
-// Get messages for a specific thread - FIXED format
+// Get messages for a specific thread - ENHANCED WITH PROFILES
 router.get('/threads/:threadId', authMiddleware, async (req, res) => {
   try {
     const { threadId } = req.params;
@@ -158,9 +186,29 @@ router.get('/threads/:threadId', authMiddleware, async (req, res) => {
       threadId: msg.threadId
     }));
     
+    // Get profiles for the other participant
+    const otherUsername = user1 === username ? user2 : user1;
+    const otherUser = await User.findOne(
+      { username: otherUsername },
+      'username profilePic isVerified verificationStatus bio tier subscriberCount'
+    );
+    
+    const profiles = {};
+    if (otherUser) {
+      profiles[otherUser.username] = {
+        username: otherUser.username,
+        profilePic: otherUser.profilePic || null,
+        isVerified: otherUser.isVerified || otherUser.verificationStatus === 'verified' || false,
+        bio: otherUser.bio || '',
+        tier: otherUser.tier || 'Tease',
+        subscriberCount: otherUser.subscriberCount || 0
+      };
+    }
+    
     res.json({
       success: true,
-      data: formattedMessages
+      data: formattedMessages,
+      profiles
     });
   } catch (error) {
     console.error('Get thread messages error:', error);
@@ -191,7 +239,7 @@ router.post('/send', authMiddleware, async (req, res) => {
     // Create new message with a UUID
     const messageId = uuidv4();
     const message = new Message({
-      _id: messageId, // Use UUID as _id
+      _id: messageId,
       sender,
       receiver,
       content,

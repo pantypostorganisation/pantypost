@@ -13,11 +13,11 @@ import { useMessages } from '@/context/MessageContext';
 import { WalletContext } from '@/context/WalletContext';
 import { useRequests } from '@/context/RequestContext';
 import { useListings } from '@/context/ListingContext';
-import { getUserProfileData } from '@/utils/profileUtils';
 import { useLocalStorage } from './useLocalStorage';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services';
 import { reportsService } from '@/services/reports.service';
+import { resolveApiUrl } from '@/utils/url';
 import {
   saveRecentEmojis,
   getRecentEmojis,
@@ -53,8 +53,11 @@ export const useBuyerMessages = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  
+  // CRITICAL CHANGE: Get sellerProfiles from MessageContext
   const { 
     messages, 
+    sellerProfiles: contextProfiles, // GET PROFILES FROM CONTEXT
     sendMessage, 
     blockedUsers, 
     reportedUsers, 
@@ -64,7 +67,8 @@ export const useBuyerMessages = () => {
     markMessagesAsRead,
     refreshMessages,
     isLoading: messagesLoading,
-    isInitialized
+    isInitialized,
+    getSellerProfile // GET THIS FUNCTION TOO
   } = useMessages();
   
   // Use useContext directly to check if wallet context is available
@@ -429,39 +433,33 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user, optimisticMessages, messageUpdateCounter]);
   
-  // Calculate other message data with async profile loading
-  const [sellerProfiles, setSellerProfiles] = useState<{ [seller: string]: { pic: string | null, verified: boolean } }>({});
-  
-  useEffect(() => {
-    const loadSellerProfiles = async () => {
-      const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
-      
-      for (const seller of Object.keys(threads)) {
-        try {
-          // Get seller profile using the new async utility
-          const profileData = await getUserProfileData(seller);
-          const sellerUser = users?.[seller];
-          
-          profiles[seller] = {
-            pic: profileData?.profilePic || null,
-            verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
-          };
-        } catch (error) {
-          console.error(`Error loading profile for ${seller}:`, error);
-          profiles[seller] = {
-            pic: null,
-            verified: false
-          };
-        }
-      }
-      
-      setSellerProfiles(profiles);
-    };
+  // CRITICAL FIX: Create sellerProfiles with resolved URLs directly from context
+  const sellerProfiles = useMemo(() => {
+    const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
     
-    if (Object.keys(threads).length > 0) {
-      loadSellerProfiles();
-    }
-  }, [threads, users]);
+    Object.keys(threads).forEach(seller => {
+      // Try to get profile from context using the function or direct access
+      const profile = getSellerProfile ? getSellerProfile(seller) : contextProfiles?.[seller];
+      
+      if (profile) {
+        // CRITICAL: Resolve the profile pic URL here
+        profiles[seller] = {
+          pic: resolveApiUrl(profile.profilePic), // RESOLVE THE URL HERE
+          verified: profile.isVerified || false
+        };
+      } else {
+        // Fallback if no profile data
+        profiles[seller] = {
+          pic: null,
+          verified: false
+        };
+      }
+    });
+    
+    console.log('[useBuyerMessages] Seller profiles resolved:', Object.keys(profiles).length);
+    
+    return profiles;
+  }, [threads, contextProfiles, getSellerProfile]);
   
   const { unreadCounts, lastMessages, totalUnreadCount } = useMemo(() => {
     const unreadCounts: { [seller: string]: number } = {};
@@ -589,36 +587,6 @@ export const useBuyerMessages = () => {
     }
   }, [activeThread, threads, messageUpdateCounter]);
   
-  // Listen for storage changes to update profiles in real-time
-  useEffect(() => {
-    const handleStorageChange = async (e: StorageEvent) => {
-      if (e.key === 'user_profiles' && e.newValue) {
-        // Re-load seller profiles when storage changes
-        const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
-        
-        for (const seller of Object.keys(threads)) {
-          try {
-            const profileData = await getUserProfileData(seller);
-            const sellerUser = users?.[seller];
-            
-            profiles[seller] = {
-              pic: profileData?.profilePic || null,
-              verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
-            };
-          } catch (error) {
-            console.error(`Error loading profile for ${seller}:`, error);
-            profiles[seller] = sellerProfiles[seller] || { pic: null, verified: false };
-          }
-        }
-        
-        setSellerProfiles(profiles);
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [threads, users, sellerProfiles]);
-  
   // OPTIMISTIC: Handle sending reply with instant UI update
   const handleReply = useCallback(async () => {
     if (!activeThread || (!replyMessage.trim() && !selectedImage) || !user) return;
@@ -710,29 +678,29 @@ export const useBuyerMessages = () => {
   }, [activeThread, user, blockedUsers, unblockUser, blockUser]);
   
   const handleReport = useCallback(async () => {
-   if (!activeThread || !user) return;
-   
-   // Use the reports service to send to MongoDB
-   const reportData = {
-     reportedUser: activeThread,
-     reportType: 'harassment' as const,
-     description: `User reported from messages by ${user.username}`,
-     severity: 'medium' as const,
-     relatedMessageId: threads[activeThread]?.[threads[activeThread].length - 1]?.id
-   };
-   
-   try {
-     const response = await reportsService.submitReport(reportData);
-     if (response.success) {
-       // Also update local state for UI
-       reportUser(user.username, activeThread);
-     }
-   } catch (error) {
-     console.error('Failed to submit report:', error);
-     // Fallback to local report
-     reportUser(user.username, activeThread);
-   }
- }, [activeThread, user, reportUser, threads]);
+    if (!activeThread || !user) return;
+    
+    // Use the reports service to send to MongoDB
+    const reportData = {
+      reportedUser: activeThread,
+      reportType: 'harassment' as const,
+      description: `User reported from messages by ${user.username}`,
+      severity: 'medium' as const,
+      relatedMessageId: threads[activeThread]?.[threads[activeThread].length - 1]?.id
+    };
+    
+    try {
+      const response = await reportsService.submitReport(reportData);
+      if (response.success) {
+        // Also update local state for UI
+        reportUser(user.username, activeThread);
+      }
+    } catch (error) {
+      console.error('Failed to submit report:', error);
+      // Fallback to local report
+      reportUser(user.username, activeThread);
+    }
+  }, [activeThread, user, reportUser, threads]);
   
   // FIXED: Handle accepting custom request (by buyer when seller edits)
   const handleAccept = useCallback(async (request: any) => {
@@ -899,7 +867,7 @@ export const useBuyerMessages = () => {
     // Send update message optimistically
     const tempId = uuidv4();
     const threadId = getConversationKey(user.username, activeThread);
-    const updateMessage = `📝 Updated custom request: ${editTitle} - $${editPrice}`;
+    const updateMessage = `📝 Updated custom request: ${editTitle} - ${editPrice}`;
     
     const optimisticMsg: OptimisticMessage = {
       id: tempId,
@@ -1020,7 +988,7 @@ export const useBuyerMessages = () => {
       });
       
       if (currentBalance < markupPrice) {
-        alert(`Insufficient balance. You have $${currentBalance.toFixed(2)} but need $${markupPrice.toFixed(2)}.`);
+        alert(`Insufficient balance. You have ${currentBalance.toFixed(2)} but need ${markupPrice.toFixed(2)}.`);
         setIsProcessingPayment(false);
         return;
       }
@@ -1053,7 +1021,7 @@ export const useBuyerMessages = () => {
         // Send payment confirmation message optimistically
         const tempId = uuidv4();
         const threadId = getConversationKey(user.username, payingRequest.seller);
-        const paymentMessage = `💰 Paid for custom request: ${payingRequest.title} - $${payingRequest.price}`;
+        const paymentMessage = `💰 Paid for custom request: ${payingRequest.title} - ${payingRequest.price}`;
         
         const optimisticMsg: OptimisticMessage = {
           id: tempId,
@@ -1163,7 +1131,7 @@ export const useBuyerMessages = () => {
     if (!isNaN(amount) && amount > 0) {
       const tempId = uuidv4();
       const threadId = getConversationKey(user.username, activeThread);
-      const tipMessage = `💝 I just sent you a $${amount.toFixed(2)} tip! Thank you!`;
+      const tipMessage = `💝 I just sent you a ${amount.toFixed(2)} tip! Thank you!`;
       
       const optimisticMsg: OptimisticMessage = {
         id: tempId,
@@ -1235,7 +1203,7 @@ export const useBuyerMessages = () => {
     // Send custom request message optimistically
     const tempId = uuidv4();
     const threadId = getConversationKey(user.username, activeThread);
-    const requestMessage = `📦 Custom Request: ${customRequestForm.title} - $${customRequestForm.price}`;
+    const requestMessage = `📦 Custom Request: ${customRequestForm.title} - ${customRequestForm.price}`;
     
     const optimisticMsg: OptimisticMessage = {
       id: tempId,
@@ -1428,7 +1396,7 @@ export const useBuyerMessages = () => {
     unreadCounts,
     uiUnreadCounts,
     lastMessages,
-    sellerProfiles,
+    sellerProfiles, // THIS NOW HAS RESOLVED URLS!
     totalUnreadCount,
     activeThread,
     setActiveThread,
