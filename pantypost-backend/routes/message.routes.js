@@ -39,7 +39,7 @@ router.get('/user-status/:username', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all threads for a user - ENHANCED to include seller profiles
+// Get all threads for a user - FIXED to return proper format
 router.get('/threads', authMiddleware, async (req, res) => {
   try {
     const username = req.query.username || req.user.username;
@@ -54,7 +54,6 @@ router.get('/threads', authMiddleware, async (req, res) => {
     
     // Group messages by thread
     const threadsMap = {};
-    const participantUsernames = new Set();
     
     messages.forEach(msg => {
       const threadId = msg.threadId;
@@ -69,13 +68,6 @@ router.get('/threads', authMiddleware, async (req, res) => {
           unreadCount: 0,
           updatedAt: msg.createdAt
         };
-        
-        // Collect all participant usernames
-        participants.forEach(p => {
-          if (p !== username) {
-            participantUsernames.add(p);
-          }
-        });
       }
       
       // Add message to thread
@@ -115,21 +107,6 @@ router.get('/threads', authMiddleware, async (req, res) => {
       }
     });
     
-    // Fetch profile data for all participants
-    const sellerProfiles = {};
-    if (participantUsernames.size > 0) {
-      const users = await User.find({
-        username: { $in: Array.from(participantUsernames) }
-      }).select('username profilePic isVerified verificationStatus');
-      
-      users.forEach(user => {
-        sellerProfiles[user.username] = {
-          pic: user.profilePic || null,
-          verified: user.isVerified || user.verificationStatus === 'verified' || false
-        };
-      });
-    }
-    
     // Convert to array and sort by last message date
     const threads = Object.values(threadsMap).sort((a, b) => 
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -137,10 +114,7 @@ router.get('/threads', authMiddleware, async (req, res) => {
     
     res.json({
       success: true,
-      data: {
-        threads,
-        sellerProfiles
-      }
+      data: threads
     });
   } catch (error) {
     console.error('Get threads error:', error);
@@ -184,22 +158,9 @@ router.get('/threads/:threadId', authMiddleware, async (req, res) => {
       threadId: msg.threadId
     }));
     
-    // Get profile data for the other participant
-    const otherUser = username === user1 ? user2 : user1;
-    const userProfile = await User.findOne({ username: otherUser })
-      .select('username profilePic isVerified verificationStatus');
-    
-    const profileData = userProfile ? {
-      pic: userProfile.profilePic || null,
-      verified: userProfile.isVerified || userProfile.verificationStatus === 'verified' || false
-    } : null;
-    
     res.json({
       success: true,
-      data: {
-        messages: formattedMessages,
-        sellerProfile: profileData
-      }
+      data: formattedMessages
     });
   } catch (error) {
     console.error('Get thread messages error:', error);
