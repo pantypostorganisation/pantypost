@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
+import { resolveApiUrl } from '@/utils/url'; // ADD THIS IMPORT
 
 // Types
 type Message = {
@@ -169,7 +170,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
               profiles[username] = {
                 username: profile.username || username,
-                profilePic: profile.profilePic || null,
+                profilePic: resolveApiUrl(profile.profilePic), // FIX: RESOLVE THE URL HERE
                 isVerified: profile.isVerified || false,
                 bio: profile.bio || '',
                 tier: profile.tier || 'Tease',
@@ -694,7 +695,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
             profiles[username] = {
               username: profile.username || username,
-              profilePic: profile.profilePic || null,
+              profilePic: resolveApiUrl(profile.profilePic), // FIX: RESOLVE THE URL HERE TOO
               isVerified: profile.isVerified || false,
               bio: profile.bio || '',
               tier: profile.tier || 'Tease',

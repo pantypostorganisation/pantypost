@@ -17,7 +17,6 @@ import { useLocalStorage } from './useLocalStorage';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services';
 import { reportsService } from '@/services/reports.service';
-import { resolveApiUrl } from '@/utils/url';
 import {
   saveRecentEmojis,
   getRecentEmojis,
@@ -433,18 +432,17 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user, optimisticMessages, messageUpdateCounter]);
   
-  // CRITICAL FIX: Create sellerProfiles with resolved URLs directly from context
+  // SIMPLIFIED FIX: Use profiles directly from context since they're already resolved
   const sellerProfiles = useMemo(() => {
     const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
     
     Object.keys(threads).forEach(seller => {
-      // Try to get profile from context using the function or direct access
+      // Get profile from context (already has resolved URLs)
       const profile = getSellerProfile ? getSellerProfile(seller) : contextProfiles?.[seller];
       
       if (profile) {
-        // CRITICAL: Resolve the profile pic URL here
         profiles[seller] = {
-          pic: resolveApiUrl(profile.profilePic), // RESOLVE THE URL HERE
+          pic: profile.profilePic, // Already resolved in MessageContext
           verified: profile.isVerified || false
         };
       } else {
@@ -456,7 +454,7 @@ export const useBuyerMessages = () => {
       }
     });
     
-    console.log('[useBuyerMessages] Seller profiles resolved:', Object.keys(profiles).length);
+    console.log('[useBuyerMessages] Seller profiles ready:', Object.keys(profiles).length);
     
     return profiles;
   }, [threads, contextProfiles, getSellerProfile]);
@@ -867,7 +865,7 @@ export const useBuyerMessages = () => {
     // Send update message optimistically
     const tempId = uuidv4();
     const threadId = getConversationKey(user.username, activeThread);
-    const updateMessage = `📝 Updated custom request: ${editTitle} - ${editPrice}`;
+    const updateMessage = `📝 Updated custom request: ${editTitle} - $${editPrice}`;
     
     const optimisticMsg: OptimisticMessage = {
       id: tempId,
@@ -988,7 +986,7 @@ export const useBuyerMessages = () => {
       });
       
       if (currentBalance < markupPrice) {
-        alert(`Insufficient balance. You have ${currentBalance.toFixed(2)} but need ${markupPrice.toFixed(2)}.`);
+        alert(`Insufficient balance. You have $${currentBalance.toFixed(2)} but need $${markupPrice.toFixed(2)}.`);
         setIsProcessingPayment(false);
         return;
       }
@@ -1021,7 +1019,7 @@ export const useBuyerMessages = () => {
         // Send payment confirmation message optimistically
         const tempId = uuidv4();
         const threadId = getConversationKey(user.username, payingRequest.seller);
-        const paymentMessage = `💰 Paid for custom request: ${payingRequest.title} - ${payingRequest.price}`;
+        const paymentMessage = `💰 Paid for custom request: ${payingRequest.title} - $${payingRequest.price}`;
         
         const optimisticMsg: OptimisticMessage = {
           id: tempId,
@@ -1131,7 +1129,7 @@ export const useBuyerMessages = () => {
     if (!isNaN(amount) && amount > 0) {
       const tempId = uuidv4();
       const threadId = getConversationKey(user.username, activeThread);
-      const tipMessage = `💝 I just sent you a ${amount.toFixed(2)} tip! Thank you!`;
+      const tipMessage = `💝 I just sent you a $${amount.toFixed(2)} tip! Thank you!`;
       
       const optimisticMsg: OptimisticMessage = {
         id: tempId,
@@ -1203,7 +1201,7 @@ export const useBuyerMessages = () => {
     // Send custom request message optimistically
     const tempId = uuidv4();
     const threadId = getConversationKey(user.username, activeThread);
-    const requestMessage = `📦 Custom Request: ${customRequestForm.title} - ${customRequestForm.price}`;
+    const requestMessage = `📦 Custom Request: ${customRequestForm.title} - $${customRequestForm.price}`;
     
     const optimisticMsg: OptimisticMessage = {
       id: tempId,
@@ -1396,7 +1394,7 @@ export const useBuyerMessages = () => {
     unreadCounts,
     uiUnreadCounts,
     lastMessages,
-    sellerProfiles, // THIS NOW HAS RESOLVED URLS!
+    sellerProfiles, // THIS NOW HAS RESOLVED URLS FROM CONTEXT!
     totalUnreadCount,
     activeThread,
     setActiveThread,
