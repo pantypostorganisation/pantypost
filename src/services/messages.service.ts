@@ -196,19 +196,39 @@ export class MessagesService {
         
       const response = await apiCall<any>(url);
       
-      // Handle the new response format with profiles
-      if (response.success && response.data) {
-        const responseData = response.data as any;
-        return {
-          success: true,
-          data: responseData.data || responseData, // Handle both formats
-          profiles: responseData.profiles || {} // Extract profiles
-        };
+      // FIX: The backend already returns { success: true, data: threads, profiles: {...} }
+      // We should pass this through directly, not wrap it again
+      if (response.success) {
+        // The response.data contains the whole backend response
+        // Check if it has the expected structure
+        if (response.data && 'data' in response.data && 'profiles' in response.data) {
+          // Backend returned the new format with profiles
+          return {
+            success: true,
+            data: response.data.data,
+            profiles: response.data.profiles
+          };
+        } else if (response.data && Array.isArray(response.data)) {
+          // Legacy format - just threads array
+          return {
+            success: true,
+            data: response.data,
+            profiles: {}
+          };
+        } else {
+          // Unexpected format
+          console.warn('[MessagesService] Unexpected response format:', response);
+          return {
+            success: true,
+            data: [],
+            profiles: {}
+          };
+        }
       }
       
       return {
-        success: response.success,
-        error: response.error,
+        success: false,
+        error: response.error || { message: 'Failed to get threads' },
       };
     } catch (error) {
       console.error('Get threads error:', error);
@@ -241,14 +261,31 @@ export class MessagesService {
         buildApiUrl(API_ENDPOINTS.MESSAGES.THREAD, { threadId })
       );
       
-      // Handle the new response format with profiles
-      if (response.success && response.data) {
-        const responseData = response.data as any;
-        return {
-          success: true,
-          data: responseData.data || responseData, // Handle both formats
-          profiles: responseData.profiles || {} // Extract profiles if available
-        };
+      // FIX: Handle the response format correctly
+      if (response.success) {
+        if (response.data && 'data' in response.data && 'profiles' in response.data) {
+          // Backend returned the new format with profiles
+          return {
+            success: true,
+            data: response.data.data,
+            profiles: response.data.profiles
+          };
+        } else if (response.data && Array.isArray(response.data)) {
+          // Legacy format - just messages array
+          return {
+            success: true,
+            data: response.data,
+            profiles: {}
+          };
+        } else {
+          // Unexpected format
+          console.warn('[MessagesService] Unexpected thread response format:', response);
+          return {
+            success: true,
+            data: [],
+            profiles: {}
+          };
+        }
       }
       
       return response;
