@@ -437,13 +437,13 @@ export const useBuyerMessages = () => {
     const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
     
     Object.keys(threads).forEach(seller => {
-      // Get profile from context (already has resolved URLs)
+      // Get profile from context (already has resolved URLs and correct property names)
       const profile = getSellerProfile ? getSellerProfile(seller) : contextProfiles?.[seller];
       
       if (profile) {
         profiles[seller] = {
-          pic: profile.profilePic, // Already resolved in MessageContext
-          verified: profile.isVerified || false
+          pic: profile.pic,  // FIX: Use 'pic' not 'profilePic'
+          verified: profile.verified || false  // FIX: Use 'verified' not 'isVerified'
         };
       } else {
         // Fallback if no profile data

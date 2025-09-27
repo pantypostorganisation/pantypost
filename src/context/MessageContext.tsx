@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
-import { resolveApiUrl } from '@/utils/url'; // ADD THIS IMPORT
+import { resolveApiUrl } from '@/utils/url';
 
 // Types
 type Message = {
@@ -57,14 +57,10 @@ type MessageOptions = {
   _optimisticId?: string;
 };
 
-// New type for seller profiles
+// FIXED: This is the proper type for seller profiles that components expect
 type SellerProfile = {
-  username: string;
-  profilePic: string | null;
-  isVerified: boolean;
-  bio: string;
-  tier: string;
-  subscriberCount: number;
+  pic: string | null;  // Components expect 'pic', not 'profilePic'
+  verified: boolean;
 };
 
 type MessageContextType = {
@@ -140,7 +136,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     messagesService.initialize();
   }, []);
 
-  // Load initial data from API with profiles
+  // Load initial data from API with profiles - FIXED
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
@@ -165,16 +161,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           const processedMessages: { [key: string]: Message[] } = {};
           const profiles: { [username: string]: SellerProfile } = {};
           
-          // Extract profiles from response
+          // FIXED: Map backend profilePic to frontend pic
           if ((threadsResponse as any).profiles) {
             Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
               profiles[username] = {
-                username: profile.username || username,
-                profilePic: resolveApiUrl(profile.profilePic), // FIX: RESOLVE THE URL HERE
-                isVerified: profile.isVerified || false,
-                bio: profile.bio || '',
-                tier: profile.tier || 'Tease',
-                subscriberCount: profile.subscriberCount || 0
+                pic: profile.profilePic ? resolveApiUrl(profile.profilePic) : null,
+                verified: profile.isVerified || false
               };
             });
           }
@@ -690,16 +682,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         const processedMessages: { [key: string]: Message[] } = {};
         const profiles: { [username: string]: SellerProfile } = {};
         
-        // Extract profiles from response
+        // FIXED: Map backend profilePic to frontend pic
         if ((threadsResponse as any).profiles) {
           Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
             profiles[username] = {
-              username: profile.username || username,
-              profilePic: resolveApiUrl(profile.profilePic), // FIX: RESOLVE THE URL HERE TOO
-              isVerified: profile.isVerified || false,
-              bio: profile.bio || '',
-              tier: profile.tier || 'Tease',
-              subscriberCount: profile.subscriberCount || 0
+              pic: profile.profilePic ? resolveApiUrl(profile.profilePic) : null,
+              verified: profile.isVerified || false
             };
           });
         }
