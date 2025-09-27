@@ -161,11 +161,23 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           const processedMessages: { [key: string]: Message[] } = {};
           const profiles: { [username: string]: SellerProfile } = {};
           
-          // FIXED: Map backend profilePic to frontend pic
+          // FIXED: Map backend profilePic to frontend pic, handling absolute URLs
           if ((threadsResponse as any).profiles) {
             Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
+              // Check if profilePic is already an absolute URL
+              const profilePicUrl = profile.profilePic;
+              let resolvedUrl = null;
+              
+              if (profilePicUrl) {
+                // If it's already an absolute URL (starts with http), use it as-is
+                // Otherwise, resolve it
+                resolvedUrl = profilePicUrl.startsWith('http') 
+                  ? profilePicUrl 
+                  : resolveApiUrl(profilePicUrl);
+              }
+              
               profiles[username] = {
-                pic: profile.profilePic ? resolveApiUrl(profile.profilePic) : null,
+                pic: resolvedUrl,
                 verified: profile.isVerified || false
               };
             });
@@ -682,11 +694,23 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         const processedMessages: { [key: string]: Message[] } = {};
         const profiles: { [username: string]: SellerProfile } = {};
         
-        // FIXED: Map backend profilePic to frontend pic
+        // FIXED: Map backend profilePic to frontend pic, handling absolute URLs
         if ((threadsResponse as any).profiles) {
           Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
+            // Check if profilePic is already an absolute URL
+            const profilePicUrl = profile.profilePic;
+            let resolvedUrl = null;
+            
+            if (profilePicUrl) {
+              // If it's already an absolute URL (starts with http), use it as-is
+              // Otherwise, resolve it
+              resolvedUrl = profilePicUrl.startsWith('http') 
+                ? profilePicUrl 
+                : resolveApiUrl(profilePicUrl);
+            }
+            
             profiles[username] = {
-              pic: profile.profilePic ? resolveApiUrl(profile.profilePic) : null,
+              pic: resolvedUrl,
               verified: profile.isVerified || false
             };
           });
