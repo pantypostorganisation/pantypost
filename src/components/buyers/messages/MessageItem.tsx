@@ -10,6 +10,7 @@ import {
   sanitizeCurrency, 
   sanitizeNumber 
 } from '@/utils/security/sanitization';
+import { resolveApiUrl } from '@/utils/url';
 import {
   CheckCheck,
   Clock,
@@ -147,6 +148,14 @@ export default function MessageItem({
   const sanitizedSender = sanitizeStrict(msg.sender || '');
   const sanitizedActiveThread = sanitizeStrict(activeThread || '');
 
+  // FIX: Resolve the image URL if it exists
+  const resolvedImageUrl = msg.type === 'image' && msg.meta?.imageUrl 
+    ? resolveApiUrl(msg.meta.imageUrl)
+    : null;
+
+  // FIX: Also resolve custom request icon URL - provide fallback if null
+  const resolvedCustomRequestIcon = resolveApiUrl('/Custom_Request_Icon.png') || '/Custom_Request_Icon.png';
+
   return (
     <div ref={messageRef} className={`flex ${isFromMe ? 'justify-end' : 'justify-start'}`}>
       <div className={`rounded-lg p-3 max-w-[75%] ${
@@ -173,17 +182,18 @@ export default function MessageItem({
           )}
         </div>
         
-        {/* Image message */}
-        {msg.type === 'image' && msg.meta?.imageUrl && (
+        {/* Image message - FIXED to use resolved URL */}
+        {msg.type === 'image' && resolvedImageUrl && (
           <div className="mt-1 mb-2">
             <SecureImage
-              src={msg.meta.imageUrl}
+              src={resolvedImageUrl}
               alt="Shared image"
               className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-              onError={() => console.error('Failed to load image')}
+              fallbackSrc="/placeholder-image.png"
+              onError={() => console.warn('Failed to load message image:', resolvedImageUrl)}
               onClick={(e: React.MouseEvent<HTMLImageElement>) => {
                 e.stopPropagation();
-                setPreviewImage(msg.meta?.imageUrl || null);
+                setPreviewImage(resolvedImageUrl);
               }}
             />
             {msg.content && (
@@ -216,7 +226,7 @@ export default function MessageItem({
               <div className="relative mr-2 flex items-center justify-center">
                 <div className="bg-white w-6 h-6 rounded-full absolute"></div>
                 <SecureImage 
-                  src="/Custom_Request_Icon.png" 
+                  src={resolvedCustomRequestIcon}
                   alt="Custom Request" 
                   className="w-8 h-8 relative z-10"
                 />

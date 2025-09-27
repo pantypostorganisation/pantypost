@@ -16,6 +16,7 @@ import {
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { sanitizeSearchQuery } from '@/utils/security/sanitization';
+import { resolveApiUrl } from '@/utils/url';
 
 interface ThreadsSidebarProps {
   threads: { [seller: string]: any[] };
@@ -199,6 +200,9 @@ export default function ThreadsSidebar({
                 const profile = sellerProfiles[seller] || { pic: null, verified: false };
                 const isActive = activeThread === seller;
                 
+                // FIX: Resolve the seller profile picture URL
+                const resolvedProfilePic = resolveApiUrl(profile.pic);
+                
                 return (
                   <div
                     key={seller}
@@ -213,14 +217,14 @@ export default function ThreadsSidebar({
                     )}
                     
                     <div className="flex items-start gap-3">
-                      {/* Avatar */}
+                      {/* Avatar - FIXED to use resolved URL */}
                       <div className="relative flex-shrink-0">
-                        {profile.pic ? (
+                        {resolvedProfilePic ? (
                           <SecureImage
-                            src={profile.pic}
+                            src={resolvedProfilePic}
                             alt={seller}
                             className="w-12 h-12 rounded-full object-cover"
-                            fallbackSrc="/placeholder-avatar.png"
+                            fallbackSrc="/default-avatar.png"
                           />
                         ) : (
                           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
