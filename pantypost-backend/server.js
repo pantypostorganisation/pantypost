@@ -112,7 +112,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 // Ensure preflight requests get CORS headers (and bypass other middleware)
-app.options('*', cors(corsOptions));
+app.options('(.*)', cors(corsOptions));
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
