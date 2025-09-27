@@ -11,7 +11,6 @@ import { z } from 'zod';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
-import { resolveApiUrl } from '@/utils/url';
 
 // Types
 type Message = {
@@ -161,23 +160,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           const processedMessages: { [key: string]: Message[] } = {};
           const profiles: { [username: string]: SellerProfile } = {};
           
-          // FIXED: Map backend profilePic to frontend pic, handling absolute URLs
+          // FIX: Store raw profilePic URL, don't resolve it here
           if ((threadsResponse as any).profiles) {
             Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
-              // Check if profilePic is already an absolute URL
-              const profilePicUrl = profile.profilePic;
-              let resolvedUrl = null;
-              
-              if (profilePicUrl) {
-                // If it's already an absolute URL (starts with http), use it as-is
-                // Otherwise, resolve it
-                resolvedUrl = profilePicUrl.startsWith('http') 
-                  ? profilePicUrl 
-                  : resolveApiUrl(profilePicUrl);
-              }
-              
               profiles[username] = {
-                pic: resolvedUrl,
+                pic: profile.profilePic || null,  // Store raw URL, components will resolve it
                 verified: profile.isVerified || false
               };
             });
@@ -694,23 +681,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         const processedMessages: { [key: string]: Message[] } = {};
         const profiles: { [username: string]: SellerProfile } = {};
         
-        // FIXED: Map backend profilePic to frontend pic, handling absolute URLs
+        // FIX: Store raw profilePic URL, don't resolve it here
         if ((threadsResponse as any).profiles) {
           Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
-            // Check if profilePic is already an absolute URL
-            const profilePicUrl = profile.profilePic;
-            let resolvedUrl = null;
-            
-            if (profilePicUrl) {
-              // If it's already an absolute URL (starts with http), use it as-is
-              // Otherwise, resolve it
-              resolvedUrl = profilePicUrl.startsWith('http') 
-                ? profilePicUrl 
-                : resolveApiUrl(profilePicUrl);
-            }
-            
             profiles[username] = {
-              pic: resolvedUrl,
+              pic: profile.profilePic || null,  // Store raw URL, components will resolve it
               verified: profile.isVerified || false
             };
           });
