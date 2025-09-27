@@ -805,17 +805,7 @@ export default function ConversationView(props: ConversationViewProps) {
               title="Attach Image"
             />
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowEmojiPicker(!showEmojiPicker);
-              }}
-              className="md:hidden border-none p-0 bg-transparent focus:outline-none"
-              title="Emoji"
-              aria-label="Emoji"
-            >
-              <Smile size={52} className="text-[#ff950e]" />
-            </button>
+            {/* REMOVED the extra emoji button that was here */}
 
             <img
               src="/Custom_Request_Icon.png"
