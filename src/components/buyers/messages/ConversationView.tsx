@@ -809,8 +809,6 @@ export default function ConversationView(props: ConversationViewProps) {
               title="Attach Image"
             />
 
-            {/* REMOVED the extra emoji button that was here */}
-
             <img
               src="/Custom_Request_Icon.png"
               alt="Custom Request"

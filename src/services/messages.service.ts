@@ -55,8 +55,8 @@ export interface MessageThread {
 
 export interface UserProfile {
   username: string;
-  profilePic: string | null;
-  isVerified: boolean;
+  pic: string | null;  // CHANGED FROM profilePic to pic
+  verified: boolean;    // CHANGED FROM isVerified to verified
   bio?: string;
   tier?: string;
   subscriberCount?: number;
@@ -158,6 +158,49 @@ const reportUserSchema = z.object({
 });
 
 /**
+ * Helper to resolve API URLs
+ */
+const resolveApiUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  
+  // If it's already a full URL, return it
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // If it starts with /uploads/, prepend the API base URL
+  if (url.startsWith('/uploads/')) {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
+    return `${apiBase}${url}`;
+  }
+  
+  // Default placeholder URLs or other cases
+  return url;
+};
+
+/**
+ * Transform backend profile format to frontend format
+ */
+const transformProfile = (backendProfile: any): UserProfile => {
+  if (!backendProfile) {
+    return {
+      username: '',
+      pic: null,
+      verified: false
+    };
+  }
+  
+  return {
+    username: backendProfile.username || '',
+    pic: resolveApiUrl(backendProfile.profilePic), // Map profilePic to pic AND resolve URL
+    verified: backendProfile.isVerified || backendProfile.verificationStatus === 'verified' || false,
+    bio: backendProfile.bio || '',
+    tier: backendProfile.tier || 'Tease',
+    subscriberCount: backendProfile.subscriberCount || 0
+  };
+};
+
+/**
  * Messages Service
  * Handles all messaging operations with backend API only
  */
@@ -196,17 +239,21 @@ export class MessagesService {
         
       const response = await apiCall<any>(url);
       
-      // FIX: The backend already returns { success: true, data: threads, profiles: {...} }
-      // We should pass this through directly, not wrap it again
       if (response.success) {
-        // The response.data contains the whole backend response
-        // Check if it has the expected structure
         if (response.data && 'data' in response.data && 'profiles' in response.data) {
-          // Backend returned the new format with profiles
+          // Transform profiles to expected format
+          const transformedProfiles: { [username: string]: UserProfile } = {};
+          
+          if (response.data.profiles) {
+            Object.entries(response.data.profiles).forEach(([username, profile]) => {
+              transformedProfiles[username] = transformProfile(profile);
+            });
+          }
+          
           return {
             success: true,
             data: response.data.data,
-            profiles: response.data.profiles
+            profiles: transformedProfiles
           };
         } else if (response.data && Array.isArray(response.data)) {
           // Legacy format - just threads array
@@ -216,7 +263,6 @@ export class MessagesService {
             profiles: {}
           };
         } else {
-          // Unexpected format
           console.warn('[MessagesService] Unexpected response format:', response);
           return {
             success: true,
@@ -261,14 +307,21 @@ export class MessagesService {
         buildApiUrl(API_ENDPOINTS.MESSAGES.THREAD, { threadId })
       );
       
-      // FIX: Handle the response format correctly
       if (response.success) {
         if (response.data && 'data' in response.data && 'profiles' in response.data) {
-          // Backend returned the new format with profiles
+          // Transform profiles
+          const transformedProfiles: { [username: string]: UserProfile } = {};
+          
+          if (response.data.profiles) {
+            Object.entries(response.data.profiles).forEach(([username, profile]) => {
+              transformedProfiles[username] = transformProfile(profile);
+            });
+          }
+          
           return {
             success: true,
             data: response.data.data,
-            profiles: response.data.profiles
+            profiles: transformedProfiles
           };
         } else if (response.data && Array.isArray(response.data)) {
           // Legacy format - just messages array
@@ -278,7 +331,6 @@ export class MessagesService {
             profiles: {}
           };
         } else {
-          // Unexpected format
           console.warn('[MessagesService] Unexpected thread response format:', response);
           return {
             success: true,

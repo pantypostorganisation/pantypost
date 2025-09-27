@@ -1,11 +1,43 @@
 // src/utils/url.ts
 
 /**
+ * Resolve API URLs for images and resources
+ */
+export const resolveApiUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  
+  // If it's already a full URL, return it
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // If it's a placeholder URL, return it as is
+  if (url.startsWith('https://via.placeholder.com')) {
+    return url;
+  }
+  
+  // If it starts with /uploads/, prepend the API base URL
+  if (url.startsWith('/uploads/')) {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
+    return `${apiBase}${url}`;
+  }
+  
+  // For any other relative path, prepend the API base
+  if (url.startsWith('/')) {
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
+    return `${apiBase}${url}`;
+  }
+  
+  // Return as is for other cases
+  return url;
+};
+
+/**
  * Resolve relative file paths (e.g., "/uploads/xyz.jpg") to an absolute backend URL.
  * This assumes NEXT_PUBLIC_API_BASE_URL looks like "http://localhost:5000/api" in dev
  * and strips the trailing "/api" for static files.
  */
-export function resolveApiUrl(path?: string | null): string | null {
+export function resolveApiUrlLegacy(path?: string | null): string | null {
   if (!path) return null;
 
   // Already absolute http(s)
