@@ -56,9 +56,9 @@ type MessageOptions = {
   _optimisticId?: string;
 };
 
-// FIXED: This is the proper type for seller profiles that components expect
+// The shape components expect
 type SellerProfile = {
-  pic: string | null;  // Components expect 'pic', not 'profilePic'
+  pic: string | null;
   verified: boolean;
 };
 
@@ -135,7 +135,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     messagesService.initialize();
   }, []);
 
-  // Load initial data from API with profiles - FIXED
+  // Load initial data from API with profiles
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
@@ -143,12 +143,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         setIsInitialized(true);
         return;
       }
-      
+
       try {
         setIsLoading(true);
         console.log('[MessageContext] Loading initial data...');
 
-        // Load all data from API through the service
         const [threadsResponse, blockedResponse, notificationsResponse] = await Promise.all([
           messagesService.getThreads(''),
           messagesService.getBlockedUsers(),
@@ -159,39 +158,35 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (threadsResponse.success && threadsResponse.data) {
           const processedMessages: { [key: string]: Message[] } = {};
           const profiles: { [username: string]: SellerProfile } = {};
-          
-          // FIX: Use the actual username from the profile object as the key
+
+          // Use actual username as key; store RAW profilePic (not resolved)
           if ((threadsResponse as any).profiles) {
             Object.values((threadsResponse as any).profiles).forEach((profile: any) => {
-              // Extract the username from the profile object itself
               const username = profile?.username || profile?.user?.username || profile?.seller || '';
-              
               if (!username) {
                 console.warn('[MessageContext] Profile missing username:', profile);
                 return;
               }
-              
-              // Sanitize the username to match how components look it up
               const key = sanitizeUsername(username) || username;
-              
+
               profiles[key] = {
-                pic: profile.profilePic || null,  // Store raw URL, components will resolve it
+                pic: profile.profilePic || null, // store raw; components call resolveApiUrl() once
                 verified: profile.isVerified || false
               };
-              
+
               console.log(`[MessageContext] Stored profile for ${key}:`, profiles[key]);
             });
           }
-          
+
           threadsResponse.data.forEach((thread: ServiceMessageThread) => {
             if (thread.messages && thread.messages.length > 0) {
               processedMessages[thread.id] = thread.messages;
             }
           });
-          
+
           console.log('[MessageContext] Loaded messages for', Object.keys(processedMessages).length, 'conversations');
           console.log('[MessageContext] Loaded profiles for', Object.keys(profiles).length, 'users:', Object.keys(profiles));
-          
+
           setMessages(processedMessages);
           setSellerProfiles(profiles);
         }
@@ -233,7 +228,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         console.log('[MessageContext] Initialization complete');
       }
     };
-    
+
     loadData();
   }, []);
 
@@ -566,7 +561,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (filtered.length === arr.length) return prev;
       return { ...prev, [seller]: filtered };
     });
-    
+
     // Also clear on backend
     messagesService.clearMessageNotifications(seller, buyer);
   }, []);
@@ -608,14 +603,14 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     async (reporter: string, reportee: string) => {
       const conversationKey = getConversationKey(reporter, reportee);
       const reportMessages = messages[conversationKey] || [];
-      
+
       try {
         const cleanReporter = sanitizeUsername(reporter) || reporter;
         const cleanReportee = sanitizeUsername(reportee) || reportee;
 
         // Import reports service dynamically to avoid circular dependency
         const { reportsService } = await import('@/services/reports.service');
-        
+
         // Submit to the main reports system
         const reportResult = await reportsService.submitReport({
           reportedUser: cleanReportee,
@@ -627,7 +622,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         if (reportResult.success) {
           console.log('[MessageContext] Report submitted successfully');
-          
+
           // Update local state
           setReportedUsers((prev) => {
             const list = prev[cleanReporter] || [];
@@ -646,16 +641,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             processed: false,
             category: 'harassment',
           };
-          
+
           setReportLogs((prev) => [...prev, newReport]);
         }
       } catch (error) {
         console.error('[MessageContext] Error reporting user:', error);
-        
+
         // Even if API fails, update local state so UI shows user as reported
         const cleanReporter = sanitizeUsername(reporter) || reporter;
         const cleanReportee = sanitizeUsername(reportee) || reportee;
-        
+
         setReportedUsers((prev) => {
           const list = prev[cleanReporter] || [];
           if (!list.includes(cleanReportee)) {
@@ -693,36 +688,31 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (threadsResponse.success && threadsResponse.data) {
         const processedMessages: { [key: string]: Message[] } = {};
         const profiles: { [username: string]: SellerProfile } = {};
-        
-        // FIX: Use the actual username from the profile object as the key
+
         if ((threadsResponse as any).profiles) {
           Object.values((threadsResponse as any).profiles).forEach((profile: any) => {
-            // Extract the username from the profile object itself
             const username = profile?.username || profile?.user?.username || profile?.seller || '';
-            
             if (!username) {
               console.warn('[MessageContext] Profile missing username:', profile);
               return;
             }
-            
-            // Sanitize the username to match how components look it up
             const key = sanitizeUsername(username) || username;
-            
+
             profiles[key] = {
-              pic: profile.profilePic || null,  // Store raw URL, components will resolve it
+              pic: profile.profilePic || null, // store raw; components resolve once
               verified: profile.isVerified || false
             };
-            
+
             console.log(`[MessageContext] Refreshed profile for ${key}:`, profiles[key]);
           });
         }
-        
+
         threadsResponse.data.forEach((thread: ServiceMessageThread) => {
           if (thread.messages && thread.messages.length > 0) {
             processedMessages[thread.id] = thread.messages;
           }
         });
-        
+
         setMessages(processedMessages);
         setSellerProfiles(profiles);
         setUpdateTrigger((n) => n + 1);
