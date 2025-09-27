@@ -128,6 +128,17 @@ export default function BuyerMessagesPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Notify parent layout about active thread state
+  useEffect(() => {
+    if (isMobile) {
+      // Dispatch custom event to notify ClientLayout about thread state
+      const event = new CustomEvent('threadStateChange', {
+        detail: { hasActiveThread: !!activeThread }
+      });
+      window.dispatchEvent(event);
+    }
+  }, [activeThread, isMobile]);
+
   // Prevent body scroll on mobile when in messages
   useEffect(() => {
     if (isMobile) {
