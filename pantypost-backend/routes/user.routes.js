@@ -213,7 +213,7 @@ router.get('/:username/ban-status', async (req, res) => {
 
 // GET /api/users/:username/profile - Public/limited profile
 // Sellers => public
-// Buyers  => visible to ANY authenticated user (token required)
+// Buyers  => PUBLIC LIMITED if no token; full public fields if authenticated; 403 if bad token
 router.get('/:username/profile', async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })
@@ -232,16 +232,23 @@ router.get('/:username/profile', async (req, res) => {
         ? authHeader.slice(7)
         : null;
 
+      // ⬇️ CHANGE: If no token, return a limited public buyer profile (200)
       if (!token) {
-        return res.status(403).json({
-          success: false,
-          error: {
-            code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-            message: 'Authentication required to view buyer profiles'
+        return res.json({
+          success: true,
+          data: {
+            username: user.username,
+            bio: user.bio,
+            profilePic: user.profilePic,
+            country: user?.settings?.country || null,
+            isVerified: user.isVerified,
+            role: user.role,
+            joinedDate: user.joinedDate
           }
         });
       }
 
+      // If token exists but is invalid/expired → 403 (unchanged)
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded;
@@ -256,6 +263,7 @@ router.get('/:username/profile', async (req, res) => {
       }
     }
     
+    // For sellers OR authenticated requests, return the fuller public payload
     res.json({
       success: true,
       data: {
