@@ -128,6 +128,26 @@ export default function BuyerMessagesPage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Prevent body scroll on mobile when in messages
+  useEffect(() => {
+    if (isMobile) {
+      // Prevent body scroll on mobile
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      document.body.style.height = '100%';
+      
+      return () => {
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.height = '';
+      };
+    }
+    // Return undefined when not mobile (satisfies TypeScript)
+    return undefined;
+  }, [isMobile]);
+
   // Force re-render when mobile state changes
   useEffect(() => {
     console.log('Mobile state changed:', isMobile);
@@ -201,12 +221,12 @@ export default function BuyerMessagesPage() {
         {/* Desktop padding - hide on mobile */}
         <div className="hidden md:block py-3 bg-black"></div>
         
-        {/* Main container - FIXED for mobile */}
-        <div className={`${isMobile ? 'fixed inset-0 pt-0' : 'h-screen bg-black flex flex-col'}`}>
-          <div className={`${isMobile ? 'w-full h-full flex flex-col' : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg'} bg-[#121212] ${isMobile ? '' : 'flex flex-col md:flex-row'} overflow-hidden`}>
+        {/* Main container - FIXED for mobile with proper overflow handling */}
+        <div className={`${isMobile ? 'fixed inset-0' : 'h-screen bg-black flex flex-col'}`}>
+          <div className={`${isMobile ? 'w-full h-full flex flex-col overflow-hidden' : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg flex flex-col md:flex-row overflow-hidden'} bg-[#121212]`}>
             
             {/* Mobile: Only show ThreadsSidebar when no active thread */}
-            <div className={`${activeThread && isMobile ? 'hidden' : 'block'} ${isMobile ? 'w-full h-full' : 'w-full md:w-1/3'}`}>
+            <div className={`${activeThread && isMobile ? 'hidden' : isMobile ? 'flex flex-col h-full overflow-hidden' : 'w-full md:w-1/3 overflow-hidden'}`}>
               <ThreadsSidebar
                 threads={threads}
                 lastMessages={lastMessages}
@@ -228,7 +248,7 @@ export default function BuyerMessagesPage() {
             
             {/* Mobile: Only show conversation when thread is active */}
             {/* Desktop: Always show conversation area */}
-            <div className={`${!activeThread && isMobile ? 'hidden' : 'flex'} ${isMobile ? 'w-full h-full' : 'w-full md:w-2/3'} flex-col bg-[#121212]`}>
+            <div className={`${!activeThread && isMobile ? 'hidden' : 'flex'} ${isMobile ? 'flex-col h-full overflow-hidden' : 'w-full md:w-2/3'} flex-col bg-[#121212] overflow-hidden`}>
               {activeThread ? (
                 <ConversationView
                   activeThread={activeThread}
