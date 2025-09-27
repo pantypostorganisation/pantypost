@@ -160,13 +160,26 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           const processedMessages: { [key: string]: Message[] } = {};
           const profiles: { [username: string]: SellerProfile } = {};
           
-          // FIX: Store raw profilePic URL, don't resolve it here
+          // FIX: Use the actual username from the profile object as the key
           if ((threadsResponse as any).profiles) {
-            Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
-              profiles[username] = {
+            Object.values((threadsResponse as any).profiles).forEach((profile: any) => {
+              // Extract the username from the profile object itself
+              const username = profile?.username || profile?.user?.username || profile?.seller || '';
+              
+              if (!username) {
+                console.warn('[MessageContext] Profile missing username:', profile);
+                return;
+              }
+              
+              // Sanitize the username to match how components look it up
+              const key = sanitizeUsername(username) || username;
+              
+              profiles[key] = {
                 pic: profile.profilePic || null,  // Store raw URL, components will resolve it
                 verified: profile.isVerified || false
               };
+              
+              console.log(`[MessageContext] Stored profile for ${key}:`, profiles[key]);
             });
           }
           
@@ -177,7 +190,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           });
           
           console.log('[MessageContext] Loaded messages for', Object.keys(processedMessages).length, 'conversations');
-          console.log('[MessageContext] Loaded profiles for', Object.keys(profiles).length, 'users');
+          console.log('[MessageContext] Loaded profiles for', Object.keys(profiles).length, 'users:', Object.keys(profiles));
           
           setMessages(processedMessages);
           setSellerProfiles(profiles);
@@ -681,13 +694,26 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         const processedMessages: { [key: string]: Message[] } = {};
         const profiles: { [username: string]: SellerProfile } = {};
         
-        // FIX: Store raw profilePic URL, don't resolve it here
+        // FIX: Use the actual username from the profile object as the key
         if ((threadsResponse as any).profiles) {
-          Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
-            profiles[username] = {
+          Object.values((threadsResponse as any).profiles).forEach((profile: any) => {
+            // Extract the username from the profile object itself
+            const username = profile?.username || profile?.user?.username || profile?.seller || '';
+            
+            if (!username) {
+              console.warn('[MessageContext] Profile missing username:', profile);
+              return;
+            }
+            
+            // Sanitize the username to match how components look it up
+            const key = sanitizeUsername(username) || username;
+            
+            profiles[key] = {
               pic: profile.profilePic || null,  // Store raw URL, components will resolve it
               verified: profile.isVerified || false
             };
+            
+            console.log(`[MessageContext] Refreshed profile for ${key}:`, profiles[key]);
           });
         }
         
