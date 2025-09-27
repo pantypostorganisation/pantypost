@@ -31,6 +31,7 @@ import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization'
 import { formatActivityStatus } from '@/utils/format';
 import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import { ALL_EMOJIS } from '@/constants/emojis';
+import { resolveApiUrl } from '@/utils/url';
 
 // Helper to get conversation key (use sanitized usernames)
 const getConversationKey = (userA: string, userB: string): string => {
@@ -194,6 +195,9 @@ export default function ConversationView(props: ConversationViewProps) {
   const { activityStatus, loading: activityLoading } = useUserActivityStatus(activeThread);
 
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
+
+  // FIX: Resolve the seller profile picture URL
+  const resolvedSellerPic = resolveApiUrl(sellerProfiles[activeThread]?.pic);
 
   // Prevent scroll outside messages container on mobile
   useEffect(() => {
@@ -400,7 +404,7 @@ export default function ConversationView(props: ConversationViewProps) {
     return !!lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Mobile Header Component - FIXED WITH PROPER STYLING
+  // Mobile Header Component - FIXED WITH PROPER STYLING AND RESOLVED PROFILE PIC
   const renderMobileHeader = () => (
     <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-lg safe-top z-50 sticky top-0">
       <div className="flex items-center justify-between p-4 min-h-[60px]">
@@ -417,14 +421,14 @@ export default function ConversationView(props: ConversationViewProps) {
             </button>
           )}
           
-          {/* Seller Avatar */}
+          {/* Seller Avatar - FIXED to use resolved URL */}
           <div className="relative mr-3 flex-shrink-0">
-            {sellerProfiles[activeThread]?.pic ? (
+            {resolvedSellerPic ? (
               <SecureImage
-                src={sellerProfiles[activeThread].pic}
+                src={resolvedSellerPic}
                 alt={sanitizeStrict(activeThread)}
                 className="w-10 h-10 rounded-full object-cover"
-                fallbackSrc="/placeholder-avatar.png"
+                fallbackSrc="/default-avatar.png"
               />
             ) : (
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
@@ -527,19 +531,19 @@ export default function ConversationView(props: ConversationViewProps) {
     </div>
   );
 
-  // Desktop Header Component
+  // Desktop Header Component - FIXED WITH RESOLVED PROFILE PIC
   const renderDesktopHeader = () => (
     <div className="flex items-center justify-between p-3">
       {/* Left section */}
       <div className="flex items-center flex-1 min-w-0">
-        {/* Seller Avatar */}
+        {/* Seller Avatar - FIXED to use resolved URL */}
         <div className="relative mr-3 flex-shrink-0">
-          {sellerProfiles[activeThread]?.pic ? (
+          {resolvedSellerPic ? (
             <SecureImage
-              src={sellerProfiles[activeThread].pic}
+              src={resolvedSellerPic}
               alt={sanitizeStrict(activeThread)}
               className="w-10 h-10 rounded-full object-cover"
-              fallbackSrc="/placeholder-avatar.png"
+              fallbackSrc="/default-avatar.png"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
@@ -700,7 +704,7 @@ export default function ConversationView(props: ConversationViewProps) {
         );
       })}
 
-      <TypingIndicator username={activeThread} isTyping={isSellerTyping} userPic={sellerProfiles[activeThread]?.pic} />
+      <TypingIndicator username={activeThread} isTyping={isSellerTyping} userPic={resolvedSellerPic} />
 
       <div ref={messagesEndRef} />
     </>
