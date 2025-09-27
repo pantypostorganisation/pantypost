@@ -1,7 +1,7 @@
 // src/app/sellers/messages/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import { useSellerMessages } from '@/hooks/useSellerMessages';
@@ -77,10 +77,40 @@ export default function SellerMessagesPage() {
     isUserReported,
   } = useSellerMessages();
 
+  // Detect if we're on mobile
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Notify parent layout about active thread state
+  useEffect(() => {
+    if (isMobile) {
+      // Dispatch custom event to notify ClientLayout about thread state
+      const event = new CustomEvent('threadStateChange', {
+        detail: { hasActiveThread: !!activeThread }
+      });
+      window.dispatchEvent(event);
+    }
+  }, [activeThread, isMobile]);
+
+  // Mobile back navigation handler
+  const handleMobileBack = useCallback(() => {
+    setActiveThread(null);
+  }, [setActiveThread]);
+
   if (!user) {
     return (
       <BanCheck>
         <RequireAuth role="seller">
+          <div className="py-3 bg-black"></div>
           <div className="h-screen bg-black flex items-center justify-center">
             <div className="text-white">Loading...</div>
           </div>
@@ -92,30 +122,59 @@ export default function SellerMessagesPage() {
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        {/* Top Padding */}
-        <div className="py-3 bg-black" />
-
-        <div className="h-screen bg-black flex flex-col overflow-hidden">
-          <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
-            {/* Left column - Message threads */}
-            <ThreadsSidebar
-              isAdmin={isAdmin}
-              threads={threads}
-              lastMessages={lastMessages}
-              buyerProfiles={buyerProfiles}
-              totalUnreadCount={totalUnreadCount}
-              uiUnreadCounts={uiUnreadCounts}
-              activeThread={activeThread}
-              setActiveThread={setActiveThread}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              filterBy={filterBy}
-              setFilterBy={setFilterBy}
-              setObserverReadMessages={setObserverReadMessages}
-            />
-
-            {/* Right column - Active conversation */}
-            <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
+        {/* Desktop padding - hide on mobile */}
+        <div className="hidden md:block py-3 bg-black"></div>
+        
+        {/* Main container - matching buyer's responsive layout */}
+        <div className={`${
+          isMobile 
+            ? activeThread 
+              ? 'fixed inset-0' 
+              : 'h-screen flex flex-col'
+            : 'h-screen bg-black flex flex-col'
+        }`}>
+          <div className={`${
+            isMobile 
+              ? 'w-full h-full flex flex-col overflow-hidden' 
+              : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg flex flex-col md:flex-row overflow-hidden'
+          } bg-[#121212]`}>
+            
+            {/* Mobile: Only show ThreadsSidebar when no active thread */}
+            <div className={`${
+              activeThread && isMobile 
+                ? 'hidden' 
+                : isMobile 
+                  ? 'flex flex-col h-full overflow-hidden' 
+                  : 'w-full md:w-1/3 overflow-hidden'
+            }`}>
+              <ThreadsSidebar
+                isAdmin={isAdmin}
+                threads={threads}
+                lastMessages={lastMessages}
+                buyerProfiles={buyerProfiles}
+                totalUnreadCount={totalUnreadCount}
+                uiUnreadCounts={uiUnreadCounts}
+                activeThread={activeThread}
+                setActiveThread={setActiveThread}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                filterBy={filterBy}
+                setFilterBy={setFilterBy}
+                setObserverReadMessages={setObserverReadMessages}
+              />
+            </div>
+            
+            {/* Mobile: Only show conversation when thread is active */}
+            {/* Desktop: Always show conversation area */}
+            <div className={`${
+              !activeThread && isMobile 
+                ? 'hidden' 
+                : 'flex'
+            } ${
+              isMobile 
+                ? 'flex-col h-full overflow-hidden' 
+                : 'w-full md:w-2/3'
+            } flex-col bg-[#121212] overflow-hidden`}>
               {activeThread ? (
                 <ConversationView
                   activeThread={activeThread}
@@ -159,6 +218,8 @@ export default function SellerMessagesPage() {
                   handleEditRequest={handleEditRequest}
                   handleMessageVisible={handleMessageVisible}
                   setPreviewImage={setPreviewImage}
+                  isMobile={isMobile}
+                  onBack={handleMobileBack}
                 />
               ) : (
                 <EmptyState />
@@ -166,8 +227,8 @@ export default function SellerMessagesPage() {
             </div>
           </div>
 
-          {/* Bottom Padding */}
-          <div className="py-6 bg-black" />
+          {/* Desktop bottom padding */}
+          <div className="hidden md:block py-3 bg-black"></div>
 
           {/* Image Preview Modal */}
           {previewImage && (
