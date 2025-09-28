@@ -2,6 +2,7 @@
 import React, { useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { WalletContext } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
+import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import {
   BadgeCheck,
   AlertTriangle,
@@ -19,8 +20,7 @@ import {
   User,
   MoreVertical,
   Ban,
-  Flag,
-  CheckCircle
+  Flag
 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import TypingIndicator from '@/components/messaging/TypingIndicator';
@@ -29,15 +29,44 @@ import { SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { formatActivityStatus } from '@/utils/format';
-import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import { ALL_EMOJIS } from '@/constants/emojis';
-import { resolveApiUrl } from '@/utils/url';
 
 // Helper to get conversation key (use sanitized usernames)
 const getConversationKey = (userA: string, userB: string): string => {
   const a = sanitizeUsername(userA);
   const b = sanitizeUsername(userB);
   return [a, b].sort().join('-');
+};
+
+// Helper function to resolve profile picture URLs properly
+const resolveProfilePicUrl = (pic: string | null | undefined): string | null => {
+  if (!pic) return null;
+  
+  // If it's already a full URL, return as-is
+  if (pic.startsWith('http://') || pic.startsWith('https://')) {
+    // Replace http with https for production API
+    if (pic.includes('api.pantypost.com') && pic.startsWith('http://')) {
+      return pic.replace('http://', 'https://');
+    }
+    return pic;
+  }
+  
+  // If it starts with /uploads/, prepend the API URL
+  if (pic.startsWith('/uploads/')) {
+    // Use HTTPS for production
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+    return `${apiUrl}${pic}`;
+  }
+  
+  // If it's just a filename or relative path, prepend /uploads/ and API URL
+  if (!pic.startsWith('/')) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+    return `${apiUrl}/uploads/${pic}`;
+  }
+  
+  // Default: prepend API URL
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+  return `${apiUrl}${pic}`;
 };
 
 // Create a status badge component
@@ -75,7 +104,7 @@ interface ConversationViewProps {
   activeThread: string;
   threads: { [seller: string]: Message[] };
   user: any;
-  sellerProfiles: { [seller: string]: { pic: string | null; verified: boolean } };
+  sellerProfiles: { [seller: string]: { profilePic: string | null; isVerified: boolean } };
   buyerRequests: CustomRequest[];
   wallet: { [username: string]: number };
   previewImage: string | null;
@@ -192,12 +221,13 @@ export default function ConversationView(props: ConversationViewProps) {
   const hasScrolledForTypingRef = useRef(false);
   const userHasScrolledRef = useRef(false);
 
+  // Use the REAL WebSocket activity status hook
   const { activityStatus, loading: activityLoading } = useUserActivityStatus(activeThread);
 
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
 
-  // FIX: Resolve the seller profile picture URL
-  const resolvedSellerPic = resolveApiUrl(sellerProfiles[activeThread]?.pic);
+  // Use profilePic instead of pic
+  const resolvedSellerPic = resolveProfilePicUrl(sellerProfiles[activeThread]?.profilePic);
 
   // Prevent scroll outside messages container on mobile
   useEffect(() => {
@@ -404,7 +434,7 @@ export default function ConversationView(props: ConversationViewProps) {
     return !!lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Mobile Header Component - FIXED WITH PROPER STYLING AND RESOLVED PROFILE PIC
+  // Mobile Header Component - NO verification badge
   const renderMobileHeader = () => (
     <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-lg safe-top z-50 sticky top-0">
       <div className="flex items-center justify-between p-4 min-h-[60px]">
@@ -421,7 +451,7 @@ export default function ConversationView(props: ConversationViewProps) {
             </button>
           )}
           
-          {/* Seller Avatar - FIXED to use resolved URL */}
+          {/* Seller Avatar with online indicator */}
           <div className="relative mr-3 flex-shrink-0">
             {resolvedSellerPic ? (
               <SecureImage
@@ -436,16 +466,9 @@ export default function ConversationView(props: ConversationViewProps) {
               </div>
             )}
             
-            {/* Online indicator */}
+            {/* Online indicator - Messenger style with #ff950e */}
             {activityStatus.isOnline && !isUserBlocked && (
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
-            )}
-            
-            {/* Verified badge */}
-            {sellerProfiles[activeThread]?.verified && (
-              <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
-                <CheckCircle className="w-4 h-4 text-blue-500" />
-              </div>
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
             )}
           </div>
           
@@ -455,7 +478,7 @@ export default function ConversationView(props: ConversationViewProps) {
               {sanitizeStrict(activeThread)}
             </div>
             <div className={`text-sm ${
-              activityStatus.isOnline && !isUserBlocked ? 'text-green-400' : 'text-gray-400'
+              activityStatus.isOnline && !isUserBlocked ? 'text-[#ff950e]' : 'text-gray-400'
             }`}>
               {getActivityDisplay()}
             </div>
@@ -531,12 +554,12 @@ export default function ConversationView(props: ConversationViewProps) {
     </div>
   );
 
-  // Desktop Header Component - FIXED WITH RESOLVED PROFILE PIC
+  // Desktop Header Component - NO verification badge
   const renderDesktopHeader = () => (
     <div className="flex items-center justify-between p-3">
       {/* Left section */}
       <div className="flex items-center flex-1 min-w-0">
-        {/* Seller Avatar - FIXED to use resolved URL */}
+        {/* Seller Avatar with online indicator */}
         <div className="relative mr-3 flex-shrink-0">
           {resolvedSellerPic ? (
             <SecureImage
@@ -551,16 +574,9 @@ export default function ConversationView(props: ConversationViewProps) {
             </div>
           )}
           
-          {/* Online indicator */}
+          {/* Online indicator - Messenger style with #ff950e */}
           {activityStatus.isOnline && !isUserBlocked && (
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
-          )}
-          
-          {/* Verified badge */}
-          {sellerProfiles[activeThread]?.verified && (
-            <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
-              <CheckCircle className="w-4 h-4 text-blue-500" />
-            </div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
           )}
         </div>
         
@@ -570,7 +586,7 @@ export default function ConversationView(props: ConversationViewProps) {
             {sanitizeStrict(activeThread)}
           </div>
           <div className={`text-xs ${
-            activityStatus.isOnline && !isUserBlocked ? 'text-green-400' : 'text-gray-400'
+            activityStatus.isOnline && !isUserBlocked ? 'text-[#ff950e]' : 'text-gray-400'
           }`}>
             {getActivityDisplay()}
           </div>
@@ -809,8 +825,6 @@ export default function ConversationView(props: ConversationViewProps) {
               title="Attach Image"
             />
 
-            {/* REMOVED the extra emoji button that was here */}
-
             <img
               src="/Custom_Request_Icon.png"
               alt="Custom Request"
@@ -895,10 +909,10 @@ export default function ConversationView(props: ConversationViewProps) {
   if (isMobile) {
     return (
       <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden">
-        {/* Mobile Header - FIXED - Now properly rendered */}
+        {/* Mobile Header */}
         {renderMobileHeader()}
 
-        {/* Messages container - flex-1 makes it fill available space */}
+        {/* Messages container */}
         <div
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto px-3 py-2"

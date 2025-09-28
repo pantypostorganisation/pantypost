@@ -56,10 +56,17 @@ type MessageOptions = {
   _optimisticId?: string;
 };
 
+// UPDATED: Use backend field names directly
+type SellerProfile = {
+  profilePic: string | null;  // Changed from 'pic' to 'profilePic'
+  isVerified: boolean;        // Changed from 'verified' to 'isVerified'
+};
+
 type MessageContextType = {
   messages: { [conversationKey: string]: Message[] };
+  sellerProfiles: { [username: string]: SellerProfile };
   isLoading: boolean;
-  isInitialized: boolean; // ADD THIS
+  isInitialized: boolean;
   sendMessage: (sender: string, receiver: string, content: string, options?: MessageOptions) => Promise<void>;
   sendCustomRequest: (
     buyer: string,
@@ -74,6 +81,7 @@ type MessageContextType = {
   getThreadsForUser: (username: string, role?: 'buyer' | 'seller') => MessageThread;
   getThreadInfo: (username: string, otherParty: string) => ThreadInfo;
   getAllThreadsInfo: (username: string, role?: 'buyer' | 'seller') => { [otherParty: string]: ThreadInfo };
+  getSellerProfile: (username: string) => SellerProfile | null;
   markMessagesAsRead: (userA: string, userB: string) => Promise<void>;
   blockUser: (blocker: string, blockee: string) => Promise<void>;
   unblockUser: (blocker: string, blockee: string) => Promise<void>;
@@ -86,7 +94,7 @@ type MessageContextType = {
   reportLogs: any[];
   messageNotifications: { [seller: string]: MessageNotification[] };
   clearMessageNotifications: (seller: string, buyer: string) => void;
-  refreshMessages: () => Promise<void>; // CHANGE TO ASYNC
+  refreshMessages: () => Promise<void>;
 };
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -105,12 +113,13 @@ const CLIP = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s
 
 export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [messages, setMessages] = useState<{ [conversationKey: string]: Message[] }>({});
+  const [sellerProfiles, setSellerProfiles] = useState<{ [username: string]: SellerProfile }>({});
   const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
   const [reportLogs, setReportLogs] = useState<any[]>([]);
   const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [isInitialized, setIsInitialized] = useState(false); // ADD THIS
+  const [isInitialized, setIsInitialized] = useState(false);
   const [updateTrigger, setUpdateTrigger] = useState(0);
 
   const wsContext = useWebSocket ? useWebSocket() : null;
@@ -126,7 +135,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     messagesService.initialize();
   }, []);
 
-  // Load initial data from API only
+  // Load initial data from API with profiles - UPDATED to use backend field names directly
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
@@ -134,28 +143,50 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         setIsInitialized(true);
         return;
       }
-      
+
       try {
         setIsLoading(true);
         console.log('[MessageContext] Loading initial data...');
 
-        // Load all data from API through the service
         const [threadsResponse, blockedResponse, notificationsResponse] = await Promise.all([
-          messagesService.getThreads(''), // Get all threads
+          messagesService.getThreads(''),
           messagesService.getBlockedUsers(),
           messagesService.getMessageNotifications('')
         ]);
 
-        // Process threads into messages format
+        // Process threads and profiles - UPDATED to use backend field names directly
         if (threadsResponse.success && threadsResponse.data) {
           const processedMessages: { [key: string]: Message[] } = {};
+          const profiles: { [username: string]: SellerProfile } = {};
+
+          // Check if profiles exist in the response
+          if ((threadsResponse as any).profiles) {
+            console.log('[MessageContext] Found profiles object:', (threadsResponse as any).profiles);
+            
+            Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
+              const key = sanitizeUsername(username) || username;
+              
+              // UPDATED: Use backend field names directly without transformation
+              profiles[key] = {
+                profilePic: profile.profilePic || null,
+                isVerified: profile.isVerified || false
+              };
+              
+              console.log(`[MessageContext] Stored profile for ${key}:`, profiles[key]);
+            });
+          }
+
           threadsResponse.data.forEach((thread: ServiceMessageThread) => {
             if (thread.messages && thread.messages.length > 0) {
               processedMessages[thread.id] = thread.messages;
             }
           });
+
           console.log('[MessageContext] Loaded messages for', Object.keys(processedMessages).length, 'conversations');
+          console.log('[MessageContext] Loaded profiles for', Object.keys(profiles).length, 'users:', Object.keys(profiles));
+
           setMessages(processedMessages);
+          setSellerProfiles(profiles);
         }
 
         // Set blocked users
@@ -183,19 +214,19 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       } catch (err) {
         console.error('[MessageContext] Error loading message data from API:', err);
-        // Don't load from localStorage - just show empty state
         setMessages({});
+        setSellerProfiles({});
         setBlockedUsers({});
         setReportedUsers({});
         setReportLogs([]);
         setMessageNotifications({});
       } finally {
         setIsLoading(false);
-        setIsInitialized(true); // ADD THIS
+        setIsInitialized(true);
         console.log('[MessageContext] Initialization complete');
       }
     };
-    
+
     loadData();
   }, []);
 
@@ -493,6 +524,13 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     [getThreadsForUser, getThreadInfo]
   );
 
+  const getSellerProfile = useCallback(
+    (username: string): SellerProfile | null => {
+      return sellerProfiles[username] || null;
+    },
+    [sellerProfiles]
+  );
+
   const markMessagesAsRead = useCallback(async (userA: string, userB: string) => {
     try {
       const result = await messagesService.markMessagesAsRead(userA, userB);
@@ -521,7 +559,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (filtered.length === arr.length) return prev;
       return { ...prev, [seller]: filtered };
     });
-    
+
     // Also clear on backend
     messagesService.clearMessageNotifications(seller, buyer);
   }, []);
@@ -563,15 +601,15 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     async (reporter: string, reportee: string) => {
       const conversationKey = getConversationKey(reporter, reportee);
       const reportMessages = messages[conversationKey] || [];
-      
+
       try {
         const cleanReporter = sanitizeUsername(reporter) || reporter;
         const cleanReportee = sanitizeUsername(reportee) || reportee;
 
         // Import reports service dynamically to avoid circular dependency
         const { reportsService } = await import('@/services/reports.service');
-        
-        // Submit to the main reports system - this is working correctly
+
+        // Submit to the main reports system
         const reportResult = await reportsService.submitReport({
           reportedUser: cleanReportee,
           reportType: 'harassment',
@@ -582,7 +620,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         if (reportResult.success) {
           console.log('[MessageContext] Report submitted successfully');
-          
+
           // Update local state
           setReportedUsers((prev) => {
             const list = prev[cleanReporter] || [];
@@ -601,16 +639,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
             processed: false,
             category: 'harassment',
           };
-          
+
           setReportLogs((prev) => [...prev, newReport]);
         }
       } catch (error) {
         console.error('[MessageContext] Error reporting user:', error);
-        
+
         // Even if API fails, update local state so UI shows user as reported
         const cleanReporter = sanitizeUsername(reporter) || reporter;
         const cleanReportee = sanitizeUsername(reportee) || reportee;
-        
+
         setReportedUsers((prev) => {
           const list = prev[cleanReporter] || [];
           if (!list.includes(cleanReportee)) {
@@ -641,19 +679,40 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return reportLogs.filter((r) => !r.processed).length;
   }, [reportLogs]);
 
-  // CHANGE refreshMessages to async and reload data
+  // UPDATED: refreshMessages to use backend field names directly
   const refreshMessages = useCallback(async () => {
     console.log('[MessageContext] Refreshing messages...');
     try {
       const threadsResponse = await messagesService.getThreads('');
+      console.log('[MessageContext] Full threads response:', JSON.stringify(threadsResponse));
       if (threadsResponse.success && threadsResponse.data) {
         const processedMessages: { [key: string]: Message[] } = {};
+        const profiles: { [username: string]: SellerProfile } = {};
+
+        if ((threadsResponse as any).profiles) {
+          console.log('[MessageContext] Found profiles object:', (threadsResponse as any).profiles);
+          
+          Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
+            const key = sanitizeUsername(username) || username;
+            
+            // UPDATED: Use backend field names directly without transformation
+            profiles[key] = {
+              profilePic: profile.profilePic || null,
+              isVerified: profile.isVerified || false
+            };
+            
+            console.log(`[MessageContext] Refreshed profile for ${key}:`, profiles[key]);
+          });
+        }
+
         threadsResponse.data.forEach((thread: ServiceMessageThread) => {
           if (thread.messages && thread.messages.length > 0) {
             processedMessages[thread.id] = thread.messages;
           }
         });
+
         setMessages(processedMessages);
+        setSellerProfiles(profiles);
         setUpdateTrigger((n) => n + 1);
       }
     } catch (error) {
@@ -665,14 +724,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     <MessageContext.Provider
       value={{
         messages,
+        sellerProfiles,
         isLoading,
-        isInitialized, // ADD THIS
+        isInitialized,
         sendMessage,
         sendCustomRequest,
         getMessagesForUsers,
         getThreadsForUser,
         getThreadInfo,
         getAllThreadsInfo,
+        getSellerProfile,
         markMessagesAsRead,
         blockUser,
         unblockUser,

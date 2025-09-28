@@ -39,10 +39,11 @@ router.get('/user-status/:username', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all threads for a user - FIXED to return proper format
+// Get all threads for a user - ENHANCED WITH PROFILE DATA
 router.get('/threads', authMiddleware, async (req, res) => {
   try {
     const username = req.query.username || req.user.username;
+    console.log('[THREADS] Getting threads for user:', username);
     
     // Get all messages where user is sender or receiver
     const messages = await Message.find({
@@ -52,8 +53,11 @@ router.get('/threads', authMiddleware, async (req, res) => {
       ]
     }).sort({ createdAt: 1 });
     
+    console.log('[THREADS] Found messages:', messages.length);
+    
     // Group messages by thread
     const threadsMap = {};
+    const participantSet = new Set();
     
     messages.forEach(msg => {
       const threadId = msg.threadId;
@@ -68,6 +72,11 @@ router.get('/threads', authMiddleware, async (req, res) => {
           unreadCount: 0,
           updatedAt: msg.createdAt
         };
+        
+        // Track all participants to fetch their profiles
+        participants.forEach(p => {
+          if (p !== username) participantSet.add(p);
+        });
       }
       
       // Add message to thread
@@ -107,14 +116,67 @@ router.get('/threads', authMiddleware, async (req, res) => {
       }
     });
     
+    // FETCH PROFILES FOR ALL PARTICIPANTS - FIXED
+    const participantProfiles = {};
+    if (participantSet.size > 0) {
+      console.log('[THREADS] Fetching profiles for participants:', Array.from(participantSet));
+      
+      const users = await User.find(
+        { username: { $in: Array.from(participantSet) } },
+        'username profilePic isVerified verificationStatus bio tier subscriberCount'
+      );
+      
+      console.log('[THREADS] Found users:', users.length);
+      
+      users.forEach(user => {
+        // Build the full URL for profilePic if it exists
+        let fullProfilePicUrl = user.profilePic;
+        
+        if (user.profilePic) {
+          // If it's already a full URL, keep it
+          if (user.profilePic.startsWith('http://') || user.profilePic.startsWith('https://')) {
+            fullProfilePicUrl = user.profilePic;
+          }
+          // If it starts with /uploads/, prepend the base URL
+          else if (user.profilePic.startsWith('/uploads/')) {
+            // Use the environment variable if available, otherwise use production URL
+            const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+            fullProfilePicUrl = `${baseUrl}${user.profilePic}`;
+          }
+          // If it's a relative path without leading slash
+          else if (!user.profilePic.startsWith('/')) {
+            const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+            fullProfilePicUrl = `${baseUrl}/uploads/${user.profilePic}`;
+          }
+        }
+        
+        console.log(`[THREADS] User ${user.username} - Original pic: ${user.profilePic}, Full URL: ${fullProfilePicUrl}`);
+        
+        participantProfiles[user.username] = {
+          username: user.username,
+          profilePic: fullProfilePicUrl,
+          isVerified: user.isVerified || user.verificationStatus === 'verified' || false,
+          bio: user.bio || '',
+          tier: user.tier || 'Tease',
+          subscriberCount: user.subscriberCount || 0
+        };
+      });
+      
+      console.log('[THREADS] Final profiles object:', JSON.stringify(participantProfiles, null, 2));
+    }
+    
     // Convert to array and sort by last message date
     const threads = Object.values(threadsMap).sort((a, b) => 
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
     
+    console.log('[THREADS] Returning threads:', threads.length, 'with profiles for:', Object.keys(participantProfiles));
+    
+    // Return with profiles at the root level
     res.json({
       success: true,
-      data: threads
+      data: threads,
+      profiles: participantProfiles
     });
   } catch (error) {
     console.error('Get threads error:', error);
@@ -125,7 +187,7 @@ router.get('/threads', authMiddleware, async (req, res) => {
   }
 });
 
-// Get messages for a specific thread - FIXED format
+// Get messages for a specific thread - ENHANCED WITH PROFILES
 router.get('/threads/:threadId', authMiddleware, async (req, res) => {
   try {
     const { threadId } = req.params;
@@ -158,9 +220,44 @@ router.get('/threads/:threadId', authMiddleware, async (req, res) => {
       threadId: msg.threadId
     }));
     
+    // Get profiles for the other participant - FIXED
+    const otherUsername = user1 === username ? user2 : user1;
+    const otherUser = await User.findOne(
+      { username: otherUsername },
+      'username profilePic isVerified verificationStatus bio tier subscriberCount'
+    );
+    
+    const profiles = {};
+    if (otherUser) {
+      // Build the full URL for profilePic if it exists
+      let fullProfilePicUrl = otherUser.profilePic;
+      
+      if (otherUser.profilePic) {
+        if (otherUser.profilePic.startsWith('http://') || otherUser.profilePic.startsWith('https://')) {
+          fullProfilePicUrl = otherUser.profilePic;
+        } else if (otherUser.profilePic.startsWith('/uploads/')) {
+          const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+          fullProfilePicUrl = `${baseUrl}${otherUser.profilePic}`;
+        } else if (!otherUser.profilePic.startsWith('/')) {
+          const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+          fullProfilePicUrl = `${baseUrl}/uploads/${otherUser.profilePic}`;
+        }
+      }
+      
+      profiles[otherUser.username] = {
+        username: otherUser.username,
+        profilePic: fullProfilePicUrl,
+        isVerified: otherUser.isVerified || otherUser.verificationStatus === 'verified' || false,
+        bio: otherUser.bio || '',
+        tier: otherUser.tier || 'Tease',
+        subscriberCount: otherUser.subscriberCount || 0
+      };
+    }
+    
     res.json({
       success: true,
-      data: formattedMessages
+      data: formattedMessages,
+      profiles
     });
   } catch (error) {
     console.error('Get thread messages error:', error);
@@ -191,7 +288,7 @@ router.post('/send', authMiddleware, async (req, res) => {
     // Create new message with a UUID
     const messageId = uuidv4();
     const message = new Message({
-      _id: messageId, // Use UUID as _id
+      _id: messageId,
       sender,
       receiver,
       content,
@@ -500,6 +597,50 @@ router.post('/unblock', authMiddleware, async (req, res) => {
   }
 });
 
+// Report a user
+router.post('/report', authMiddleware, async (req, res) => {
+  try {
+    const { reportee, reason, messages, category } = req.body;
+    const reporter = req.user.username;
+    
+    if (!reportee) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reportee username is required'
+      });
+    }
+    
+    // Create report in Report model
+    const Report = require('../models/Report');
+    const report = new Report({
+      reporter,
+      reportedUser: reportee,
+      reason: reason || '',
+      category: category || 'other',
+      messages: messages || [],
+      status: 'pending',
+      processed: false
+    });
+    
+    await report.save();
+    
+    res.json({
+      success: true,
+      data: {
+        reporter,
+        reportee,
+        reportId: report._id
+      }
+    });
+  } catch (error) {
+    console.error('Report user error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Get message notifications for current user
 router.get('/notifications', authMiddleware, async (req, res) => {
   try {
@@ -576,50 +717,6 @@ router.post('/notifications/clear', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('Clear notifications error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Report a user
-router.post('/report', authMiddleware, async (req, res) => {
-  try {
-    const { reportee, reason, messages, category } = req.body;
-    const reporter = req.user.username;
-    
-    if (!reportee) {
-      return res.status(400).json({
-        success: false,
-        error: 'Reportee username is required'
-      });
-    }
-    
-    // Create report in Report model
-    const Report = require('../models/Report');
-    const report = new Report({
-      reporter,
-      reportedUser: reportee,
-      reason: reason || '',
-      category: category || 'other',
-      messages: messages || [],
-      status: 'pending',
-      processed: false
-    });
-    
-    await report.save();
-    
-    res.json({
-      success: true,
-      data: {
-        reporter,
-        reportee,
-        reportId: report._id
-      }
-    });
-  } catch (error) {
-    console.error('Report user error:', error);
     res.status(500).json({
       success: false,
       error: error.message

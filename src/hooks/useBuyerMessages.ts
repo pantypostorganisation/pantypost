@@ -13,7 +13,6 @@ import { useMessages } from '@/context/MessageContext';
 import { WalletContext } from '@/context/WalletContext';
 import { useRequests } from '@/context/RequestContext';
 import { useListings } from '@/context/ListingContext';
-import { getUserProfileData } from '@/utils/profileUtils';
 import { useLocalStorage } from './useLocalStorage';
 import { uploadToCloudinary } from '@/utils/cloudinary';
 import { securityService } from '@/services';
@@ -53,8 +52,11 @@ export const useBuyerMessages = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  
+  // Get sellerProfiles from MessageContext
   const { 
     messages, 
+    sellerProfiles: contextProfiles, // GET PROFILES FROM CONTEXT
     sendMessage, 
     blockedUsers, 
     reportedUsers, 
@@ -64,7 +66,8 @@ export const useBuyerMessages = () => {
     markMessagesAsRead,
     refreshMessages,
     isLoading: messagesLoading,
-    isInitialized
+    isInitialized,
+    getSellerProfile // GET THIS FUNCTION TOO
   } = useMessages();
   
   // Use useContext directly to check if wallet context is available
@@ -146,14 +149,17 @@ export const useBuyerMessages = () => {
   
   const isAdmin = user?.role === 'admin';
   
-  // CRITICAL FIX: Ensure messages are loaded on mount
+  // Load initial data
   useEffect(() => {
     const loadInitialData = async () => {
       if (user && !initialLoadComplete) {
         console.log('[useBuyerMessages] Loading initial data...');
+        console.log('[useBuyerMessages] User:', user.username);
+        console.log('[useBuyerMessages] Is initialized:', isInitialized);
         
         // If messages context is not initialized, refresh
         if (!isInitialized) {
+          console.log('[useBuyerMessages] Context not initialized, refreshing...');
           await refreshMessages();
         }
         
@@ -171,7 +177,7 @@ export const useBuyerMessages = () => {
     return walletContext.getBuyerBalance(username);
   }, [walletContext]);
   
-  // FIXED: Memoize wallet object properly
+  // Memoize wallet object properly
   const wallet = useMemo(() => {
     if (!user || !walletContext) return {};
     
@@ -202,7 +208,7 @@ export const useBuyerMessages = () => {
     markMessageAsReadAndUpdateUI(message);
   }, [markMessageAsReadAndUpdateUI]);
   
-  // CRITICAL: Listen for new messages and handle optimistic updates properly
+  // Listen for new messages and handle optimistic updates properly
   useEffect(() => {
     const handleNewMessage = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -319,7 +325,7 @@ export const useBuyerMessages = () => {
     return () => clearInterval(interval);
   }, []);
   
-  // ENHANCED: Merge real messages with optimistic messages and deduplicate
+  // Merge real messages with optimistic messages and deduplicate
   const threads = useMemo(() => {
     const result: { [seller: string]: Message[] } = {};
     
@@ -429,39 +435,57 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user, optimisticMessages, messageUpdateCounter]);
   
-  // Calculate other message data with async profile loading
-  const [sellerProfiles, setSellerProfiles] = useState<{ [seller: string]: { pic: string | null, verified: boolean } }>({});
-  
-  useEffect(() => {
-    const loadSellerProfiles = async () => {
-      const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+  // UPDATED: Build seller profiles using backend field names directly
+  const sellerProfiles = useMemo(() => {
+    const profiles: { [seller: string]: { profilePic: string | null; isVerified: boolean } } = {};
+    
+    console.log('[useBuyerMessages] ========== BUILDING SELLER PROFILES ==========');
+    console.log('[useBuyerMessages] contextProfiles from MessageContext:', contextProfiles);
+    console.log('[useBuyerMessages] getSellerProfile function available?', !!getSellerProfile);
+    console.log('[useBuyerMessages] Current threads (sellers):', Object.keys(threads));
+    
+    Object.keys(threads).forEach(seller => {
+      console.log(`[useBuyerMessages] Processing seller: ${seller}`);
       
-      for (const seller of Object.keys(threads)) {
-        try {
-          // Get seller profile using the new async utility
-          const profileData = await getUserProfileData(seller);
-          const sellerUser = users?.[seller];
-          
-          profiles[seller] = {
-            pic: profileData?.profilePic || null,
-            verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
-          };
-        } catch (error) {
-          console.error(`Error loading profile for ${seller}:`, error);
-          profiles[seller] = {
-            pic: null,
-            verified: false
-          };
-        }
+      // Try to get profile using the function first
+      let profile = null;
+      if (getSellerProfile) {
+        profile = getSellerProfile(seller);
+        console.log(`[useBuyerMessages]   - getSellerProfile(${seller}) returned:`, profile);
       }
       
-      setSellerProfiles(profiles);
-    };
+      // Fallback to contextProfiles if function didn't return anything
+      if (!profile && contextProfiles) {
+        profile = contextProfiles[seller];
+        console.log(`[useBuyerMessages]   - contextProfiles[${seller}]:`, profile);
+      }
+      
+      if (profile) {
+        console.log(`[useBuyerMessages]   ✓ Found profile for ${seller}:`, {
+          profilePic: profile.profilePic,
+          isVerified: profile.isVerified
+        });
+        
+        // UPDATED: Use backend field names directly
+        profiles[seller] = {
+          profilePic: profile.profilePic || null,
+          isVerified: profile.isVerified || false
+        };
+      } else {
+        console.log(`[useBuyerMessages]   ✗ No profile found for ${seller}, using defaults`);
+        profiles[seller] = {
+          profilePic: null,
+          isVerified: false
+        };
+      }
+    });
     
-    if (Object.keys(threads).length > 0) {
-      loadSellerProfiles();
-    }
-  }, [threads, users]);
+    console.log('[useBuyerMessages] ========== FINAL SELLER PROFILES ==========');
+    console.log('[useBuyerMessages] Final profiles object:', profiles);
+    console.log('[useBuyerMessages] Total profiles built:', Object.keys(profiles).length);
+    
+    return profiles;
+  }, [threads, contextProfiles, getSellerProfile]);
   
   const { unreadCounts, lastMessages, totalUnreadCount } = useMemo(() => {
     const unreadCounts: { [seller: string]: number } = {};
@@ -589,37 +613,7 @@ export const useBuyerMessages = () => {
     }
   }, [activeThread, threads, messageUpdateCounter]);
   
-  // Listen for storage changes to update profiles in real-time
-  useEffect(() => {
-    const handleStorageChange = async (e: StorageEvent) => {
-      if (e.key === 'user_profiles' && e.newValue) {
-        // Re-load seller profiles when storage changes
-        const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
-        
-        for (const seller of Object.keys(threads)) {
-          try {
-            const profileData = await getUserProfileData(seller);
-            const sellerUser = users?.[seller];
-            
-            profiles[seller] = {
-              pic: profileData?.profilePic || null,
-              verified: sellerUser?.isVerified || sellerUser?.verificationStatus === 'verified' || false
-            };
-          } catch (error) {
-            console.error(`Error loading profile for ${seller}:`, error);
-            profiles[seller] = sellerProfiles[seller] || { pic: null, verified: false };
-          }
-        }
-        
-        setSellerProfiles(profiles);
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, [threads, users, sellerProfiles]);
-  
-  // OPTIMISTIC: Handle sending reply with instant UI update
+  // Handle sending reply with instant UI update
   const handleReply = useCallback(async () => {
     if (!activeThread || (!replyMessage.trim() && !selectedImage) || !user) return;
     
@@ -710,31 +704,31 @@ export const useBuyerMessages = () => {
   }, [activeThread, user, blockedUsers, unblockUser, blockUser]);
   
   const handleReport = useCallback(async () => {
-   if (!activeThread || !user) return;
-   
-   // Use the reports service to send to MongoDB
-   const reportData = {
-     reportedUser: activeThread,
-     reportType: 'harassment' as const,
-     description: `User reported from messages by ${user.username}`,
-     severity: 'medium' as const,
-     relatedMessageId: threads[activeThread]?.[threads[activeThread].length - 1]?.id
-   };
-   
-   try {
-     const response = await reportsService.submitReport(reportData);
-     if (response.success) {
-       // Also update local state for UI
-       reportUser(user.username, activeThread);
-     }
-   } catch (error) {
-     console.error('Failed to submit report:', error);
-     // Fallback to local report
-     reportUser(user.username, activeThread);
-   }
- }, [activeThread, user, reportUser, threads]);
+    if (!activeThread || !user) return;
+    
+    // Use the reports service to send to MongoDB
+    const reportData = {
+      reportedUser: activeThread,
+      reportType: 'harassment' as const,
+      description: `User reported from messages by ${user.username}`,
+      severity: 'medium' as const,
+      relatedMessageId: threads[activeThread]?.[threads[activeThread].length - 1]?.id
+    };
+    
+    try {
+      const response = await reportsService.submitReport(reportData);
+      if (response.success) {
+        // Also update local state for UI
+        reportUser(user.username, activeThread);
+      }
+    } catch (error) {
+      console.error('Failed to submit report:', error);
+      // Fallback to local report
+      reportUser(user.username, activeThread);
+    }
+  }, [activeThread, user, reportUser, threads]);
   
-  // FIXED: Handle accepting custom request (by buyer when seller edits)
+  // Handle accepting custom request (by buyer when seller edits)
   const handleAccept = useCallback(async (request: any) => {
     if (!user || !request || !walletContext) return;
     
@@ -875,7 +869,7 @@ export const useBuyerMessages = () => {
     setEditMessage(request.description || '');
   }, []);
   
-  // FIXED: Handle submitting edited request with optimistic updates
+  // Handle submitting edited request with optimistic updates
   const handleEditSubmit = useCallback(async () => {
     if (!editRequestId || !user || !activeThread) return;
     
@@ -1150,7 +1144,7 @@ export const useBuyerMessages = () => {
     inputRef.current?.focus();
   }, [recentEmojis, setRecentEmojis]);
   
-  // FIXED: handleSendTip now just handles UI updates after tip is sent
+  // handleSendTip now just handles UI updates after tip is sent
   // The actual tip sending is done entirely by the TipModal component
   const handleSendTip = useCallback(async () => {
     if (!activeThread || !user) return;
@@ -1428,7 +1422,7 @@ export const useBuyerMessages = () => {
     unreadCounts,
     uiUnreadCounts,
     lastMessages,
-    sellerProfiles,
+    sellerProfiles, // NOW USES BACKEND FIELD NAMES: profilePic and isVerified
     totalUnreadCount,
     activeThread,
     setActiveThread,

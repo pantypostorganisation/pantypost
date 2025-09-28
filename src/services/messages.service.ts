@@ -53,6 +53,23 @@ export interface MessageThread {
   };
 }
 
+// UPDATED: Use backend field names directly
+export interface UserProfile {
+  username: string;
+  profilePic: string | null;  // Using backend field name
+  isVerified: boolean;        // Using backend field name (but we won't display the badge)
+  bio?: string;
+  tier?: string;
+  subscriberCount?: number;
+}
+
+export interface ThreadsResponse {
+  success: boolean;
+  data?: MessageThread[];
+  profiles?: { [username: string]: UserProfile };
+  error?: { message: string };
+}
+
 export interface SendMessageRequest {
   sender: string;
   receiver: string;
@@ -161,9 +178,10 @@ export class MessagesService {
   }
 
   /**
-   * Get all message threads for a user
+   * Get all message threads for a user with profiles
+   * FIXED: Make a direct API call to preserve the profiles in the response
    */
-  async getThreads(username: string, role?: 'buyer' | 'seller'): Promise<ApiResponse<MessageThread[]>> {
+  async getThreads(username: string, role?: 'buyer' | 'seller'): Promise<ThreadsResponse> {
     try {
       // Check rate limit
       const rateLimitResult = this.rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
@@ -178,7 +196,47 @@ export class MessagesService {
         ? `${API_ENDPOINTS.MESSAGES.THREADS}?username=${encodeURIComponent(username)}${role ? `&role=${role}` : ''}`
         : API_ENDPOINTS.MESSAGES.THREADS;
         
-      return await apiCall<MessageThread[]>(url);
+      console.log('[MessagesService.getThreads] Calling API:', url);
+      
+      // FIXED: Make a direct fetch call to preserve the full response structure
+      const token = this.getAuthToken();
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+      const fullUrl = `${baseUrl}/api${url}`;
+      
+      const response = await fetch(fullUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[MessagesService.getThreads] Full response from backend:', data);
+      
+      if (data.success) {
+        // Extract threads and profiles from the backend response
+        const threads = data.data || [];
+        const profiles = data.profiles || {};
+        
+        console.log('[MessagesService.getThreads] Extracted threads count:', threads.length);
+        console.log('[MessagesService.getThreads] Extracted profiles:', profiles);
+        
+        return {
+          success: true,
+          data: threads,
+          profiles: profiles
+        };
+      }
+      
+      return {
+        success: false,
+        error: data.error || { message: 'Failed to get threads' },
+      };
     } catch (error) {
       console.error('Get threads error:', error);
       return {
@@ -189,9 +247,32 @@ export class MessagesService {
   }
 
   /**
-   * Get messages between two users
+   * Get auth token helper
    */
-  async getThread(userA: string, userB: string): Promise<ApiResponse<Message[]>> {
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // Check sessionStorage first (where AuthContext stores it)
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (authTokens) {
+        const parsed = JSON.parse(authTokens);
+        return parsed.token || null;
+      }
+      
+      // Check direct auth_token
+      const token = sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token');
+      return token;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Get messages between two users with profiles
+   * FIXED: Make a direct API call to preserve the profiles in the response
+   */
+  async getThread(userA: string, userB: string): Promise<ApiResponse<Message[]> & { profiles?: { [username: string]: UserProfile } }> {
     try {
       const sanitizedUserA = sanitizeStrict(userA);
       const sanitizedUserB = sanitizeStrict(userB);
@@ -206,9 +287,41 @@ export class MessagesService {
 
       const threadId = this.getConversationKey(sanitizedUserA, sanitizedUserB);
       
-      return await apiCall<Message[]>(
-        buildApiUrl(API_ENDPOINTS.MESSAGES.THREAD, { threadId })
-      );
+      // FIXED: Make a direct fetch call to preserve the full response structure
+      const token = this.getAuthToken();
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+      const fullUrl = `${baseUrl}/api/messages/threads/${threadId}`;
+      
+      const response = await fetch(fullUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('[MessagesService.getThread] Full response from backend:', data);
+      
+      if (data.success) {
+        const messages = data.data || [];
+        const profiles = data.profiles || {};
+        
+        return {
+          success: true,
+          data: messages,
+          profiles: profiles
+        };
+      }
+      
+      return {
+        success: false,
+        error: data.error || { message: 'Failed to get thread' },
+      };
     } catch (error) {
       console.error('Get thread error:', error);
       return {
@@ -505,12 +618,16 @@ export class MessagesService {
   }
 
   /**
-   * Get blocked users - returns empty for now
+   * Get blocked users
    */
   async getBlockedUsers(): Promise<ApiResponse<{ [user: string]: string[] }>> {
     try {
-      // Return empty object - backend doesn't have this endpoint yet
-      return { success: true, data: {} };
+      // Use the correct endpoint path
+      const response = await apiCall<{ [user: string]: string[] }>(
+        `${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/blocked-users')}`
+      );
+      
+      return response.success ? response : { success: true, data: {} };
     } catch (error) {
       console.error('Get blocked users error:', error);
       return { success: true, data: {} };
@@ -518,12 +635,21 @@ export class MessagesService {
   }
 
   /**
-   * Get message notifications - returns empty for now
+   * Get message notifications
    */
   async getMessageNotifications(username: string): Promise<ApiResponse<MessageNotification[]>> {
     try {
-      // Return empty array - backend doesn't have this endpoint yet
-      return { success: true, data: [] };
+      const sanitizedUsername = sanitizeStrict(username);
+      if (!sanitizedUsername) {
+        return { success: true, data: [] };
+      }
+
+      // Use the correct endpoint path
+      const response = await apiCall<MessageNotification[]>(
+        `${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/notifications')}?username=${encodeURIComponent(sanitizedUsername)}`
+      );
+      
+      return response.success ? response : { success: true, data: [] };
     } catch (error) {
       console.error('Get message notifications error:', error);
       return { success: true, data: [] };
@@ -531,12 +657,16 @@ export class MessagesService {
   }
 
   /**
-   * Get unread reports count - returns 0 for now
+   * Get unread reports count
    */
   async getUnreadReports(): Promise<ApiResponse<{ count: number }>> {
     try {
-      // Return 0 - backend doesn't have this endpoint yet
-      return { success: true, data: { count: 0 } };
+      // Use the correct endpoint path
+      const response = await apiCall<{ count: number }>(
+        `${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/reports/unread-count')}`
+      );
+      
+      return response.success ? response : { success: true, data: { count: 0 } };
     } catch (error) {
       console.error('Get unread reports error:', error);
       return { success: true, data: { count: 0 } };
@@ -555,8 +685,14 @@ export class MessagesService {
         return;
       }
 
-      // Backend doesn't have this endpoint yet
-      console.log('Clear notifications called but endpoint not implemented yet');
+      // Use the correct endpoint path
+      await apiCall<void>(`${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/notifications/clear')}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          seller: sanitizedSeller,
+          buyer: sanitizedBuyer
+        })
+      });
     } catch (error) {
       console.error('Clear message notifications error:', error);
     }
@@ -617,7 +753,7 @@ export class MessagesService {
         };
       }
 
-      // This would need to upload to backend
+      // For now, return an error as this endpoint doesn't exist yet
       return {
         success: false,
         error: { message: 'File upload not implemented yet' },
@@ -657,6 +793,14 @@ export class MessagesService {
    */
   isWebSocketReady(): boolean {
     return this.wsReady;
+  }
+
+  /**
+   * Clear all caches
+   */
+  clearCache(): void {
+    this.messageCache.clear();
+    this.threadCache.clear();
   }
 }
 
