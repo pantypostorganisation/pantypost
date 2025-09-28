@@ -179,7 +179,7 @@ export class MessagesService {
 
   /**
    * Get all message threads for a user with profiles
-   * UPDATED: No transformation needed - use backend data directly
+   * FIXED: Properly extract profiles from the response
    */
   async getThreads(username: string, role?: 'buyer' | 'seller'): Promise<ThreadsResponse> {
     try {
@@ -198,29 +198,47 @@ export class MessagesService {
         
       const response = await apiCall<any>(url);
       
-      if (response.success) {
-        if (response.data && 'data' in response.data && 'profiles' in response.data) {
-          // UPDATED: Use profiles directly without transformation
-          return {
-            success: true,
-            data: response.data.data,
-            profiles: response.data.profiles // Direct pass-through
-          };
-        } else if (response.data && Array.isArray(response.data)) {
-          // Legacy format - just threads array
-          return {
-            success: true,
-            data: response.data,
-            profiles: {}
-          };
-        } else {
-          console.warn('[MessagesService] Unexpected response format:', response);
-          return {
-            success: true,
-            data: [],
-            profiles: {}
-          };
+      if (response.success && response.data) {
+        console.log('[MessagesService] Raw API response:', response.data);
+        
+        // The backend returns { success: true, data: threads[], profiles: {...} }
+        // But apiCall wraps it as { success: true, data: { success: true, data: threads[], profiles: {...} } }
+        // So we need to check if response.data has a nested structure
+        
+        let threads: MessageThread[] = [];
+        let profiles: { [username: string]: UserProfile } = {};
+        
+        // Check if response.data is the actual response from backend (has success, data, profiles)
+        if (response.data.success && response.data.data && response.data.profiles) {
+          // This is the nested structure from the backend
+          threads = response.data.data;
+          profiles = response.data.profiles;
+          console.log('[MessagesService] Extracted profiles from nested structure:', profiles);
         }
+        // Check if response.data has data and profiles directly
+        else if (response.data.data && response.data.profiles) {
+          threads = response.data.data;
+          profiles = response.data.profiles;
+          console.log('[MessagesService] Extracted profiles from direct structure:', profiles);
+        }
+        // Legacy format - just threads array
+        else if (Array.isArray(response.data)) {
+          threads = response.data;
+          profiles = {};
+          console.log('[MessagesService] Legacy format - no profiles');
+        }
+        // Another possible structure where response.data IS the threads array
+        else {
+          console.warn('[MessagesService] Unexpected response format:', response.data);
+          threads = [];
+          profiles = {};
+        }
+        
+        return {
+          success: true,
+          data: threads,
+          profiles: profiles
+        };
       }
       
       return {
@@ -238,7 +256,7 @@ export class MessagesService {
 
   /**
    * Get messages between two users with profiles
-   * UPDATED: No transformation needed
+   * FIXED: Properly extract profiles from the response
    */
   async getThread(userA: string, userB: string): Promise<ApiResponse<Message[]> & { profiles?: { [username: string]: UserProfile } }> {
     try {
@@ -259,29 +277,34 @@ export class MessagesService {
         buildApiUrl(API_ENDPOINTS.MESSAGES.THREAD, { threadId })
       );
       
-      if (response.success) {
-        if (response.data && 'data' in response.data && 'profiles' in response.data) {
-          // UPDATED: Use profiles directly without transformation
-          return {
-            success: true,
-            data: response.data.data,
-            profiles: response.data.profiles // Direct pass-through
-          };
-        } else if (response.data && Array.isArray(response.data)) {
-          // Legacy format - just messages array
-          return {
-            success: true,
-            data: response.data,
-            profiles: {}
-          };
-        } else {
-          console.warn('[MessagesService] Unexpected thread response format:', response);
-          return {
-            success: true,
-            data: [],
-            profiles: {}
-          };
+      if (response.success && response.data) {
+        console.log('[MessagesService] getThread raw response:', response.data);
+        
+        let messages: Message[] = [];
+        let profiles: { [username: string]: UserProfile } = {};
+        
+        // Check for nested structure from backend
+        if (response.data.success && response.data.data && response.data.profiles) {
+          messages = response.data.data;
+          profiles = response.data.profiles;
+          console.log('[MessagesService] getThread extracted profiles:', profiles);
         }
+        // Direct structure
+        else if (response.data.data && response.data.profiles) {
+          messages = response.data.data;
+          profiles = response.data.profiles;
+        }
+        // Legacy format
+        else if (Array.isArray(response.data)) {
+          messages = response.data;
+          profiles = {};
+        }
+        
+        return {
+          success: true,
+          data: messages,
+          profiles: profiles
+        };
       }
       
       return response;
