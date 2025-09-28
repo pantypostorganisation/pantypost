@@ -43,6 +43,7 @@ router.get('/user-status/:username', authMiddleware, async (req, res) => {
 router.get('/threads', authMiddleware, async (req, res) => {
   try {
     const username = req.query.username || req.user.username;
+    console.log('[THREADS] Getting threads for user:', username);
     
     // Get all messages where user is sender or receiver
     const messages = await Message.find({
@@ -51,6 +52,8 @@ router.get('/threads', authMiddleware, async (req, res) => {
         { receiver: username }
       ]
     }).sort({ createdAt: 1 });
+    
+    console.log('[THREADS] Found messages:', messages.length);
     
     // Group messages by thread
     const threadsMap = {};
@@ -116,12 +119,17 @@ router.get('/threads', authMiddleware, async (req, res) => {
     // FETCH PROFILES FOR ALL PARTICIPANTS
     const participantProfiles = {};
     if (participantSet.size > 0) {
+      console.log('[THREADS] Participants to fetch:', Array.from(participantSet));
+      
       const users = await User.find(
         { username: { $in: Array.from(participantSet) } },
         'username profilePic isVerified verificationStatus bio tier subscriberCount'
       );
       
+      console.log('[THREADS] Found users from DB:', users.length, users.map(u => u.username));
+      
       users.forEach(user => {
+        console.log('[THREADS] Adding profile for:', user.username, 'pic:', user.profilePic);
         participantProfiles[user.username] = {
           username: user.username,
           profilePic: user.profilePic || null,
@@ -131,12 +139,18 @@ router.get('/threads', authMiddleware, async (req, res) => {
           subscriberCount: user.subscriberCount || 0
         };
       });
+      
+      console.log('[THREADS] Final profiles:', JSON.stringify(participantProfiles));
+    } else {
+      console.log('[THREADS] No participants to fetch profiles for');
     }
     
     // Convert to array and sort by last message date
     const threads = Object.values(threadsMap).sort((a, b) => 
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
+    
+    console.log('[THREADS] Returning threads:', threads.length, 'with profiles for:', Object.keys(participantProfiles));
     
     // Include participant profiles in response
     res.json({
