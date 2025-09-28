@@ -683,6 +683,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     console.log('[MessageContext] Refreshing messages...');
     try {
       const threadsResponse = await messagesService.getThreads('');
+      console.log('[MessageContext] Full threads response:', JSON.stringify(threadsResponse));
       if (threadsResponse.success && threadsResponse.data) {
         const processedMessages: { [key: string]: Message[] } = {};
         const profiles: { [username: string]: SellerProfile } = {};
