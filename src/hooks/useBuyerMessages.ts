@@ -154,9 +154,12 @@ export const useBuyerMessages = () => {
     const loadInitialData = async () => {
       if (user && !initialLoadComplete) {
         console.log('[useBuyerMessages] Loading initial data...');
+        console.log('[useBuyerMessages] User:', user.username);
+        console.log('[useBuyerMessages] Is initialized:', isInitialized);
         
         // If messages context is not initialized, refresh
         if (!isInitialized) {
+          console.log('[useBuyerMessages] Context not initialized, refreshing...');
           await refreshMessages();
         }
         
@@ -432,21 +435,43 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user, optimisticMessages, messageUpdateCounter]);
   
-  // FIXED: Use profiles directly from context with correct property names
+  // DEBUGGING: Enhanced seller profiles with detailed logging
   const sellerProfiles = useMemo(() => {
     const profiles: { [seller: string]: { pic: string | null; verified: boolean } } = {};
     
+    console.log('[useBuyerMessages] ========== BUILDING SELLER PROFILES ==========');
+    console.log('[useBuyerMessages] contextProfiles from MessageContext:', contextProfiles);
+    console.log('[useBuyerMessages] getSellerProfile function available?', !!getSellerProfile);
+    console.log('[useBuyerMessages] Current threads (sellers):', Object.keys(threads));
+    
     Object.keys(threads).forEach(seller => {
-      // Get profile from context (already has correct property names)
-      const profile = getSellerProfile ? getSellerProfile(seller) : contextProfiles?.[seller];
+      console.log(`[useBuyerMessages] Processing seller: ${seller}`);
+      
+      // Try to get profile using the function first
+      let profile = null;
+      if (getSellerProfile) {
+        profile = getSellerProfile(seller);
+        console.log(`[useBuyerMessages]   - getSellerProfile(${seller}) returned:`, profile);
+      }
+      
+      // Fallback to contextProfiles if function didn't return anything
+      if (!profile && contextProfiles) {
+        profile = contextProfiles[seller];
+        console.log(`[useBuyerMessages]   - contextProfiles[${seller}]:`, profile);
+      }
       
       if (profile) {
+        console.log(`[useBuyerMessages]   ✓ Found profile for ${seller}:`, {
+          pic: profile.pic,
+          verified: profile.verified
+        });
+        
         profiles[seller] = {
-          pic: profile.pic || null,  // Keep the same property names from MessageContext
-          verified: profile.verified || false  // Keep the same property names from MessageContext
+          pic: profile.pic || null,
+          verified: profile.verified || false
         };
       } else {
-        // Fallback if no profile data
+        console.log(`[useBuyerMessages]   ✗ No profile found for ${seller}, using defaults`);
         profiles[seller] = {
           pic: null,
           verified: false
@@ -454,7 +479,9 @@ export const useBuyerMessages = () => {
       }
     });
     
-    console.log('[useBuyerMessages] Seller profiles ready:', Object.keys(profiles).length);
+    console.log('[useBuyerMessages] ========== FINAL SELLER PROFILES ==========');
+    console.log('[useBuyerMessages] Final profiles object:', profiles);
+    console.log('[useBuyerMessages] Total profiles built:', Object.keys(profiles).length);
     
     return profiles;
   }, [threads, contextProfiles, getSellerProfile]);
