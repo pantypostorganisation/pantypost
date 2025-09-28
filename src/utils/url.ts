@@ -6,8 +6,12 @@
 export const resolveApiUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   
-  // If it's already a full URL, return it
+  // If it's already a full URL, force HTTPS for api.pantypost.com
   if (url.startsWith('http://') || url.startsWith('https://')) {
+    // Force HTTPS for api.pantypost.com URLs to avoid mixed content errors
+    if (url.includes('api.pantypost.com')) {
+      return url.replace('http://', 'https://');
+    }
     return url;
   }
   
@@ -66,8 +70,13 @@ export function safeImageSrc(
   const placeholder = options?.placeholder ?? '/placeholder-image.png';
   if (!input) return placeholder;
 
-  // Already http(s) — accept
-  if (/^https?:\/\//i.test(input)) return input;
+  // Already http(s) — accept but force HTTPS for api.pantypost.com
+  if (/^https?:\/\//i.test(input)) {
+    if (input.includes('api.pantypost.com')) {
+      return input.replace('http://', 'https://');
+    }
+    return input;
+  }
 
   // Unsafe schemes
   if (/^(javascript|vbscript|data):/i.test(input)) return placeholder;
