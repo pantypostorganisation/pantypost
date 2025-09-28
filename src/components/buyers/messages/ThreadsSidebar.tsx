@@ -4,7 +4,37 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MessageSquare, Search, Star, Package, Bell, X, Filter, Check } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { resolveApiUrl } from '@/utils/url';
+
+// Helper function to resolve image URLs
+const resolveProfilePicUrl = (pic: string | null | undefined): string | null => {
+  if (!pic) return null;
+  
+  // If it's already a full URL, return as-is
+  if (pic.startsWith('http://') || pic.startsWith('https://')) {
+    // Replace http with https for production API
+    if (pic.includes('api.pantypost.com') && pic.startsWith('http://')) {
+      return pic.replace('http://', 'https://');
+    }
+    return pic;
+  }
+  
+  // If it starts with /uploads/, prepend the API URL
+  if (pic.startsWith('/uploads/')) {
+    // Use HTTPS for production
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+    return `${apiUrl}${pic}`;
+  }
+  
+  // If it's just a filename or relative path, prepend /uploads/ and API URL
+  if (!pic.startsWith('/')) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+    return `${apiUrl}/uploads/${pic}`;
+  }
+  
+  // Default: prepend API URL
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+  return `${apiUrl}${pic}`;
+};
 
 interface ThreadsSidebarProps {
   threads: { [seller: string]: any[] };
@@ -228,8 +258,13 @@ export default function ThreadsSidebar({
                 const profile = sellerProfiles[seller] || { pic: null, verified: false };
                 const isActive = activeThread === seller;
                 
-                // FIX: Resolve the seller profile picture URL
-                const resolvedProfilePic = resolveApiUrl(profile.pic)?.replace('http://api.pantypost.com', 'https://api.pantypost.com');
+                // CRITICAL FIX: Properly resolve the profile picture URL
+                const resolvedProfilePic = resolveProfilePicUrl(profile.pic);
+                
+                console.log(`ThreadsSidebar: Seller ${seller} profile pic:`, {
+                  original: profile.pic,
+                  resolved: resolvedProfilePic
+                });
                 
                 return (
                   <div
@@ -253,10 +288,20 @@ export default function ThreadsSidebar({
                               src={resolvedProfilePic} 
                               alt={seller}
                               className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error(`Failed to load image for ${seller}:`, resolvedProfilePic);
+                                // Fallback to placeholder on error
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                (e.target as HTMLImageElement).parentElement!.innerHTML = `
+                                  <div class="w-full h-full flex items-center justify-center text-white font-bold bg-gradient-to-br from-purple-500 to-pink-500">
+                                    ${seller.charAt(0).toUpperCase()}
+                                  </div>
+                                `;
+                              }}
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              <MessageSquare size={20} />
+                            <div className="w-full h-full flex items-center justify-center text-white font-bold bg-gradient-to-br from-purple-500 to-pink-500">
+                              {seller.charAt(0).toUpperCase()}
                             </div>
                           )}
                         </div>
@@ -268,8 +313,8 @@ export default function ThreadsSidebar({
                           </div>
                         )}
                         
-                        {/* Online indicator */}
-                        <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+                        {/* Online indicator - you can implement actual online status if available */}
+                        {/* <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" /> */}
                       </div>
                       
                       {/* Thread info */}

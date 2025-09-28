@@ -31,13 +31,43 @@ import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization'
 import { formatActivityStatus } from '@/utils/format';
 import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import { ALL_EMOJIS } from '@/constants/emojis';
-import { resolveApiUrl } from '@/utils/url';
 
 // Helper to get conversation key (use sanitized usernames)
 const getConversationKey = (userA: string, userB: string): string => {
   const a = sanitizeUsername(userA);
   const b = sanitizeUsername(userB);
   return [a, b].sort().join('-');
+};
+
+// Helper function to resolve profile picture URLs properly
+const resolveProfilePicUrl = (pic: string | null | undefined): string | null => {
+  if (!pic) return null;
+  
+  // If it's already a full URL, return as-is
+  if (pic.startsWith('http://') || pic.startsWith('https://')) {
+    // Replace http with https for production API
+    if (pic.includes('api.pantypost.com') && pic.startsWith('http://')) {
+      return pic.replace('http://', 'https://');
+    }
+    return pic;
+  }
+  
+  // If it starts with /uploads/, prepend the API URL
+  if (pic.startsWith('/uploads/')) {
+    // Use HTTPS for production
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+    return `${apiUrl}${pic}`;
+  }
+  
+  // If it's just a filename or relative path, prepend /uploads/ and API URL
+  if (!pic.startsWith('/')) {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+    return `${apiUrl}/uploads/${pic}`;
+  }
+  
+  // Default: prepend API URL
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+  return `${apiUrl}${pic}`;
 };
 
 // Create a status badge component
@@ -196,8 +226,8 @@ export default function ConversationView(props: ConversationViewProps) {
 
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
 
-  // FIX: Resolve the seller profile picture URL
-  const resolvedSellerPic = resolveApiUrl(sellerProfiles[activeThread]?.pic);
+  // FIX: Resolve the seller profile picture URL with new helper
+  const resolvedSellerPic = resolveProfilePicUrl(sellerProfiles[activeThread]?.pic);
 
   // Prevent scroll outside messages container on mobile
   useEffect(() => {
