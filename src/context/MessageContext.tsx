@@ -167,9 +167,10 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
               // Use the username from the key, not from the profile object
               const key = sanitizeUsername(username) || username;
               
+              // Handle both frontend (pic) and backend (profilePic) formats
               profiles[key] = {
-                pic: profile.profilePic || null,
-                verified: profile.isVerified || false
+                pic: profile.pic || profile.profilePic || null,
+                verified: profile.verified || profile.isVerified || false
               };
               
               console.log(`[MessageContext] Stored profile for ${key}:`, profiles[key]);
@@ -694,9 +695,10 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
             const key = sanitizeUsername(username) || username;
             
+            // Handle both frontend (pic) and backend (profilePic) formats
             profiles[key] = {
-              pic: profile.profilePic || null,
-              verified: profile.isVerified || false
+              pic: profile.pic || profile.profilePic || null,
+              verified: profile.verified || profile.isVerified || false
             };
             
             console.log(`[MessageContext] Refreshed profile for ${key}:`, profiles[key]);

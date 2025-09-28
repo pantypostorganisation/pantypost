@@ -116,23 +116,45 @@ router.get('/threads', authMiddleware, async (req, res) => {
       }
     });
     
-    // FETCH PROFILES FOR ALL PARTICIPANTS
+    // FETCH PROFILES FOR ALL PARTICIPANTS - FIXED
     const participantProfiles = {};
     if (participantSet.size > 0) {
-      console.log('[THREADS] Participants to fetch:', Array.from(participantSet));
+      console.log('[THREADS] Fetching profiles for participants:', Array.from(participantSet));
       
       const users = await User.find(
         { username: { $in: Array.from(participantSet) } },
         'username profilePic isVerified verificationStatus bio tier subscriberCount'
       );
       
-      console.log('[THREADS] Found users from DB:', users.length, users.map(u => u.username));
+      console.log('[THREADS] Found users:', users.length);
       
       users.forEach(user => {
-        console.log('[THREADS] Adding profile for:', user.username, 'pic:', user.profilePic);
+        // Build the full URL for profilePic if it exists
+        let fullProfilePicUrl = user.profilePic;
+        
+        if (user.profilePic) {
+          // If it's already a full URL, keep it
+          if (user.profilePic.startsWith('http://') || user.profilePic.startsWith('https://')) {
+            fullProfilePicUrl = user.profilePic;
+          }
+          // If it starts with /uploads/, prepend the base URL
+          else if (user.profilePic.startsWith('/uploads/')) {
+            // Use the environment variable if available, otherwise use production URL
+            const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+            fullProfilePicUrl = `${baseUrl}${user.profilePic}`;
+          }
+          // If it's a relative path without leading slash
+          else if (!user.profilePic.startsWith('/')) {
+            const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+            fullProfilePicUrl = `${baseUrl}/uploads/${user.profilePic}`;
+          }
+        }
+        
+        console.log(`[THREADS] User ${user.username} - Original pic: ${user.profilePic}, Full URL: ${fullProfilePicUrl}`);
+        
         participantProfiles[user.username] = {
           username: user.username,
-          profilePic: user.profilePic || null,
+          profilePic: fullProfilePicUrl,
           isVerified: user.isVerified || user.verificationStatus === 'verified' || false,
           bio: user.bio || '',
           tier: user.tier || 'Tease',
@@ -140,9 +162,7 @@ router.get('/threads', authMiddleware, async (req, res) => {
         };
       });
       
-      console.log('[THREADS] Final profiles:', JSON.stringify(participantProfiles));
-    } else {
-      console.log('[THREADS] No participants to fetch profiles for');
+      console.log('[THREADS] Final profiles object:', JSON.stringify(participantProfiles, null, 2));
     }
     
     // Convert to array and sort by last message date
@@ -152,7 +172,7 @@ router.get('/threads', authMiddleware, async (req, res) => {
     
     console.log('[THREADS] Returning threads:', threads.length, 'with profiles for:', Object.keys(participantProfiles));
     
-    // Include participant profiles in response
+    // Return with profiles at the root level
     res.json({
       success: true,
       data: threads,
@@ -200,7 +220,7 @@ router.get('/threads/:threadId', authMiddleware, async (req, res) => {
       threadId: msg.threadId
     }));
     
-    // Get profiles for the other participant
+    // Get profiles for the other participant - FIXED
     const otherUsername = user1 === username ? user2 : user1;
     const otherUser = await User.findOne(
       { username: otherUsername },
@@ -209,9 +229,24 @@ router.get('/threads/:threadId', authMiddleware, async (req, res) => {
     
     const profiles = {};
     if (otherUser) {
+      // Build the full URL for profilePic if it exists
+      let fullProfilePicUrl = otherUser.profilePic;
+      
+      if (otherUser.profilePic) {
+        if (otherUser.profilePic.startsWith('http://') || otherUser.profilePic.startsWith('https://')) {
+          fullProfilePicUrl = otherUser.profilePic;
+        } else if (otherUser.profilePic.startsWith('/uploads/')) {
+          const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+          fullProfilePicUrl = `${baseUrl}${otherUser.profilePic}`;
+        } else if (!otherUser.profilePic.startsWith('/')) {
+          const baseUrl = process.env.API_BASE_URL || 'https://api.pantypost.com';
+          fullProfilePicUrl = `${baseUrl}/uploads/${otherUser.profilePic}`;
+        }
+      }
+      
       profiles[otherUser.username] = {
         username: otherUser.username,
-        profilePic: otherUser.profilePic || null,
+        profilePic: fullProfilePicUrl,
         isVerified: otherUser.isVerified || otherUser.verificationStatus === 'verified' || false,
         bio: otherUser.bio || '',
         tier: otherUser.tier || 'Tease',
@@ -562,6 +597,50 @@ router.post('/unblock', authMiddleware, async (req, res) => {
   }
 });
 
+// Report a user
+router.post('/report', authMiddleware, async (req, res) => {
+  try {
+    const { reportee, reason, messages, category } = req.body;
+    const reporter = req.user.username;
+    
+    if (!reportee) {
+      return res.status(400).json({
+        success: false,
+        error: 'Reportee username is required'
+      });
+    }
+    
+    // Create report in Report model
+    const Report = require('../models/Report');
+    const report = new Report({
+      reporter,
+      reportedUser: reportee,
+      reason: reason || '',
+      category: category || 'other',
+      messages: messages || [],
+      status: 'pending',
+      processed: false
+    });
+    
+    await report.save();
+    
+    res.json({
+      success: true,
+      data: {
+        reporter,
+        reportee,
+        reportId: report._id
+      }
+    });
+  } catch (error) {
+    console.error('Report user error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Get message notifications for current user
 router.get('/notifications', authMiddleware, async (req, res) => {
   try {
@@ -638,50 +717,6 @@ router.post('/notifications/clear', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('Clear notifications error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Report a user
-router.post('/report', authMiddleware, async (req, res) => {
-  try {
-    const { reportee, reason, messages, category } = req.body;
-    const reporter = req.user.username;
-    
-    if (!reportee) {
-      return res.status(400).json({
-        success: false,
-        error: 'Reportee username is required'
-      });
-    }
-    
-    // Create report in Report model
-    const Report = require('../models/Report');
-    const report = new Report({
-      reporter,
-      reportedUser: reportee,
-      reason: reason || '',
-      category: category || 'other',
-      messages: messages || [],
-      status: 'pending',
-      processed: false
-    });
-    
-    await report.save();
-    
-    res.json({
-      success: true,
-      data: {
-        reporter,
-        reportee,
-        reportId: report._id
-      }
-    });
-  } catch (error) {
-    console.error('Report user error:', error);
     res.status(500).json({
       success: false,
       error: error.message
