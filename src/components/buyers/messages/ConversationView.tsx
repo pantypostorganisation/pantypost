@@ -19,8 +19,7 @@ import {
   User,
   MoreVertical,
   Ban,
-  Flag,
-  CheckCircle
+  Flag
 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import TypingIndicator from '@/components/messaging/TypingIndicator';
@@ -28,8 +27,6 @@ import { getLatestCustomRequestMessages, Message, CustomRequest, getInitial } fr
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
-import { formatActivityStatus } from '@/utils/format';
-import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import { ALL_EMOJIS } from '@/constants/emojis';
 
 // Helper to get conversation key (use sanitized usernames)
@@ -68,6 +65,31 @@ const resolveProfilePicUrl = (pic: string | null | undefined): string | null => 
   // Default: prepend API URL
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
   return `${apiUrl}${pic}`;
+};
+
+// Simple activity status format
+const formatActivityStatus = (isOnline: boolean, lastActive: Date | null): string => {
+  if (isOnline) return 'Active now';
+  
+  if (!lastActive) return 'Offline';
+  
+  const now = Date.now();
+  const then = lastActive.getTime();
+  const diffMs = now - then;
+  
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (minutes < 1) return 'Active just now';
+  if (minutes === 1) return '1m ago';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours === 1) return '1hr ago';
+  if (hours < 24) return `${hours}hr ago`;
+  if (days === 1) return '1d ago';
+  if (days < 30) return `${days}d ago`;
+  
+  return 'Offline';
 };
 
 // Create a status badge component
@@ -222,11 +244,15 @@ export default function ConversationView(props: ConversationViewProps) {
   const hasScrolledForTypingRef = useRef(false);
   const userHasScrolledRef = useRef(false);
 
-  const { activityStatus, loading: activityLoading } = useUserActivityStatus(activeThread);
+  // Mock activity status - in production this would come from WebSocket or API
+  const [activityStatus, setActivityStatus] = useState<{ isOnline: boolean; lastActive: Date | null }>({
+    isOnline: Math.random() > 0.6, // Mock: 40% chance of being online
+    lastActive: new Date(Date.now() - Math.random() * 86400000 * 7) // Mock: Random time within last 7 days
+  });
 
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
 
-  // UPDATED: Use profilePic instead of pic
+  // Use profilePic instead of pic
   const resolvedSellerPic = resolveProfilePicUrl(sellerProfiles[activeThread]?.profilePic);
 
   // Prevent scroll outside messages container on mobile
@@ -422,7 +448,6 @@ export default function ConversationView(props: ConversationViewProps) {
 
   const getActivityDisplay = () => {
     if (isUserBlocked) return 'Blocked';
-    if (activityLoading) return '...';
     return formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
   };
 
@@ -434,7 +459,7 @@ export default function ConversationView(props: ConversationViewProps) {
     return !!lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Mobile Header Component - UPDATED with online indicator
+  // Mobile Header Component - NO verification badge
   const renderMobileHeader = () => (
     <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-lg safe-top z-50 sticky top-0">
       <div className="flex items-center justify-between p-4 min-h-[60px]">
@@ -451,7 +476,7 @@ export default function ConversationView(props: ConversationViewProps) {
             </button>
           )}
           
-          {/* Seller Avatar - UPDATED with online indicator */}
+          {/* Seller Avatar with online indicator */}
           <div className="relative mr-3 flex-shrink-0">
             {resolvedSellerPic ? (
               <SecureImage
@@ -469,13 +494,6 @@ export default function ConversationView(props: ConversationViewProps) {
             {/* Online indicator - Messenger style with #ff950e */}
             {activityStatus.isOnline && !isUserBlocked && (
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
-            )}
-            
-            {/* Verified badge - adjusted position to not overlap with online indicator */}
-            {sellerProfiles[activeThread]?.isVerified && (
-              <div className="absolute -top-1 -right-1 bg-[#1a1a1a] rounded-full">
-                <CheckCircle className="w-4 h-4 text-blue-500" />
-              </div>
             )}
           </div>
           
@@ -561,12 +579,12 @@ export default function ConversationView(props: ConversationViewProps) {
     </div>
   );
 
-  // Desktop Header Component - UPDATED with online indicator
+  // Desktop Header Component - NO verification badge
   const renderDesktopHeader = () => (
     <div className="flex items-center justify-between p-3">
       {/* Left section */}
       <div className="flex items-center flex-1 min-w-0">
-        {/* Seller Avatar - UPDATED with online indicator */}
+        {/* Seller Avatar with online indicator */}
         <div className="relative mr-3 flex-shrink-0">
           {resolvedSellerPic ? (
             <SecureImage
@@ -584,13 +602,6 @@ export default function ConversationView(props: ConversationViewProps) {
           {/* Online indicator - Messenger style with #ff950e */}
           {activityStatus.isOnline && !isUserBlocked && (
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
-          )}
-          
-          {/* Verified badge - adjusted position to not overlap with online indicator */}
-          {sellerProfiles[activeThread]?.isVerified && (
-            <div className="absolute -top-1 -right-1 bg-[#1a1a1a] rounded-full">
-              <CheckCircle className="w-4 h-4 text-blue-500" />
-            </div>
           )}
         </div>
         
@@ -923,10 +934,10 @@ export default function ConversationView(props: ConversationViewProps) {
   if (isMobile) {
     return (
       <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden">
-        {/* Mobile Header - Now properly rendered */}
+        {/* Mobile Header */}
         {renderMobileHeader()}
 
-        {/* Messages container - flex-1 makes it fill available space */}
+        {/* Messages container */}
         <div
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto px-3 py-2"

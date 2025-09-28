@@ -2,9 +2,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { MessageSquare, Search, Star, Package, Bell, X, Filter, Check } from 'lucide-react';
+import { MessageSquare, Search, Star, Package, Bell, X, Filter } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 
 // Helper function to resolve image URLs
 const resolveProfilePicUrl = (pic: string | null | undefined): string | null => {
@@ -35,6 +34,31 @@ const resolveProfilePicUrl = (pic: string | null | undefined): string | null => 
   // Default: prepend API URL
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
   return `${apiUrl}${pic}`;
+};
+
+// Simple activity status format
+const formatActivityStatus = (isOnline: boolean, lastActive: Date | null): string => {
+  if (isOnline) return 'Active now';
+  
+  if (!lastActive) return 'Offline';
+  
+  const now = Date.now();
+  const then = lastActive.getTime();
+  const diffMs = now - then;
+  
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  const hours = Math.floor(diffMs / (1000 * 60 * 60));
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (minutes < 1) return 'Active just now';
+  if (minutes === 1) return '1m ago';
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours === 1) return '1hr ago';
+  if (hours < 24) return `${hours}hr ago`;
+  if (days === 1) return '1d ago';
+  if (days < 30) return `${days}d ago`;
+  
+  return 'Offline';
 };
 
 interface ThreadsSidebarProps {
@@ -77,8 +101,12 @@ function ThreadItem({
   onThreadClick: (seller: string) => void;
   onToggleFavorite: (e: React.MouseEvent, seller: string) => void;
 }) {
-  // Get activity status for this seller
-  const { activityStatus, loading } = useUserActivityStatus(seller);
+  // Mock activity status - in production this would come from WebSocket or API
+  const [activityStatus, setActivityStatus] = useState<{ isOnline: boolean; lastActive: Date | null }>({
+    isOnline: Math.random() > 0.6, // Mock: 40% chance of being online
+    lastActive: new Date(Date.now() - Math.random() * 86400000 * 7) // Mock: Random time within last 7 days
+  });
+  
   const resolvedProfilePic = resolveProfilePicUrl(profile.profilePic);
   
   // Format last message preview
@@ -136,24 +164,25 @@ function ThreadItem({
           </div>
           
           {/* Online indicator - Messenger style */}
-          {activityStatus.isOnline && !loading && (
+          {activityStatus.isOnline && (
             <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
-          )}
-          
-          {/* Verification badge */}
-          {profile.isVerified && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-              <Check size={12} className="text-white" />
-            </div>
           )}
         </div>
         
         {/* Thread info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-1">
-            <span className="font-medium text-white truncate">
-              {seller}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-white truncate">
+                {seller}
+              </span>
+              {/* Activity status text */}
+              <span className={`text-xs ${
+                activityStatus.isOnline ? 'text-[#ff950e]' : 'text-gray-500'
+              }`}>
+                {formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive)}
+              </span>
+            </div>
             
             <div className="flex items-center gap-2">
               {/* Pending requests indicator */}
@@ -184,16 +213,9 @@ function ThreadItem({
           </div>
           
           {/* Last message preview */}
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-400 truncate">
-              {lastMessage ? formatMessagePreview(lastMessage) : 'No messages yet'}
-            </p>
-            {lastMessage && (
-              <span className="text-xs text-gray-500 ml-2">
-                {formatDistanceToNow(new Date(lastMessage.date), { addSuffix: true })}
-              </span>
-            )}
-          </div>
+          <p className="text-sm text-gray-400 truncate">
+            {lastMessage ? formatMessagePreview(lastMessage) : 'No messages yet'}
+          </p>
         </div>
       </div>
     </div>
