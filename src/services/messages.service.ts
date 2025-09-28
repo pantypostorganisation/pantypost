@@ -196,43 +196,77 @@ export class MessagesService {
         ? `${API_ENDPOINTS.MESSAGES.THREADS}?username=${encodeURIComponent(username)}${role ? `&role=${role}` : ''}`
         : API_ENDPOINTS.MESSAGES.THREADS;
         
+      console.log('[MessagesService.getThreads] Calling API:', url);
       const response = await apiCall<any>(url);
+      console.log('[MessagesService.getThreads] Raw response from apiCall:', response);
       
-      if (response.success && response.data) {
-        console.log('[MessagesService] Raw API response:', response.data);
+      if (response.success) {
+        // DEBUG: Log what we received
+        console.log('[MessagesService.getThreads] response.success is true');
+        console.log('[MessagesService.getThreads] response.data type:', typeof response.data);
+        console.log('[MessagesService.getThreads] response.data keys:', response.data ? Object.keys(response.data) : 'null');
         
-        // The backend returns { success: true, data: threads[], profiles: {...} }
-        // But apiCall wraps it as { success: true, data: { success: true, data: threads[], profiles: {...} } }
-        // So we need to check if response.data has a nested structure
+        // The backend sends { success: true, data: [...threads], profiles: {...} }
+        // But apiCall() extracts only the 'data' field from backend response
+        // So response.data here is just the threads array, not the full response
         
+        // We need to check if response.data is the threads array or the full structure
         let threads: MessageThread[] = [];
         let profiles: { [username: string]: UserProfile } = {};
         
-        // Check if response.data is the actual response from backend (has success, data, profiles)
-        if (response.data.success && response.data.data && response.data.profiles) {
-          // This is the nested structure from the backend
-          threads = response.data.data;
-          profiles = response.data.profiles;
-          console.log('[MessagesService] Extracted profiles from nested structure:', profiles);
-        }
-        // Check if response.data has data and profiles directly
-        else if (response.data.data && response.data.profiles) {
-          threads = response.data.data;
-          profiles = response.data.profiles;
-          console.log('[MessagesService] Extracted profiles from direct structure:', profiles);
-        }
-        // Legacy format - just threads array
-        else if (Array.isArray(response.data)) {
+        if (Array.isArray(response.data)) {
+          // response.data is just the threads array
+          // This means profiles were lost during apiCall processing
+          console.log('[MessagesService.getThreads] response.data is an array (threads only, no profiles)');
           threads = response.data;
           profiles = {};
-          console.log('[MessagesService] Legacy format - no profiles');
+          
+          // WORKAROUND: Make a direct fetch to get the full response with profiles
+          try {
+            const token = this.getAuthToken();
+            if (token) {
+              const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+              const directUrl = `${baseUrl}/api${url}`;
+              
+              console.log('[MessagesService.getThreads] Making direct fetch to get profiles:', directUrl);
+              
+              const directResponse = await fetch(directUrl, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (directResponse.ok) {
+                const directData = await directResponse.json();
+                console.log('[MessagesService.getThreads] Direct fetch response:', directData);
+                
+                if (directData.success && directData.profiles) {
+                  profiles = directData.profiles;
+                  console.log('[MessagesService.getThreads] Got profiles from direct fetch:', profiles);
+                }
+              }
+            }
+          } catch (error) {
+            console.error('[MessagesService.getThreads] Direct fetch failed:', error);
+          }
+        } else if (response.data && typeof response.data === 'object') {
+          // Check if response.data has the full structure
+          if ('data' in response.data && 'profiles' in response.data) {
+            console.log('[MessagesService.getThreads] Found nested structure with profiles');
+            threads = response.data.data;
+            profiles = response.data.profiles;
+          } else if ('profiles' in response.data) {
+            // Profiles at same level as threads?
+            console.log('[MessagesService.getThreads] Found profiles at same level');
+            profiles = response.data.profiles;
+            // Extract threads - might be under a different key
+            threads = response.data.threads || response.data.data || [];
+          }
         }
-        // Another possible structure where response.data IS the threads array
-        else {
-          console.warn('[MessagesService] Unexpected response format:', response.data);
-          threads = [];
-          profiles = {};
-        }
+        
+        console.log('[MessagesService.getThreads] Final result - threads count:', threads.length);
+        console.log('[MessagesService.getThreads] Final result - profiles:', profiles);
         
         return {
           success: true,
@@ -251,6 +285,28 @@ export class MessagesService {
         success: false,
         error: { message: 'Failed to get message threads' },
       };
+    }
+  }
+
+  /**
+   * Get auth token helper
+   */
+  private getAuthToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // Check sessionStorage first (where AuthContext stores it)
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (authTokens) {
+        const parsed = JSON.parse(authTokens);
+        return parsed.token || null;
+      }
+      
+      // Check direct auth_token
+      const token = sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token');
+      return token;
+    } catch {
+      return null;
     }
   }
 
@@ -277,27 +333,45 @@ export class MessagesService {
         buildApiUrl(API_ENDPOINTS.MESSAGES.THREAD, { threadId })
       );
       
+      console.log('[MessagesService.getThread] Raw response:', response);
+      
       if (response.success && response.data) {
-        console.log('[MessagesService] getThread raw response:', response.data);
-        
         let messages: Message[] = [];
         let profiles: { [username: string]: UserProfile } = {};
         
-        // Check for nested structure from backend
-        if (response.data.success && response.data.data && response.data.profiles) {
-          messages = response.data.data;
-          profiles = response.data.profiles;
-          console.log('[MessagesService] getThread extracted profiles:', profiles);
-        }
-        // Direct structure
-        else if (response.data.data && response.data.profiles) {
-          messages = response.data.data;
-          profiles = response.data.profiles;
-        }
-        // Legacy format
-        else if (Array.isArray(response.data)) {
+        // Similar logic to getThreads
+        if (Array.isArray(response.data)) {
           messages = response.data;
-          profiles = {};
+          
+          // Try direct fetch for profiles
+          try {
+            const token = this.getAuthToken();
+            if (token) {
+              const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+              const directUrl = `${baseUrl}/api/messages/threads/${threadId}`;
+              
+              const directResponse = await fetch(directUrl, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              
+              if (directResponse.ok) {
+                const directData = await directResponse.json();
+                if (directData.profiles) {
+                  profiles = directData.profiles;
+                }
+              }
+            }
+          } catch (error) {
+            console.error('[MessagesService.getThread] Direct fetch failed:', error);
+          }
+        } else if (response.data && typeof response.data === 'object') {
+          if ('data' in response.data && 'profiles' in response.data) {
+            messages = response.data.data;
+            profiles = response.data.profiles;
+          }
         }
         
         return {
