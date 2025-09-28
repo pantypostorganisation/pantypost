@@ -164,9 +164,13 @@ const getFileUrl = (req, filepath) => {
   // Remove 'uploads/' from the beginning if present
   const cleanPath = normalizedPath.replace(/^uploads\//, '');
   
-  // Construct the full URL
-  const protocol = req.protocol;
+  // Get the host
   const host = req.get('host');
+  
+  // Force HTTPS for api.pantypost.com (production), use request protocol for localhost (dev)
+  const protocol = (host && host.includes('api.pantypost.com')) ? 'https' : req.protocol;
+  
+  // Construct the full URL
   return `${protocol}://${host}/uploads/${cleanPath}`;
 };
 
