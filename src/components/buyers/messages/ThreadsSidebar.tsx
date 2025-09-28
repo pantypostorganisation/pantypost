@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MessageSquare, Search, Star, Package, Bell, X, Filter } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 
 // Helper function to resolve image URLs
 const resolveProfilePicUrl = (pic: string | null | undefined): string | null => {
@@ -101,11 +102,8 @@ function ThreadItem({
   onThreadClick: (seller: string) => void;
   onToggleFavorite: (e: React.MouseEvent, seller: string) => void;
 }) {
-  // Mock activity status - in production this would come from WebSocket or API
-  const [activityStatus, setActivityStatus] = useState<{ isOnline: boolean; lastActive: Date | null }>({
-    isOnline: Math.random() > 0.6, // Mock: 40% chance of being online
-    lastActive: new Date(Date.now() - Math.random() * 86400000 * 7) // Mock: Random time within last 7 days
-  });
+  // Use the REAL WebSocket activity status hook
+  const { activityStatus, loading } = useUserActivityStatus(seller);
   
   const resolvedProfilePic = resolveProfilePicUrl(profile.profilePic);
   
@@ -164,7 +162,7 @@ function ThreadItem({
           </div>
           
           {/* Online indicator - Messenger style */}
-          {activityStatus.isOnline && (
+          {activityStatus.isOnline && !loading && (
             <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
           )}
         </div>
@@ -180,7 +178,7 @@ function ThreadItem({
               <span className={`text-xs ${
                 activityStatus.isOnline ? 'text-[#ff950e]' : 'text-gray-500'
               }`}>
-                {formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive)}
+                {loading ? '...' : formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive)}
               </span>
             </div>
             

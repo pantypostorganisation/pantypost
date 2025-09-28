@@ -2,6 +2,7 @@
 import React, { useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { WalletContext } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
+import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import {
   BadgeCheck,
   AlertTriangle,
@@ -27,6 +28,7 @@ import { getLatestCustomRequestMessages, Message, CustomRequest, getInitial } fr
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
+import { formatActivityStatus } from '@/utils/format';
 import { ALL_EMOJIS } from '@/constants/emojis';
 
 // Helper to get conversation key (use sanitized usernames)
@@ -65,31 +67,6 @@ const resolveProfilePicUrl = (pic: string | null | undefined): string | null => 
   // Default: prepend API URL
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
   return `${apiUrl}${pic}`;
-};
-
-// Simple activity status format
-const formatActivityStatus = (isOnline: boolean, lastActive: Date | null): string => {
-  if (isOnline) return 'Active now';
-  
-  if (!lastActive) return 'Offline';
-  
-  const now = Date.now();
-  const then = lastActive.getTime();
-  const diffMs = now - then;
-  
-  const minutes = Math.floor(diffMs / (1000 * 60));
-  const hours = Math.floor(diffMs / (1000 * 60 * 60));
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  
-  if (minutes < 1) return 'Active just now';
-  if (minutes === 1) return '1m ago';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours === 1) return '1hr ago';
-  if (hours < 24) return `${hours}hr ago`;
-  if (days === 1) return '1d ago';
-  if (days < 30) return `${days}d ago`;
-  
-  return 'Offline';
 };
 
 // Create a status badge component
@@ -244,11 +221,8 @@ export default function ConversationView(props: ConversationViewProps) {
   const hasScrolledForTypingRef = useRef(false);
   const userHasScrolledRef = useRef(false);
 
-  // Mock activity status - in production this would come from WebSocket or API
-  const [activityStatus, setActivityStatus] = useState<{ isOnline: boolean; lastActive: Date | null }>({
-    isOnline: Math.random() > 0.6, // Mock: 40% chance of being online
-    lastActive: new Date(Date.now() - Math.random() * 86400000 * 7) // Mock: Random time within last 7 days
-  });
+  // Use the REAL WebSocket activity status hook
+  const { activityStatus, loading: activityLoading } = useUserActivityStatus(activeThread);
 
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
 
@@ -448,6 +422,7 @@ export default function ConversationView(props: ConversationViewProps) {
 
   const getActivityDisplay = () => {
     if (isUserBlocked) return 'Blocked';
+    if (activityLoading) return '...';
     return formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
   };
 
