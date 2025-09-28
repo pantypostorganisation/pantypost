@@ -434,7 +434,7 @@ export default function ConversationView(props: ConversationViewProps) {
     return !!lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Mobile Header Component - UPDATED to use profilePic and isVerified
+  // Mobile Header Component - UPDATED with online indicator
   const renderMobileHeader = () => (
     <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-lg safe-top z-50 sticky top-0">
       <div className="flex items-center justify-between p-4 min-h-[60px]">
@@ -451,7 +451,7 @@ export default function ConversationView(props: ConversationViewProps) {
             </button>
           )}
           
-          {/* Seller Avatar - UPDATED to use resolved URL */}
+          {/* Seller Avatar - UPDATED with online indicator */}
           <div className="relative mr-3 flex-shrink-0">
             {resolvedSellerPic ? (
               <SecureImage
@@ -466,14 +466,14 @@ export default function ConversationView(props: ConversationViewProps) {
               </div>
             )}
             
-            {/* Online indicator */}
+            {/* Online indicator - Messenger style with #ff950e */}
             {activityStatus.isOnline && !isUserBlocked && (
-              <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
             )}
             
-            {/* Verified badge - UPDATED to use isVerified */}
+            {/* Verified badge - adjusted position to not overlap with online indicator */}
             {sellerProfiles[activeThread]?.isVerified && (
-              <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
+              <div className="absolute -top-1 -right-1 bg-[#1a1a1a] rounded-full">
                 <CheckCircle className="w-4 h-4 text-blue-500" />
               </div>
             )}
@@ -485,7 +485,7 @@ export default function ConversationView(props: ConversationViewProps) {
               {sanitizeStrict(activeThread)}
             </div>
             <div className={`text-sm ${
-              activityStatus.isOnline && !isUserBlocked ? 'text-green-400' : 'text-gray-400'
+              activityStatus.isOnline && !isUserBlocked ? 'text-[#ff950e]' : 'text-gray-400'
             }`}>
               {getActivityDisplay()}
             </div>
@@ -561,12 +561,12 @@ export default function ConversationView(props: ConversationViewProps) {
     </div>
   );
 
-  // Desktop Header Component - UPDATED to use profilePic and isVerified
+  // Desktop Header Component - UPDATED with online indicator
   const renderDesktopHeader = () => (
     <div className="flex items-center justify-between p-3">
       {/* Left section */}
       <div className="flex items-center flex-1 min-w-0">
-        {/* Seller Avatar - UPDATED to use resolved URL */}
+        {/* Seller Avatar - UPDATED with online indicator */}
         <div className="relative mr-3 flex-shrink-0">
           {resolvedSellerPic ? (
             <SecureImage
@@ -581,14 +581,14 @@ export default function ConversationView(props: ConversationViewProps) {
             </div>
           )}
           
-          {/* Online indicator */}
+          {/* Online indicator - Messenger style with #ff950e */}
           {activityStatus.isOnline && !isUserBlocked && (
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
           )}
           
-          {/* Verified badge - UPDATED to use isVerified */}
+          {/* Verified badge - adjusted position to not overlap with online indicator */}
           {sellerProfiles[activeThread]?.isVerified && (
-            <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
+            <div className="absolute -top-1 -right-1 bg-[#1a1a1a] rounded-full">
               <CheckCircle className="w-4 h-4 text-blue-500" />
             </div>
           )}
@@ -600,7 +600,7 @@ export default function ConversationView(props: ConversationViewProps) {
             {sanitizeStrict(activeThread)}
           </div>
           <div className={`text-xs ${
-            activityStatus.isOnline && !isUserBlocked ? 'text-green-400' : 'text-gray-400'
+            activityStatus.isOnline && !isUserBlocked ? 'text-[#ff950e]' : 'text-gray-400'
           }`}>
             {getActivityDisplay()}
           </div>

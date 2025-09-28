@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { MessageSquare, Search, Star, Package, Bell, X, Filter, Check } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 
 // Helper function to resolve image URLs
 const resolveProfilePicUrl = (pic: string | null | undefined): string | null => {
@@ -52,6 +53,151 @@ interface ThreadsSidebarProps {
   totalUnreadCount: number;
   buyerRequests?: any[];
   setObserverReadMessages?: (messages: Set<string>) => void;
+}
+
+// Component to handle individual thread item with online status
+function ThreadItem({ 
+  seller, 
+  lastMessage, 
+  unreadCount, 
+  profile, 
+  isActive, 
+  isFavorite,
+  pendingRequests,
+  onThreadClick,
+  onToggleFavorite 
+}: {
+  seller: string;
+  lastMessage: any;
+  unreadCount: number;
+  profile: { profilePic: string | null; isVerified: boolean };
+  isActive: boolean;
+  isFavorite: boolean;
+  pendingRequests: number;
+  onThreadClick: (seller: string) => void;
+  onToggleFavorite: (e: React.MouseEvent, seller: string) => void;
+}) {
+  // Get activity status for this seller
+  const { activityStatus, loading } = useUserActivityStatus(seller);
+  const resolvedProfilePic = resolveProfilePicUrl(profile.profilePic);
+  
+  // Format last message preview
+  const formatMessagePreview = (message: any) => {
+    if (!message) return '';
+    
+    if (message.type === 'customRequest' && message.meta) {
+      return `📦 Custom Request: ${message.meta.title}`;
+    }
+    
+    if (message.type === 'image') {
+      return '🖼️ Image';
+    }
+    
+    return message.content || '';
+  };
+  
+  return (
+    <div
+      onClick={() => onThreadClick(seller)}
+      className={`relative px-4 py-3 border-b border-gray-800 cursor-pointer transition-all hover:bg-[#222] ${
+        isActive ? 'bg-[#222]' : ''
+      }`}
+    >
+      {/* Active indicator */}
+      {isActive && (
+        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]" />
+      )}
+      
+      <div className="flex items-start gap-3">
+        {/* Avatar with online indicator */}
+        <div className="relative">
+          <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700">
+            {resolvedProfilePic ? (
+              <img 
+                src={resolvedProfilePic} 
+                alt={seller}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  console.error(`Failed to load image for ${seller}:`, resolvedProfilePic);
+                  // Fallback to placeholder on error
+                  (e.target as HTMLImageElement).style.display = 'none';
+                  (e.target as HTMLImageElement).parentElement!.innerHTML = `
+                    <div class="w-full h-full flex items-center justify-center text-white font-bold bg-gradient-to-br from-purple-500 to-pink-500">
+                      ${seller.charAt(0).toUpperCase()}
+                    </div>
+                  `;
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-white font-bold bg-gradient-to-br from-purple-500 to-pink-500">
+                {seller.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+          
+          {/* Online indicator - Messenger style */}
+          {activityStatus.isOnline && !loading && (
+            <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#ff950e] rounded-full border-2 border-[#1a1a1a]" />
+          )}
+          
+          {/* Verification badge */}
+          {profile.isVerified && (
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+              <Check size={12} className="text-white" />
+            </div>
+          )}
+        </div>
+        
+        {/* Thread info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-medium text-white truncate">
+              {seller}
+            </span>
+            
+            <div className="flex items-center gap-2">
+              {/* Pending requests indicator */}
+              {pendingRequests > 0 && (
+                <span className="text-xs bg-purple-500 text-white px-2 py-1 rounded-full">
+                  {pendingRequests} pending
+                </span>
+              )}
+              
+              {/* Unread count */}
+              {unreadCount > 0 && (
+                <span className="text-xs bg-[#ff950e] text-black px-2 py-1 rounded-full font-bold">
+                  {unreadCount}
+                </span>
+              )}
+              
+              {/* Favorite button */}
+              <button
+                onClick={(e) => onToggleFavorite(e, seller)}
+                className="text-gray-400 hover:text-yellow-500 transition-colors"
+              >
+                <Star 
+                  size={16} 
+                  className={isFavorite ? 'fill-yellow-500 text-yellow-500' : ''}
+                />
+              </button>
+            </div>
+          </div>
+          
+          {/* Last message preview */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-400 truncate">
+              {lastMessage ? formatMessagePreview(lastMessage) : 'No messages yet'}
+            </p>
+            {lastMessage && (
+              <span className="text-xs text-gray-500 ml-2">
+                {formatDistanceToNow(new Date(lastMessage.date), { addSuffix: true })}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function ThreadsSidebar({
@@ -130,21 +276,6 @@ export default function ThreadsSidebar({
       setObserverReadMessages(new Set());
     }
   }, [setActiveThread, setObserverReadMessages]);
-  
-  // Format last message preview
-  const formatMessagePreview = (message: any) => {
-    if (!message) return '';
-    
-    if (message.type === 'customRequest' && message.meta) {
-      return `📦 Custom Request: ${message.meta.title}`;
-    }
-    
-    if (message.type === 'image') {
-      return '🖼️ Image';
-    }
-    
-    return message.content || '';
-  };
   
   // Get pending requests for sellers
   const pendingRequestsCount = useMemo(() => {
@@ -252,124 +383,20 @@ export default function ThreadsSidebar({
                 <p className="text-sm">{searchQuery ? 'No sellers found' : filterBy === 'unread' ? 'No unread messages' : 'No conversations yet'}</p>
               </div>
             ) : (
-              filteredThreads.map((seller) => {
-                const lastMessage = lastMessages[seller];
-                const unreadCount = uiUnreadCounts[seller] || 0;
-                // UPDATED: Now the profile should have profilePic and isVerified
-                const profile = sellerProfiles[seller] || { profilePic: null, isVerified: false };
-                const isActive = activeThread === seller;
-                
-                // UPDATED: Use profilePic instead of pic
-                const resolvedProfilePic = resolveProfilePicUrl(profile.profilePic);
-                
-                console.log(`ThreadsSidebar: Seller ${seller} profile:`, {
-                  original: profile.profilePic,
-                  resolved: resolvedProfilePic,
-                  isVerified: profile.isVerified
-                });
-                
-                return (
-                  <div
-                    key={seller}
-                    onClick={() => handleThreadClick(seller)}
-                    className={`relative px-4 py-3 border-b border-gray-800 cursor-pointer transition-all hover:bg-[#222] ${
-                      isActive ? 'bg-[#222]' : ''
-                    }`}
-                  >
-                    {/* Active indicator */}
-                    {isActive && (
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#ff950e]" />
-                    )}
-                    
-                    <div className="flex items-start gap-3">
-                      {/* Avatar - UPDATED to use resolved URL */}
-                      <div className="relative">
-                        <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700">
-                          {resolvedProfilePic ? (
-                            <img 
-                              src={resolvedProfilePic} 
-                              alt={seller}
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                console.error(`Failed to load image for ${seller}:`, resolvedProfilePic);
-                                // Fallback to placeholder on error
-                                (e.target as HTMLImageElement).style.display = 'none';
-                                (e.target as HTMLImageElement).parentElement!.innerHTML = `
-                                  <div class="w-full h-full flex items-center justify-center text-white font-bold bg-gradient-to-br from-purple-500 to-pink-500">
-                                    ${seller.charAt(0).toUpperCase()}
-                                  </div>
-                                `;
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-white font-bold bg-gradient-to-br from-purple-500 to-pink-500">
-                              {seller.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Verification badge - UPDATED to use isVerified */}
-                        {profile.isVerified && (
-                          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                            <Check size={12} className="text-white" />
-                          </div>
-                        )}
-                        
-                        {/* Online indicator - you can implement actual online status if available */}
-                        {/* <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" /> */}
-                      </div>
-                      
-                      {/* Thread info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-white truncate">
-                            {seller}
-                          </span>
-                          
-                          <div className="flex items-center gap-2">
-                            {/* Pending requests indicator */}
-                            {pendingRequestsCount[seller] > 0 && (
-                              <span className="text-xs bg-purple-500 text-white px-2 py-1 rounded-full">
-                                {pendingRequestsCount[seller]} pending
-                              </span>
-                            )}
-                            
-                            {/* Unread count */}
-                            {unreadCount > 0 && (
-                              <span className="text-xs bg-[#ff950e] text-black px-2 py-1 rounded-full font-bold">
-                                {unreadCount}
-                              </span>
-                            )}
-                            
-                            {/* Favorite button */}
-                            <button
-                              onClick={(e) => toggleFavorite(e, seller)}
-                              className="text-gray-400 hover:text-yellow-500 transition-colors"
-                            >
-                              <Star 
-                                size={16} 
-                                className={favorites.includes(seller) ? 'fill-yellow-500 text-yellow-500' : ''}
-                              />
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {/* Last message preview */}
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm text-gray-400 truncate">
-                            {lastMessage ? formatMessagePreview(lastMessage) : 'No messages yet'}
-                          </p>
-                          {lastMessage && (
-                            <span className="text-xs text-gray-500 ml-2">
-                              {formatDistanceToNow(new Date(lastMessage.date), { addSuffix: true })}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+              filteredThreads.map((seller) => (
+                <ThreadItem
+                  key={seller}
+                  seller={seller}
+                  lastMessage={lastMessages[seller]}
+                  unreadCount={uiUnreadCounts[seller] || 0}
+                  profile={sellerProfiles[seller] || { profilePic: null, isVerified: false }}
+                  isActive={activeThread === seller}
+                  isFavorite={favorites.includes(seller)}
+                  pendingRequests={pendingRequestsCount[seller] || 0}
+                  onThreadClick={handleThreadClick}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))
             )}
           </>
         )}
