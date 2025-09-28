@@ -1,27 +1,15 @@
 // src/components/buyers/messages/ThreadsSidebar.tsx
 'use client';
 
-import React, { useMemo } from 'react';
-import { 
-  MessageSquare, 
-  Search, 
-  Bell,
-  Filter,
-  Package,
-  Star,
-  FileText,
-  User,
-  CheckCircle
-} from 'lucide-react';
-import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
-import { SecureInput } from '@/components/ui/SecureInput';
-import { sanitizeSearchQuery } from '@/utils/security/sanitization';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { MessageSquare, Search, Star, Package, Bell, X, Filter, Check } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { resolveApiUrl } from '@/utils/url';
 
 interface ThreadsSidebarProps {
   threads: { [seller: string]: any[] };
   lastMessages: { [seller: string]: any };
-  sellerProfiles: { [seller: string]: { pic: string | null, verified: boolean } };
+  sellerProfiles: { [seller: string]: any };
   uiUnreadCounts: { [seller: string]: number };
   activeThread: string | null;
   setActiveThread: (thread: string | null) => void;
@@ -32,8 +20,8 @@ interface ThreadsSidebarProps {
   filterBy: 'all' | 'unread';
   setFilterBy: (filter: 'all' | 'unread') => void;
   totalUnreadCount: number;
-  buyerRequests: any[];
-  setObserverReadMessages: (fn: (prev: Set<string>) => Set<string>) => void;
+  buyerRequests?: any[];
+  setObserverReadMessages?: (messages: Set<string>) => void;
 }
 
 export default function ThreadsSidebar({
@@ -50,127 +38,167 @@ export default function ThreadsSidebar({
   filterBy,
   setFilterBy,
   totalUnreadCount,
-  buyerRequests,
+  buyerRequests = [],
   setObserverReadMessages
 }: ThreadsSidebarProps) {
-  // Filter threads based on search and filter
+  const [favorites, setFavorites] = useState<string[]>([]);
+  
+  // Extract thread list
+  const threadList = useMemo(() => Object.keys(threads), [threads]);
+  
+  // Filter threads based on search query, favorites, and filter
   const filteredThreads = useMemo(() => {
-    const sanitizedSearchQuery = sanitizeSearchQuery(searchQuery);
-    return Object.keys(threads)
-      .filter(seller => {
-        if (sanitizedSearchQuery && !seller.toLowerCase().includes(sanitizedSearchQuery.toLowerCase())) {
-          return false;
-        }
-        if (filterBy === 'unread' && uiUnreadCounts[seller] === 0) {
-          return false;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        const dateA = lastMessages[a] ? new Date(lastMessages[a].date).getTime() : 0;
-        const dateB = lastMessages[b] ? new Date(lastMessages[b].date).getTime() : 0;
-        return dateB - dateA;
-      });
-  }, [threads, searchQuery, filterBy, uiUnreadCounts, lastMessages]);
-
-  // Count pending requests
-  const pendingRequestsCount = buyerRequests.filter(req => req.status === 'pending').length;
-
-  const handleThreadClick = (seller: string) => {
+    let filtered = threadList;
+    
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(seller => 
+        seller.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply tab filter
+    if (activeTab === 'favorites') {
+      filtered = filtered.filter(seller => favorites.includes(seller));
+    }
+    
+    // Apply unread filter
+    if (filterBy === 'unread') {
+      filtered = filtered.filter(seller => (uiUnreadCounts[seller] || 0) > 0);
+    }
+    
+    // Sort by last message date
+    filtered.sort((a, b) => {
+      const lastMessageA = lastMessages[a];
+      const lastMessageB = lastMessages[b];
+      
+      if (!lastMessageA) return 1;
+      if (!lastMessageB) return -1;
+      
+      return new Date(lastMessageB.date).getTime() - new Date(lastMessageA.date).getTime();
+    });
+    
+    return filtered;
+  }, [threadList, searchQuery, activeTab, favorites, filterBy, uiUnreadCounts, lastMessages]);
+  
+  // Toggle favorite
+  const toggleFavorite = useCallback((e: React.MouseEvent, seller: string) => {
+    e.stopPropagation();
+    setFavorites(prev => 
+      prev.includes(seller) 
+        ? prev.filter(s => s !== seller)
+        : [...prev, seller]
+    );
+  }, []);
+  
+  // Handle thread click
+  const handleThreadClick = useCallback((seller: string) => {
     setActiveThread(seller);
-    setObserverReadMessages((prev: Set<string>) => new Set(prev));
+    
+    // Clear unread messages for this thread
+    if (setObserverReadMessages) {
+      setObserverReadMessages(new Set());
+    }
+  }, [setActiveThread, setObserverReadMessages]);
+  
+  // Format last message preview
+  const formatMessagePreview = (message: any) => {
+    if (!message) return '';
+    
+    if (message.type === 'customRequest' && message.meta) {
+      return `📦 Custom Request: ${message.meta.title}`;
+    }
+    
+    if (message.type === 'image') {
+      return '🖼️ Image';
+    }
+    
+    return message.content || '';
   };
-
+  
+  // Get pending requests for sellers
+  const pendingRequestsCount = useMemo(() => {
+    const counts: { [seller: string]: number } = {};
+    
+    buyerRequests.forEach(request => {
+      if (request.status === 'pending' || request.status === 'edited') {
+        counts[request.seller] = (counts[request.seller] || 0) + 1;
+      }
+    });
+    
+    return counts;
+  }, [buyerRequests]);
+  
   return (
-    <div className="h-full bg-[#1a1a1a] border-r border-gray-800 flex flex-col">
+    <div className="h-full flex flex-col bg-[#1a1a1a]">
       {/* Header */}
       <div className="p-4 border-b border-gray-800">
-        <h2 className="text-xl font-bold text-white mb-3 flex items-center">
-          <MessageSquare className="mr-2 text-[#ff950e]" size={20} />
-          Messages
-        </h2>
+        <h2 className="text-xl font-bold text-white mb-4">Messages</h2>
+        
+        {/* Search */}
+        <div className="relative mb-3">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search sellers..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-[#222] text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
         
         {/* Tabs */}
-        <div className="flex space-x-1 mb-3 bg-[#222] p-1 rounded-lg">
+        <div className="flex gap-2 mb-3">
           <button
             onClick={() => setActiveTab('messages')}
-            className={`flex-1 flex items-center justify-center gap-1 py-2 px-2 rounded-md text-xs font-medium transition-all ${
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'messages'
                 ? 'bg-[#ff950e] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-[#333]'
+                : 'bg-[#222] text-gray-400 hover:text-white'
             }`}
           >
-            <MessageSquare size={12} />
-            <span>Chats</span>
-            {totalUnreadCount > 0 && activeTab === 'messages' && (
-              <span className="ml-1 bg-black/20 text-xs px-1 py-0.5 rounded-full min-w-[18px] text-center">
-                {totalUnreadCount}
-              </span>
-            )}
+            <MessageSquare size={16} className="inline mr-1" />
+            All
           </button>
-          
           <button
             onClick={() => setActiveTab('favorites')}
-            className={`flex-1 flex items-center justify-center gap-1 py-2 px-2 rounded-md text-xs font-medium transition-all ${
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'favorites'
                 ? 'bg-[#ff950e] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-[#333]'
+                : 'bg-[#222] text-gray-400 hover:text-white'
             }`}
           >
-            <Star size={12} />
-            <span>Favorites</span>
+            <Star size={16} className="inline mr-1" />
+            Starred
           </button>
-          
           <button
             onClick={() => setActiveTab('requests')}
-            className={`flex-1 flex items-center justify-center gap-1 py-2 px-2 rounded-md text-xs font-medium transition-all ${
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'requests'
                 ? 'bg-[#ff950e] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-[#333]'
+                : 'bg-[#222] text-gray-400 hover:text-white'
             }`}
           >
-            <FileText size={12} />
-            <span>Requests</span>
-            {pendingRequestsCount > 0 && activeTab === 'requests' && (
-              <span className="ml-1 bg-black/20 text-xs px-1 py-0.5 rounded-full min-w-[18px] text-center">
-                {pendingRequestsCount}
-              </span>
-            )}
+            <Package size={16} className="inline mr-1" />
+            Requests
           </button>
         </div>
         
-        {/* Search & Filter - Only show for messages tab */}
+        {/* Filter */}
         {activeTab === 'messages' && (
           <>
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-              <SecureInput
-                type="text"
-                placeholder="Search sellers..."
-                value={searchQuery}
-                onChange={(value: string) => setSearchQuery(value)}
-                sanitizer={sanitizeSearchQuery}
-                className="w-full bg-[#222] text-white rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-[#ff950e] border-0"
-                maxLength={100}
-              />
-            </div>
-            
-            {/* Filter */}
             <div className="flex gap-2">
               <button
-                onClick={() => setFilterBy('all')}
-                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-md text-xs transition-all ${
-                  filterBy === 'all'
-                    ? 'bg-[#ff950e] text-black'
-                    : 'bg-[#222] text-gray-400 hover:text-white'
-                }`}
-              >
-                <Filter size={10} />
-                All
-              </button>
-              <button
-                onClick={() => setFilterBy('unread')}
-                className={`flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-md text-xs transition-all ${
+                onClick={() => setFilterBy(filterBy === 'all' ? 'unread' : 'all')}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                   filterBy === 'unread'
                     ? 'bg-[#ff950e] text-black'
                     : 'bg-[#222] text-gray-400 hover:text-white'
@@ -201,7 +229,7 @@ export default function ThreadsSidebar({
                 const isActive = activeThread === seller;
                 
                 // FIX: Resolve the seller profile picture URL
-                const resolvedProfilePic = resolveApiUrl(profile.pic);
+                const resolvedProfilePic = resolveApiUrl(profile.pic)?.replace('http://api.pantypost.com', 'https://api.pantypost.com');
                 
                 return (
                   <div
@@ -218,69 +246,75 @@ export default function ThreadsSidebar({
                     
                     <div className="flex items-start gap-3">
                       {/* Avatar - FIXED to use resolved URL */}
-                      <div className="relative flex-shrink-0">
-                        {resolvedProfilePic ? (
-                          <SecureImage
-                            src={resolvedProfilePic}
-                            alt={seller}
-                            className="w-12 h-12 rounded-full object-cover"
-                            fallbackSrc="/default-avatar.png"
-                          />
-                        ) : (
-                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold">
-                            {seller.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        {profile.verified && (
-                          <CheckCircle className="absolute -bottom-1 -right-1 w-4 h-4 text-blue-500 bg-[#1a1a1a] rounded-full" />
-                        )}
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <h3 className="font-semibold text-white truncate">
-                            <SecureMessageDisplay 
-                              content={seller}
-                              allowBasicFormatting={false}
-                              className="inline"
-                              as="span"
+                      <div className="relative">
+                        <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700">
+                          {resolvedProfilePic ? (
+                            <img 
+                              src={resolvedProfilePic} 
+                              alt={seller}
+                              className="w-full h-full object-cover"
                             />
-                          </h3>
-                          {lastMessage && (
-                            <span className="text-xs text-gray-400 ml-2">
-                              {new Date(lastMessage.date).toLocaleDateString() === new Date().toLocaleDateString()
-                                ? new Date(lastMessage.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                : new Date(lastMessage.date).toLocaleDateString([], { month: 'short', day: 'numeric' })
-                              }
-                            </span>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              <MessageSquare size={20} />
+                            </div>
                           )}
                         </div>
                         
-                        <div className="flex items-center justify-between">
-                          {lastMessage && (
-                            <div className="text-sm text-gray-400 truncate flex-1">
-                              {lastMessage.type === 'customRequest' ? (
-                                <span className="flex items-center gap-1">
-                                  <Package size={12} />
-                                  Custom Request
-                                </span>
-                              ) : lastMessage.type === 'image' ? (
-                                <span className="italic">📷 Image</span>
-                              ) : (
-                                <SecureMessageDisplay 
-                                  content={lastMessage.content || ''}
-                                  allowBasicFormatting={false}
-                                  maxLength={50}
-                                  as="span"
-                                />
-                              )}
-                            </div>
-                          )}
+                        {/* Verification badge */}
+                        {profile.verified && (
+                          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <Check size={12} className="text-white" />
+                          </div>
+                        )}
+                        
+                        {/* Online indicator */}
+                        <div className="absolute top-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
+                      </div>
+                      
+                      {/* Thread info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="font-medium text-white truncate">
+                            {seller}
+                          </span>
                           
-                          {unreadCount > 0 && (
-                            <span className="ml-2 inline-flex items-center justify-center bg-[#ff950e] text-black text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px]">
-                              {unreadCount}
+                          <div className="flex items-center gap-2">
+                            {/* Pending requests indicator */}
+                            {pendingRequestsCount[seller] > 0 && (
+                              <span className="text-xs bg-purple-500 text-white px-2 py-1 rounded-full">
+                                {pendingRequestsCount[seller]} pending
+                              </span>
+                            )}
+                            
+                            {/* Unread count */}
+                            {unreadCount > 0 && (
+                              <span className="text-xs bg-[#ff950e] text-black px-2 py-1 rounded-full font-bold">
+                                {unreadCount}
+                              </span>
+                            )}
+                            
+                            {/* Favorite button */}
+                            <button
+                              onClick={(e) => toggleFavorite(e, seller)}
+                              className="text-gray-400 hover:text-yellow-500 transition-colors"
+                            >
+                              <Star 
+                                size={16} 
+                                className={favorites.includes(seller) ? 'fill-yellow-500 text-yellow-500' : ''}
+                              />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Last message preview */}
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-gray-400 truncate">
+                            {lastMessage ? formatMessagePreview(lastMessage) : 'No messages yet'}
+                          </p>
+                          {lastMessage && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              {formatDistanceToNow(new Date(lastMessage.date), { addSuffix: true })}
                             </span>
                           )}
                         </div>
@@ -293,64 +327,72 @@ export default function ThreadsSidebar({
           </>
         )}
         
-        {/* Favorites Tab */}
         {activeTab === 'favorites' && (
-          <div className="p-4 text-center text-gray-400">
-            <Star className="mx-auto mb-2 opacity-50" size={32} />
-            <p>Favorite sellers coming soon!</p>
-            <p className="text-xs mt-1">Save your preferred sellers for quick access</p>
-          </div>
-        )}
-        
-        {/* Requests Tab */}
-        {activeTab === 'requests' && (
-          <>
-            {buyerRequests.length === 0 ? (
-              <div className="p-4 text-center text-gray-400">
-                <FileText className="mx-auto mb-2 opacity-50" size={32} />
-                <p>No custom requests yet</p>
-                <p className="text-xs mt-1">Your sent requests will appear here</p>
+          <div className="p-4">
+            {favorites.length === 0 ? (
+              <div className="text-center text-gray-400">
+                <Star className="mx-auto mb-2 opacity-50" size={24} />
+                <p className="text-sm">No starred conversations</p>
+                <p className="text-xs mt-2">Star conversations to access them quickly</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-800">
-                {buyerRequests.map((request) => (
+              <div className="space-y-2">
+                {favorites.map(seller => (
                   <div
-                    key={request.id}
-                    onClick={() => setActiveThread(request.seller)}
-                    className="p-4 hover:bg-[#222] cursor-pointer transition-all"
+                    key={seller}
+                    onClick={() => handleThreadClick(seller)}
+                    className="p-3 bg-[#222] rounded-lg hover:bg-[#2a2a2a] cursor-pointer flex items-center justify-between"
                   >
-                    <div className="flex items-start justify-between mb-1">
-                      <h4 className="font-medium text-white truncate flex-1">
-                        <SecureMessageDisplay 
-                          content={request.title}
-                          allowBasicFormatting={false}
-                          as="span"
-                        />
-                      </h4>
-                      <span className={`ml-2 text-xs px-2 py-1 rounded-full ${
-                        request.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
-                        request.status === 'accepted' ? 'bg-green-500/20 text-green-400' :
-                        request.status === 'rejected' ? 'bg-red-500/20 text-red-400' :
-                        request.status === 'paid' ? 'bg-purple-500/20 text-purple-400' :
-                        'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {request.status}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-400 mb-1">
-                      To: <SecureMessageDisplay 
-                        content={request.seller}
-                        allowBasicFormatting={false}
-                        className="inline"
-                        as="span"
-                      />
-                    </p>
-                    <p className="text-sm font-semibold text-[#ff950e]">${request.price.toFixed(2)}</p>
+                    <span className="text-white">{seller}</span>
+                    <button
+                      onClick={(e) => toggleFavorite(e, seller)}
+                      className="text-yellow-500"
+                    >
+                      <Star size={16} className="fill-yellow-500" />
+                    </button>
                   </div>
                 ))}
               </div>
             )}
-          </>
+          </div>
+        )}
+        
+        {activeTab === 'requests' && (
+          <div className="p-4">
+            {buyerRequests.filter(r => r.status === 'pending' || r.status === 'edited').length === 0 ? (
+              <div className="text-center text-gray-400">
+                <Package className="mx-auto mb-2 opacity-50" size={24} />
+                <p className="text-sm">No pending requests</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {buyerRequests
+                  .filter(r => r.status === 'pending' || r.status === 'edited')
+                  .map(request => (
+                    <div
+                      key={request.id}
+                      onClick={() => handleThreadClick(request.seller)}
+                      className="p-3 bg-[#222] rounded-lg hover:bg-[#2a2a2a] cursor-pointer"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-white font-medium">{request.title}</span>
+                        <span className="text-[#ff950e] font-bold">${request.price}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-400">From: {request.seller}</span>
+                        <span className={`text-xs px-2 py-1 rounded ${
+                          request.status === 'edited' 
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-yellow-500/20 text-yellow-400'
+                        }`}>
+                          {request.status === 'edited' ? 'Edited' : 'Pending'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

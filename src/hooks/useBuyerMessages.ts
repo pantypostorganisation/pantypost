@@ -432,18 +432,18 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user, optimisticMessages, messageUpdateCounter]);
   
-  // SIMPLIFIED FIX: Use profiles directly from context since they're already resolved
+  // FIXED: Use profiles directly from context with correct property names
   const sellerProfiles = useMemo(() => {
-    const profiles: { [seller: string]: { pic: string | null, verified: boolean } } = {};
+    const profiles: { [seller: string]: { pic: string | null; verified: boolean } } = {};
     
     Object.keys(threads).forEach(seller => {
-      // Get profile from context (already has resolved URLs and correct property names)
+      // Get profile from context (already has correct property names)
       const profile = getSellerProfile ? getSellerProfile(seller) : contextProfiles?.[seller];
       
       if (profile) {
         profiles[seller] = {
-          pic: profile.pic,  // FIX: Use 'pic' not 'profilePic'
-          verified: profile.verified || false  // FIX: Use 'verified' not 'isVerified'
+          pic: profile.pic || null,  // Keep the same property names from MessageContext
+          verified: profile.verified || false  // Keep the same property names from MessageContext
         };
       } else {
         // Fallback if no profile data
@@ -1394,7 +1394,7 @@ export const useBuyerMessages = () => {
     unreadCounts,
     uiUnreadCounts,
     lastMessages,
-    sellerProfiles, // THIS NOW HAS RESOLVED URLS FROM CONTEXT!
+    sellerProfiles, // THIS NOW HAS CORRECT PROPERTY NAMES!
     totalUnreadCount,
     activeThread,
     setActiveThread,
