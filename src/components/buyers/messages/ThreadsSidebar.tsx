@@ -255,15 +255,17 @@ export default function ThreadsSidebar({
               filteredThreads.map((seller) => {
                 const lastMessage = lastMessages[seller];
                 const unreadCount = uiUnreadCounts[seller] || 0;
-                const profile = sellerProfiles[seller] || { pic: null, verified: false };
+                // UPDATED: Now the profile should have profilePic and isVerified
+                const profile = sellerProfiles[seller] || { profilePic: null, isVerified: false };
                 const isActive = activeThread === seller;
                 
-                // CRITICAL FIX: Properly resolve the profile picture URL
-                const resolvedProfilePic = resolveProfilePicUrl(profile.pic);
+                // UPDATED: Use profilePic instead of pic
+                const resolvedProfilePic = resolveProfilePicUrl(profile.profilePic);
                 
-                console.log(`ThreadsSidebar: Seller ${seller} profile pic:`, {
-                  original: profile.pic,
-                  resolved: resolvedProfilePic
+                console.log(`ThreadsSidebar: Seller ${seller} profile:`, {
+                  original: profile.profilePic,
+                  resolved: resolvedProfilePic,
+                  isVerified: profile.isVerified
                 });
                 
                 return (
@@ -280,7 +282,7 @@ export default function ThreadsSidebar({
                     )}
                     
                     <div className="flex items-start gap-3">
-                      {/* Avatar - FIXED to use resolved URL */}
+                      {/* Avatar - UPDATED to use resolved URL */}
                       <div className="relative">
                         <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700">
                           {resolvedProfilePic ? (
@@ -306,8 +308,8 @@ export default function ThreadsSidebar({
                           )}
                         </div>
                         
-                        {/* Verification badge */}
-                        {profile.verified && (
+                        {/* Verification badge - UPDATED to use isVerified */}
+                        {profile.isVerified && (
                           <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
                             <Check size={12} className="text-white" />
                           </div>

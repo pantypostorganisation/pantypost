@@ -105,7 +105,7 @@ interface ConversationViewProps {
   activeThread: string;
   threads: { [seller: string]: Message[] };
   user: any;
-  sellerProfiles: { [seller: string]: { pic: string | null; verified: boolean } };
+  sellerProfiles: { [seller: string]: { profilePic: string | null; isVerified: boolean } };
   buyerRequests: CustomRequest[];
   wallet: { [username: string]: number };
   previewImage: string | null;
@@ -226,8 +226,8 @@ export default function ConversationView(props: ConversationViewProps) {
 
   const threadMessages = getLatestCustomRequestMessages(threads[activeThread] || [], buyerRequests);
 
-  // FIX: Resolve the seller profile picture URL with new helper
-  const resolvedSellerPic = resolveProfilePicUrl(sellerProfiles[activeThread]?.pic);
+  // UPDATED: Use profilePic instead of pic
+  const resolvedSellerPic = resolveProfilePicUrl(sellerProfiles[activeThread]?.profilePic);
 
   // Prevent scroll outside messages container on mobile
   useEffect(() => {
@@ -434,7 +434,7 @@ export default function ConversationView(props: ConversationViewProps) {
     return !!lastMsg && lastMsg.sender === user?.username;
   }
 
-  // Mobile Header Component - FIXED WITH PROPER STYLING AND RESOLVED PROFILE PIC
+  // Mobile Header Component - UPDATED to use profilePic and isVerified
   const renderMobileHeader = () => (
     <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-lg safe-top z-50 sticky top-0">
       <div className="flex items-center justify-between p-4 min-h-[60px]">
@@ -451,7 +451,7 @@ export default function ConversationView(props: ConversationViewProps) {
             </button>
           )}
           
-          {/* Seller Avatar - FIXED to use resolved URL */}
+          {/* Seller Avatar - UPDATED to use resolved URL */}
           <div className="relative mr-3 flex-shrink-0">
             {resolvedSellerPic ? (
               <SecureImage
@@ -471,8 +471,8 @@ export default function ConversationView(props: ConversationViewProps) {
               <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
             )}
             
-            {/* Verified badge */}
-            {sellerProfiles[activeThread]?.verified && (
+            {/* Verified badge - UPDATED to use isVerified */}
+            {sellerProfiles[activeThread]?.isVerified && (
               <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
                 <CheckCircle className="w-4 h-4 text-blue-500" />
               </div>
@@ -561,12 +561,12 @@ export default function ConversationView(props: ConversationViewProps) {
     </div>
   );
 
-  // Desktop Header Component - FIXED WITH RESOLVED PROFILE PIC
+  // Desktop Header Component - UPDATED to use profilePic and isVerified
   const renderDesktopHeader = () => (
     <div className="flex items-center justify-between p-3">
       {/* Left section */}
       <div className="flex items-center flex-1 min-w-0">
-        {/* Seller Avatar - FIXED to use resolved URL */}
+        {/* Seller Avatar - UPDATED to use resolved URL */}
         <div className="relative mr-3 flex-shrink-0">
           {resolvedSellerPic ? (
             <SecureImage
@@ -586,8 +586,8 @@ export default function ConversationView(props: ConversationViewProps) {
             <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1a1a1a]" />
           )}
           
-          {/* Verified badge */}
-          {sellerProfiles[activeThread]?.verified && (
+          {/* Verified badge - UPDATED to use isVerified */}
+          {sellerProfiles[activeThread]?.isVerified && (
             <div className="absolute -bottom-1 -right-1 bg-[#1a1a1a] rounded-full">
               <CheckCircle className="w-4 h-4 text-blue-500" />
             </div>
@@ -923,7 +923,7 @@ export default function ConversationView(props: ConversationViewProps) {
   if (isMobile) {
     return (
       <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden">
-        {/* Mobile Header - FIXED - Now properly rendered */}
+        {/* Mobile Header - Now properly rendered */}
         {renderMobileHeader()}
 
         {/* Messages container - flex-1 makes it fill available space */}

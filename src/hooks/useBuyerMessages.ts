@@ -53,7 +53,7 @@ export const useBuyerMessages = () => {
   const searchParams = useSearchParams();
   const { user } = useAuth();
   
-  // CRITICAL CHANGE: Get sellerProfiles from MessageContext
+  // Get sellerProfiles from MessageContext
   const { 
     messages, 
     sellerProfiles: contextProfiles, // GET PROFILES FROM CONTEXT
@@ -149,7 +149,7 @@ export const useBuyerMessages = () => {
   
   const isAdmin = user?.role === 'admin';
   
-  // CRITICAL FIX: Ensure messages are loaded on mount
+  // Load initial data
   useEffect(() => {
     const loadInitialData = async () => {
       if (user && !initialLoadComplete) {
@@ -177,7 +177,7 @@ export const useBuyerMessages = () => {
     return walletContext.getBuyerBalance(username);
   }, [walletContext]);
   
-  // FIXED: Memoize wallet object properly
+  // Memoize wallet object properly
   const wallet = useMemo(() => {
     if (!user || !walletContext) return {};
     
@@ -208,7 +208,7 @@ export const useBuyerMessages = () => {
     markMessageAsReadAndUpdateUI(message);
   }, [markMessageAsReadAndUpdateUI]);
   
-  // CRITICAL: Listen for new messages and handle optimistic updates properly
+  // Listen for new messages and handle optimistic updates properly
   useEffect(() => {
     const handleNewMessage = (event: Event) => {
       const customEvent = event as CustomEvent;
@@ -325,7 +325,7 @@ export const useBuyerMessages = () => {
     return () => clearInterval(interval);
   }, []);
   
-  // ENHANCED: Merge real messages with optimistic messages and deduplicate
+  // Merge real messages with optimistic messages and deduplicate
   const threads = useMemo(() => {
     const result: { [seller: string]: Message[] } = {};
     
@@ -435,9 +435,9 @@ export const useBuyerMessages = () => {
     return result;
   }, [messages, user, optimisticMessages, messageUpdateCounter]);
   
-  // DEBUGGING: Enhanced seller profiles with detailed logging
+  // UPDATED: Build seller profiles using backend field names directly
   const sellerProfiles = useMemo(() => {
-    const profiles: { [seller: string]: { pic: string | null; verified: boolean } } = {};
+    const profiles: { [seller: string]: { profilePic: string | null; isVerified: boolean } } = {};
     
     console.log('[useBuyerMessages] ========== BUILDING SELLER PROFILES ==========');
     console.log('[useBuyerMessages] contextProfiles from MessageContext:', contextProfiles);
@@ -462,19 +462,20 @@ export const useBuyerMessages = () => {
       
       if (profile) {
         console.log(`[useBuyerMessages]   ✓ Found profile for ${seller}:`, {
-          pic: profile.pic,
-          verified: profile.verified
+          profilePic: profile.profilePic,
+          isVerified: profile.isVerified
         });
         
+        // UPDATED: Use backend field names directly
         profiles[seller] = {
-          pic: profile.pic || null,
-          verified: profile.verified || false
+          profilePic: profile.profilePic || null,
+          isVerified: profile.isVerified || false
         };
       } else {
         console.log(`[useBuyerMessages]   ✗ No profile found for ${seller}, using defaults`);
         profiles[seller] = {
-          pic: null,
-          verified: false
+          profilePic: null,
+          isVerified: false
         };
       }
     });
@@ -612,7 +613,7 @@ export const useBuyerMessages = () => {
     }
   }, [activeThread, threads, messageUpdateCounter]);
   
-  // OPTIMISTIC: Handle sending reply with instant UI update
+  // Handle sending reply with instant UI update
   const handleReply = useCallback(async () => {
     if (!activeThread || (!replyMessage.trim() && !selectedImage) || !user) return;
     
@@ -727,7 +728,7 @@ export const useBuyerMessages = () => {
     }
   }, [activeThread, user, reportUser, threads]);
   
-  // FIXED: Handle accepting custom request (by buyer when seller edits)
+  // Handle accepting custom request (by buyer when seller edits)
   const handleAccept = useCallback(async (request: any) => {
     if (!user || !request || !walletContext) return;
     
@@ -868,7 +869,7 @@ export const useBuyerMessages = () => {
     setEditMessage(request.description || '');
   }, []);
   
-  // FIXED: Handle submitting edited request with optimistic updates
+  // Handle submitting edited request with optimistic updates
   const handleEditSubmit = useCallback(async () => {
     if (!editRequestId || !user || !activeThread) return;
     
@@ -1143,7 +1144,7 @@ export const useBuyerMessages = () => {
     inputRef.current?.focus();
   }, [recentEmojis, setRecentEmojis]);
   
-  // FIXED: handleSendTip now just handles UI updates after tip is sent
+  // handleSendTip now just handles UI updates after tip is sent
   // The actual tip sending is done entirely by the TipModal component
   const handleSendTip = useCallback(async () => {
     if (!activeThread || !user) return;
@@ -1421,7 +1422,7 @@ export const useBuyerMessages = () => {
     unreadCounts,
     uiUnreadCounts,
     lastMessages,
-    sellerProfiles, // THIS NOW HAS CORRECT PROPERTY NAMES!
+    sellerProfiles, // NOW USES BACKEND FIELD NAMES: profilePic and isVerified
     totalUnreadCount,
     activeThread,
     setActiveThread,

@@ -56,10 +56,10 @@ type MessageOptions = {
   _optimisticId?: string;
 };
 
-// The shape components expect
+// UPDATED: Use backend field names directly
 type SellerProfile = {
-  pic: string | null;
-  verified: boolean;
+  profilePic: string | null;  // Changed from 'pic' to 'profilePic'
+  isVerified: boolean;        // Changed from 'verified' to 'isVerified'
 };
 
 type MessageContextType = {
@@ -135,7 +135,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     messagesService.initialize();
   }, []);
 
-  // Load initial data from API with profiles
+  // Load initial data from API with profiles - UPDATED to use backend field names directly
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
@@ -154,23 +154,22 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           messagesService.getMessageNotifications('')
         ]);
 
-        // Process threads and profiles
+        // Process threads and profiles - UPDATED to use backend field names directly
         if (threadsResponse.success && threadsResponse.data) {
           const processedMessages: { [key: string]: Message[] } = {};
           const profiles: { [username: string]: SellerProfile } = {};
 
-          // Check if profiles exist at the root level of the response
+          // Check if profiles exist in the response
           if ((threadsResponse as any).profiles) {
             console.log('[MessageContext] Found profiles object:', (threadsResponse as any).profiles);
             
             Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
-              // Use the username from the key, not from the profile object
               const key = sanitizeUsername(username) || username;
               
-              // Handle both frontend (pic) and backend (profilePic) formats
+              // UPDATED: Use backend field names directly without transformation
               profiles[key] = {
-                pic: profile.pic || profile.profilePic || null,
-                verified: profile.verified || profile.isVerified || false
+                profilePic: profile.profilePic || null,
+                isVerified: profile.isVerified || false
               };
               
               console.log(`[MessageContext] Stored profile for ${key}:`, profiles[key]);
@@ -680,6 +679,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     return reportLogs.filter((r) => !r.processed).length;
   }, [reportLogs]);
 
+  // UPDATED: refreshMessages to use backend field names directly
   const refreshMessages = useCallback(async () => {
     console.log('[MessageContext] Refreshing messages...');
     try {
@@ -695,10 +695,10 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
             const key = sanitizeUsername(username) || username;
             
-            // Handle both frontend (pic) and backend (profilePic) formats
+            // UPDATED: Use backend field names directly without transformation
             profiles[key] = {
-              pic: profile.pic || profile.profilePic || null,
-              verified: profile.verified || profile.isVerified || false
+              profilePic: profile.profilePic || null,
+              isVerified: profile.isVerified || false
             };
             
             console.log(`[MessageContext] Refreshed profile for ${key}:`, profiles[key]);

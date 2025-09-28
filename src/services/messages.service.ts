@@ -53,10 +53,11 @@ export interface MessageThread {
   };
 }
 
+// UPDATED: Use backend field names directly
 export interface UserProfile {
   username: string;
-  pic: string | null;  // CHANGED FROM profilePic to pic
-  verified: boolean;    // CHANGED FROM isVerified to verified
+  profilePic: string | null;  // Using backend field name
+  isVerified: boolean;        // Using backend field name
   bio?: string;
   tier?: string;
   subscriberCount?: number;
@@ -158,49 +159,6 @@ const reportUserSchema = z.object({
 });
 
 /**
- * Helper to resolve API URLs
- */
-const resolveApiUrl = (url: string | null | undefined): string | null => {
-  if (!url) return null;
-  
-  // If it's already a full URL, return it
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url;
-  }
-  
-  // If it starts with /uploads/, prepend the API base URL
-  if (url.startsWith('/uploads/')) {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
-    return `${apiBase}${url}`;
-  }
-  
-  // Default placeholder URLs or other cases
-  return url;
-};
-
-/**
- * Transform backend profile format to frontend format
- */
-const transformProfile = (backendProfile: any): UserProfile => {
-  if (!backendProfile) {
-    return {
-      username: '',
-      pic: null,
-      verified: false
-    };
-  }
-  
-  return {
-    username: backendProfile.username || '',
-    pic: resolveApiUrl(backendProfile.profilePic), // Map profilePic to pic AND resolve URL
-    verified: backendProfile.isVerified || backendProfile.verificationStatus === 'verified' || false,
-    bio: backendProfile.bio || '',
-    tier: backendProfile.tier || 'Tease',
-    subscriberCount: backendProfile.subscriberCount || 0
-  };
-};
-
-/**
  * Messages Service
  * Handles all messaging operations with backend API only
  */
@@ -221,6 +179,7 @@ export class MessagesService {
 
   /**
    * Get all message threads for a user with profiles
+   * UPDATED: No transformation needed - use backend data directly
    */
   async getThreads(username: string, role?: 'buyer' | 'seller'): Promise<ThreadsResponse> {
     try {
@@ -241,19 +200,11 @@ export class MessagesService {
       
       if (response.success) {
         if (response.data && 'data' in response.data && 'profiles' in response.data) {
-          // Transform profiles to expected format
-          const transformedProfiles: { [username: string]: UserProfile } = {};
-          
-          if (response.data.profiles) {
-            Object.entries(response.data.profiles).forEach(([username, profile]) => {
-              transformedProfiles[username] = transformProfile(profile);
-            });
-          }
-          
+          // UPDATED: Use profiles directly without transformation
           return {
             success: true,
             data: response.data.data,
-            profiles: transformedProfiles
+            profiles: response.data.profiles // Direct pass-through
           };
         } else if (response.data && Array.isArray(response.data)) {
           // Legacy format - just threads array
@@ -287,6 +238,7 @@ export class MessagesService {
 
   /**
    * Get messages between two users with profiles
+   * UPDATED: No transformation needed
    */
   async getThread(userA: string, userB: string): Promise<ApiResponse<Message[]> & { profiles?: { [username: string]: UserProfile } }> {
     try {
@@ -309,19 +261,11 @@ export class MessagesService {
       
       if (response.success) {
         if (response.data && 'data' in response.data && 'profiles' in response.data) {
-          // Transform profiles
-          const transformedProfiles: { [username: string]: UserProfile } = {};
-          
-          if (response.data.profiles) {
-            Object.entries(response.data.profiles).forEach(([username, profile]) => {
-              transformedProfiles[username] = transformProfile(profile);
-            });
-          }
-          
+          // UPDATED: Use profiles directly without transformation
           return {
             success: true,
             data: response.data.data,
-            profiles: transformedProfiles
+            profiles: response.data.profiles // Direct pass-through
           };
         } else if (response.data && Array.isArray(response.data)) {
           // Legacy format - just messages array
