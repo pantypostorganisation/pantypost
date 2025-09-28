@@ -159,21 +159,19 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           const processedMessages: { [key: string]: Message[] } = {};
           const profiles: { [username: string]: SellerProfile } = {};
 
-          // Use actual username as key; store RAW profilePic (not resolved)
+          // Check if profiles exist at the root level of the response
           if ((threadsResponse as any).profiles) {
-            Object.values((threadsResponse as any).profiles).forEach((profile: any) => {
-              const username = profile?.username || profile?.user?.username || profile?.seller || '';
-              if (!username) {
-                console.warn('[MessageContext] Profile missing username:', profile);
-                return;
-              }
+            console.log('[MessageContext] Found profiles object:', (threadsResponse as any).profiles);
+            
+            Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
+              // Use the username from the key, not from the profile object
               const key = sanitizeUsername(username) || username;
-
+              
               profiles[key] = {
-                pic: profile.profilePic || null, // store raw; components call resolveApiUrl() once
+                pic: profile.profilePic || null,
                 verified: profile.isVerified || false
               };
-
+              
               console.log(`[MessageContext] Stored profile for ${key}:`, profiles[key]);
             });
           }
@@ -690,19 +688,16 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         const profiles: { [username: string]: SellerProfile } = {};
 
         if ((threadsResponse as any).profiles) {
-          Object.values((threadsResponse as any).profiles).forEach((profile: any) => {
-            const username = profile?.username || profile?.user?.username || profile?.seller || '';
-            if (!username) {
-              console.warn('[MessageContext] Profile missing username:', profile);
-              return;
-            }
+          console.log('[MessageContext] Found profiles object:', (threadsResponse as any).profiles);
+          
+          Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
             const key = sanitizeUsername(username) || username;
-
+            
             profiles[key] = {
-              pic: profile.profilePic || null, // store raw; components resolve once
+              pic: profile.profilePic || null,
               verified: profile.isVerified || false
             };
-
+            
             console.log(`[MessageContext] Refreshed profile for ${key}:`, profiles[key]);
           });
         }
