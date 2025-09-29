@@ -2,10 +2,29 @@
 'use client';
 
 import Link from 'next/link';
-import { HelpCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { FOOTER_LINKS } from '@/utils/homepage-constants';
+
+// Inline the HelpCircle icon to avoid Turbopack issues
+const HelpCircleIcon = () => (
+  <svg 
+    xmlns="http://www.w3.org/2000/svg" 
+    width="16" 
+    height="16" 
+    viewBox="0 0 24 24" 
+    fill="none" 
+    stroke="currentColor" 
+    strokeWidth="2" 
+    strokeLinecap="round" 
+    strokeLinejoin="round"
+    className="inline-block"
+  >
+    <circle cx="12" cy="12" r="10"></circle>
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+    <path d="M12 17h.01"></path>
+  </svg>
+);
 
 export default function Footer() {
   const currentYear = new Date().getFullYear();
@@ -60,7 +79,7 @@ export default function Footer() {
               href="/help"
               className="inline-flex items-center gap-2 text-[#ff950e] hover:underline text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] rounded"
             >
-              <HelpCircle className="h-4 w-4" />
+              <HelpCircleIcon />
               Contact Support
             </Link>
           </div>
