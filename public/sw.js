@@ -1,105 +1,111 @@
-// public/sw.js
+/* public/sw.js */
 
-const CACHE_NAME = 'pantypost-v1';
-const urlsToCache = [
-  '/',
-  '/browse',
-  '/offline',
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+/* ---------- SW version (BUMP THIS to force update) ---------- */
+const SW_VERSION = 'pp-sw-v7'; // ← bump this string when you deploy
+
+/* ---------- Cache names ---------- */
+const STATIC_CACHE = `${SW_VERSION}-static`;
+const HTML_CACHE   = `${SW_VERSION}-html`;
+
+/* ---------- What to cache ---------- */
+const STATIC_ASSET_PATTERNS = [
+  /^\/_next\/static\//,
+  /^\/icons?\//,
+  /^\/images?\//,
+  /^\/manifest\.json$/,
+  /^\/favicon\.ico$/,
 ];
 
-// Install event
+/* Utility: check if request is same-origin */
+function isSameOrigin(url) {
+  return new URL(url, self.location.href).origin === self.location.origin;
+}
+
+/* Utility: should we cache this request as a static asset? */
+function isStaticAsset(req) {
+  const url = new URL(req.url);
+  return STATIC_ASSET_PATTERNS.some((rx) => rx.test(url.pathname));
+}
+
+/* Utility: skip caching/responding for API & cross-origin */
+function isApiOrCrossOrigin(req) {
+  const url = new URL(req.url);
+  // Skip any cross-origin request (e.g., https://api.pantypost.com/*)
+  if (!isSameOrigin(url.href)) return true;
+  // Skip any same-origin API route (proxied or native)
+  if (url.pathname.startsWith('/api/')) return true;
+  return false;
+}
+
+/* ---------- Install: pre-cache nothing heavy ---------- */
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
-      .then(() => self.skipWaiting())
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(STATIC_CACHE);
+    // You can add tiny always-needed files here if you want, but it's optional.
+    await cache.addAll(['/manifest.json', '/favicon.ico'].filter(Boolean));
+    self.skipWaiting();
+  })());
 });
 
-// Activate event
+/* ---------- Activate: clean old caches ---------- */
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        .filter((k) => !k.startsWith(SW_VERSION))
+        .map((k) => caches.delete(k))
+    );
+    // Take control immediately
+    await self.clients.claim();
+  })());
 });
 
-// Fetch event with network-first strategy
+/* ---------- Fetch strategy ---------- */
 self.addEventListener('fetch', (event) => {
-  if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .catch(() => caches.match('/offline'))
-    );
+  const req = event.request;
+  const url = new URL(req.url);
+
+  // 1) Never intercept API or cross-origin requests
+  if (isApiOrCrossOrigin(req)) return;
+
+  // 2) For navigation requests (HTML): network-first, fallback to cache
+  if (req.mode === 'navigate' || (req.destination === 'document')) {
+    event.respondWith(networkFirstHtml(req));
     return;
   }
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Clone the response
-        const responseClone = response.clone();
-
-        caches.open(CACHE_NAME).then((cache) => {
-          // Cache successful responses
-          if (response.status === 200) {
-            cache.put(event.request, responseClone);
-          }
-        });
-
-        return response;
-      })
-      .catch(() => caches.match(event.request))
-  );
-});
-
-// Background sync for messages
-self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-messages') {
-    event.waitUntil(syncMessages());
+  // 3) For static assets: cache-first
+  if (isStaticAsset(req)) {
+    event.respondWith(cacheFirstStatic(req));
+    return;
   }
+
+  // 4) Default: pass-through
+  // (You can choose a strategy here if needed; we simply let it go to network)
 });
 
-async function syncMessages() {
-  const cache = await caches.open('messages-cache');
-  const requests = await cache.keys();
-
-  for (const request of requests) {
-    try {
-      const response = await fetch(request);
-      if (response.ok) {
-        await cache.delete(request);
-      }
-    } catch (error) {
-      console.error('Sync failed:', error);
-    }
+/* ---------- Strategies ---------- */
+async function networkFirstHtml(req) {
+  const cache = await caches.open(HTML_CACHE);
+  try {
+    const fresh = await fetch(req);
+    // Cache only successful responses
+    if (fresh && fresh.ok) cache.put(req, fresh.clone());
+    return fresh;
+  } catch {
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    // As a last resort, try to serve the app shell (root)
+    return caches.match('/') || new Response('Offline', { status: 503 });
   }
 }
 
-// Push notifications
-self.addEventListener('push', (event) => {
-  const options = {
-    body: event.data?.text() || 'New notification from PantyPost',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/badge-72x72.png',
-    vibrate: [200, 100, 200],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    }
-  };
-
-  event.waitUntil(
-    self.registration.showNotification('PantyPost', options)
-  );
-});
+async function cacheFirstStatic(req) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(req);
+  if (cached) return cached;
+  const res = await fetch(req);
+  if (res && res.ok) cache.put(req, res.clone());
+  return res;
+}
