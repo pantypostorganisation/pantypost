@@ -64,21 +64,16 @@ function normalizeProfileFromBackend(raw: any): NormalizedBuyerProfile | null {
     },
   };
 }
-function getApiBases() {
-  const defaultApiBase = '/api';
-  const configured = process.env.NEXT_PUBLIC_API_BASE_URL || defaultApiBase;
-  const apiBase = configured.replace(/\/+$/, '');
-  const origin = apiBase.replace(/\/api$/, '');
-  return { apiBase, origin };
-}
 function resolveAvatarUrl(raw?: string | null): string | null {
   if (!raw) return null;
   const src = String(raw).trim();
   if (src.toLowerCase().includes('placeholder') || src === '-' || src === 'none') return null;
   if (src.startsWith('http://') || src.startsWith('https://')) return src;
   if (src.startsWith('/')) {
-    const { origin } = getApiBases();
-    return `${origin}${src}`;
+    // Use current origin for relative assets from API
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}${src}`;
+    }
   }
   return null;
 }
@@ -94,7 +89,6 @@ const COUNTRY_TO_CODE: Record<string, string> = {
   Japan: 'JP',
   India: 'IN',
   'New Zealand': 'NZ',
-  // ... (rest not necessary for display; edit page holds full list)
 };
 function flagFromIso2(code?: string | null): string {
   if (!code || code.length !== 2) return '🌐';
@@ -188,7 +182,7 @@ export default function BuyerProfilePage() {
   const fetchMe = useCallback(async () => {
     if (!token) return;
     try {
-      const resp = await fetch(`${getApiBases().apiBase}/users/me/profile`, {
+      const resp = await fetch(`/users/me/profile`, {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       });
       const json = await resp.json().catch(() => null);
@@ -207,8 +201,8 @@ export default function BuyerProfilePage() {
     setHttpStatus(null);
 
     try {
-      const { apiBase } = getApiBases();
-      const url = `${apiBase}/users/${encodeURIComponent(usernameForRequest)}/profile`;
+      // IMPORTANT: call our same-origin proxy to avoid CORS
+      const url = `/users/${encodeURIComponent(usernameForRequest)}/profile`;
 
       const tk = getGlobalAuthToken?.();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -259,9 +253,6 @@ export default function BuyerProfilePage() {
   }, [fetchMe]);
 
   const isOwner = !!me && me.username === usernameForRequest;
-
-  // Owner-only: inline country picker already refreshes via loadProfile() after save (from earlier step).
-  // This page now also hot-updates via the storage listener above.
 
   if (!usernameForRequest) {
     return (
