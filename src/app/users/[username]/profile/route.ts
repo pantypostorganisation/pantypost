@@ -1,3 +1,4 @@
+// src/app/users/[username]/profile/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
