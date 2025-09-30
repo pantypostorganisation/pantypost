@@ -137,7 +137,7 @@ export default function HeroSection() {
               <img
                 src="/phone-mockup.png"
                 alt="PantyPost mobile app interface showcasing the marketplace"
-                className="h-[280px] sm:h-96 md:h-[440px] lg:h-[520px] w-auto transform transition-all duration-500 hover:scale-105 hover:rotate-3"
+                className="h-[340px] sm:h-96 md:h-[440px] lg:h-[520px] w-auto transform transition-all duration-500 hover:scale-105 hover:rotate-3"
                 style={{
                   filter:
                     'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))',
@@ -145,7 +145,7 @@ export default function HeroSection() {
                 onError={() => setImgError(true)}
               />
             ) : (
-              <div className="h-[280px] sm:h-96 md:h-[440px] lg:h-[520px] w-[160px] sm:w-[220px] md:w-[250px] lg:w-[300px] bg-gradient-to-br from-gray-800 to-gray-900 rounded-[2rem] border border-gray-700 flex items-center justify-center">
+              <div className="h-[340px] sm:h-96 md:h-[440px] lg:h-[520px] w-[200px] sm:w-[220px] md:w-[250px] lg:w-[300px] bg-gradient-to-br from-gray-800 to-gray-900 rounded-[2rem] border border-gray-700 flex items-center justify-center">
                 <span className="text-gray-400 text-sm">App Preview</span>
               </div>
             )}

@@ -33,7 +33,7 @@ export default function TrustBadges() {
 
   return (
     <motion.div 
-      className="flex gap-2.5 mt-6 flex-wrap" 
+      className="grid grid-cols-2 sm:flex gap-2 sm:gap-2.5 mt-6 w-full sm:w-auto" 
       variants={containerVariants}
       role="region"
       aria-label="Trust and security indicators"
@@ -41,7 +41,7 @@ export default function TrustBadges() {
       {trustBadges.map((badge, index) => (
         <motion.span
           key={`trust-badge-${index}`}
-          className="flex items-center gap-1.5 bg-white/5 backdrop-blur-lg text-gray-200 px-3 py-1.5 rounded-full text-xs border border-white/10 shadow-sm transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-md hover:scale-105 group cursor-default"
+          className="flex items-center justify-center sm:justify-start gap-1.5 bg-white/5 backdrop-blur-lg text-gray-200 px-3 py-2 sm:py-1.5 rounded-full text-xs border border-white/10 shadow-sm transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-md hover:scale-105 group cursor-default"
           variants={itemVariants}
           whileHover={{ 
             scale: 1.05,
@@ -63,7 +63,7 @@ export default function TrustBadges() {
           ) : (
             <badge.Icon className="w-3.5 h-3.5 text-[#ff950e] group-hover:scale-110 transition-transform duration-200" aria-hidden="true" />
           )}
-          <span className="font-medium select-none">{badge.text}</span>
+          <span className="font-medium select-none whitespace-nowrap text-[11px] sm:text-xs">{badge.text}</span>
         </motion.span>
       ))}
     </motion.div>
