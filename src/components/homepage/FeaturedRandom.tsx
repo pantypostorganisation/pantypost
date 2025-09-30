@@ -9,14 +9,14 @@ import { listingsService } from '@/services/listings.service';
 import type { Listing } from '@/context/ListingContext';
 import { useAuth } from '@/context/AuthContext';
 
-// Loading skeleton component
+// Loading skeleton component - matching browse page dimensions
 const ListingSkeleton = () => (
-  <div className="bg-[#131313] rounded-xl border border-white/10 overflow-hidden">
-    <div className="aspect-[4/3] bg-gray-800/50 animate-pulse"></div>
-    <div className="p-4 space-y-3">
-      <div className="h-5 bg-gray-800/50 rounded animate-pulse"></div>
+  <div className="bg-[#131313] rounded-lg sm:rounded-xl border border-white/10 overflow-hidden">
+    <div className="aspect-[4/5] sm:aspect-square bg-gray-800/50 animate-pulse"></div>
+    <div className="p-3 sm:p-4 md:p-5 space-y-2 sm:space-y-3">
+      <div className="h-4 sm:h-5 bg-gray-800/50 rounded animate-pulse"></div>
       <div className="h-3 bg-gray-800/30 rounded w-2/3 animate-pulse"></div>
-      <div className="h-6 bg-gray-800/50 rounded w-1/3 animate-pulse"></div>
+      <div className="h-5 sm:h-6 bg-gray-800/50 rounded w-1/3 animate-pulse"></div>
     </div>
   </div>
 );
@@ -126,7 +126,7 @@ export default function FeaturedRandom() {
       className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16 relative z-30"
     >
       {/* Section Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6 sm:mb-8">
         <div>
           <h2 
             id="featured-random-title" 
@@ -134,20 +134,20 @@ export default function FeaturedRandom() {
           >
             Featured Picks
           </h2>
-          <p className="text-gray-400 mt-2">
+          <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">
             Discover unique items from our marketplace
           </p>
         </div>
         <Link 
           href="/browse" 
-          className="text-[#ff950e] hover:text-[#ffb347] text-sm font-medium transition-colors hover:underline underline-offset-4"
+          className="text-[#ff950e] hover:text-[#ffb347] text-xs sm:text-sm font-medium transition-colors hover:underline underline-offset-4"
         >
           View all →
         </Link>
       </div>
 
-      {/* Listings Grid */}
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Listings Grid - 2 columns on mobile matching browse page gap */}
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
         {loading ? (
           // Show skeletons while loading
           Array.from({ length: skeletonCount }).map((_, index) => (
@@ -186,146 +186,145 @@ export default function FeaturedRandom() {
             return (
               <article 
                 key={listing.id} 
-                className="group relative bg-[#131313] rounded-xl overflow-hidden border border-white/10 hover:border-[#ff950e]/50 transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl hover:shadow-[#ff950e]/10"
+                className="group relative bg-gradient-to-br from-[#1a1a1a] to-[#111] border border-gray-800 rounded-lg sm:rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:border-[#ff950e] cursor-pointer hover:transform hover:scale-[1.02] overflow-hidden"
               >
                 <Link 
                   href={`/browse/${encodeURIComponent(listing.id)}`} 
-                  className="block focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded-xl"
+                  className="block focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded-lg sm:rounded-xl"
                 >
-                  {/* Image Container */}
-                  <div className="relative aspect-[4/3] overflow-hidden bg-gray-900">
+                  {/* Type Badge - Matching browse page positioning */}
+                  <div className="absolute top-2 sm:top-3 md:top-4 right-2 sm:right-3 md:right-4 z-10">
+                    {isAuction && (
+                      <span className="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg font-bold flex items-center shadow-lg">
+                        <Gavel className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-1.5" /> AUCTION
+                      </span>
+                    )}
+
+                    {!isAuction && listing.isPremium && (
+                      <span className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg font-bold flex items-center shadow-lg">
+                        <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-1.5" /> PREMIUM
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Image Container - Matching browse page aspect ratio */}
+                  <div className="relative aspect-[4/5] sm:aspect-square overflow-hidden bg-black">
                     {listing.imageUrls && listing.imageUrls.length > 0 ? (
                       <Image
                         src={listing.imageUrls[0]}
                         alt={listing.title}
                         width={400}
-                        height={300}
-                        className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-110`}
-                        style={isPremiumLocked ? { filter: 'blur(2px)' } : {}}
+                        height={500}
+                        className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
+                          isPremiumLocked ? 'blur-md' : ''
+                        }`}
                         loading="lazy"
                         unoptimized // Since these may be external URLs
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                        <span className="text-gray-600 text-sm">No image</span>
+                        <span className="text-gray-600 text-xs sm:text-sm">No image</span>
                       </div>
                     )}
                     
-                    {/* Overlay gradient on hover */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    {/* Enhanced bottom gradient */}
+                    <div className="absolute inset-x-0 bottom-0 h-24 sm:h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
                     
                     {/* Premium lock overlay */}
                     {isPremiumLocked && (
-                      <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center">
-                        <Lock className="w-8 h-8 text-[#ff950e] mb-2" />
-                        <p className="text-xs font-bold text-white text-center px-4">
-                          Subscribe to view
+                      <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm">
+                        <Lock className="w-8 h-8 sm:w-12 sm:h-12 text-[#ff950e] mb-2 sm:mb-4" />
+                        <p className="text-xs sm:text-sm font-bold text-white text-center px-2 sm:px-4">
+                          Subscribe to view premium content
                         </p>
                       </div>
                     )}
                     
-                    {/* Badges */}
-                    <div className="absolute top-3 left-3 flex items-center gap-2">
-                      {listing.isPremium && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-600 to-orange-600 text-white text-xs px-2 py-1 font-medium">
-                          <Star className="w-3 h-3" />
-                          Premium
-                        </span>
-                      )}
-                      {isAuction && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-purple-600/90 backdrop-blur-sm text-white text-xs px-2 py-1 font-medium">
-                          <Gavel className="w-3 h-3" />
-                          Auction
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Auction timer */}
+                    {/* Auction timer - Matching browse page positioning */}
                     {isAuction && listing.auction && (
-                      <div className="absolute bottom-3 left-3 z-10">
-                        <span className="bg-black/90 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-lg font-bold flex items-center shadow-lg border border-purple-500/30">
-                          <Clock className="w-3 h-3 mr-1 text-purple-400" />
+                      <div className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-2 sm:left-3 md:left-4 z-10">
+                        <span className="bg-black/90 backdrop-blur-sm text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-2 rounded-md sm:rounded-lg font-bold flex items-center shadow-lg border border-purple-500/30">
+                          <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-purple-400" />
                           {formatTimeRemaining(listing.auction.endTime)}
                         </span>
                       </div>
                     )}
                   </div>
                   
-                  {/* Content */}
-                  <div className="p-4">
-                    {/* Title and Seller */}
-                    <div className="mb-3">
-                      <h3 className="font-semibold text-white line-clamp-1 group-hover:text-[#ff950e] transition-colors">
+                  {/* Content - Matching browse page padding and text sizes */}
+                  <div className="p-3 sm:p-4 md:p-5 flex flex-col flex-grow">
+                    <div>
+                      <h3 className="text-sm sm:text-base md:text-xl font-bold text-white mb-1 sm:mb-2 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
                         {listing.title}
                       </h3>
-                      <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                        @{listing.seller}
-                        {/* Also show verification badge next to seller name if verified */}
-                        {isSellerVerified && (
-                          <Image
-                            src="/verification_badge.png"
-                            alt="Verified"
-                            width={12}
-                            height={12}
-                            className="w-3 h-3 inline-block"
-                          />
-                        )}
+                      <p className="text-xs sm:text-sm text-gray-400 mb-2 sm:mb-3 line-clamp-1 sm:line-clamp-2 leading-relaxed">
+                        {listing.description}
                       </p>
                     </div>
-                    
-                    {/* Price */}
-                    <div className="flex items-end justify-between">
-                      <div>
-                        {isAuction ? (
-                          <>
-                            <div className="text-xs text-gray-400">
-                              {listing.auction?.highestBid ? 'Current bid' : 'Starting at'}
-                            </div>
-                            <div className="text-lg font-bold text-purple-400">
-                              ${(listing.auction?.highestBid || listing.auction?.startingPrice || 0).toFixed(2)}
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            {isPremiumLocked && (
-                              <div className="text-xs text-gray-400">Premium</div>
-                            )}
-                            <div className="text-lg font-bold text-white">
-                              ${listing.price.toFixed(2)}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                      
-                      {/* Auction bid count */}
-                      {isAuction && listing.auction?.bids && listing.auction.bids.length > 0 && (
-                        <div className="text-xs text-gray-400">
-                          {listing.auction.bids.length} bid{listing.auction.bids.length !== 1 ? 's' : ''}
-                        </div>
-                      )}
-                      
-                      {/* Trust signals */}
-                      {!isAuction && (listing as any).trustSignals?.rating && (listing as any).trustSignals.rating > 0 && (
-                        <div className="flex items-center gap-1">
-                          <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                          <span className="text-xs text-gray-400">
-                            {(listing as any).trustSignals.rating.toFixed(1)}
+
+                    {/* Auction info - Matching browse page */}
+                    {isAuction && listing.auction && (
+                      <div className="bg-gradient-to-r from-purple-900/30 to-purple-800/20 rounded-lg sm:rounded-xl p-2 sm:p-3 md:p-4 mb-2 sm:mb-4 border border-purple-700/30 backdrop-blur-sm">
+                        <div className="flex justify-between items-center text-xs sm:text-sm mb-1 sm:mb-2">
+                          <span className="text-purple-300 font-medium text-[10px] sm:text-xs">
+                            {listing.auction?.highestBid ? 'Current bid' : 'Starting at'}
+                          </span>
+                          <span className="font-bold text-white flex items-center text-sm sm:text-base md:text-lg">
+                            ${(listing.auction?.highestBid || listing.auction?.startingPrice || 0).toFixed(2)}
                           </span>
                         </div>
-                      )}
-                    </div>
-                    
-                    {/* Hover effect - View Details */}
-                    <div className="absolute inset-x-4 bottom-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <div className={`${
-                        isAuction 
-                          ? 'bg-purple-600 text-white' 
-                          : isPremiumLocked 
-                            ? 'bg-gray-700 text-white'
-                            : 'bg-[#ff950e] text-black'
-                      } text-center py-2 rounded-lg font-medium text-sm`}>
-                        {isPremiumLocked ? 'Subscribe to View' : 'View Details'}
+                        <div className="flex justify-between items-center text-[10px] sm:text-xs">
+                          <span className="text-gray-400 flex items-center gap-0.5 sm:gap-1">
+                            <Gavel className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                            {listing.auction.bids?.length || 0} bids
+                          </span>
+                          {listing.auction.reservePrice && (
+                            <span
+                              className={`font-medium text-[10px] sm:text-xs ${
+                                (!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
+                                  ? 'text-yellow-400'
+                                  : 'text-green-400'
+                              }`}
+                            >
+                              {(!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice)
+                                ? '⚠️ Reserve not met'
+                                : '✅ Reserve met'
+                              }
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    )}
+
+                    {/* Price & Seller - Matching browse page layout */}
+                    <div className="flex justify-between items-end mt-auto">
+                      <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm md:text-base text-gray-400 hover:text-[#ff950e] transition-colors max-w-[60%]">
+                        <span className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center text-xs sm:text-sm md:text-lg font-bold text-[#ff950e] border-2 border-gray-700 flex-shrink-0">
+                          {listing.seller.charAt(0).toUpperCase()}
+                        </span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-xs sm:text-sm md:text-base flex items-center gap-1 sm:gap-2 truncate">
+                            <span className="truncate">{listing.seller}</span>
+                            {isSellerVerified && (
+                              <Image
+                                src="/verification_badge.png"
+                                alt="Verified"
+                                width={16}
+                                height={16}
+                                className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 flex-shrink-0"
+                              />
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {!isAuction && (
+                        <div className="text-right">
+                          <p className="font-bold text-[#ff950e] text-base sm:text-xl md:text-2xl">
+                            ${listing.price.toFixed(2)}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Link>
