@@ -13,7 +13,7 @@ const inter = Inter({
 
 // Metadata without viewport and themeColor
 export const metadata: Metadata = {
-  title: 'PantyPost - Premium Adult Marketplace | Verified Sellers',
+  title: 'Panty Post - Premium Adult Marketplace',
   description: 'The premier marketplace for adult content and personalized experiences. Connect with verified sellers in a secure, private environment. 21+ only.',
   robots: 'noindex, nofollow',
 };
