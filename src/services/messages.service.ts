@@ -159,6 +159,31 @@ const reportUserSchema = z.object({
 });
 
 /**
+ * Helper: Resolve API root so we never double-append /api
+ * - If NEXT_PUBLIC_API_BASE_URL ends with /api, keep it as-is.
+ * - Otherwise, append /api.
+ * Examples:
+ *  - http://localhost:5000        -> http://localhost:5000/api
+ *  - https://api.pantypost.com/api -> https://api.pantypost.com/api
+ */
+function resolveApiRoot(): string {
+  const rawBase = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000').replace(/\/+$/, '');
+  return rawBase.endsWith('/api') ? rawBase : `${rawBase}/api`;
+}
+
+/**
+ * Helper: Join API root with a path safely
+ * - Strips a leading /api from path to avoid /api/api
+ * - Ensures exactly one slash between root and path
+ */
+function joinApi(root: string, path: string): string {
+  const cleanedRoot = root.replace(/\/+$/, '');
+  const cleanedPath = `/${(path || '').replace(/^\/+/, '')}`;     // ensure leading slash
+  const withoutApi = cleanedPath.startsWith('/api/') ? cleanedPath.slice(4) : cleanedPath; // drop '/api'
+  return `${cleanedRoot}${withoutApi}`;
+}
+
+/**
  * Messages Service
  * Handles all messaging operations with backend API only
  */
@@ -183,7 +208,7 @@ export class MessagesService {
    */
   async getThreads(username: string, role?: 'buyer' | 'seller'): Promise<ThreadsResponse> {
     try {
-      // Check rate limit
+      // Rate limit
       const rateLimitResult = this.rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
       if (!rateLimitResult.allowed) {
         return {
@@ -192,50 +217,48 @@ export class MessagesService {
         };
       }
 
-      const url = username 
-        ? `${API_ENDPOINTS.MESSAGES.THREADS}?username=${encodeURIComponent(username)}${role ? `&role=${role}` : ''}`
-        : API_ENDPOINTS.MESSAGES.THREADS;
-        
-      console.log('[MessagesService.getThreads] Calling API:', url);
-      
-      // FIXED: Make a direct fetch call to preserve the full response structure
+      // Build path from API_ENDPOINTS and query
+      const basePath = API_ENDPOINTS.MESSAGES.THREADS || '/messages/threads';
+      const urlPath =
+        username
+          ? `${basePath}?username=${encodeURIComponent(username)}${role ? `&role=${role}` : ''}`
+          : basePath;
+
+      const apiRoot = resolveApiRoot();
+      const fullUrl = joinApi(apiRoot, urlPath);
+
       const token = this.getAuthToken();
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
-      const fullUrl = `${baseUrl}/api${url}`;
-      
+
+      console.log('[MessagesService.getThreads] Request URL:', fullUrl);
+
       const response = await fetch(fullUrl, {
         method: 'GET',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          Authorization: token ? `Bearer ${token}` : '',
           'Content-Type': 'application/json',
         },
       });
 
       if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        console.error('[MessagesService.getThreads] Non-OK response:', response.status, errorBody);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
       console.log('[MessagesService.getThreads] Full response from backend:', data);
-      
-      if (data.success) {
-        // Extract threads and profiles from the backend response
-        const threads = data.data || [];
-        const profiles = data.profiles || {};
-        
-        console.log('[MessagesService.getThreads] Extracted threads count:', threads.length);
-        console.log('[MessagesService.getThreads] Extracted profiles:', profiles);
-        
+
+      if (data?.success) {
         return {
           success: true,
-          data: threads,
-          profiles: profiles
+          data: data.data || [],
+          profiles: data.profiles || {},
         };
       }
-      
+
       return {
         success: false,
-        error: data.error || { message: 'Failed to get threads' },
+        error: data?.error || { message: 'Failed to get threads' },
       };
     } catch (error) {
       console.error('Get threads error:', error);
@@ -251,7 +274,7 @@ export class MessagesService {
    */
   private getAuthToken(): string | null {
     if (typeof window === 'undefined') return null;
-    
+
     try {
       // Check sessionStorage first (where AuthContext stores it)
       const authTokens = sessionStorage.getItem('auth_tokens');
@@ -259,7 +282,7 @@ export class MessagesService {
         const parsed = JSON.parse(authTokens);
         return parsed.token || null;
       }
-      
+
       // Check direct auth_token
       const token = sessionStorage.getItem('auth_token') || localStorage.getItem('auth_token');
       return token;
@@ -276,8 +299,8 @@ export class MessagesService {
     try {
       const sanitizedUserA = sanitizeStrict(userA);
       const sanitizedUserB = sanitizeStrict(userB);
-      
-      if (!sanitizedUserA || !sanitizedUserB || 
+
+      if (!sanitizedUserA || !sanitizedUserB ||
           sanitizedUserA.length > 30 || sanitizedUserB.length > 30) {
         return {
           success: false,
@@ -286,41 +309,45 @@ export class MessagesService {
       }
 
       const threadId = this.getConversationKey(sanitizedUserA, sanitizedUserB);
-      
-      // FIXED: Make a direct fetch call to preserve the full response structure
+
+      const apiRoot = resolveApiRoot();
+      // Prefer API_ENDPOINTS if present, otherwise default
+      const basePath = (API_ENDPOINTS?.MESSAGES?.THREADS && API_ENDPOINTS.MESSAGES.THREADS.replace(/\/+$/, '')) || '/messages/threads';
+      const urlPath = `${basePath}/${encodeURIComponent(threadId)}`;
+      const fullUrl = joinApi(apiRoot, urlPath);
+
       const token = this.getAuthToken();
-      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
-      const fullUrl = `${baseUrl}/api/messages/threads/${threadId}`;
-      
+
+      console.log('[MessagesService.getThread] Request URL:', fullUrl);
+
       const response = await fetch(fullUrl, {
         method: 'GET',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          Authorization: token ? `Bearer ${token}` : '',
           'Content-Type': 'application/json',
         },
       });
 
       if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        console.error('[MessagesService.getThread] Non-OK response:', response.status, errorBody);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
       console.log('[MessagesService.getThread] Full response from backend:', data);
-      
-      if (data.success) {
-        const messages = data.data || [];
-        const profiles = data.profiles || {};
-        
+
+      if (data?.success) {
         return {
           success: true,
-          data: messages,
-          profiles: profiles
+          data: data.data || [],
+          profiles: data.profiles || {}
         };
       }
-      
+
       return {
         success: false,
-        error: data.error || { message: 'Failed to get thread' },
+        error: data?.error || { message: 'Failed to get thread' },
       };
     } catch (error) {
       console.error('Get thread error:', error);
@@ -347,7 +374,7 @@ export class MessagesService {
       const sanitizedRequest = validation.data!;
 
       const rateLimitResult = this.rateLimiter.check(
-        `message_send_${sanitizedRequest.sender}`, 
+        `message_send_${sanitizedRequest.sender}`,
         RATE_LIMITS.MESSAGE_SEND
       );
       if (!rateLimitResult.allowed) {
@@ -439,8 +466,8 @@ export class MessagesService {
     try {
       const sanitizedUsername = sanitizeStrict(username);
       const sanitizedOtherParty = sanitizeStrict(otherParty);
-      
-      if (!sanitizedUsername || !sanitizedOtherParty || 
+
+      if (!sanitizedUsername || !sanitizedOtherParty ||
           sanitizedUsername.length > 30 || sanitizedOtherParty.length > 30) {
         return {
           success: false,
@@ -450,9 +477,9 @@ export class MessagesService {
 
       const response = await apiCall<void>(API_ENDPOINTS.MESSAGES.MARK_READ, {
         method: 'POST',
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           username: sanitizedUsername,
-          otherParty: sanitizedOtherParty 
+          otherParty: sanitizedOtherParty
         }),
       });
 
@@ -540,7 +567,7 @@ export class MessagesService {
     try {
       const sanitizedBlocker = sanitizeStrict(blocker);
       const sanitizedBlocked = sanitizeStrict(blocked);
-      
+
       if (!sanitizedBlocker || !sanitizedBlocked) {
         return false;
       }
@@ -583,7 +610,7 @@ export class MessagesService {
     try {
       const sanitizedReporter = sanitizeStrict(reporter);
       const sanitizedReportee = sanitizeStrict(reportee);
-      
+
       if (!sanitizedReporter || !sanitizedReportee) {
         return false;
       }
@@ -609,7 +636,7 @@ export class MessagesService {
       const response = await apiCall<{ count: number }>(
         `${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/unread-count')}?username=${encodeURIComponent(sanitizedUsername)}`
       );
-      
+
       return response.success && response.data ? response.data.count : 0;
     } catch (error) {
       console.error('Get unread count error:', error);
@@ -626,7 +653,7 @@ export class MessagesService {
       const response = await apiCall<{ [user: string]: string[] }>(
         `${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/blocked-users')}`
       );
-      
+
       return response.success ? response : { success: true, data: {} };
     } catch (error) {
       console.error('Get blocked users error:', error);
@@ -648,7 +675,7 @@ export class MessagesService {
       const response = await apiCall<MessageNotification[]>(
         `${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/notifications')}?username=${encodeURIComponent(sanitizedUsername)}`
       );
-      
+
       return response.success ? response : { success: true, data: [] };
     } catch (error) {
       console.error('Get message notifications error:', error);
@@ -665,7 +692,7 @@ export class MessagesService {
       const response = await apiCall<{ count: number }>(
         `${API_ENDPOINTS.MESSAGES.THREADS.replace('/threads', '/reports/unread-count')}`
       );
-      
+
       return response.success ? response : { success: true, data: { count: 0 } };
     } catch (error) {
       console.error('Get unread reports error:', error);
@@ -680,7 +707,7 @@ export class MessagesService {
     try {
       const sanitizedSeller = sanitizeStrict(seller);
       const sanitizedBuyer = sanitizeStrict(buyer);
-      
+
       if (!sanitizedSeller || !sanitizedBuyer) {
         return;
       }
@@ -710,9 +737,9 @@ export class MessagesService {
     if (!this.messageListeners.has(sanitizedThreadId)) {
       this.messageListeners.set(sanitizedThreadId, new Set());
     }
-    
+
     this.messageListeners.get(sanitizedThreadId)!.add(callback);
-    
+
     return () => {
       const listeners = this.messageListeners.get(sanitizedThreadId);
       if (listeners) {
