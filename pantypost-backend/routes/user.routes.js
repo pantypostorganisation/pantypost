@@ -144,6 +144,8 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid country value' }
         });
       }
+      user.country = country;
+      // Keep legacy settings.country in sync for older clients that still read from it
       user.settings = user.settings || {};
       user.settings.country = country;
     }
@@ -158,7 +160,7 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
         role: user.role,
         bio: user.bio || '',
         profilePic: user.profilePic || null,
-        country: user?.settings?.country || ''
+        country: user.country || user?.settings?.country || ''
       }
     });
   } catch (error) {
@@ -240,7 +242,7 @@ router.get('/:username/profile', async (req, res) => {
             username: user.username,
             bio: user.bio,
             profilePic: user.profilePic,
-            country: user?.settings?.country || null,
+            country: user.country || user?.settings?.country || null,
             isVerified: user.isVerified,
             role: user.role,
             joinedDate: user.joinedDate
@@ -270,7 +272,7 @@ router.get('/:username/profile', async (req, res) => {
         username: user.username,
         bio: user.bio,
         profilePic: user.profilePic,
-        country: user?.settings?.country || null,
+        country: user.country || user?.settings?.country || null,
         isVerified: user.isVerified,
         tier: user.tier,
         subscriptionPrice: user.subscriptionPrice,
