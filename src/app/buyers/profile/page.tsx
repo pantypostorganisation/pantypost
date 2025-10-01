@@ -294,7 +294,7 @@ export default function BuyerSelfProfilePage() {
     setUploadErr(null);
     try {
       const fd = new FormData();
-      fd.append('profilePic', file);
+      fd.append('file', file);
       const resp = await fetch(getUploadEndpoint(), {
         method: 'POST',
         credentials: 'include',

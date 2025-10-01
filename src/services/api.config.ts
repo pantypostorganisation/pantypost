@@ -141,7 +141,7 @@ export const API_ENDPOINTS = {
   // Upload endpoints
   UPLOAD: {
     IMAGE: '/upload/image',
-    PROFILE: '/upload/profile',
+    PROFILE: '/upload/profile-pic',
     VERIFICATION: '/upload/verification',
   },
   
