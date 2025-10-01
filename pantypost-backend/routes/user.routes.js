@@ -79,8 +79,12 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
         username: user.username,
         role: user.role,
         bio: user.bio || '',
-        profilePic: user.profilePic || null,
-        country: user?.settings?.country || ''
+        profilePic:
+          user.profilePic ||
+          user?.settings?.profilePic ||
+          user?.settings?.profilePicture ||
+          null,
+        country: user.country || user?.settings?.country || ''
       }
     });
   } catch (error) {
@@ -117,17 +121,25 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
 
     // Validate profilePic (allow empty, http(s), or /uploads, or placeholder)
     if (typeof profilePic !== 'undefined') {
-      const pic = profilePic;
+      let sanitizedPic = profilePic;
+      if (typeof sanitizedPic === 'string') {
+        sanitizedPic = sanitizedPic.trim();
+      }
+
       if (
-        pic === null ||
-        pic === '' ||
-        (typeof pic === 'string' &&
-          (pic.startsWith('http://') ||
-           pic.startsWith('https://') ||
-           pic.startsWith('/uploads/') ||
-           pic.includes('placeholder')))
+        sanitizedPic === null ||
+        sanitizedPic === '' ||
+        (typeof sanitizedPic === 'string' &&
+          (sanitizedPic.startsWith('http://') ||
+           sanitizedPic.startsWith('https://') ||
+           sanitizedPic.startsWith('/uploads/') ||
+           sanitizedPic.includes('placeholder')))
       ) {
-        user.profilePic = pic;
+        const storedPic = sanitizedPic ? sanitizedPic : '';
+        user.profilePic = storedPic;
+        user.settings = user.settings || {};
+        user.settings.profilePic = storedPic;
+        user.settings.profilePicture = storedPic;
       } else {
         return res.status(400).json({
           success: false,
@@ -144,6 +156,8 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid country value' }
         });
       }
+      user.country = country;
+      // Keep legacy settings.country in sync for older clients that still read from it
       user.settings = user.settings || {};
       user.settings.country = country;
     }
@@ -157,8 +171,12 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
         username: user.username,
         role: user.role,
         bio: user.bio || '',
-        profilePic: user.profilePic || null,
-        country: user?.settings?.country || ''
+        profilePic:
+          user.profilePic ||
+          user?.settings?.profilePic ||
+          user?.settings?.profilePicture ||
+          null,
+        country: user.country || user?.settings?.country || ''
       }
     });
   } catch (error) {
@@ -239,8 +257,12 @@ router.get('/:username/profile', async (req, res) => {
           data: {
             username: user.username,
             bio: user.bio,
-            profilePic: user.profilePic,
-            country: user?.settings?.country || null,
+            profilePic:
+              user.profilePic ||
+              user?.settings?.profilePic ||
+              user?.settings?.profilePicture ||
+              null,
+            country: user.country || user?.settings?.country || null,
             isVerified: user.isVerified,
             role: user.role,
             joinedDate: user.joinedDate
@@ -269,8 +291,12 @@ router.get('/:username/profile', async (req, res) => {
       data: {
         username: user.username,
         bio: user.bio,
-        profilePic: user.profilePic,
-        country: user?.settings?.country || null,
+        profilePic:
+          user.profilePic ||
+          user?.settings?.profilePic ||
+          user?.settings?.profilePicture ||
+          null,
+        country: user.country || user?.settings?.country || null,
         isVerified: user.isVerified,
         tier: user.tier,
         subscriptionPrice: user.subscriptionPrice,
@@ -374,13 +400,25 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
             user[field] = price;
           }
         } else if (field === 'profilePic') {
-          const pic = req.body[field];
-          if (pic === null || pic === '' || 
-              pic.startsWith('http://') || 
-              pic.startsWith('https://') || 
-              pic.startsWith('/uploads/') ||
-              pic.includes('placeholder')) {
-            user[field] = pic;
+          let pic = req.body[field];
+          if (typeof pic === 'string') {
+            pic = pic.trim();
+          }
+
+          if (
+            pic === null ||
+            pic === '' ||
+            (typeof pic === 'string' &&
+              (pic.startsWith('http://') ||
+               pic.startsWith('https://') ||
+               pic.startsWith('/uploads/') ||
+               pic.includes('placeholder')))
+          ) {
+            const storedPic = pic ? pic : '';
+            user[field] = storedPic;
+            user.settings = user.settings || {};
+            user.settings.profilePic = storedPic;
+            user.settings.profilePicture = storedPic;
           }
         } else {
           user[field] = req.body[field];

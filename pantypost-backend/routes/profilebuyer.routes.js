@@ -21,12 +21,20 @@ router.get('/', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
+    const resolvedProfilePic =
+      user.profilePic ||
+      user?.settings?.profilePic ||
+      user?.settings?.profilePicture ||
+      '';
+
+    const resolvedCountry = user.country || user?.settings?.country || '';
+
     const data = {
       username: user.username,
       role: user.role || 'buyer',
       bio: user.bio || '',
-      profilePic: user.profilePic || '',
-      country: user.country || '',
+      profilePic: resolvedProfilePic,
+      country: resolvedCountry,
     };
 
     return res.json({ success: true, data });
@@ -48,13 +56,45 @@ router.patch('/', authMiddleware, async (req, res) => {
     }
 
     const { bio, profilePic, country } = req.body || {};
-    const update = {
-      ...(typeof bio === 'string' ? { bio: bio.slice(0, 500) } : {}),
-      ...(typeof country === 'string' ? { country: country.slice(0, 56) } : {}),
-      ...(typeof profilePic === 'string' || profilePic === null
-        ? { profilePic: profilePic || '' }
-        : {}),
-    };
+
+    const update = {};
+
+    if (typeof bio === 'string') {
+      update.bio = bio.slice(0, 500);
+    }
+
+    if (typeof country === 'string') {
+      const sanitizedCountry = country.slice(0, 56);
+      update.country = sanitizedCountry;
+      update['settings.country'] = sanitizedCountry;
+    }
+
+    if (typeof profilePic !== 'undefined') {
+      let sanitizedPic = profilePic;
+      if (typeof sanitizedPic === 'string') {
+        sanitizedPic = sanitizedPic.trim();
+      }
+
+      if (
+        sanitizedPic === null ||
+        sanitizedPic === '' ||
+        (typeof sanitizedPic === 'string' &&
+          (sanitizedPic.startsWith('http://') ||
+            sanitizedPic.startsWith('https://') ||
+            sanitizedPic.startsWith('/uploads/') ||
+            sanitizedPic.includes('placeholder')))
+      ) {
+        const storedPic = sanitizedPic ? sanitizedPic : '';
+        update.profilePic = storedPic;
+        update['settings.profilePic'] = storedPic;
+        update['settings.profilePicture'] = storedPic;
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid profile picture URL',
+        });
+      }
+    }
 
     const user = await User.findOneAndUpdate(
       { username },
@@ -66,12 +106,20 @@ router.patch('/', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
+    const resolvedProfilePic =
+      user.profilePic ||
+      user?.settings?.profilePic ||
+      user?.settings?.profilePicture ||
+      '';
+
+    const resolvedCountry = user.country || user?.settings?.country || '';
+
     const data = {
       username: user.username,
       role: user.role || 'buyer',
       bio: user.bio || '',
-      profilePic: user.profilePic || '',
-      country: user.country || '',
+      profilePic: resolvedProfilePic,
+      country: resolvedCountry,
     };
 
     return res.json({ success: true, data });
