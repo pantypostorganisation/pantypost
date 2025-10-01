@@ -122,40 +122,32 @@ export default function Home() {
   return (
     <BanCheck>
       <div className="min-h-screen bg-black flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
-        <a
-          href="#marketplace-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:bg-[#ff950e] focus:text-black focus:px-4 focus:py-2 focus:rounded-full focus:shadow-lg"
-        >
-          Skip to main content
-        </a>
-
-        <main id="marketplace-content" className="flex-1 flex flex-col">
-          {/* Hero Section with Error Boundary */}
-          <SectionWrapper sectionName="Hero" fallbackHeight="h-screen">
-            <HeroSection />
-          </SectionWrapper>
-
-          {/* Trust Signals Section with Error Boundary */}
-          <SectionWrapper sectionName="Trust Signals" fallbackHeight="h-64">
-            <TrustSignalsSection />
-          </SectionWrapper>
-
-          {/* Featured Random Listings Section */}
-          <SectionWrapper sectionName="Featured Listings" fallbackHeight="h-96">
-            <FeaturedRandom />
-          </SectionWrapper>
-
-          {/* Features Section with Error Boundary */}
-          <SectionWrapper sectionName="Features" fallbackHeight="h-96">
-            <FeaturesSection />
-          </SectionWrapper>
-
-          {/* CTA Section with Error Boundary */}
-          <SectionWrapper sectionName="Call to Action" fallbackHeight="h-80">
-            <CTASection />
-          </SectionWrapper>
-        </main>
-
+        
+        {/* Hero Section with Error Boundary */}
+        <SectionWrapper sectionName="Hero" fallbackHeight="h-screen">
+          <HeroSection />
+        </SectionWrapper>
+        
+        {/* Trust Signals Section with Error Boundary */}
+        <SectionWrapper sectionName="Trust Signals" fallbackHeight="h-64">
+          <TrustSignalsSection />
+        </SectionWrapper>
+        
+        {/* Featured Random Listings Section */}
+        <SectionWrapper sectionName="Featured Listings" fallbackHeight="h-96">
+          <FeaturedRandom />
+        </SectionWrapper>
+        
+        {/* Features Section with Error Boundary */}
+        <SectionWrapper sectionName="Features" fallbackHeight="h-96">
+          <FeaturesSection />
+        </SectionWrapper>
+        
+        {/* CTA Section with Error Boundary */}
+        <SectionWrapper sectionName="Call to Action" fallbackHeight="h-80">
+          <CTASection />
+        </SectionWrapper>
+        
         {/* Footer with Error Boundary */}
         <SectionWrapper sectionName="Footer" fallbackHeight="h-64">
           <Footer />

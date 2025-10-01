@@ -7,27 +7,6 @@ import { itemVariants, containerVariants, shapeVariants, VIEWPORT_CONFIG } from 
 import { PLATFORM_FEATURES } from '@/utils/homepage-constants';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
-const JOURNEY_STEPS = [
-  {
-    title: 'Create your profile',
-    description: 'Launch with a compliant storefront, identity verification and built-in subscription tiers.',
-  },
-  {
-    title: 'List and promote',
-    description: 'Upload listings with private or public visibility, auction support and marketing boosts.',
-  },
-  {
-    title: 'Earn and scale',
-    description: 'Automated payouts, analytics dashboards and retention tools keep revenue predictable.',
-  },
-] as const;
-
-const SELLER_PERKS = [
-  'PCI-compliant payment processing with escrow and dispute handling.',
-  'Built-in CRM to nurture top buyers and convert subscribers.',
-  'Visibility boosts for verified sellers in featured placements.',
-] as const;
-
 // Enhanced loading skeleton for feature cards
 const FeatureSkeleton = () => (
   <div className="bg-[#131313] rounded-xl p-6 border border-white/10 animate-pulse">
@@ -358,15 +337,6 @@ export default function FeaturesSection() {
           How <span className="text-[#ff950e]">PantyPost</span> Works
         </motion.h2>
 
-        <motion.p
-          className="mx-auto max-w-3xl text-center text-gray-400 text-base md:text-lg leading-relaxed"
-          initial={skipAnimation ? false : "hidden"}
-          animate={shouldAnimate ? "visible" : "hidden"}
-          variants={itemVariants}
-        >
-          Whether you are buying or selling, our platform delivers enterprise-level tooling: guided onboarding, conversion-focused storefronts and transparent reporting designed for a legitimate marketplace.
-        </motion.p>
-
         {/* Error state for entire section */}
         {sectionError && !isLoaded ? (
           <div className="text-center py-16">
@@ -390,70 +360,25 @@ export default function FeaturesSection() {
             </button>
           </div>
         ) : (
-          <div className="mt-12 grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-10 lg:gap-14">
-            <motion.div
-              className="grid grid-cols-1 md:grid-cols-3 gap-8"
-              initial={skipAnimation ? false : "hidden"}
-              animate={shouldAnimate ? "visible" : "hidden"}
-              variants={skipAnimation ? {} : containerVariants}
-              role="region"
-              aria-label="Platform features"
-            >
-              {validFeatures.map((feature, index) => (
-                <FeatureCard
-                  key={`feature-${index}-${feature.title}`}
-                  feature={feature}
-                  index={index}
-                  isLoaded={isLoaded}
-                  onRetry={() => handleFeatureRetry(index)}
-                  skipAnimation={skipAnimation}
-                />
-              ))}
-            </motion.div>
-
-            <motion.div
-              className="space-y-6"
-              initial={skipAnimation ? false : "hidden"}
-              animate={shouldAnimate ? "visible" : "hidden"}
-              variants={skipAnimation ? {} : containerVariants}
-              aria-label="Platform journey overview"
-            >
-              <motion.div
-                className="rounded-3xl border border-white/10 bg-[#111]/80 p-6 md:p-8 shadow-lg shadow-black/30"
-                variants={itemVariants}
-              >
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#ff950e]">Growth journey</p>
-                <ol className="mt-5 space-y-5 text-sm text-gray-300">
-                  {JOURNEY_STEPS.map((step, index) => (
-                    <li key={step.title} className="flex gap-4">
-                      <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 text-xs font-semibold text-[#ff950e]">
-                        {index + 1}
-                      </span>
-                      <div>
-                        <p className="font-semibold text-white">{step.title}</p>
-                        <p className="text-gray-400 leading-relaxed">{step.description}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </motion.div>
-
-              <motion.div
-                className="rounded-3xl border border-[#ff950e]/20 bg-gradient-to-br from-[#151515] via-[#101010] to-[#080808] p-6 md:p-7"
-                variants={itemVariants}
-              >
-                <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#ff950e]">Why sellers choose us</p>
-                <ul className="mt-5 space-y-4 text-sm text-gray-300">
-                  {SELLER_PERKS.map((perk) => (
-                    <li key={perk} className="flex gap-3">
-                      <span className="mt-1 inline-block h-2 w-2 flex-shrink-0 rounded-full bg-[#ff950e]" aria-hidden="true" />
-                      <span className="leading-relaxed">{perk}</span>
-                    </li>
-                  ))}
-                </ul>
-              </motion.div>
-            </motion.div>
-          </div>
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-3 gap-8"
+            initial={skipAnimation ? false : "hidden"}
+            animate={shouldAnimate ? "visible" : "hidden"}
+            variants={skipAnimation ? {} : containerVariants}
+            role="region"
+            aria-label="Platform features"
+          >
+            {validFeatures.map((feature, index) => (
+              <FeatureCard
+                key={`feature-${index}-${feature.title}`}
+                feature={feature}
+                index={index}
+                isLoaded={isLoaded}
+                onRetry={() => handleFeatureRetry(index)}
+                skipAnimation={skipAnimation}
+              />
+            ))}
+          </motion.div>
         )}
       </div>
 
