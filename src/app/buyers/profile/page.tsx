@@ -28,7 +28,7 @@ const API_ORIGIN = (() => {
     const parsed = new URL(API_BASE_URL);
     return parsed.origin;
   } catch {
-    return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
+    return API_BASE_URL;
   }
 })();
 
