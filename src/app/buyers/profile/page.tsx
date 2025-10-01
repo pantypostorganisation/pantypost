@@ -4,7 +4,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { getGlobalAuthToken } from '@/context/AuthContext';
-import { buildApiUrl } from '@/services/api.config';
+import { buildApiUrl, API_BASE_URL } from '@/services/api.config';
 
 type MeProfile = {
   username: string;
@@ -16,7 +16,62 @@ type MeProfile = {
 
 // Upload endpoint (kept as-is, only used for file POST)
 function getUploadEndpoint() {
-  return (process.env.NEXT_PUBLIC_UPLOAD_ENDPOINT || '/api/upload').replace(/\/+$/, '');
+  const envOverride = process.env.NEXT_PUBLIC_UPLOAD_ENDPOINT?.trim();
+  if (envOverride) {
+    return envOverride.replace(/\/+$/, '');
+  }
+  return buildApiUrl('/upload');
+}
+
+const API_ORIGIN = (() => {
+  try {
+    const parsed = new URL(API_BASE_URL);
+    return parsed.origin;
+  } catch {
+    return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
+  }
+})();
+
+const UPLOAD_PREFIX = API_ORIGIN ? `${API_ORIGIN}/uploads/` : '';
+
+function sanitizeProfilePicValue(raw?: string | null): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (UPLOAD_PREFIX && trimmed.startsWith(UPLOAD_PREFIX)) {
+    return trimmed.slice(API_ORIGIN.length) || trimmed;
+  }
+  if (trimmed.startsWith('uploads/')) {
+    return `/${trimmed}`;
+  }
+  return trimmed;
+}
+
+function resolveProfilePicUrl(raw?: string | null): string {
+  const sanitized = sanitizeProfilePicValue(raw);
+  if (!sanitized) return '';
+  if (/^https?:\/\//i.test(sanitized)) {
+    return sanitized;
+  }
+  if (sanitized.startsWith('/uploads/')) {
+    if (API_ORIGIN) {
+      return `${API_ORIGIN}${sanitized}`;
+    }
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}${sanitized}`;
+    }
+  }
+  if (sanitized.startsWith('uploads/')) {
+    const withSlash = `/${sanitized}`;
+    if (API_ORIGIN) {
+      return `${API_ORIGIN}${withSlash}`;
+    }
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}${withSlash}`;
+    }
+    return withSlash;
+  }
+  return sanitized;
 }
 
 // Always read the latest token right before calls
@@ -139,7 +194,7 @@ export default function BuyerSelfProfilePage() {
         username: data.username,
         role: data.role,
         bio: data.bio || '',
-        profilePic: data.profilePic || '',
+        profilePic: sanitizeProfilePicValue(data.profilePic),
         country: data.country || '',
       });
     } catch {
@@ -169,7 +224,14 @@ export default function BuyerSelfProfilePage() {
 
   const broadcastProfileUpdate = (payload: Partial<MeProfile> & { username: string }) => {
     try {
-      localStorage.setItem('pp:profile-updated', JSON.stringify({ ts: Date.now(), ...payload }));
+      const { profilePic, ...rest } = payload;
+      const normalized = {
+        ...rest,
+        ...(typeof profilePic !== 'undefined'
+          ? { profilePic: sanitizeProfilePicValue(profilePic) }
+          : {}),
+      } as Partial<MeProfile> & { username: string };
+      localStorage.setItem('pp:profile-updated', JSON.stringify({ ts: Date.now(), ...normalized }));
     } catch {
       /* ignore */
     }
@@ -192,7 +254,7 @@ export default function BuyerSelfProfilePage() {
         },
         body: JSON.stringify({
           bio: form.bio,
-          profilePic: form.profilePic || null,
+          profilePic: sanitizeProfilePicValue(form.profilePic) || null,
           country: form.country,
         }),
       });
@@ -206,7 +268,7 @@ export default function BuyerSelfProfilePage() {
           username: d.username,
           role: d.role,
           bio: d.bio || '',
-          profilePic: d.profilePic || '',
+          profilePic: sanitizeProfilePicValue(d.profilePic),
           country: d.country || '',
         });
         setSuccess('Profile saved.');
@@ -214,7 +276,7 @@ export default function BuyerSelfProfilePage() {
           username: d.username,
           bio: d.bio || '',
           country: d.country || '',
-          profilePic: d.profilePic || '',
+          profilePic: sanitizeProfilePicValue(d.profilePic),
         });
       }
     } catch {
@@ -250,7 +312,7 @@ export default function BuyerSelfProfilePage() {
         if (!url) {
           setUploadErr('Upload response missing URL.');
         } else {
-          setForm((f) => ({ ...f, profilePic: url }));
+          setForm((f) => ({ ...f, profilePic: sanitizeProfilePicValue(url) }));
           setSuccess('Photo uploaded — click Save to apply.');
         }
       }
@@ -262,6 +324,7 @@ export default function BuyerSelfProfilePage() {
   };
 
   const disabled = saving || loading;
+  const previewUrl = resolveProfilePicUrl(form.profilePic);
 
   return (
     <BanCheck>
@@ -340,14 +403,14 @@ export default function BuyerSelfProfilePage() {
                 <label className="block text-sm text-gray-400 mb-1">Profile picture</label>
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-16 h-16 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center text-xl">
-                    {form.profilePic ? (
+                    {previewUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={form.profilePic} alt="Preview" className="w-full h-full object-cover" />
+                      <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
                     ) : (
                       <span className="opacity-70">No photo</span>
                     )}
                   </div>
-                  {form.profilePic && (
+                  {previewUrl && (
                     <button
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, profilePic: '' }))}

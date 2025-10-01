@@ -8,6 +8,7 @@ import { sanitizeStrict } from '@/utils/security/sanitization';
 import Image from 'next/image';
 import Link from 'next/link';
 import { getGlobalAuthToken } from '@/context/AuthContext';
+import { API_BASE_URL } from '@/services/api.config';
 
 /* ==== Types ==== */
 type NormalizedBuyerProfile = {
@@ -64,15 +65,40 @@ function normalizeProfileFromBackend(raw: any): NormalizedBuyerProfile | null {
     },
   };
 }
+const API_ORIGIN = (() => {
+  try {
+    const parsed = new URL(API_BASE_URL);
+    return parsed.origin;
+  } catch {
+    return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
+  }
+})();
+
 function resolveAvatarUrl(raw?: string | null): string | null {
   if (!raw) return null;
   const src = String(raw).trim();
+  if (!src) return null;
   if (src.toLowerCase().includes('placeholder') || src === '-' || src === 'none') return null;
-  if (src.startsWith('http://') || src.startsWith('https://')) return src;
+  if (src.startsWith('http://') || src.startsWith('https://')) {
+    return src;
+  }
+  if (src.startsWith('/uploads/')) {
+    if (API_ORIGIN) return `${API_ORIGIN}${src}`;
+    if (typeof window !== 'undefined') return `${window.location.origin}${src}`;
+    return src;
+  }
+  if (src.startsWith('uploads/')) {
+    const withSlash = `/${src}`;
+    if (API_ORIGIN) return `${API_ORIGIN}${withSlash}`;
+    if (typeof window !== 'undefined') return `${window.location.origin}${withSlash}`;
+    return withSlash;
+  }
   if (src.startsWith('/')) {
-    // Use current origin for relative assets from API
     if (typeof window !== 'undefined') {
       return `${window.location.origin}${src}`;
+    }
+    if (API_ORIGIN) {
+      return `${API_ORIGIN}${src}`;
     }
   }
   return null;
