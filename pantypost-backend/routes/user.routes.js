@@ -79,8 +79,12 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
         username: user.username,
         role: user.role,
         bio: user.bio || '',
-        profilePic: user.profilePic || null,
-        country: user?.settings?.country || ''
+        profilePic:
+          user.profilePic ||
+          user?.settings?.profilePic ||
+          user?.settings?.profilePicture ||
+          null,
+        country: user.country || user?.settings?.country
       }
     });
   } catch (error) {
@@ -128,6 +132,9 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
            pic.includes('placeholder')))
       ) {
         user.profilePic = pic;
+        user.settings = user.settings || {};
+        user.settings.profilePic = pic;
+        user.settings.profilePicture = pic;
       } else {
         return res.status(400).json({
           success: false,
@@ -144,6 +151,8 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid country value' }
         });
       }
+      user.country = country;
+      // Keep legacy settings.country in sync for older clients that still read from it
       user.settings = user.settings || {};
       user.settings.country = country;
     }
@@ -157,8 +166,12 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
         username: user.username,
         role: user.role,
         bio: user.bio || '',
-        profilePic: user.profilePic || null,
-        country: user?.settings?.country || ''
+        profilePic:
+          user.profilePic ||
+          user?.settings?.profilePic ||
+          user?.settings?.profilePicture ||
+          null,
+        country: user.country || user?.settings?.country
       }
     });
   } catch (error) {
@@ -239,8 +252,12 @@ router.get('/:username/profile', async (req, res) => {
           data: {
             username: user.username,
             bio: user.bio,
-            profilePic: user.profilePic,
-            country: user?.settings?.country || null,
+            profilePic:
+              user.profilePic ||
+              user?.settings?.profilePic ||
+              user?.settings?.profilePicture ||
+              null,
+            country: user.country || user?.settings?.country,
             isVerified: user.isVerified,
             role: user.role,
             joinedDate: user.joinedDate
@@ -269,8 +286,12 @@ router.get('/:username/profile', async (req, res) => {
       data: {
         username: user.username,
         bio: user.bio,
-        profilePic: user.profilePic,
-        country: user?.settings?.country || null,
+        profilePic:
+          user.profilePic ||
+          user?.settings?.profilePic ||
+          user?.settings?.profilePicture ||
+          null,
+        country: user.country || user?.settings?.country,
         isVerified: user.isVerified,
         tier: user.tier,
         subscriptionPrice: user.subscriptionPrice,

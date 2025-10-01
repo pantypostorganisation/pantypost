@@ -36,6 +36,11 @@ const userSchema = new mongoose.Schema({
     maxlength: 500,
     default: ''
   },
+  country: {
+    type: String,
+    maxlength: 56,
+    default: ''
+  },
   profilePic: {
     type: String,
     default: 'https://via.placeholder.com/150' // Default avatar
