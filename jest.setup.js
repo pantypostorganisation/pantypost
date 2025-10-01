@@ -103,25 +103,43 @@ beforeEach(() => {
 });
 
 // Mock Next.js router
-jest.mock('next/navigation', () => ({
-  useRouter() {
-    return {
-      push: jest.fn(),
-      replace: jest.fn(),
-      prefetch: jest.fn(),
-      back: jest.fn(),
+jest.mock('next/navigation', () => {
+  const push = jest.fn();
+  const replace = jest.fn();
+  const prefetch = jest.fn();
+  const back = jest.fn();
+
+  return {
+    __esModule: true,
+    useRouter: () => ({
+      push,
+      replace,
+      prefetch,
+      back,
       pathname: '/',
       route: '/',
       query: {},
       asPath: '/',
-    };
-  },
-  useSearchParams() {
-    return new URLSearchParams();
-  },
-  usePathname() {
-    return '/';
-  },
+    }),
+    useSearchParams: () => new URLSearchParams(),
+    usePathname: jest.fn(() => '/'),
+  };
+});
+
+// Provide a default mock for the auth context so components can render in tests
+jest.mock('@/context/AuthContext', () => ({
+  __esModule: true,
+  useAuth: () => ({
+    login: jest.fn(),
+    logout: jest.fn(),
+    register: jest.fn(),
+    isAuthReady: true,
+    user: null,
+    error: null,
+    clearError: jest.fn(),
+    loading: false,
+  }),
+  AuthProvider: ({ children }) => children,
 }));
 
 // Mock Next.js Image component
