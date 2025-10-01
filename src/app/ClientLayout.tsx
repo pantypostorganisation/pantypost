@@ -12,14 +12,32 @@ import { PWAInstall } from '@/components/PWAInstall';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { errorTracker } from '@/lib/errorTracking';
 import { usePerformanceMonitoring } from '@/hooks/usePerformanceMonitoring';
+import { cn } from '@/utils/cn';
 
 // Simple loading component
 function LoadingFallback() {
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center">
+    <div className="min-h-screen bg-black text-white flex items-center justify-center transition-opacity duration-500">
       <div className="text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
         <p className="text-gray-400">Loading PantyPost...</p>
+      </div>
+    </div>
+  );
+}
+
+function LoadingOverlay({ isVisible }: { isVisible: boolean }) {
+  return (
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-center justify-center bg-black text-white transition-opacity duration-500',
+        isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      )}
+      aria-hidden={!isVisible}
+    >
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
+        <p className="text-gray-400">Connecting to PantyPost...</p>
       </div>
     </div>
   );
@@ -33,6 +51,7 @@ export default function ClientLayout({
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [hasActiveThread, setHasActiveThread] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const pathname = usePathname();
 
   const hideHeaderRoutes = [
@@ -46,7 +65,7 @@ export default function ClientLayout({
 
   // Check if we're on a messages page
   const isMessagesPage = pathname === '/buyers/messages' || pathname === '/sellers/messages';
-  
+
   // Determine if header should be hidden
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
@@ -54,15 +73,15 @@ export default function ClientLayout({
 
   useEffect(() => {
     setMounted(true);
-    
+
     // Check if mobile
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile);
     };
@@ -75,7 +94,7 @@ export default function ClientLayout({
     };
 
     window.addEventListener('threadStateChange' as any, handleThreadChange);
-    
+
     return () => {
       window.removeEventListener('threadStateChange' as any, handleThreadChange);
     };
@@ -98,6 +117,16 @@ export default function ClientLayout({
   usePerformanceMonitoring();
 
   useEffect(() => {
+    if (!mounted) return;
+
+    const timeout = window.setTimeout(() => {
+      setIsReady(true);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [mounted]);
+
+  useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log('Current pathname:', pathname);
       console.log('Is mobile:', isMobile);
@@ -115,10 +144,15 @@ export default function ClientLayout({
     <>
       {/* Google Analytics */}
       <GoogleAnalytics />
-      
+
       <Providers>
         <Suspense fallback={<LoadingFallback />}>
-          <div className="flex flex-col fullscreen md:min-h-screen bg-black text-white">
+          <div
+            className={cn(
+              'flex flex-col fullscreen md:min-h-screen bg-black text-white transition-opacity duration-500',
+              isReady ? 'opacity-100' : 'opacity-0'
+            )}
+          >
             <BanCheck>
               {!shouldHideHeader && <Header />}
               <main className="flex-1">
@@ -134,6 +168,8 @@ export default function ClientLayout({
         {/* PWA Install Prompt */}
         <PWAInstall />
       </Providers>
+
+      <LoadingOverlay isVisible={!isReady} />
     </>
   );
 }
