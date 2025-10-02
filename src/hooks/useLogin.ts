@@ -19,7 +19,6 @@ export const useLogin = () => {
   const router = useRouter();
   const { login, isAuthReady, user, error: authError, clearError } = useAuth();
   
-  // Rate limiting for login attempts - UPDATED TO USE LOGIN CONFIG
   const { checkLimit: checkLoginLimit, resetLimit: resetLoginLimit } = useRateLimit('LOGIN_HOOK', RATE_LIMITS.LOGIN);
   
   // Track failed attempts for this session
@@ -28,7 +27,7 @@ export const useLogin = () => {
 
   const [state, setState] = useState<LoginState>({
     username: '',
-    password: '', // ADD THIS LINE - was missing
+    password: '',
     role: null,
     error: '',
     isLoading: false,
@@ -54,7 +53,7 @@ export const useLogin = () => {
     }
   }, [isAuthReady, user, router]);
 
-  // Sync auth context errors - ONLY on step 2 and when relevant
+  // Sync auth context errors - only on step 2 and when relevant
   useEffect(() => {
     // Only sync auth errors when we're on step 2 (role selection)
     // This prevents rate limit errors from showing on the username step
@@ -89,19 +88,24 @@ export const useLogin = () => {
     return MIN_LOGIN_DELAY + Math.random() * (MAX_LOGIN_DELAY - MIN_LOGIN_DELAY);
   }, []);
 
-  // Handle login with security enhancements - UPDATED to use password from state
+  // Handle login with security enhancements
   const handleLogin = useCallback(async (password?: string) => {
     const { username, role } = state;
-    const loginPassword = password || state.password || 'password123'; // Use passed password, state password, or dummy
-    
+    const loginPassword = password ?? state.password ?? '';
+
     // Clear any previous auth errors
     if (clearError) {
       clearError();
     }
-    
+
     // Clear local error state
     updateState({ error: '' });
-    
+
+    if (!loginPassword) {
+      updateState({ error: 'Password is required.', isLoading: false });
+      return;
+    }
+
     // Check rate limit
     const rateLimitResult = checkLoginLimit();
     if (!rateLimitResult.allowed) {
@@ -152,11 +156,10 @@ export const useLogin = () => {
       const delay = getRandomDelay();
       await new Promise(resolve => setTimeout(resolve, delay));
       
-      // Sanitize username before login
       const sanitizedUsername = usernameValidation.data;
-      
-      console.log('[useLogin] Attempting login with:', { 
-        username: sanitizedUsername, 
+
+      console.log('[useLogin] Attempting login with:', {
+        username: sanitizedUsername,
         role,
         hasPassword: !!loginPassword
       });

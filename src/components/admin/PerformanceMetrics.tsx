@@ -13,6 +13,36 @@ interface MetricData {
   timestamp: string;
 }
 
+const PLACEHOLDER_METRICS: ReadonlyArray<Omit<MetricData, 'timestamp'>> = [
+  { name: 'First Contentful Paint', value: 1.2, rating: 'good' },
+  { name: 'Largest Contentful Paint', value: 2.1, rating: 'good' },
+  { name: 'First Input Delay', value: 45, rating: 'good' },
+  { name: 'Cumulative Layout Shift', value: 0.08, rating: 'good' },
+  { name: 'Time to Interactive', value: 3.2, rating: 'needs-improvement' }
+];
+
+const RATING_STYLES: Record<
+  Rating,
+  { textColor: string; barColor: string; progress: number; Icon: typeof TrendingUp }
+> = {
+  good: { textColor: 'text-green-500', barColor: 'bg-green-500', progress: 100, Icon: TrendingUp },
+  'needs-improvement': {
+    textColor: 'text-yellow-500',
+    barColor: 'bg-yellow-500',
+    progress: 66,
+    Icon: AlertCircle
+  },
+  poor: { textColor: 'text-red-500', barColor: 'bg-red-500', progress: 33, Icon: AlertCircle }
+};
+
+const buildPlaceholderMetrics = (): MetricData[] => {
+  const timestamp = new Date().toISOString();
+  return PLACEHOLDER_METRICS.map(metric => ({
+    ...metric,
+    timestamp
+  }));
+};
+
 export function PerformanceMetrics() {
   const [metrics, setMetrics] = useState<MetricData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,18 +50,10 @@ export function PerformanceMetrics() {
   useEffect(() => {
     let mounted = true;
 
-    const fetchMetrics = async () => {
+    const loadMetrics = () => {
       try {
-        // Replace with real API call; keep mock safe/sanitized
-        const nowIso = new Date().toISOString();
-        const mockMetrics: MetricData[] = [
-          { name: 'First Contentful Paint', value: 1.2, rating: 'good', timestamp: nowIso },
-          { name: 'Largest Contentful Paint', value: 2.1, rating: 'good', timestamp: nowIso },
-          { name: 'First Input Delay', value: 45, rating: 'good', timestamp: nowIso },
-          { name: 'Cumulative Layout Shift', value: 0.08, rating: 'good', timestamp: nowIso },
-          { name: 'Time to Interactive', value: 3.2, rating: 'needs-improvement', timestamp: nowIso }
-        ];
-        if (mounted) setMetrics(mockMetrics);
+        const placeholderMetrics = buildPlaceholderMetrics();
+        if (mounted) setMetrics(placeholderMetrics);
       } catch (error) {
         console.error('Failed to fetch metrics:', error);
         if (mounted) setMetrics([]);
@@ -40,32 +62,11 @@ export function PerformanceMetrics() {
       }
     };
 
-    fetchMetrics();
+    loadMetrics();
     return () => {
       mounted = false;
     };
   }, []);
-
-  const getMetricColor = (rating: Rating) => {
-    switch (rating) {
-      case 'good':
-        return 'text-green-500';
-      case 'needs-improvement':
-        return 'text-yellow-500';
-      case 'poor':
-        return 'text-red-500';
-    }
-  };
-
-  const getMetricIcon = (rating: Rating) => {
-    switch (rating) {
-      case 'good':
-        return <TrendingUp className="h-4 w-4" />;
-      case 'needs-improvement':
-      case 'poor':
-        return <AlertCircle className="h-4 w-4" />;
-    }
-  };
 
   if (loading) {
     return (
@@ -103,40 +104,33 @@ export function PerformanceMetrics() {
 
       <div className="space-y-3">
         {metrics.map((metric) => {
-          const val = Number(metric.value);
-          const safeVal = Number.isFinite(val) ? val : 0;
-          const isCLS = metric.name.toLowerCase().includes('layout shift');
-          const isDelay = metric.name.toLowerCase().includes('delay');
+          const { textColor, barColor, progress, Icon } = RATING_STYLES[metric.rating];
+          const value = Number(metric.value);
+          const safeValue = Number.isFinite(value) ? value : 0;
+          const metricName = metric.name.toLowerCase();
+          const isLayoutShift = metricName.includes('layout shift');
+          const isDelay = metricName.includes('delay');
+          const unit = isLayoutShift ? '' : isDelay ? 'ms' : 's';
 
           return (
             <div key={metric.name} className="bg-black/30 rounded-lg p-4 border border-gray-800">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-medium text-gray-300">{metric.name}</h3>
-                <div className={`flex items-center gap-1 ${getMetricColor(metric.rating)}`}>
-                  {getMetricIcon(metric.rating)}
+                <div className={`flex items-center gap-1 ${textColor}`}>
+                  <Icon className="h-4 w-4" />
                   <span className="text-xs uppercase">{metric.rating.replace('-', ' ')}</span>
                 </div>
               </div>
 
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white">{safeVal}</span>
-                <span className="text-sm text-gray-500">{isCLS ? '' : isDelay ? 'ms' : 's'}</span>
+                <span className="text-2xl font-bold text-white">{safeValue}</span>
+                <span className="text-sm text-gray-500">{unit}</span>
               </div>
 
               <div className="mt-2 h-2 bg-gray-800 rounded-full overflow-hidden" aria-hidden="true">
                 <div
-                  className={`h-full transition-all duration-500 ${
-                    metric.rating === 'good'
-                      ? 'bg-green-500'
-                      : metric.rating === 'needs-improvement'
-                      ? 'bg-yellow-500'
-                      : 'bg-red-500'
-                  }`}
-                  style={{
-                    width: `${
-                      metric.rating === 'good' ? 100 : metric.rating === 'needs-improvement' ? 66 : 33
-                    }%`
-                  }}
+                  className={`h-full transition-all duration-500 ${barColor}`}
+                  style={{ width: `${progress}%` }}
                 />
               </div>
             </div>
