@@ -1,38 +1,47 @@
 // src/utils/url.ts
 
+const DEFAULT_API_BASE_URL = 'https://api.pantypost.com';
+const LEGACY_DEFAULT_API_BASE_URL = 'http://localhost:5000/api';
+const API_HOST = 'api.pantypost.com';
+const PLACEHOLDER_PREFIX = 'https://via.placeholder.com';
+const HTTP_PREFIX_REGEX = /^https?:\/\//i;
+const UNSAFE_SCHEME_REGEX = /^(javascript|vbscript|data):/i;
+
+const getApiBaseUrl = (): string => {
+  return process.env.NEXT_PUBLIC_API_BASE_URL || DEFAULT_API_BASE_URL;
+};
+
+const getLegacyBaseHost = (): string => {
+  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || LEGACY_DEFAULT_API_BASE_URL;
+  return apiBase.replace(/\/api\/?$/, '').replace(/\/$/, '');
+};
+
+const ensureHttpsForApiHost = (value: string): string => {
+  return value.includes(API_HOST) ? value.replace('http://', 'https://') : value;
+};
+
+const isAbsoluteHttpUrl = (value: string): boolean => HTTP_PREFIX_REGEX.test(value);
+
+const hasUnsafeScheme = (value: string): boolean => UNSAFE_SCHEME_REGEX.test(value);
+
 /**
  * Resolve API URLs for images and resources
  */
 export const resolveApiUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
-  
-  // If it's already a full URL, force HTTPS for api.pantypost.com
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    // Force HTTPS for api.pantypost.com URLs to avoid mixed content errors
-    if (url.includes('api.pantypost.com')) {
-      return url.replace('http://', 'https://');
-    }
+
+  if (isAbsoluteHttpUrl(url)) {
+    return ensureHttpsForApiHost(url);
+  }
+
+  if (url.startsWith(PLACEHOLDER_PREFIX)) {
     return url;
   }
-  
-  // If it's a placeholder URL, return it as is
-  if (url.startsWith('https://via.placeholder.com')) {
-    return url;
-  }
-  
-  // If it starts with /uploads/, prepend the API base URL
-  if (url.startsWith('/uploads/')) {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
-    return `${apiBase}${url}`;
-  }
-  
-  // For any other relative path, prepend the API base
+
   if (url.startsWith('/')) {
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
-    return `${apiBase}${url}`;
+    return `${getApiBaseUrl()}${url}`;
   }
-  
-  // Return as is for other cases
+
   return url;
 };
 
@@ -44,17 +53,19 @@ export const resolveApiUrl = (url: string | null | undefined): string | null => 
 export function resolveApiUrlLegacy(path?: string | null): string | null {
   if (!path) return null;
 
-  // Already absolute http(s)
-  if (/^https?:\/\//i.test(path)) return path;
+  if (isAbsoluteHttpUrl(path)) {
+    return path;
+  }
 
-  // Reject dangerous schemes outright (javascript:, data:, vbscript:, etc.)
-  if (!/^(\/|https?:)/i.test(path)) return null;
-  if (/^(javascript|vbscript|data):/i.test(path)) return null;
+  if (hasUnsafeScheme(path)) {
+    return null;
+  }
 
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000/api';
-  const baseHost = apiBase.replace(/\/api\/?$/, '').replace(/\/$/, ''); // strip trailing /api and trailing slash
-  const normalized = path.startsWith('/') ? path : `/${path}`;
-  return `${baseHost}${normalized}`;
+  if (!path.startsWith('/')) {
+    return null;
+  }
+
+  return `${getLegacyBaseHost()}${path}`;
 }
 
 /**
@@ -71,15 +82,12 @@ export function safeImageSrc(
   if (!input) return placeholder;
 
   // Already http(s) — accept but force HTTPS for api.pantypost.com
-  if (/^https?:\/\//i.test(input)) {
-    if (input.includes('api.pantypost.com')) {
-      return input.replace('http://', 'https://');
-    }
-    return input;
+  if (isAbsoluteHttpUrl(input)) {
+    return ensureHttpsForApiHost(input);
   }
 
   // Unsafe schemes
-  if (/^(javascript|vbscript|data):/i.test(input)) return placeholder;
+  if (hasUnsafeScheme(input)) return placeholder;
 
   // Relative path — resolve against backend host
   const resolved = resolveApiUrl(input);

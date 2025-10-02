@@ -14,6 +14,7 @@ import { useAuth } from '@/context/AuthContext';
 import { User, ShoppingBag, Shield } from 'lucide-react';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
+import { AUTH_ERROR_FALLBACK, normalizeAuthError } from '@/utils/authErrors';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -106,7 +107,8 @@ export default function LoginPage() {
   useEffect(() => {
     if (authError) {
       if (isDev) console.log('[Login] Auth error:', authError);
-      setError(authError);
+      const normalized = normalizeAuthError(authError) ?? authError;
+      setError(normalized);
       setIsLoading(false); // IMPORTANT: Clear loading state when error occurs
     }
     
@@ -257,8 +259,11 @@ export default function LoginPage() {
           setIsLoading(false);
           
           // If auth context didn't provide an error, set a generic one
-          if (!authError) {
-            setError('Invalid username or password');
+          const normalized = normalizeAuthError(authError) ?? authError;
+          if (normalized) {
+            setError(normalized);
+          } else {
+            setError(AUTH_ERROR_FALLBACK);
           }
         }
         // If success is true, user will be redirected by the useEffect

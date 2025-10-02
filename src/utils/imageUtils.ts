@@ -4,136 +4,125 @@
  */
 
 /**
+ * Reads a File instance as a data URL.
+ */
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    const onLoad = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Failed to read file'));
+    };
+
+    const onError = () => {
+      reject(new Error('Failed to read file'));
+    };
+
+    reader.addEventListener('load', onLoad, { once: true });
+    reader.addEventListener('error', onError, { once: true });
+
+    reader.readAsDataURL(file);
+  });
+
+/**
+ * Loads an image element from the provided data URL.
+ */
+const loadImageFromDataUrl = (dataUrl: string): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const img = new Image();
+
+    img.addEventListener('load', () => resolve(img), { once: true });
+    img.addEventListener('error', () => reject(new Error('Failed to load image')), {
+      once: true
+    });
+
+    img.src = dataUrl;
+  });
+
+/**
+ * Calculates the scaled dimensions for an image while preserving its aspect ratio.
+ */
+const calculateDimensions = (
+  width: number,
+  height: number,
+  maxDimension: number
+): { width: number; height: number } => {
+  if (width <= maxDimension && height <= maxDimension) {
+    return { width, height };
+  }
+
+  if (width > height) {
+    return {
+      width: maxDimension,
+      height: Math.round((height * maxDimension) / width)
+    };
+  }
+
+  return {
+    width: Math.round((width * maxDimension) / height),
+    height: maxDimension
+  };
+};
+
+type CanvasBundle = {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  dispose: () => void;
+};
+
+const createCanvasBundle = (width: number, height: number): CanvasBundle | null => {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    canvas.width = 0;
+    canvas.height = 0;
+    return null;
+  }
+
+  const dispose = () => {
+    ctx.clearRect(0, 0, width, height);
+    canvas.width = 0;
+    canvas.height = 0;
+  };
+
+  return { canvas, ctx, dispose };
+};
+
+/**
  * Compresses an image file to a specified max dimension while maintaining aspect ratio
  * @param file - The image file to compress
  * @param maxDimension - The maximum width or height in pixels
  * @param quality - JPEG compression quality (0-1)
  * @returns A Promise resolving to the compressed image as a Data URL
  */
-export const compressImage = (
-  file: File, 
-  maxDimension: number = 1200, 
+export const compressImage = async (
+  file: File,
+  maxDimension: number = 1200,
   quality: number = 0.7
 ): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    let canvas: HTMLCanvasElement | null = null;
-    let ctx: CanvasRenderingContext2D | null = null;
-    let img: HTMLImageElement | null = null;
-    let reader: FileReader | null = null;
-    
-    try {
-      // Create FileReader to read the file
-      reader = new FileReader();
-      
-      reader.onload = (readerEvent) => {
-        // Create image element
-        img = new Image();
-        
-        img.onload = () => {
-          try {
-            // Calculate new dimensions while preserving aspect ratio
-            let width = img!.width;
-            let height = img!.height;
-            
-            if (width > height) {
-              if (width > maxDimension) {
-                height = Math.round((height * maxDimension) / width);
-                width = maxDimension;
-              }
-            } else {
-              if (height > maxDimension) {
-                width = Math.round((width * maxDimension) / height);
-                height = maxDimension;
-              }
-            }
-            
-            // Create canvas for resizing
-            canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            
-            // Draw image on canvas with new dimensions
-            ctx = canvas.getContext('2d');
-            if (!ctx) {
-              reject(new Error('Could not get canvas context'));
-              return;
-            }
-            
-            ctx.drawImage(img!, 0, 0, width, height);
-            
-            // Convert to JPEG with specified quality
-            const dataUrl = canvas.toDataURL('image/jpeg', quality);
-            
-            // Clean up resources before resolving
-            cleanupResources();
-            
-            resolve(dataUrl);
-          } catch (error) {
-            cleanupResources();
-            reject(error);
-          }
-        };
-        
-        img.onerror = () => {
-          cleanupResources();
-          reject(new Error('Failed to load image'));
-        };
-        
-        // Set image source to FileReader result
-        if (typeof readerEvent.target?.result === 'string') {
-          img!.src = readerEvent.target.result;
-        } else {
-          cleanupResources();
-          reject(new Error('Failed to read file'));
-        }
-      };
-      
-      reader.onerror = () => {
-        cleanupResources();
-        reject(new Error('Failed to read file'));
-      };
-      
-      // Read file as Data URL
-      reader.readAsDataURL(file);
-      
-    } catch (error) {
-      cleanupResources();
-      reject(error);
-    }
-    
-    // Helper function to clean up all resources
-    function cleanupResources() {
-      // Clear canvas
-      if (ctx && canvas) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      
-      // Remove canvas from memory
-      if (canvas) {
-        canvas.width = 0;
-        canvas.height = 0;
-        canvas = null;
-      }
-      
-      // Clear context
-      ctx = null;
-      
-      // Clear image
-      if (img) {
-        img.onload = null;
-        img.onerror = null;
-        img.src = '';
-        img = null;
-      }
-      
-      // Clear reader
-      if (reader) {
-        reader.onload = null;
-        reader.onerror = null;
-        reader = null;
-      }
-    }
-  });
+  const dataUrl = await readFileAsDataUrl(file);
+  const img = await loadImageFromDataUrl(dataUrl);
+  const { width, height } = calculateDimensions(img.width, img.height, maxDimension);
+  const bundle = createCanvasBundle(width, height);
+  if (!bundle) {
+    throw new Error('Could not get canvas context');
+  }
+
+  try {
+    bundle.ctx.drawImage(img, 0, 0, width, height);
+    return bundle.canvas.toDataURL('image/jpeg', quality);
+  } finally {
+    bundle.dispose();
+    img.src = '';
+  }
 };
 
 /**
@@ -142,16 +131,14 @@ export const compressImage = (
  * @returns The approximate size in KB
  */
 export const estimateDataUrlSize = (dataUrl: string): number => {
-  // Remove the data URL prefix to get just the base64 data
-  const base64 = dataUrl.split(',')[1];
-  
-  // Calculate approximate size (base64 is ~4/3 the size of binary)
-  if (base64) {
-    const approximateBytes = (base64.length * 3) / 4;
-    return Math.round(approximateBytes / 1024); // Convert to KB
+  const [, base64 = ''] = dataUrl.split(',', 2);
+  if (!base64) {
+    return 0;
   }
-  
-  return 0;
+
+  // Calculate approximate size (base64 is ~4/3 the size of binary)
+  const approximateBytes = (base64.length * 3) / 4;
+  return Math.round(approximateBytes / 1024); // Convert to KB
 };
 
 /**
@@ -167,51 +154,30 @@ export const createInitialsPlaceholder = (
   textColor: string = '#ffffff',
   size: number = 200
 ): string => {
-  let canvas: HTMLCanvasElement | null = null;
-  let ctx: CanvasRenderingContext2D | null = null;
-  
+  const bundle = createCanvasBundle(size, size);
+  if (!bundle) {
+    return '';
+  }
+
   try {
-    // Create canvas element
-    canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    
-    // Get drawing context
-    ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return '';
-    }
-    
     // Draw background
-    ctx.fillStyle = backgroundColor;
-    ctx.fillRect(0, 0, size, size);
-    
+    bundle.ctx.fillStyle = backgroundColor;
+    bundle.ctx.fillRect(0, 0, size, size);
+
     // Draw text
-    ctx.fillStyle = textColor;
-    ctx.font = `bold ${size/2}px Arial, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(initials.substring(0, 2).toUpperCase(), size/2, size/2);
-    
+    bundle.ctx.fillStyle = textColor;
+    bundle.ctx.font = `bold ${size / 2}px Arial, sans-serif`;
+    bundle.ctx.textAlign = 'center';
+    bundle.ctx.textBaseline = 'middle';
+    bundle.ctx.fillText(initials.substring(0, 2).toUpperCase(), size / 2, size / 2);
+
     // Get data URL
-    const dataUrl = canvas.toDataURL('image/png');
-    
-    // Clean up
-    ctx.clearRect(0, 0, size, size);
-    canvas.width = 0;
-    canvas.height = 0;
-    
-    return dataUrl;
+    return bundle.canvas.toDataURL('image/png');
   } catch (error) {
     console.error('Error creating initials placeholder:', error);
     return '';
   } finally {
-    // Ensure cleanup happens even if there's an error
-    if (ctx && canvas) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-    canvas = null;
-    ctx = null;
+    bundle.dispose();
   }
 };
 
@@ -234,23 +200,23 @@ export const validateImageFile = (
       error: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}`
     };
   }
-  
+
   // Check file size
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
   if (file.size > maxSizeBytes) {
     return {
       valid: false,
-      error: `File size exceeds the ${maxSizeMB}MB limit`
+      error: `File is too large. Maximum size is ${maxSizeMB}MB`
     };
   }
-  
+
   return { valid: true };
 };
 
 /**
- * Loads and processes multiple image files
- * @param files - Array of files to process
- * @param maxDimension - Max dimension for compression
+ * Process multiple images with progress tracking
+ * @param files - Array of image files
+ * @param maxDimension - Maximum dimension for resizing
  * @param progressCallback - Optional callback for progress updates
  * @returns Promise resolving to array of processed image data URLs
  */
@@ -261,7 +227,7 @@ export const processMultipleImages = async (
 ): Promise<string[]> => {
   const results: string[] = [];
   const errors: string[] = [];
-  
+
   for (let i = 0; i < files.length; i++) {
     try {
       // Validate the file
@@ -271,29 +237,26 @@ export const processMultipleImages = async (
         errors.push(`${files[i].name}: ${validation.error}`);
         continue;
       }
-      
+
       // Compress the image
       const compressed = await compressImage(files[i], maxDimension);
       results.push(compressed);
-      
+
       // Update progress if callback provided
-      if (progressCallback) {
-        progressCallback((i + 1) / files.length);
-      }
-      
+      progressCallback?.((i + 1) / files.length);
+
       // Force garbage collection hint by yielding control
-      await new Promise(resolve => setTimeout(resolve, 0));
-      
+      await new Promise((resolve) => setTimeout(resolve, 0));
     } catch (error) {
       console.error(`Error processing image ${files[i].name}:`, error);
       errors.push(`${files[i].name}: Processing failed`);
     }
   }
-  
+
   // Log any errors that occurred
   if (errors.length > 0) {
     console.warn('Image processing completed with errors:', errors);
   }
-  
+
   return results;
 };

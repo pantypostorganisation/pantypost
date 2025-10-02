@@ -5,11 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { User, ShoppingBag, Crown } from 'lucide-react';
 import { LoginState, RoleOption } from '@/types/login';
-import { validateUsername, validateAdminCredentials } from '@/utils/loginUtils';
+import { validateAdminCredentials } from '@/utils/loginUtils';
 import { useRateLimit, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { authSchemas } from '@/utils/validation/schemas';
 import { sanitizeUsername } from '@/utils/security/sanitization';
-import { securityService } from '@/services';
+import { AUTH_ERROR_FALLBACK, normalizeAuthError } from '@/utils/authErrors';
 
 // Constants for security
 const MIN_LOGIN_DELAY = 800;
@@ -18,17 +18,18 @@ const MAX_LOGIN_DELAY = 1200;
 export const useLogin = () => {
   const router = useRouter();
   const { login, isAuthReady, user, error: authError, clearError } = useAuth();
-  
-  // Rate limiting for login attempts - UPDATED TO USE LOGIN CONFIG
+
+  // Rate limiting for login attempts
   const { checkLimit: checkLoginLimit, resetLimit: resetLoginLimit } = useRateLimit('LOGIN_HOOK', RATE_LIMITS.LOGIN);
-  
+
   // Track failed attempts for this session
   const failedAttemptsRef = useRef(0);
   const lastAttemptTimeRef = useRef(0);
+  const authErrorRef = useRef<string | null>(null);
 
   const [state, setState] = useState<LoginState>({
     username: '',
-    password: '', // ADD THIS LINE - was missing
+    password: '',
     role: null,
     error: '',
     isLoading: false,
@@ -54,12 +55,15 @@ export const useLogin = () => {
     }
   }, [isAuthReady, user, router]);
 
-  // Sync auth context errors - ONLY on step 2 and when relevant
+  // Sync auth context errors - only on step 2 and when relevant
   useEffect(() => {
+    authErrorRef.current = authError ?? null;
+
     // Only sync auth errors when we're on step 2 (role selection)
     // This prevents rate limit errors from showing on the username step
     if (authError && state.step === 2) {
-      setState(prev => ({ ...prev, error: authError, isLoading: false }));
+      const normalizedError = normalizeAuthError(authError) ?? authError;
+      setState(prev => ({ ...prev, error: normalizedError, isLoading: false }));
     }
   }, [authError, state.step]);
 
@@ -89,18 +93,24 @@ export const useLogin = () => {
     return MIN_LOGIN_DELAY + Math.random() * (MAX_LOGIN_DELAY - MIN_LOGIN_DELAY);
   }, []);
 
-  // Handle login with security enhancements - UPDATED to use password from state
+  // Handle login with security enhancements
   const handleLogin = useCallback(async (password?: string) => {
     const { username, role } = state;
-    const loginPassword = password || state.password || 'password123'; // Use passed password, state password, or dummy
-    
+    const loginPassword = password ?? state.password ?? '';
+
     // Clear any previous auth errors
     if (clearError) {
       clearError();
     }
-    
+
     // Clear local error state
     updateState({ error: '' });
+    authErrorRef.current = null;
+
+    if (!loginPassword) {
+      updateState({ error: 'Password is required.', isLoading: false });
+      return;
+    }
     
     // Check rate limit
     const rateLimitResult = checkLoginLimit();
@@ -152,11 +162,10 @@ export const useLogin = () => {
       const delay = getRandomDelay();
       await new Promise(resolve => setTimeout(resolve, delay));
       
-      // Sanitize username before login
       const sanitizedUsername = usernameValidation.data;
-      
-      console.log('[useLogin] Attempting login with:', { 
-        username: sanitizedUsername, 
+
+      console.log('[useLogin] Attempting login with:', {
+        username: sanitizedUsername,
         role,
         hasPassword: !!loginPassword
       });
@@ -179,41 +188,37 @@ export const useLogin = () => {
       
       if (success) {
         console.log('[useLogin] Login successful, preparing redirect...');
-        
+
         // Reset failed attempts on success
         failedAttemptsRef.current = 0;
         resetLoginLimit(); // Reset rate limit on success
-        
+
         // Clear sensitive data from state
         updateState({ username: '', password: '', role: null, error: '', isLoading: false });
-        
+
         // Extended delay to ensure auth context is fully updated
         await new Promise(resolve => setTimeout(resolve, 300));
-        
+
         // Use replace to prevent back button issues
         console.log('[useLogin] Redirecting to home page...');
         router.replace('/');
-        
+
       } else {
         console.error('[useLogin] Login failed, authError:', authError);
-        
+
         // Track failed attempts for non-admin roles too
         if (role === 'admin') {
           failedAttemptsRef.current++;
           lastAttemptTimeRef.current = Date.now();
         }
-        
-        // The error should be set by the useEffect that watches authError
-        // But we'll also set it here as a fallback
-        if (!state.error && !authError) {
-          updateState({ 
-            error: 'Login failed. Please try again.', 
-            isLoading: false 
-          });
-        } else {
-          // Just ensure loading is false
-          updateState({ isLoading: false });
-        }
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const latestAuthError = normalizeAuthError(authErrorRef.current) ?? authErrorRef.current;
+        updateState({
+          error: latestAuthError || AUTH_ERROR_FALLBACK,
+          isLoading: false
+        });
       }
     } catch (error) {
       console.error('[useLogin] Login error:', error);
@@ -227,9 +232,9 @@ export const useLogin = () => {
         }
       }
       
-      updateState({ 
-        error: errorMessage, 
-        isLoading: false 
+      updateState({
+        error: errorMessage,
+        isLoading: false
       });
     }
   }, [state, authError, clearError, login, router, updateState, checkLoginLimit, resetLoginLimit, getRandomDelay]);
@@ -357,7 +362,7 @@ export const useLogin = () => {
     handleUsernameSubmit,
     handleKeyPress,
     handleUsernameChange,
-    handlePasswordChange, // ADD THIS
+    handlePasswordChange,
     goBack,
     handleCrownClick,
     
