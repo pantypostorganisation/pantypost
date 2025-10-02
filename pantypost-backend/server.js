@@ -68,7 +68,7 @@ global.webSocketService = webSocketService;
 // Connect to MongoDB
 connectDB();
 
-// CORS Configuration - FIXED for production
+// CORS Configuration - FIXED for development network access
 const corsOptions = {
   origin: function(origin, callback) {
     // In development, allow ALL origins (this fixes network IP access)
@@ -80,10 +80,10 @@ const corsOptions = {
     const allowedOrigins = [
       'https://pantypost.com',
       'https://www.pantypost.com',
-      'https://api.pantypost.com',  // Added this for API subdomain
+      // Add any other production domains here
     ];
     
-    // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
+    // Allow requests with no origin (like mobile apps or Postman)
     if (!origin) return callback(null, true);
     
     // Check if the origin is in the allowed list
@@ -109,7 +109,7 @@ const corsOptions = {
   optionsSuccessStatus: 200 // For legacy browser support
 };
 
-app.use(cors(corsOptions));
+app.use(cors(corsOptions)); // (duplicate removed)
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -118,8 +118,7 @@ app.use(express.static(__dirname));
 // Serve uploaded files statically
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Health check - MUST respond to OPTIONS for CORS preflight
-app.options('/api/health', cors(corsOptions)); // Handle preflight
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
