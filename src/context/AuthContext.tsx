@@ -629,7 +629,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           return true;
         } else {
-          const errorMessage = (response as any)?.error?.message || 'Login failed';
+          const errorInfo = (response as any)?.error;
+          let errorMessage = errorInfo?.message || 'Login failed';
+
+          if (errorInfo?.code === 'AUTH_INVALID_CREDENTIALS') {
+            const lowerMessage = errorMessage.toLowerCase();
+
+            if (
+              lowerMessage.includes("couldn't find") ||
+              lowerMessage.includes('could not find') ||
+              lowerMessage.includes('no account')
+            ) {
+              errorMessage = `We couldn't find an account with the username "${cleanUsername}". Double-check the spelling or sign up for a new account.`;
+            } else if (lowerMessage.includes('password')) {
+              errorMessage = 'Wrong password. Please try again or use "Forgot password" if you need help.';
+            }
+          }
+
           setError(errorMessage);
           setLoading(false);
           return false;
