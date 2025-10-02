@@ -3,26 +3,39 @@
  * Utility function for combining class names
  * Filters out falsy values and joins the remaining strings
  */
-export function cn(...inputs: (string | undefined | null | false | 0 | '')[]) {
+type PrimitiveClass = string | undefined | null | false | 0 | '';
+type ClassValue = PrimitiveClass | readonly ClassValue[];
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const collectClassNames = (values: readonly ClassValue[], acc: string[] = []): string[] => {
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      collectClassNames(value, acc);
+      continue;
+    }
+
+    if (isNonEmptyString(value)) {
+      acc.push(value);
+    }
+  }
+
+  return acc;
+};
+
+export function cn(...inputs: PrimitiveClass[]): string {
   return inputs.filter(Boolean).join(' ');
 }
 
 /**
  * Alternative implementation with more features if needed
- * This version also handles arrays and objects
+ * This version also handles nested arrays and ignores non-string values
  */
 export function cnAdvanced(...inputs: ClassValue[]): string {
-  return inputs
-    .flat()
-    .filter((x) => typeof x === 'string' && x.length > 0)
-    .join(' ');
+  return collectClassNames(inputs).join(' ');
 }
-
-type ClassValue = 
-  | string 
-  | undefined 
-  | null 
-  | false 
-  | 0 
-  | '' 
-  | ClassValue[];
