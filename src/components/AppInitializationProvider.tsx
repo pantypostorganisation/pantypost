@@ -31,50 +31,59 @@ interface AppInitializationContextType {
 const AppInitializationContext = createContext<AppInitializationContextType | undefined>(undefined);
 
 // ---------- Helpers ----------
+const DEFAULT_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
 const DEFAULT_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT ?? 10000);
 
+function normalizeBaseUrl(url?: string | null) {
+  const s = (url ?? '').trim();
+  if (!s) return DEFAULT_BASE;
+  return s.replace(/\/+$/, ''); // strip trailing slash(es)
+}
+
 /**
- * Build the health URL - use relative URL in development for proxy
+ * Build the health URL robustly regardless of whether the env contains '/api' already.
+ * Priority: NEXT_PUBLIC_API_URL (kept for backward-compat), then NEXT_PUBLIC_API_BASE_URL.
  */
 function buildHealthUrl() {
-  // In development, ALWAYS use relative URL to go through Next.js proxy
-  if (process.env.NODE_ENV === 'development') {
-    return '/api/health';
+  const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+  const rawApiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? '').trim();
+
+  // Prefer API_URL if provided; otherwise fallback to API_BASE_URL; otherwise default.
+  const base = normalizeBaseUrl(rawApiUrl || rawApiBase || DEFAULT_BASE);
+
+  // If base already ends with '/api', just add '/health'; otherwise add '/api/health'.
+  if (base.toLowerCase().endsWith('/api')) {
+    return `${base}/health`;
   }
-  
-  // Production - use full URL
-  const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
-  return `${apiUrl}/health`;
+  return `${base}/api/health`;
 }
 
 async function fetchWithTimeout(input: RequestInfo, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), Math.max(3000, timeoutMs)); // minimum 3s
   try {
-    const res = await fetch(input, { 
-      ...init, 
-      signal: controller.signal, 
-      credentials: 'include', // Use include for development cookies
-      mode: 'cors' 
-    });
+    const res = await fetch(input, { ...init, signal: controller.signal, credentials: 'omit', mode: 'cors' });
     return res;
   } finally {
     clearTimeout(id);
   }
 }
 
-// SILENT - No loading component shown during initialization
-// The page will just show black while loading
+// Loading component
 function InitializationLoader(): React.ReactElement {
-  return <div className="min-h-screen bg-black" />;
+  return (
+    <div className="min-h-screen bg-black text-white flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+        <p className="text-gray-400">Initializing PantyPost...</p>
+        <p className="text-xs text-gray-600 mt-2">Connecting to server...</p>
+      </div>
+    </div>
+  );
 }
 
 // Error component
 function InitializationError({ error, onRetry }: { error: Error; onRetry: () => void }): React.ReactElement {
-  // Extract hostname for debugging
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'unknown';
-  const isDev = process.env.NODE_ENV === 'development';
-
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-gray-900 rounded-lg p-8 text-center">
@@ -85,33 +94,13 @@ function InitializationError({ error, onRetry }: { error: Error; onRetry: () => 
         </div>
         <h1 className="text-2xl font-bold mb-2">Connection Error</h1>
         <p className="text-gray-400 mb-4">{error.message || 'Failed to connect to the server'}</p>
-        
-        {isDev ? (
-          <div className="text-sm text-gray-500 mb-4 text-left bg-black/50 p-3 rounded">
-            <p className="mb-2">Development mode detected. Please ensure:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Backend is running: npm run dev (in pantypost-backend folder)</li>
-              <li>Backend is on port 5000</li>
-              <li>Frontend is on port 3000</li>
-              {hostname.startsWith('192.168.') || hostname.startsWith('10.') || hostname.startsWith('172.') ? (
-                <li>Accessing from network IP: {hostname}</li>
-              ) : (
-                <li>Accessing from: {hostname}</li>
-              )}
-            </ul>
-          </div>
-        ) : null}
-        
         <button onClick={onRetry} className="bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700 transition-colors">
           Retry Connection
         </button>
-        
-        {isDev && (
+        {process.env.NODE_ENV === 'development' && (
           <details className="mt-4 text-left">
             <summary className="cursor-pointer text-sm text-gray-500 hover:text-gray-300">Technical details</summary>
-            <pre className="mt-2 text-xs bg-black/50 p-3 rounded overflow-auto max-h-48">
-              {`Hostname: ${hostname}\nEnvironment: ${process.env.NODE_ENV}\nHealth URL: ${buildHealthUrl()}\nError: ${error.stack}`}
-            </pre>
+            <pre className="mt-2 text-xs bg-black/50 p-3 rounded overflow-auto max-h-48">{error.stack}</pre>
           </details>
         )}
       </div>
@@ -175,25 +164,19 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         DEFAULT_TIMEOUT_MS
       ).catch((err) => {
         console.error('[AppInitializer] Health check fetch failed:', err);
-        
-        // Provide helpful error message
-        if (process.env.NODE_ENV === 'development') {
-          throw new Error('Cannot connect to backend server. Please ensure the backend is running on port 5000.');
-        } else {
-          throw new Error('Cannot connect to server. Please try again later.');
-        }
+        throw new Error('Cannot connect to backend server. Please ensure the API is running.');
       });
 
       if (!res || !res.ok) {
         const statusText = res ? `${res.status} ${res.statusText}` : 'no response';
-        throw new Error(`Backend server error (${statusText})`);
+        throw new Error(`Backend server is not responding correctly (${statusText})`);
       }
 
       let data: any = null;
       try {
         data = await res.json();
       } catch {
-        throw new Error('Invalid response from server');
+        throw new Error('Backend server is not responding correctly (invalid JSON)');
       }
 
       console.log('[AppInitializer] API health check response:', data);
@@ -218,11 +201,7 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
         sessionStorage.setItem('app_health_status', JSON.stringify(health));
       }
 
-      console.log('[AppInitializer] Initialization complete:', { 
-        initialized: true, 
-        health,
-        accessedFrom: typeof window !== 'undefined' ? window.location.hostname : 'server'
-      });
+      console.log('[AppInitializer] Initialization complete:', { initialized: true, health });
     } catch (err) {
       console.error('[AppInitializer] Initialization failed:', err);
       setError(err instanceof Error ? err : new Error('Initialization failed'));
@@ -268,7 +247,6 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     );
   }
 
-  // SILENT LOADING - Just show black screen while initializing
   if (isInitializing && !isInitialized) {
     return (
       <AppInitializationContext.Provider

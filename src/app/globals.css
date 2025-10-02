@@ -29,41 +29,15 @@ a:hover {
   color: var(--color-primary-light);
 }
 
+/* REMOVED the global button styling that was making everything pill-shaped
+   Let individual buttons define their own border-radius */
+
 .card {
   background: var(--color-card);
   border-radius: 1rem;
   box-shadow: 0 2px 12px 0 rgba(0,0,0,0.12);
   padding: 1.5rem;
   color: var(--color-foreground);
-}
-
-/* ======== SMOOTH APP FADE-IN ======== */
-@keyframes appFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.app-fade-in {
-  animation: appFadeIn 1s ease-in-out;
-}
-
-/* Loading screen that shows during initialization */
-.loading-screen {
-  position: fixed;
-  inset: 0;
-  background: #000;
-  z-index: 9999;
-  opacity: 1;
-  transition: opacity 1s ease-in-out;
-  pointer-events: none;
-}
-
-.loading-screen.fade-out {
-  opacity: 0;
 }
 
 /* ======== Verification Page Enhancements ======== */
@@ -218,6 +192,8 @@ a:hover {
   box-shadow: 0 0 0 2px rgba(255, 149, 14, 0.2);
   background: rgba(26, 26, 26, 1);
 }
+
+/* ... (other styles remain unchanged) ... */
 
 /* ======== NEW: Breathing green hover for Verify button text ======== */
 @keyframes breathe-green {

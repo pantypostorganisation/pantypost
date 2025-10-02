@@ -12,10 +12,35 @@ import { PWAInstall } from '@/components/PWAInstall';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { errorTracker } from '@/lib/errorTracking';
 import { usePerformanceMonitoring } from '@/hooks/usePerformanceMonitoring';
+import { cn } from '@/utils/cn';
 
-// SILENT loading - no spinner, just black screen
+// Simple loading component
 function LoadingFallback() {
-  return <div className="min-h-screen bg-black" />;
+  return (
+    <div className="min-h-screen bg-black text-white flex items-center justify-center transition-opacity duration-500">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
+        <p className="text-gray-400">Loading PantyPost...</p>
+      </div>
+    </div>
+  );
+}
+
+function LoadingOverlay({ isVisible }: { isVisible: boolean }) {
+  return (
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex items-center justify-center bg-black text-white transition-opacity duration-500',
+        isVisible ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      )}
+      aria-hidden={!isVisible}
+    >
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
+        <p className="text-gray-400">Connecting to PantyPost...</p>
+      </div>
+    </div>
+  );
 }
 
 export default function ClientLayout({
@@ -25,7 +50,8 @@ export default function ClientLayout({
 }) {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [showContent, setShowContent] = useState(false);
+  const [hasActiveThread, setHasActiveThread] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const pathname = usePathname();
 
   const hideHeaderRoutes = [
@@ -37,32 +63,40 @@ export default function ClientLayout({
     '/reset-password-final'
   ];
 
-  // Check if we're on a messages page on mobile
+  // Check if we're on a messages page
   const isMessagesPage = pathname === '/buyers/messages' || pathname === '/sellers/messages';
-  
+
+  // Determine if header should be hidden
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
-  }) || (isMessagesPage && isMobile);
+  }) || (isMessagesPage && isMobile && hasActiveThread); // Hide header on mobile messages pages when thread is active
 
   useEffect(() => {
     setMounted(true);
-    
+
     // Check if mobile
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
-    // Trigger fade-in after mount
-    const timer = setTimeout(() => {
-      setShowContent(true);
-    }, 100);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile);
-      clearTimeout(timer);
+    };
+  }, []);
+
+  // Listen for custom events from the messages page to track active thread
+  useEffect(() => {
+    const handleThreadChange = (event: CustomEvent) => {
+      setHasActiveThread(event.detail.hasActiveThread);
+    };
+
+    window.addEventListener('threadStateChange' as any, handleThreadChange);
+
+    return () => {
+      window.removeEventListener('threadStateChange' as any, handleThreadChange);
     };
   }, []);
 
@@ -83,13 +117,24 @@ export default function ClientLayout({
   usePerformanceMonitoring();
 
   useEffect(() => {
+    if (!mounted) return;
+
+    const timeout = window.setTimeout(() => {
+      setIsReady(true);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [mounted]);
+
+  useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
       console.log('Current pathname:', pathname);
       console.log('Is mobile:', isMobile);
       console.log('Is messages page:', isMessagesPage);
+      console.log('Has active thread:', hasActiveThread);
       console.log('Should hide header:', shouldHideHeader);
     }
-  }, [pathname, shouldHideHeader, isMobile, isMessagesPage]);
+  }, [pathname, shouldHideHeader, isMobile, isMessagesPage, hasActiveThread]);
 
   if (!mounted) {
     return <LoadingFallback />;
@@ -99,23 +144,32 @@ export default function ClientLayout({
     <>
       {/* Google Analytics */}
       <GoogleAnalytics />
-      
+
       <Providers>
         <Suspense fallback={<LoadingFallback />}>
-          <div className={`flex flex-col fullscreen md:min-h-screen bg-black text-white ${showContent ? 'app-fade-in' : 'opacity-0'}`}>
+          <div
+            className={cn(
+              'flex flex-col fullscreen md:min-h-screen bg-black text-white transition-opacity duration-500',
+              isReady ? 'opacity-100' : 'opacity-0'
+            )}
+          >
             <BanCheck>
               {!shouldHideHeader && <Header />}
               <main className="flex-1">
                 {children}
               </main>
               <AgeVerificationModal />
+              {/* Keep message area if you still want DM popups; remove the next line if you don't want message popups either */}
               <MessageNotifications />
+              {/* NOTICE: No NotificationToaster mounted here */}
             </BanCheck>
           </div>
         </Suspense>
         {/* PWA Install Prompt */}
         <PWAInstall />
       </Providers>
+
+      <LoadingOverlay isVisible={!isReady} />
     </>
   );
 }
