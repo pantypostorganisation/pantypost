@@ -13,7 +13,6 @@ import React, {
 import { usePathname, useRouter } from 'next/navigation';
 import { apiConfig } from '@/config/environment';
 import { z } from 'zod';
-import { sanitizeUsername } from '@/utils/security/sanitization';
 
 // ==================== TYPES ====================
 
@@ -540,6 +539,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // refreshSession is stable here; intentional single-run
 
+  const normalizeLoginErrorMessage = useCallback((message: unknown, username: string) => {
+    const rawMessage = typeof message === 'string' ? message.trim() : '';
+
+    if (!rawMessage) {
+      return 'Login failed. Please try again.';
+    }
+
+    const lower = rawMessage.toLowerCase();
+
+    if (lower.includes('too many login')) {
+      return rawMessage;
+    }
+
+    if (
+      lower.includes("couldn't find") ||
+      lower.includes('could not find') ||
+      lower.includes('no account')
+    ) {
+      return `We couldn't find an account with the username "${username}". Double-check the spelling or sign up for a new account.`;
+    }
+
+    if (
+      lower.includes('wrong password') ||
+      lower.includes("doesn't match") ||
+      lower.includes('incorrect password') ||
+      lower.includes('password is incorrect')
+    ) {
+      return 'Wrong password. Please try again or use "Forgot password" if you need help.';
+    }
+
+    if (lower.includes('unauthorized')) {
+      return 'Invalid username or password. Please try again.';
+    }
+
+    return rawMessage;
+  }, []);
+
   const login = useCallback(
     async (
       username: string,
@@ -556,16 +592,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const parsed = LoginPayloadSchema.safeParse({ username, password, role });
         if (!parsed.success) {
           setError('Please enter a valid username and password.');
-          setLoading(false);
           return false;
         }
 
-        const cleanUsername = sanitizeUsername
-          ? sanitizeUsername(parsed.data.username)
-          : parsed.data.username.trim();
+        const inputUsername = parsed.data.username.trim();
 
         const payload: LoginPayload = {
-          username: cleanUsername,
+          username: inputUsername,
           password: parsed.data.password,
           role: parsed.data.role, // optional on backend; we pass it if present
         };
@@ -599,9 +632,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const expiryDate = new Date(banInfo.expiresAt).toLocaleDateString();
               errorMessage += ` Suspension expires: ${expiryDate}`;
             }
-            
+
             setError(errorMessage);
-            setLoading(false);
             return false;
           }
 
@@ -626,22 +658,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(response.data.user);
 
           console.log('[Auth] Login successful');
-          setLoading(false);
           return true;
         } else {
-          const errorMessage = (response as any)?.error?.message || 'Login failed';
-          setError(errorMessage);
-          setLoading(false);
+          const errorInfo = (response as any)?.error;
+          const normalizedMessage = normalizeLoginErrorMessage(
+            errorInfo?.message || 'Login failed',
+            inputUsername
+          );
+
+          setError(normalizedMessage);
           return false;
         }
       } catch (error) {
         console.error('[Auth] Login error:', error);
         setError('Network error. Please check your connection and try again.');
-        setLoading(false);
         return false;
+      } finally {
+        setLoading(false);
       }
     },
-    []
+    [normalizeLoginErrorMessage]
   );
 
   const logout = useCallback(async () => {

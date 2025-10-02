@@ -102,19 +102,51 @@ export default function LoginPage() {
     }
   }, [isAuthReady, user, router]);
 
+  const mapAuthErrorMessage = useCallback(
+    (message: string) => {
+      const trimmed = message?.trim();
+      if (!trimmed) return '';
+
+      const lower = trimmed.toLowerCase();
+
+      if (lower.includes('too many login')) {
+        return trimmed;
+      }
+
+      if (
+        lower.includes("couldn't find") ||
+        lower.includes('could not find') ||
+        lower.includes('no account')
+      ) {
+        return `We couldn't find an account with the username "${username}". Double-check the spelling or sign up for a new account.`;
+      }
+
+      if (
+        lower.includes('wrong password') ||
+        lower.includes("doesn't match") ||
+        lower.includes('incorrect password')
+      ) {
+        return 'Wrong password. Please try again or use "Forgot password" if you need help.';
+      }
+
+      return trimmed;
+    },
+    [username]
+  );
+
   // Sync auth errors and loading state
   useEffect(() => {
     if (authError) {
       if (isDev) console.log('[Login] Auth error:', authError);
-      setError(authError);
+      setError(mapAuthErrorMessage(authError));
       setIsLoading(false); // IMPORTANT: Clear loading state when error occurs
     }
-    
+
     // Also sync loading state from auth context
     if (!authLoading && isLoading) {
       setIsLoading(false);
     }
-  }, [authError, authLoading, isLoading]);
+  }, [authError, authLoading, isLoading, mapAuthErrorMessage]);
 
   const clearCountdownInterval = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -248,27 +280,29 @@ export default function LoginPage() {
       
       try {
         const success = await login(username.trim(), password, role);
-        
+
         if (isDev) console.log('[Login] Login result:', success);
-        
+
         if (!success) {
+          if (isMountedRef.current) {
+            setIsLoading(false);
+          }
           // Login failed - auth context has set the error
-          // Make sure we're not stuck in loading state
-          setIsLoading(false);
-          
-          // If auth context didn't provide an error, set a generic one
           if (!authError) {
-            setError('Invalid username or password');
+            setError(mapAuthErrorMessage('Invalid username or password'));
           }
         }
         // If success is true, user will be redirected by the useEffect
       } catch (err) {
         if (isDev) console.error('[Login] login() error:', err);
         setError('An unexpected error occurred. Please try again.');
-        setIsLoading(false);
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
-    [username, password, role, login, isRateLimited, authError, clearError]
+    [username, password, role, login, isRateLimited, authError, clearError, mapAuthErrorMessage]
   );
 
   const handleKeyPress = useCallback(
