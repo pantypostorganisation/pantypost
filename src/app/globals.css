@@ -40,6 +40,20 @@ a:hover {
   color: var(--color-foreground);
 }
 
+/* ======== Smooth Page Fade-In Animation ======== */
+@keyframes smoothFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in-smooth {
+  animation: smoothFadeIn 1s ease-in;
+}
+
 /* ======== Verification Page Enhancements ======== */
 
 /* Custom scrollbar styles */
