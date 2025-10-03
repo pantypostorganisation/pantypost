@@ -95,26 +95,31 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
 
   if (isLoading) {
     return (
-      <div className="mt-12">
-        <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
-        <div className="flex items-center justify-center py-10 bg-[#1a1a1a] rounded-xl border border-gray-800">
-          <Loader2 className="w-8 h-8 animate-spin text-[#ff950e]" />
-          <span className="ml-3 text-gray-400">Loading reviews...</span>
+      <div className="mt-12 space-y-6">
+        <h2 className="text-2xl sm:text-3xl font-bold text-white">Reviews</h2>
+        <div className="flex items-center justify-center gap-3 rounded-3xl border border-white/10 bg-black/40 py-10 text-gray-300">
+          <Loader2 className="h-6 w-6 animate-spin text-[#ff950e]" />
+          <span>Loading reviews...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="mt-12">
-      <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
+    <div className="mt-12 space-y-8">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <h2 className="text-2xl sm:text-3xl font-bold text-white">Reviews</h2>
+        <p className="text-sm text-gray-400 max-w-lg">
+          Authentic experiences from verified buyers keep our community safe and intimate.
+        </p>
+      </div>
 
       {reviews.length === 0 ? (
-        <div className="text-center py-10 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
-          <p className="text-lg">No reviews yet.</p>
+        <div className="rounded-3xl border border-dashed border-white/15 bg-black/40 py-12 text-center text-gray-400 shadow-inner shadow-black/40">
+          <p className="text-lg">No reviews yet. Be the first to share your experience.</p>
         </div>
       ) : (
-        <ul className="space-y-6 mb-8">
+        <ul className="space-y-6">
           {reviews.map((review) => {
             const key = review._id || `${review.reviewer}-${review.date}`;
             const safeReviewer = sanitizeStrict(review.reviewer);
@@ -122,17 +127,25 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
             const safeDate = formatDateSafe(review.date);
 
             return (
-              <li key={key} className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 shadow-lg">
-                <div className="flex items-center gap-3 mb-3">
-                  <StarRating rating={safeRating} />
-                  <span className="text-gray-400 text-sm">
-                    by <span className="font-semibold text-white">{safeReviewer || 'Anonymous'}</span> on {safeDate}
+              <li
+                key={key}
+                className="rounded-3xl border border-white/10 bg-black/40 p-6 sm:p-8 shadow-[0_18px_50px_-35px_rgba(0,0,0,0.9)]"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-2">
+                    <StarRating rating={safeRating} />
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                      {safeDate}
+                    </span>
+                  </div>
+                  <span className="text-sm text-gray-300">
+                    Reviewed by <span className="font-semibold text-white">{safeReviewer || 'Anonymous'}</span>
                   </span>
                 </div>
 
                 <SecureMessageDisplay
                   content={review.comment}
-                  className="text-base text-gray-300 leading-relaxed mb-3"
+                  className="mt-4 text-base leading-relaxed text-gray-200"
                   allowBasicFormatting={false}
                   maxLength={1000}
                 />
@@ -140,29 +153,37 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
                 {(review.asDescribed !== undefined ||
                   review.fastShipping !== undefined ||
                   review.wouldBuyAgain !== undefined) && (
-                  <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-700">
+                  <div className="mt-6 flex flex-wrap gap-2">
                     {review.asDescribed && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ As Described</span>
+                      <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                        ✓ As Described
+                      </span>
                     )}
                     {review.fastShipping && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ Fast Shipping</span>
+                      <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                        ✓ Fast Shipping
+                      </span>
                     )}
                     {review.wouldBuyAgain && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ Would Buy Again</span>
+                      <span className="rounded-full border border-emerald-400/40 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                        ✓ Would Buy Again
+                      </span>
                     )}
                   </div>
                 )}
 
                 {review.sellerResponse && (
-                  <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border-l-4 border-[#ff950e]">
-                    <p className="text-sm font-semibold text-[#ff950e] mb-2">Seller Response:</p>
+                  <div className="mt-6 rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#ff950e]">
+                      Seller Response
+                    </p>
                     <SecureMessageDisplay
                       content={review.sellerResponse.text}
-                      className="text-sm text-gray-300"
+                      className="mt-2 text-sm text-orange-100/90"
                       allowBasicFormatting={false}
                       maxLength={500}
                     />
-                    <p className="text-xs text-gray-500 mt-2">{formatDateSafe(review.sellerResponse.date)}</p>
+                    <p className="mt-3 text-xs text-[#ff950e]/70">{formatDateSafe(review.sellerResponse.date)}</p>
                   </div>
                 )}
               </li>
@@ -172,25 +193,25 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
       )}
 
       {canReview && (
-        <div className="border-t border-gray-700 pt-8 mt-8" id="review-form">
-          <h3 className="text-xl font-bold mb-4 text-white">Leave a Review</h3>
+        <div className="rounded-3xl border border-white/10 bg-black/50 p-6 sm:p-8" id="review-form">
+          <h3 className="text-xl font-semibold text-white">Share Your Experience</h3>
+          <p className="mt-1 text-sm text-gray-400">
+            Reviews are anonymous to other buyers and help keep our marketplace trustworthy.
+          </p>
 
           {submitted ? (
-            <div className="p-6 bg-green-900/20 border border-green-600 rounded-xl">
-              <p className="text-green-500 text-lg font-semibold flex items-center">
-                <span className="text-2xl mr-2">✓</span>
-                Review submitted successfully!
-              </p>
-              <p className="text-gray-400 text-sm mt-2">Thank you for your feedback.</p>
+            <div className="mt-6 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-6 text-center text-emerald-200">
+              <p className="text-lg font-semibold">✓ Review submitted successfully!</p>
+              <p className="mt-2 text-sm text-emerald-100/80">Thank you for your feedback.</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Rating</label>
+            <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="text-sm font-medium text-gray-300">Rating</label>
                 <select
                   value={rating}
                   onChange={(e) => onRatingChange(Number(e.target.value))}
-                  className="block w-full max-w-[200px] border border-gray-700 rounded-lg px-3 py-2 bg-black text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                  className="w-full sm:w-52 rounded-full border border-white/15 bg-black/60 px-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
                   disabled={isSubmitting}
                 >
                   {[5, 4, 3, 2, 1].map((r) => (
@@ -201,46 +222,44 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
                 </select>
               </div>
 
-              <div className="mb-6">
-                <SecureTextarea
-                  label="Comment"
-                  value={comment}
-                  onChange={handleCommentChange}
-                  placeholder="Share your experience with this seller..."
-                  rows={4}
-                  maxLength={500}
-                  characterCount={true}
-                  sanitize={true}
-                  sanitizer={sanitizeStrict}
-                  disabled={isSubmitting}
-                  error={validationError}
-                />
-              </div>
+              <SecureTextarea
+                label="Comment"
+                value={comment}
+                onChange={handleCommentChange}
+                placeholder="Share what made this seller special..."
+                rows={5}
+                maxLength={500}
+                characterCount={true}
+                sanitize={true}
+                sanitizer={sanitizeStrict}
+                disabled={isSubmitting}
+                error={validationError}
+                className="[&_textarea]:bg-black/60 [&_textarea]:border-white/15 [&_textarea]:text-white"
+              />
 
-              {/* Additional options (informational only) */}
-              <div className="mb-6 space-y-2">
-                <p className="text-sm text-gray-400 mb-2">Your review will include:</p>
-                <div className="flex flex-wrap gap-3">
-                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Item as described</span>
-                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Fast shipping</span>
-                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Would buy again</span>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-xs text-gray-400">
+                <p className="font-semibold uppercase tracking-[0.2em] text-white/70">Your review highlights</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1">✓ Item as described</span>
+                  <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1">✓ Fast shipping</span>
+                  <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1">✓ Would buy again</span>
                 </div>
               </div>
 
               {validationError && (
-                <div className="p-3 bg-red-900/20 border border-red-600 rounded-lg">
-                  <p className="text-red-500 text-sm">{validationError}</p>
+                <div className="rounded-2xl border border-red-400/40 bg-red-500/10 p-4 text-red-200">
+                  <p className="text-sm">{validationError}</p>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={isSubmitting || !comment || comment.trim().length < 10}
-                className="bg-[#ff950e] text-black px-6 py-3 rounded-full hover:bg-[#e0850d] font-bold transition text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ff950e] to-[#fb923c] px-8 py-3 text-base font-semibold text-black transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="h-5 w-5 animate-spin" />
                     Submitting...
                   </>
                 ) : (
