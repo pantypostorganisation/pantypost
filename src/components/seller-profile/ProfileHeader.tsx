@@ -4,6 +4,7 @@
 import Link from 'next/link';
 import {
   Lock,
+  ArrowRight,
   Mail,
   Gift,
   DollarSign,
@@ -143,7 +144,7 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
   const getStatusBadge = () => {
     if (activityLoading) {
       return (
-        <span className="flex items-center gap-1 text-xs bg-gray-600 text-white px-2 py-1 rounded-full font-bold shadow">
+        <span className="flex items-center gap-2 text-xs font-semibold text-gray-300 bg-white/10 px-3 py-1.5 rounded-full">
           Loading...
         </span>
       );
@@ -151,7 +152,7 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
 
     if (activityStatus.isOnline) {
       return (
-        <span className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded-full font-bold shadow">
+        <span className="flex items-center gap-2 text-xs font-semibold text-emerald-300 bg-emerald-500/15 px-3 py-1.5 rounded-full">
           Active Now
         </span>
       );
@@ -159,7 +160,7 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
 
     const activityText = formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive);
     return (
-      <span className="flex items-center gap-1 text-xs bg-gray-600 text-white px-2 py-1 rounded-full font-bold shadow">
+      <span className="flex items-center gap-2 text-xs font-semibold text-gray-300 bg-white/10 px-3 py-1.5 rounded-full">
         {activityText}
       </span>
     );
@@ -179,8 +180,12 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
   const safeReviews = Number.isFinite(reviewsCount) ? reviewsCount : 0;
 
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative overflow-visible">
-      {/* Favorite button - high z-index and better positioning */}
+    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#1b0f12] via-[#0f0b0c] to-[#050505] shadow-[0_25px_80px_-30px_rgba(0,0,0,0.8)] px-6 sm:px-10 py-10">
+      <div className="pointer-events-none absolute inset-0 opacity-60" aria-hidden="true">
+        <div className="absolute -top-32 left-1/3 h-64 w-64 bg-[#ff950e]/30 blur-3xl" />
+        <div className="absolute -bottom-24 right-1/4 h-72 w-72 bg-pink-500/10 blur-3xl" />
+      </div>
+
       {user?.role === 'buyer' && user.username !== username && onToggleFavorite && (
         <button
           onClick={(e) => {
@@ -188,173 +193,213 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
             e.stopPropagation();
             onToggleFavorite();
           }}
-          className="absolute top-4 right-4 w-12 h-12 flex items-center justify-center rounded-lg bg-[#222] hover:bg-[#333] transition-colors group z-50"
+          className="absolute top-6 right-6 w-12 h-12 flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 backdrop-blur transition-colors hover:bg-white/10 group z-20"
           aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           type="button"
         >
           <Heart
             size={20}
-            className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400 group-hover:text-gray-300'}
+            className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-300 group-hover:text-white'}
             style={{ pointerEvents: 'none' }}
           />
         </button>
       )}
 
-      {/* Profile section with centered profile pic and badge to the right */}
-      <div className="flex flex-col items-center relative mb-6 w-full">
-        {/* Profile Picture - Centered */}
-        <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg relative z-10">
-          {resolvedProfilePic ? (
-            <img
-              src={resolvedProfilePic}
-              alt={`${sanitizedUsername}'s profile`}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              decoding="async"
-              referrerPolicy="no-referrer"
-            />
-          ) : (
-            <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-6xl font-bold">
-              {sanitizedUsername ? sanitizedUsername.charAt(0).toUpperCase() : '?'}
+      <div className="relative flex flex-col gap-10 md:flex-row md:items-start">
+        <div className="flex flex-col items-center md:items-start gap-6 md:w-64">
+          <div className="relative">
+            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-2xl shadow-black/40">
+              {resolvedProfilePic ? (
+                <img
+                  src={resolvedProfilePic}
+                  alt={`${sanitizedUsername}'s profile`}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full bg-gray-800 flex items-center justify-center text-gray-400 text-6xl font-bold">
+                  {sanitizedUsername ? sanitizedUsername.charAt(0).toUpperCase() : '?'}
+                </div>
+              )}
+
+              {activityStatus.isOnline && !activityLoading && (
+                <div className="absolute bottom-2 left-2 w-4 h-4 bg-emerald-400 rounded-full border-2 border-black" />
+              )}
             </div>
-          )}
 
-          {/* Online indicator - bottom left of profile picture */}
-          {activityStatus.isOnline && !activityLoading && (
-            <div className="absolute bottom-2 left-2 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1a1a1a] z-20" />
-          )}
-        </div>
-
-        {/* Badge positioned to the right of profile pic */}
-        {normalizedTier && normalizedTier !== 'None' && (
-          <div className="absolute right-0 sm:right-1/4 top-1/2 transform -translate-y-1/2 z-10">
-            <TierBadge tier={normalizedTier} size="2xl" showTooltip={true} />
-          </div>
-        )}
-      </div>
-
-      <div className="flex flex-col items-center text-center mb-6">
-        <div className="flex items-center justify-center gap-3 mb-2">
-          <span className="text-2xl sm:text-3xl font-bold text-white">{sanitizedUsername}</span>
-          {isVerified ? (
-            <div className="relative group">
-              <img src="/verification_badge.png" alt="Verified" className="w-6 h-6" />
-              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
-                Verified Seller
+            {normalizedTier && normalizedTier !== 'None' && (
+              <div className="absolute -right-4 bottom-0 translate-y-1/2">
+                <TierBadge tier={normalizedTier} size="2xl" showTooltip={true} />
               </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap justify-center md:justify-start gap-2 text-[11px] uppercase tracking-[0.18em] text-gray-400">
+            <span className="px-3 py-1 rounded-full border border-white/10 bg-white/5">Premium Marketplace</span>
+            {normalizedTier && normalizedTier !== 'None' && (
+              <span className="px-3 py-1 rounded-full border border-[#ff950e]/40 text-[#ff950e] bg-[#ff950e]/10">{normalizedTier} Tier</span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col gap-8 text-center md:text-left">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+                  <span className="text-3xl sm:text-4xl font-bold text-white tracking-tight">{sanitizedUsername}</span>
+                  {isVerified ? (
+                    <div className="relative group">
+                      <img src="/verification_badge.png" alt="Verified" className="w-6 h-6" />
+                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/80 px-3 py-1 text-xs text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                        Verified Seller
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="flex items-center gap-1 rounded-full border border-yellow-500/40 bg-yellow-500/10 px-3 py-1 text-xs font-semibold text-yellow-300">
+                      <AlertTriangle className="w-4 h-4" />
+                      Unverified
+                    </span>
+                  )}
+                  {getStatusBadge()}
+                </div>
+
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm text-gray-300">
+                  <span className="text-gray-400">Location: Private</span>
+                  <span className="hidden sm:inline text-gray-600">•</span>
+                  <span>{getActivityDisplay()}</span>
+                </div>
+              </div>
+
+              {user?.role === 'buyer' && user.username !== username && (
+                <div className="flex justify-center sm:justify-end">
+                  <a
+                    href="#listings"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-gray-200 hover:border-[#ff950e]/50 hover:text-white"
+                  >
+                    Explore Listings
+                    <ArrowRight className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
             </div>
-          ) : (
-            <span className="flex items-center gap-1 text-xs bg-yellow-600 text-black px-2 py-1 rounded-full font-bold shadow">
-              <AlertTriangle className="w-4 h-4" />
-              Unverified
-            </span>
-          )}
-          {getStatusBadge()}
+
+            <div className="text-base text-gray-200/90 leading-relaxed max-w-3xl mx-auto md:mx-0">
+              <SecureMessageDisplay
+                content={
+                  bio ||
+                  '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'
+                }
+                allowBasicFormatting={false}
+                maxLength={500}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-5 text-center shadow-inner shadow-black/20">
+              <Camera className="mx-auto mb-3 h-6 w-6 text-[#ff950e]" />
+              <p className="text-2xl font-semibold text-white">{safePhotos}</p>
+              <p className="text-xs uppercase tracking-widest text-gray-400">Photos</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-5 text-center shadow-inner shadow-black/20">
+              <Video className="mx-auto mb-3 h-6 w-6 text-pink-300" />
+              <p className="text-2xl font-semibold text-white">{safeVideos}</p>
+              <p className="text-xs uppercase tracking-widest text-gray-400">Videos</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-5 text-center shadow-inner shadow-black/20">
+              <Users className="mx-auto mb-3 h-6 w-6 text-[#ff950e]" />
+              <p className="text-2xl font-semibold text-white">{safeFollowers}</p>
+              <p className="text-xs uppercase tracking-widest text-gray-400">Followers</p>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-5 text-center shadow-inner shadow-black/20">
+              <Star className="mx-auto mb-3 h-6 w-6 text-yellow-300" />
+              {safeAvg !== null ? (
+                <>
+                  <p className="text-2xl font-semibold text-white">{safeAvg.toFixed(1)}</p>
+                  <p className="text-xs uppercase tracking-widest text-gray-400">{safeReviews} reviews</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-semibold text-white">--</p>
+                  <p className="text-xs uppercase tracking-widest text-gray-400">Rating</p>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap justify-center md:justify-start gap-3">
+            {showSubscribeButton && (
+              <button
+                onClick={onShowSubscribeModal}
+                className="flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ff950e] to-[#f97316] px-6 py-3 text-base font-semibold text-black shadow-lg shadow-[#ff950e]/30 transition hover:from-[#ffa733] hover:to-[#fb923c]"
+                type="button"
+              >
+                <DollarSign className="h-5 w-5" />
+                {typeof subscriptionPrice === 'number' && subscriptionPrice > 0
+                  ? `Subscribe ($${subscriptionPrice.toFixed(2)}/mo)`
+                  : 'Subscribe'}
+              </button>
+            )}
+
+            {showUnsubscribeButton && (
+              <button
+                onClick={onShowUnsubscribeModal}
+                className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-base font-semibold text-white transition hover:border-red-500/40 hover:text-red-200"
+                type="button"
+              >
+                <Lock className="h-5 w-5" />
+                Unsubscribe
+              </button>
+            )}
+
+            {user?.role === 'buyer' && user.username !== username && (
+              <button
+                className="flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-6 py-3 text-base font-semibold text-[#ff950e] transition hover:border-[#ff950e]/60 hover:bg-[#ff950e]/20"
+                onClick={onShowTipModal}
+                type="button"
+              >
+                <Gift className="h-5 w-5" />
+                Tip Seller
+              </button>
+            )}
+
+            {user?.role === 'buyer' && user.username !== username && (
+              <Link
+                href={`/buyers/messages?thread=${encodeURIComponent(username)}`}
+                className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-6 py-3 text-base font-semibold text-white transition hover:border-white/30"
+              >
+                <Mail className="h-5 w-5" />
+                Message
+              </Link>
+            )}
+
+            {user?.role === 'buyer' && user.username !== username && (
+              <button
+                className="flex items-center gap-2 rounded-full border border-white/5 bg-white/5 px-6 py-3 text-base font-semibold text-gray-500 cursor-not-allowed"
+                disabled
+                type="button"
+              >
+                <MessageCircle className="h-5 w-5" />
+                Custom Request
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap justify-center md:justify-start gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+            <a href="#listings" className="rounded-full border border-white/10 px-4 py-2 hover:border-[#ff950e]/40 hover:text-white">
+              Listings
+            </a>
+            <a href="#gallery" className="rounded-full border border-white/10 px-4 py-2 hover:border-[#ff950e]/40 hover:text-white">
+              Gallery
+            </a>
+            <a href="#reviews" className="rounded-full border border-white/10 px-4 py-2 hover:border-[#ff950e]/40 hover:text-white">
+              Reviews
+            </a>
+          </div>
         </div>
-
-        <div className="text-sm text-gray-400 mb-1">Location: Private</div>
-        <div className="text-sm text-gray-400 mb-3">{getActivityDisplay()}</div>
-
-        <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
-          <SecureMessageDisplay
-            content={
-              bio ||
-              '🧾 Seller bio goes here. This is where the seller can share details about themselves, their offerings, and what subscribers can expect.'
-            }
-            allowBasicFormatting={false}
-            maxLength={500}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-wrap justify-center gap-6 sm:gap-8 mb-8 w-full border-t border-b border-gray-700 py-4">
-        <div className="flex flex-col items-center">
-          <Camera className="w-6 h-6 text-[#ff950e] mb-1" />
-          <span className="text-lg font-bold text-white">{safePhotos}</span>
-          <span className="text-xs text-gray-400">Photos</span>
-        </div>
-        <div className="flex flex-col items-center">
-          <Video className="w-6 h-6 text-gray-500 mb-1" />
-          <span className="text-lg font-bold text-white">{safeVideos}</span>
-          <span className="text-xs text-gray-400">Videos</span>
-        </div>
-        <div className="flex flex-col items-center">
-          <Users className="w-6 h-6 text-[#ff950e] mb-1" />
-          <span className="text-lg font-bold text-white">{safeFollowers}</span>
-          <span className="text-xs text-gray-400">Followers</span>
-        </div>
-        <div className="flex flex-col items-center">
-          <Star className="w-6 h-6 text-[#ff950e] mb-1" />
-          {safeAvg !== null ? (
-            <>
-              <span className="text-lg font-bold text-white">{safeAvg.toFixed(1)}</span>
-              <span className="text-xs text-gray-400 mt-1">({safeReviews} reviews)</span>
-            </>
-          ) : (
-            <>
-              <span className="text-lg font-bold text-white">--</span>
-              <span className="text-xs text-gray-400">Rating</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-3 justify-center w-full max-w-lg">
-        {showSubscribeButton && (
-          <button
-            onClick={onShowSubscribeModal}
-            className="flex items-center gap-2 bg-[#ff950e] text-black font-bold px-6 py-3 rounded-full shadow-lg hover:bg-[#e0850d] transition text-base"
-            type="button"
-          >
-            <DollarSign className="w-5 h-5" />
-            {typeof subscriptionPrice === 'number' && subscriptionPrice > 0
-              ? `Subscribe ($${subscriptionPrice.toFixed(2)}/mo)`
-              : 'Subscribe'}
-          </button>
-        )}
-
-        {showUnsubscribeButton && (
-          <button
-            onClick={onShowUnsubscribeModal}
-            className="flex items-center gap-2 bg-gray-700 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-red-600 transition text-base"
-            type="button"
-          >
-            <Lock className="w-5 h-5" />
-            Unsubscribe
-          </button>
-        )}
-
-        {user?.role === 'buyer' && user.username !== username && (
-          <button
-            className="flex items-center gap-2 bg-gray-800 text-[#ff950e] font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
-            onClick={onShowTipModal}
-            type="button"
-          >
-            <Gift className="w-5 h-5" />
-            Tip Seller
-          </button>
-        )}
-
-        {user?.role === 'buyer' && user.username !== username && (
-          <Link
-            href={`/buyers/messages?thread=${encodeURIComponent(username)}`}
-            className="flex items-center gap-2 bg-gray-800 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
-          >
-            <Mail className="w-5 h-5" />
-            Message
-          </Link>
-        )}
-
-        {user?.role === 'buyer' && user.username !== username && (
-          <button
-            className="flex items-center gap-2 bg-gray-800 text-gray-500 font-bold px-6 py-3 rounded-full shadow-lg cursor-not-allowed text-base"
-            disabled
-            type="button"
-          >
-            <MessageCircle className="w-5 h-5" />
-            Custom Request
-          </button>
-        )}
       </div>
     </div>
   );
