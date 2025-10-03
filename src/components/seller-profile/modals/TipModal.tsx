@@ -35,16 +35,18 @@ export default function TipModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [localTipSuccess, setLocalTipSuccess] = useState(false);
   const [localTipError, setLocalTipError] = useState('');
-
+  
   const walletContext = useContext(WalletContext);
   const { user } = useAuth();
 
   if (!show) return null;
 
   const sanitizedUsername = sanitizeStrict(username);
-
+  
   // Get user balance from wallet context
-  const userBalance = user && walletContext ? walletContext.getBuyerBalance(user.username) : 0;
+  const userBalance = user && walletContext 
+    ? walletContext.getBuyerBalance(user.username) 
+    : 0;
 
   const handleSecureAmountChange = (value: string) => {
     if (value === '') {
@@ -59,57 +61,57 @@ export default function TipModal({
 
   const handleSecureSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     // Prevent double submission
     if (isProcessing) {
       return;
     }
-
+    
     if (!user) {
       setLocalTipError('You must be logged in to send tips');
       return;
     }
-
+    
     if (user.role !== 'buyer') {
       setLocalTipError('Only buyers can send tips');
       return;
     }
-
+    
     setIsProcessing(true);
     setLocalTipError('');
     setLocalTipSuccess(false);
-
+    
     try {
       const amount = parseFloat(tipAmount);
-
+      
       // Validate amount
       if (isNaN(amount) || amount < 1 || amount > 500) {
         setLocalTipError('Tip amount must be between $1 and $500');
         setIsProcessing(false);
         return;
       }
-
+      
       // Check balance
       if (amount > userBalance) {
         setLocalTipError('Insufficient balance');
         setIsProcessing(false);
         return;
       }
-
+      
       // Send tip via service - only once
       const result = await tipService.sendTip(username, amount);
-
+      
       if (result.success) {
         setLocalTipSuccess(true);
-
+        
         // Reload wallet data to reflect new balance
         if (walletContext && walletContext.reloadData) {
           await walletContext.reloadData();
         }
-
+        
         // REMOVED: parentOnSubmit() call that was causing double sending
         // The parent component should handle success through props or context
-
+        
         // Auto-close after success
         setTimeout(() => {
           onAmountChange('');
@@ -132,143 +134,138 @@ export default function TipModal({
   const displayError = localTipError || parentTipError;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur">
-      <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-black via-[#15070a] to-black p-px shadow-[0_30px_90px_rgba(0,0,0,0.65)]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,149,14,0.25),_transparent_70%)]" aria-hidden="true" />
-        <div className="relative rounded-[26px] bg-black/85 p-8">
-          <div className="flex items-start justify-between gap-6">
-            <div>
-              <h2 className="flex items-center gap-2 text-2xl font-semibold text-white">
-                <Gift className="h-6 w-6 text-[#ff950e]" />
-                Send a tip
-              </h2>
-              <p className="mt-2 text-sm text-gray-400">
-                Surprise <span className="text-[#ff950e]">{sanitizedUsername}</span> with a little extra love.
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-full border border-white/10 bg-white/5 p-1 text-gray-400 transition hover:text-white"
-              aria-label="Close"
-              type="button"
-              disabled={isProcessing}
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {displaySuccess ? (
-            <div className="mt-6 rounded-2xl border border-green-500/40 bg-green-500/10 p-8 text-center text-green-200">
-              <div className="text-4xl">✓</div>
-              <p className="mt-3 text-lg font-semibold text-green-100">Tip sent successfully!</p>
-              <p className="mt-1 text-sm text-green-100/70">{sanitizedUsername} just felt your appreciation.</p>
-            </div>
-          ) : (
-            <SecureForm
-              onSubmit={handleSecureSubmit}
-              rateLimitKey="tip_send"
-              rateLimitConfig={{ maxAttempts: 20, windowMs: 60 * 60 * 1000 }}
-            >
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gray-300">Amount ($)</label>
-                <div className="relative mt-2">
-                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#ff950e]">
-                    <DollarSign className="h-5 w-5" />
-                  </div>
-                  <SecureInput
-                    type="number"
-                    value={tipAmount}
-                    onChange={handleSecureAmountChange}
-                    onBlur={() => setTouched(true)}
-                    className="w-full rounded-xl border border-white/10 bg-black/60 pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                    placeholder="Enter amount"
-                    min="0.01"
-                    max="500"
-                    step="0.01"
-                    error={displayError}
-                    touched={touched}
-                    sanitize={false}
-                    disabled={isProcessing}
-                  />
-                </div>
-
-                <div className="mt-3 grid grid-cols-4 gap-2">
-                  {[5, 10, 20, 50].map((amount) => {
-                    const canUse = userBalance >= amount && !isProcessing;
-                    return (
-                      <button
-                        key={amount}
-                        type="button"
-                        onClick={() => {
-                          onAmountChange(amount.toString());
-                          setTouched(true);
-                        }}
-                        disabled={!canUse}
-                        className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
-                          canUse
-                            ? 'border border-[#ff950e]/30 bg-[#ff950e]/10 text-[#ff950e] hover:bg-[#ff950e]/20'
-                            : 'border border-white/5 bg-white/5 text-gray-500 cursor-not-allowed'
-                        }`}
-                      >
-                        ${amount}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {user && (
-                <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-gray-300">
-                  <div className="flex justify-between">
-                    <span>Wallet balance</span>
-                    <span className="font-semibold text-white">${userBalance.toFixed(2)}</span>
-                  </div>
-                  {tipAmount && parseFloat(tipAmount) > 0 && (
-                    <div className="mt-2 flex justify-between">
-                      <span>After tip</span>
-                      <span
-                        className={`${
-                          userBalance - parseFloat(tipAmount) >= 0 ? 'text-green-300' : 'text-red-300'
-                        } font-semibold`}
-                      >
-                        ${(userBalance - parseFloat(tipAmount)).toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="mt-8 flex flex-col gap-3">
-                <button
-                  type="submit"
-                  disabled={disabled || userBalance < parseFloat(tipAmount || '0')}
-                  className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-base font-semibold transition ${
-                    !disabled && userBalance >= parseFloat(tipAmount || '0')
-                      ? 'bg-[#ff950e] text-black shadow-lg shadow-[#ff950e33] hover:bg-[#e0850d]'
-                      : 'bg-white/10 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {isProcessing ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
-                      <span>Sending...</span>
-                    </>
-                  ) : (
-                    'Send tip'
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={isProcessing}
-                  className="w-full rounded-full border border-white/10 bg-white/5 px-6 py-3 text-base font-semibold text-gray-200 transition hover:bg-white/10 disabled:opacity-60"
-                >
-                  Cancel
-                </button>
-              </div>
-            </SecureForm>
-          )}
+    <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
+      <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-[#ff950e] flex items-center gap-2">
+            <Gift className="w-6 h-6" />
+            Send Tip
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white transition"
+            aria-label="Close"
+            type="button"
+            disabled={isProcessing}
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
+
+        {displaySuccess ? (
+          <div className="text-center py-8">
+            <div className="text-green-500 text-5xl mb-4">✓</div>
+            <p className="text-xl text-white">Tip sent successfully!</p>
+            <p className="text-gray-400 mt-2">Thank you for supporting {sanitizedUsername}</p>
+          </div>
+        ) : (
+          <SecureForm
+            onSubmit={handleSecureSubmit}
+            rateLimitKey="tip_send"
+            rateLimitConfig={{ maxAttempts: 20, windowMs: 60 * 60 * 1000 }}
+          >
+            <p className="mb-6 text-center text-white">
+              Show your appreciation for <strong className="text-[#ff950e]">{sanitizedUsername}</strong>
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium mb-2 text-gray-300">
+                Amount ($)
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
+                  <DollarSign className="w-5 h-5 text-gray-400" />
+                </div>
+                <SecureInput
+                  type="number"
+                  value={tipAmount}
+                  onChange={handleSecureAmountChange}
+                  onBlur={() => setTouched(true)}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-black text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                  placeholder="Enter amount"
+                  min="0.01"
+                  max="500"
+                  step="0.01"
+                  error={displayError}
+                  touched={touched}
+                  sanitize={false}
+                  disabled={isProcessing}
+                />
+              </div>
+              
+              {/* Quick amount buttons */}
+              <div className="flex gap-2 mt-3">
+                {[5, 10, 20, 50].map((amount) => (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => {
+                      onAmountChange(amount.toString());
+                      setTouched(true);
+                    }}
+                    disabled={isProcessing || userBalance < amount}
+                    className={`flex-1 px-3 py-1.5 rounded-lg transition-colors text-sm ${
+                      userBalance >= amount 
+                        ? 'bg-gray-800 text-white hover:bg-gray-700'
+                        : 'bg-gray-900 text-gray-600 cursor-not-allowed'
+                    }`}
+                  >
+                    ${amount}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Balance info */}
+            {user && (
+              <div className="mb-4 p-3 bg-gray-900 rounded-lg text-sm">
+                <div className="flex justify-between mb-1">
+                  <span className="text-gray-400">Your Balance:</span>
+                  <span className="text-white font-medium">${userBalance.toFixed(2)}</span>
+                </div>
+                {tipAmount && parseFloat(tipAmount) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">After Tip:</span>
+                    <span className={`font-medium ${
+                      userBalance - parseFloat(tipAmount) >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      ${(userBalance - parseFloat(tipAmount)).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3">
+              <button
+                type="submit"
+                disabled={disabled || userBalance < parseFloat(tipAmount || '0')}
+                className={`w-full font-bold py-3 rounded-full transition flex items-center justify-center gap-2 ${
+                  !disabled && userBalance >= parseFloat(tipAmount || '0')
+                    ? 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
+                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <span>Sending...</span>
+                  </>
+                ) : (
+                  'Send Tip'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isProcessing}
+                className="w-full bg-gray-700 text-white font-medium py-3 rounded-full hover:bg-gray-600 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </SecureForm>
+        )}
       </div>
     </div>
   );

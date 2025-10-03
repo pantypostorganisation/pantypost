@@ -53,20 +53,6 @@ function clampRating(n: number): number {
   return Math.max(0, Math.min(5, n));
 }
 
-function safeAvgDisplay(reviews: Review[]): number | null {
-  if (!Array.isArray(reviews) || reviews.length === 0) {
-    return null;
-  }
-
-  const rated = reviews.map((review) => clampRating(review.rating)).filter((value) => value > 0);
-  if (rated.length === 0) {
-    return null;
-  }
-
-  const total = rated.reduce((sum, value) => sum + value, 0);
-  return Number.isFinite(total) ? total / rated.length : null;
-}
-
 export default function ReviewsSection(rawProps: ReviewsSectionProps) {
   const parsed = PropsSchema.safeParse(rawProps);
   const {
@@ -109,48 +95,26 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
 
   if (isLoading) {
     return (
-      <section className="mt-16">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-white">Buyer impressions</h2>
-            <p className="mt-2 text-sm text-gray-400">We&apos;re fetching the latest whispers from admirers.</p>
-          </div>
+      <div className="mt-12">
+        <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
+        <div className="flex items-center justify-center py-10 bg-[#1a1a1a] rounded-xl border border-gray-800">
+          <Loader2 className="w-8 h-8 animate-spin text-[#ff950e]" />
+          <span className="ml-3 text-gray-400">Loading reviews...</span>
         </div>
-        <div className="mt-6 flex items-center justify-center gap-3 rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-gray-300 backdrop-blur-sm">
-          <Loader2 className="h-8 w-8 animate-spin text-[#ff950e]" />
-          <span>Loading reviews...</span>
-        </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section className="mt-16">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-[0.35em] text-[#ff950e]">Social proof</span>
-          <h2 className="mt-3 text-3xl sm:text-4xl font-bold text-white">Reviews from paying admirers</h2>
-          <p className="mt-2 text-sm text-gray-400 max-w-2xl">
-            Every review is verified through a completed purchase so you can feel confident subscribing.
-          </p>
-        </div>
-        {safeAvgDisplay(reviews) && (
-          <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-5 py-2 text-sm text-gray-200">
-            <StarRating rating={safeAvgDisplay(reviews)} />
-            <span>{safeAvgDisplay(reviews)?.toFixed(1)} average</span>
-          </div>
-        )}
-      </div>
+    <div className="mt-12">
+      <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
 
       {reviews.length === 0 ? (
-        <div className="mt-8 text-center text-gray-400">
-          <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-12 backdrop-blur-sm">
-            <p className="text-lg font-medium text-white">No reviews yet.</p>
-            <p className="mt-2 text-sm text-gray-400">Be the first admirer to leave feedback after purchasing.</p>
-          </div>
+        <div className="text-center py-10 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
+          <p className="text-lg">No reviews yet.</p>
         </div>
       ) : (
-        <ul className="mt-8 space-y-6">
+        <ul className="space-y-6 mb-8">
           {reviews.map((review) => {
             const key = review._id || `${review.reviewer}-${review.date}`;
             const safeReviewer = sanitizeStrict(review.reviewer);
@@ -158,18 +122,17 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
             const safeDate = formatDateSafe(review.date);
 
             return (
-              <li key={key} className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-[0_25px_60px_rgba(0,0,0,0.4)] backdrop-blur">
-                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-300">
+              <li key={key} className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 shadow-lg">
+                <div className="flex items-center gap-3 mb-3">
                   <StarRating rating={safeRating} />
-                  <span>
-                    by <span className="font-semibold text-white">{safeReviewer || 'Anonymous'}</span>
+                  <span className="text-gray-400 text-sm">
+                    by <span className="font-semibold text-white">{safeReviewer || 'Anonymous'}</span> on {safeDate}
                   </span>
-                  <span className="text-gray-500">{safeDate}</span>
                 </div>
 
                 <SecureMessageDisplay
                   content={review.comment}
-                  className="mt-4 text-base leading-relaxed text-gray-200"
+                  className="text-base text-gray-300 leading-relaxed mb-3"
                   allowBasicFormatting={false}
                   maxLength={1000}
                 />
@@ -177,29 +140,29 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
                 {(review.asDescribed !== undefined ||
                   review.fastShipping !== undefined ||
                   review.wouldBuyAgain !== undefined) && (
-                  <div className="mt-5 flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-700">
                     {review.asDescribed && (
-                      <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-semibold text-green-400">✓ As Described</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ As Described</span>
                     )}
                     {review.fastShipping && (
-                      <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-semibold text-green-400">✓ Fast Shipping</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ Fast Shipping</span>
                     )}
                     {review.wouldBuyAgain && (
-                      <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-semibold text-green-400">✓ Would Buy Again</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ Would Buy Again</span>
                     )}
                   </div>
                 )}
 
                 {review.sellerResponse && (
-                  <div className="mt-6 rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/5 p-5 text-sm text-gray-200">
-                    <p className="mb-2 font-semibold text-[#ff950e]">Seller Response</p>
+                  <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border-l-4 border-[#ff950e]">
+                    <p className="text-sm font-semibold text-[#ff950e] mb-2">Seller Response:</p>
                     <SecureMessageDisplay
                       content={review.sellerResponse.text}
-                      className="text-sm text-gray-100"
+                      className="text-sm text-gray-300"
                       allowBasicFormatting={false}
                       maxLength={500}
                     />
-                    <p className="mt-2 text-xs text-[#ff950e]/70">{formatDateSafe(review.sellerResponse.date)}</p>
+                    <p className="text-xs text-gray-500 mt-2">{formatDateSafe(review.sellerResponse.date)}</p>
                   </div>
                 )}
               </li>
@@ -209,26 +172,25 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
       )}
 
       {canReview && (
-        <div className="mt-12 rounded-3xl border border-white/10 bg-white/[0.03] p-8 backdrop-blur" id="review-form">
-          <h3 className="text-2xl font-semibold text-white">Share your experience</h3>
-          <p className="mt-1 text-sm text-gray-400">Only buyers who have completed a purchase can leave a review.</p>
+        <div className="border-t border-gray-700 pt-8 mt-8" id="review-form">
+          <h3 className="text-xl font-bold mb-4 text-white">Leave a Review</h3>
 
           {submitted ? (
-            <div className="mt-6 flex items-start gap-3 rounded-2xl border border-green-500/40 bg-green-500/10 p-6 text-sm text-green-100">
-              <span className="text-2xl">✓</span>
-              <div>
-                <p className="text-base font-semibold text-green-200">Review submitted successfully!</p>
-                <p className="mt-1 text-sm text-green-200/70">Thank you for supporting the community.</p>
-              </div>
+            <div className="p-6 bg-green-900/20 border border-green-600 rounded-xl">
+              <p className="text-green-500 text-lg font-semibold flex items-center">
+                <span className="text-2xl mr-2">✓</span>
+                Review submitted successfully!
+              </p>
+              <p className="text-gray-400 text-sm mt-2">Thank you for your feedback.</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-6">
-                <label className="text-sm font-medium text-gray-200">Rating</label>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Rating</label>
                 <select
                   value={rating}
                   onChange={(e) => onRatingChange(Number(e.target.value))}
-                  className="w-full max-w-[220px] rounded-full border border-white/10 bg-black/50 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                  className="block w-full max-w-[200px] border border-gray-700 rounded-lg px-3 py-2 bg-black text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
                   disabled={isSubmitting}
                 >
                   {[5, 4, 3, 2, 1].map((r) => (
@@ -239,43 +201,46 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
                 </select>
               </div>
 
-              <SecureTextarea
-                label="Comment"
-                value={comment}
-                onChange={handleCommentChange}
-                placeholder="Tell other buyers what made this experience unforgettable..."
-                rows={5}
-                maxLength={500}
-                characterCount={true}
-                sanitize={true}
-                sanitizer={sanitizeStrict}
-                disabled={isSubmitting}
-                error={validationError}
-              />
+              <div className="mb-6">
+                <SecureTextarea
+                  label="Comment"
+                  value={comment}
+                  onChange={handleCommentChange}
+                  placeholder="Share your experience with this seller..."
+                  rows={4}
+                  maxLength={500}
+                  characterCount={true}
+                  sanitize={true}
+                  sanitizer={sanitizeStrict}
+                  disabled={isSubmitting}
+                  error={validationError}
+                />
+              </div>
 
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-xs text-gray-300">
-                <p className="mb-2 font-semibold text-gray-200">What we highlight</p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="rounded-full bg-white/5 px-3 py-1 font-medium text-gray-200">✓ Item as described</span>
-                  <span className="rounded-full bg-white/5 px-3 py-1 font-medium text-gray-200">✓ Fast shipping</span>
-                  <span className="rounded-full bg-white/5 px-3 py-1 font-medium text-gray-200">✓ Would buy again</span>
+              {/* Additional options (informational only) */}
+              <div className="mb-6 space-y-2">
+                <p className="text-sm text-gray-400 mb-2">Your review will include:</p>
+                <div className="flex flex-wrap gap-3">
+                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Item as described</span>
+                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Fast shipping</span>
+                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Would buy again</span>
                 </div>
               </div>
 
               {validationError && (
-                <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
-                  {validationError}
+                <div className="p-3 bg-red-900/20 border border-red-600 rounded-lg">
+                  <p className="text-red-500 text-sm">{validationError}</p>
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={isSubmitting || !comment || comment.trim().length < 10}
-                className="inline-flex items-center gap-2 rounded-full bg-[#ff950e] px-8 py-3 text-base font-semibold text-black shadow-lg shadow-[#ff950e33] transition hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-60"
+                className="bg-[#ff950e] text-black px-6 py-3 rounded-full hover:bg-[#e0850d] font-bold transition text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                     Submitting...
                   </>
                 ) : (
@@ -286,6 +251,6 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
