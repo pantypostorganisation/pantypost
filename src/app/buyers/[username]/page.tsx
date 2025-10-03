@@ -7,6 +7,7 @@ import BanCheck from '@/components/BanCheck';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import Image from 'next/image';
 import Link from 'next/link';
+import { CalendarDays, MapPin, MessageCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { getGlobalAuthToken } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/services/api.config';
 
@@ -45,23 +46,78 @@ function formatDate(dateLike?: string) {
     return '—';
   }
 }
-function normalizeProfileFromBackend(raw: any): NormalizedBuyerProfile | null {
-  if (!raw || raw.success === false) return null;
-  const d = raw.data;
-  if (!d || !d.username || !d.role) return null;
+type BackendProfileData = {
+  username?: unknown;
+  role?: unknown;
+  joinedDate?: unknown;
+  createdAt?: unknown;
+  isBanned?: unknown;
+  banReason?: unknown;
+  bio?: unknown;
+  profilePic?: unknown;
+  country?: unknown;
+};
+
+type BackendProfileResponse = {
+  success?: boolean;
+  data?: BackendProfileData | null;
+  error?: { message?: string } | null;
+};
+
+function normalizeProfileFromBackend(raw: unknown): NormalizedBuyerProfile | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const response = raw as BackendProfileResponse;
+  if (response.success === false) return null;
+
+  const data = response.data;
+  if (!data || typeof data !== 'object') return null;
+
+  const username = 'username' in data ? data.username : undefined;
+  const role = 'role' in data ? data.role : undefined;
+
+  if (typeof username !== 'string') return null;
+
+  const allowedRoles = new Set(['buyer', 'seller', 'admin']);
+  if (typeof role !== 'string' || !allowedRoles.has(role)) return null;
+
+  const joinedAt =
+    typeof data.joinedDate === 'string'
+      ? data.joinedDate
+      : typeof data.createdAt === 'string'
+      ? data.createdAt
+      : undefined;
+
+  const createdAt = typeof data.createdAt === 'string' ? data.createdAt : undefined;
+  const isBanned = typeof data.isBanned === 'boolean' ? data.isBanned : undefined;
+  const banReason = typeof data.banReason === 'string' ? data.banReason : undefined;
+  const bio = typeof data.bio === 'string' ? data.bio : '';
+  const profilePic =
+    typeof data.profilePic === 'string'
+      ? data.profilePic
+      : data.profilePic === null
+      ? null
+      : undefined;
+  const country =
+    typeof data.country === 'string'
+      ? data.country
+      : data.country === null
+      ? null
+      : undefined;
+
   return {
     user: {
-      username: String(d.username),
-      role: d.role,
-      joinedAt: d.joinedDate ?? d.createdAt,
-      createdAt: d.createdAt,
-      isBanned: d.isBanned,
-      banReason: d.banReason,
+      username,
+      role,
+      joinedAt,
+      createdAt,
+      isBanned,
+      banReason,
     },
     profile: {
-      bio: d.bio ?? '',
-      profilePic: d.profilePic ?? null,
-      country: d.country ?? null,
+      bio,
+      profilePic: profilePic ?? null,
+      country: country ?? null,
     },
   };
 }
@@ -236,7 +292,7 @@ export default function BuyerProfilePage() {
 
       const resp = await fetch(url, { method: 'GET', headers });
       setHttpStatus(resp.status);
-      const json: any = await resp.json().catch(() => null);
+      const json = (await resp.json().catch(() => null)) as BackendProfileResponse | null;
 
       if (!resp.ok) {
         const msg =
@@ -262,8 +318,8 @@ export default function BuyerProfilePage() {
         return;
       }
       setProfileData(normalized);
-    } catch (e: any) {
-      console.error('[BuyerProfilePage] loadProfile error:', e);
+    } catch (error) {
+      console.error('[BuyerProfilePage] loadProfile error:', error);
       setError('Failed to load profile.');
     } finally {
       setLoading(false);
@@ -280,100 +336,222 @@ export default function BuyerProfilePage() {
 
   const isOwner = !!me && me.username === usernameForRequest;
 
+  const sanitizedBio = useMemo(() => {
+    const rawBio = profileData?.profile?.bio;
+    if (!rawBio) return '';
+    return sanitizeStrict(rawBio);
+  }, [profileData?.profile?.bio]);
+
+  const sanitizedCountry = useMemo(() => {
+    const rawCountry = profileData?.profile?.country;
+    if (!rawCountry) return '';
+    return sanitizeStrict(rawCountry);
+  }, [profileData?.profile?.country]);
+
+  const sanitizedBanReason = useMemo(() => {
+    const rawReason = profileData?.user?.banReason;
+    if (!rawReason) return '';
+    return sanitizeStrict(rawReason);
+  }, [profileData?.user?.banReason]);
+
   if (!usernameForRequest) {
     return (
-      <div className="min-h-screen bg-black text-white p-6">
-        <div className="max-w-4xl mx-auto pt-24">
-          <h1 className="text-2xl font-bold mb-4">Invalid username</h1>
-          <p className="text-gray-300">Please provide a valid username in the URL.</p>
+      <BanCheck>
+        <div className="min-h-screen bg-gradient-to-b from-black via-neutral-950 to-black text-white px-6">
+          <div className="mx-auto max-w-3xl pt-24 text-center">
+            <h1 className="text-3xl font-semibold">Invalid username</h1>
+            <p className="mt-3 text-neutral-400">Please provide a valid username in the URL.</p>
+          </div>
         </div>
-      </div>
+      </BanCheck>
     );
   }
 
   return (
     <BanCheck>
-      <div className="min-h-screen bg-black text-white">
-        <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-10">
-          <div className="bg-[var(--color-card,#171717)] rounded-2xl shadow-lg p-6 md:p-8 border border-neutral-800">
-            {loading ? (
-              <div className="animate-pulse">
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-full bg-neutral-800" />
-                  <div className="flex-1">
-                    <div className="h-5 w-40 bg-neutral-800 rounded mb-3" />
-                    <div className="h-4 w-64 bg-neutral-800 rounded" />
-                  </div>
-                </div>
-                <div className="h-4 w-56 bg-neutral-800 rounded mt-6" />
-              </div>
-            ) : error ? (
-              <div className="text-red-400">
-                <p className="font-semibold mb-2">Could not load buyer profile</p>
-                <p className="text-sm text-red-300">{error}</p>
-                {httpStatus === 403 && (
-                  <p className="text-xs text-red-300 mt-2">Tip: Buyer profiles are private. Log in to view.</p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-col md:flex-row md:items-center gap-6">
-                  <div className="relative w-24 h-24 md:w-28 md:h-28">
-                    <div className="absolute inset-0 rounded-full ring-2 ring-[#ff950e]/40" />
-                    <SafeAvatar
-                      src={profileData?.profile?.profilePic || null}
-                      alt={`${usernameForDisplay}'s avatar`}
-                      letterFallback={profileData?.user?.username?.[0]?.toUpperCase() ?? 'B'}
-                    />
-                  </div>
+      <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-black via-neutral-950 to-black text-white">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute left-1/2 top-[-10%] h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-[#ff950e]/20 blur-[120px] opacity-60" />
+          <div className="absolute bottom-[-20%] right-[-10%] h-[420px] w-[420px] rounded-full bg-[#ff5f1f]/10 blur-[160px]" />
+        </div>
 
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h1 className="text-2xl md:text-3xl font-bold">{usernameForDisplay}</h1>
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-neutral-800 border border-neutral-700">
-                        Buyer
-                      </span>
+        <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-10">
+          <div className="relative overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-950/70 shadow-[0_0_60px_rgba(255,149,14,0.12)]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/15 via-transparent to-transparent opacity-80" />
+            <div className="relative p-6 sm:p-10">
+              {loading ? (
+                <div className="space-y-10 animate-pulse">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+                    <div className="h-28 w-28 rounded-full bg-neutral-800/80" />
+                    <div className="flex-1 space-y-4">
+                      <div className="h-6 w-48 rounded bg-neutral-800/80" />
+                      <div className="h-4 w-72 rounded bg-neutral-800/80" />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="h-20 rounded-2xl bg-neutral-800/80" />
+                        <div className="h-20 rounded-2xl bg-neutral-800/80" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="h-11 w-40 rounded-full bg-neutral-800/80" />
+                </div>
+              ) : error ? (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-200">
+                  <p className="text-lg font-semibold">Could not load buyer profile</p>
+                  <p className="mt-2 text-sm text-red-100/80">{error}</p>
+                  {httpStatus === 403 && (
+                    <p className="mt-4 text-xs text-red-100/70">
+                      Tip: Buyer profiles are private. Log in to view.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
+                    <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
+                      <div className="relative">
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#ff950e]/50 to-transparent blur-2xl opacity-70" />
+                        <div className="relative h-32 w-32 overflow-hidden rounded-full border border-[#ff950e]/40 bg-neutral-900/80 p-[3px] sm:h-36 sm:w-36">
+                          <div className="relative h-full w-full overflow-hidden rounded-full bg-neutral-950">
+                            <SafeAvatar
+                              src={profileData?.profile?.profilePic || null}
+                              alt={`${usernameForDisplay}'s avatar`}
+                              letterFallback={profileData?.user?.username?.[0]?.toUpperCase() ?? 'B'}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+                        <span className="rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-[#ffb347]">
+                          Buyer Profile
+                        </span>
+                      </div>
                     </div>
 
-                    {profileData?.profile?.bio && (
-                      <p className="text-gray-300 mt-2">{sanitizeStrict(profileData.profile.bio!)}</p>
-                    )}
+                    <div className="flex-1 space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h1 className="text-3xl font-bold sm:text-4xl">{usernameForDisplay}</h1>
+                          <span className="rounded-full border border-neutral-700/60 bg-neutral-900/70 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-300">
+                            Buyer
+                          </span>
+                        </div>
 
-                    <div className="text-sm text-gray-400 mt-3 space-y-1">
-                      <div>Joined: {formatDate(profileData?.user?.joinedAt || profileData?.user?.createdAt)}</div>
+                        {sanitizedBio && (
+                          <p className="max-w-2xl text-base leading-relaxed text-neutral-300 sm:text-lg">
+                            {sanitizedBio}
+                          </p>
+                        )}
+                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {flagFromCountryName(profileData?.profile?.country)}{' '}
-                          {profileData?.profile?.country
-                            ? sanitizeStrict(profileData.profile.country!)
-                            : 'Country not set'}
-                        </span>
+                      <div className="flex flex-wrap gap-3">
+                        <Link
+                          href={`/buyers/messages`}
+                          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff7b1f] to-[#ff5f1f] px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-[#ff950e]/30 transition hover:shadow-[#ff950e]/50 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/80 focus:ring-offset-2 focus:ring-offset-black"
+                        >
+                          <MessageCircle size={18} />
+                          Message
+                        </Link>
 
                         {isOwner && (
                           <Link
                             href={`/buyers/profile`}
-                            className="ml-2 text-xs px-2 py-1 rounded-md bg-neutral-800 border border-neutral-700 hover:border-neutral-600"
-                            title="Edit country and profile details"
+                            className="inline-flex items-center gap-2 rounded-full border border-neutral-700/70 bg-neutral-900/70 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
+                            title="Edit your buyer profile"
                           >
-                            Edit
+                            Edit profile
                           </Link>
                         )}
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Link
-                    href={`/buyers/messages`}
-                    className="px-4 py-2 rounded-xl bg-neutral-800 border border-neutral-700 hover:border-neutral-600 transition"
-                  >
-                    Message
-                  </Link>
-                </div>
-              </>
-            )}
+                  <div className="mt-12 grid gap-5 sm:grid-cols-2">
+                    <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+                      <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 -translate-y-1/2 translate-x-1/3 rounded-full bg-[#ff950e]/20 blur-2xl" />
+                      <div className="relative flex items-start gap-4">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/15 text-[#ffb347]">
+                          <CalendarDays size={18} />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Member since</p>
+                          <p className="mt-2 text-lg font-semibold text-white">
+                            {formatDate(profileData?.user?.joinedAt || profileData?.user?.createdAt)}
+                          </p>
+                          <p className="mt-1 text-sm text-neutral-400">
+                            Welcome aboard! Thanks for being part of the community.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
+                      <div className="pointer-events-none absolute bottom-0 right-0 h-24 w-24 translate-y-1/2 translate-x-1/4 rounded-full bg-[#ff5f1f]/15 blur-2xl" />
+                      <div className="relative flex items-start gap-4">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/15 text-[#ffb347]">
+                          <MapPin size={18} />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Location</p>
+                          <p className="mt-2 text-lg font-semibold text-white">
+                            {profileData?.profile?.country ? (
+                              <span>
+                                {flagFromCountryName(profileData?.profile?.country)}{' '}
+                                {sanitizedCountry}
+                              </span>
+                            ) : (
+                              'Not shared yet'
+                            )}
+                          </p>
+                          {isOwner && !profileData?.profile?.country && (
+                            <p className="mt-1 text-sm text-neutral-400">
+                              Add your country so sellers know where you are shopping from.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 sm:col-span-2">
+                      <div className="pointer-events-none absolute left-0 top-0 h-24 w-24 -translate-x-1/3 -translate-y-1/3 rounded-full bg-[#ff950e]/20 blur-2xl" />
+                      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-start gap-4">
+                          <span
+                            className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                              profileData?.user?.isBanned
+                                ? 'bg-red-500/20 text-red-300'
+                                : 'bg-[#ff950e]/15 text-[#ffb347]'
+                            }`}
+                          >
+                            {profileData?.user?.isBanned ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
+                          </span>
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Account status</p>
+                            <p
+                              className={`mt-2 text-lg font-semibold ${
+                                profileData?.user?.isBanned ? 'text-red-200' : 'text-white'
+                              }`}
+                            >
+                              {profileData?.user?.isBanned ? 'Account suspended' : 'Active buyer'}
+                            </p>
+                            <p className="mt-1 text-sm text-neutral-400">
+                              {profileData?.user?.isBanned
+                                ? 'This account has been suspended.'
+                                : 'Everything looks good. Enjoy browsing and connecting with sellers.'}
+                            </p>
+                          </div>
+                        </div>
+
+                        {profileData?.user?.isBanned && sanitizedBanReason && (
+                          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-200">
+                            {sanitizedBanReason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
