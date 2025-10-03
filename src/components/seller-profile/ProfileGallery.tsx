@@ -41,23 +41,38 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
   const slideIndex = clamp(rawIndex, 0, maxIndex);
 
   return (
-    <div className="mt-12">
-      <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white flex items-center gap-2">
-        <ImageIcon className="w-7 h-7 text-[#ff950e]" />
-        Photo Gallery
-      </h2>
+    <section className="mt-16">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#ff950e]">
+            <ImageIcon className="h-3.5 w-3.5" />
+            Gallery
+          </div>
+          <h2 className="mt-4 text-3xl sm:text-4xl font-bold text-white">Visual teasers &amp; behind-the-scenes</h2>
+          <p className="mt-2 text-sm text-gray-400 max-w-xl">
+            Slip into the seller&apos;s world with curated shots designed to build anticipation for their premium drops.
+          </p>
+        </div>
+
+        {galleryImages.length > 1 && (
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <span className="inline-flex h-2 w-2 rounded-full bg-[#ff950e]" />
+            Swipe through for the full reveal
+          </div>
+        )}
+      </div>
 
       {galleryImages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-6 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
-          <ImageIcon className="w-12 h-12 text-gray-600 mb-3" />
-          <p className="text-lg">No gallery photos yet.</p>
+        <div className="mt-6 flex flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-white/10 bg-white/[0.03] p-10 text-gray-400 backdrop-blur-sm">
+          <ImageIcon className="h-12 w-12 text-gray-600" />
+          <p className="text-lg">No gallery photos yet. Stay tuned for new drops.</p>
         </div>
       ) : (
-        <div className="relative rounded-xl overflow-hidden border border-gray-800 shadow-xl bg-gradient-to-b from-[#1a1a1a] to-black">
+        <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] shadow-[0_30px_60px_rgba(0,0,0,0.45)] backdrop-blur">
           {/* Slideshow Container */}
-          <div className="relative h-96 sm:h-[480px] overflow-hidden">
+          <div className="relative h-[480px] sm:h-[540px] overflow-hidden">
             <div
-              className="flex transition-transform duration-700 ease-in-out h-full"
+              className="flex h-full transition-transform duration-700 ease-in-out"
               style={{ transform: `translateX(-${slideIndex * 100}%)` }}
               aria-live="polite"
             >
@@ -66,12 +81,12 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
                 return (
                   <div
                     key={index}
-                    className="min-w-full h-full flex-shrink-0 flex items-center justify-center bg-black"
+                    className="flex h-full min-w-full flex-shrink-0 items-center justify-center bg-gradient-to-br from-black via-[#0d0306] to-black"
                   >
                     <img
                       src={src}
                       alt={`Gallery photo ${index + 1}`}
-                      className="h-full w-auto max-w-full object-contain cursor-pointer transition-transform duration-300 hover:scale-[1.02]"
+                      className="max-h-full w-auto max-w-full cursor-pointer rounded-3xl object-contain shadow-[0_10px_40px_rgba(0,0,0,0.6)] transition duration-500 hover:scale-[1.03]"
                       onClick={() => onImageClick(src, index)}
                       loading="lazy"
                       decoding="async"
@@ -82,49 +97,47 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
               })}
             </div>
 
-            {/* Navigation Arrows - small */}
+            {/* Navigation Arrows */}
             {galleryImages.length > 1 && (
               <>
                 <button
-                  className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
+                  className="absolute left-6 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/70 p-3 text-white shadow-lg transition hover:bg-black/90"
                   onClick={(e) => onPrevSlide?.(e)}
                   aria-label="Previous image"
                   type="button"
                 >
-                  <ChevronLeft strokeWidth={3} className="w-3 h-3" />
+                  <ChevronLeft strokeWidth={3} className="h-5 w-5" />
                 </button>
 
                 <button
-                  className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
+                  className="absolute right-6 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/70 p-3 text-white shadow-lg transition hover:bg-black/90"
                   onClick={(e) => onNextSlide?.(e)}
                   aria-label="Next image"
                   type="button"
                 >
-                  <ChevronRight strokeWidth={3} className="w-3 h-3" />
+                  <ChevronRight strokeWidth={3} className="h-5 w-5" />
                 </button>
               </>
             )}
 
             {/* Controls and image counter overlay */}
-            <div className="absolute bottom-0 left-0 right-0 flex justify-between items-center p-4 bg-gradient-to-t from-black to-transparent z-10">
-              {/* Current slide indicator */}
-              <div className="text-white font-medium text-sm bg-black bg-opacity-60 px-3 py-1 rounded-full">
+            <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between bg-gradient-to-t from-black via-black/60 to-transparent">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2 text-sm font-medium text-white backdrop-blur">
                 {slideIndex + 1} / {galleryImages.length}
               </div>
 
-              {/* Controls */}
-              <div className="flex gap-2">
+              <div className="flex items-center gap-3">
                 <button
                   onClick={onTogglePause}
-                  className="bg-black bg-opacity-60 text-white p-1 rounded-full hover:bg-opacity-80 transition-all"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white transition hover:bg-black/80"
                   aria-label={isPaused ? 'Play slideshow' : 'Pause slideshow'}
                   type="button"
                 >
                   {isPaused ? (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      width="12"
-                      height="12"
+                      width="14"
+                      height="14"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -137,8 +150,8 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
                   ) : (
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
-                      width="12"
-                      height="12"
+                      width="14"
+                      height="14"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -154,17 +167,17 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
 
                 <button
                   onClick={() => onImageClick(safeImageSrc(galleryImages[slideIndex]), slideIndex)}
-                  className="bg-black bg-opacity-60 text-white p-1 rounded-full hover:bg-opacity-80 transition-all flex items-center justify-center"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white transition hover:bg-black/80"
                   aria-label="View fullscreen"
                   type="button"
                 >
-                  <Maximize className="w-3 h-3" />
+                  <Maximize className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </section>
   );
 }

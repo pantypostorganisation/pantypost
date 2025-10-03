@@ -202,7 +202,14 @@ export default function SellerProfilePage() {
   return (
     <BanCheck>
       <main className="min-h-screen bg-black text-white">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="relative">
+          <div className="absolute inset-0 bg-gradient-to-b from-black via-[#13030a] to-black" aria-hidden="true" />
+          <div
+            className="absolute inset-x-0 -top-24 h-72 bg-[radial-gradient(circle_at_top,_rgba(255,149,14,0.35),_transparent_65%)] blur-3xl"
+            aria-hidden="true"
+          />
+        </div>
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-20 pt-12">
           {showToast && (
             <div className="fixed top-6 right-6 z-50 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
               ✅ Subscribed to {safeUsername} successfully!
@@ -231,41 +238,63 @@ export default function SellerProfilePage() {
             onToggleFavorite={toggleFavorite}
           />
 
+          <nav className="mt-10 flex justify-center">
+            <div className="flex flex-wrap items-center gap-3 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 backdrop-blur">
+              <a href="#listings" className="text-sm font-semibold tracking-wide text-gray-200 hover:text-white transition">
+                Listings
+              </a>
+              {galleryImages && galleryImages.length > 0 && (
+                <a href="#gallery" className="text-sm font-semibold tracking-wide text-gray-200 hover:text-white transition">
+                  Gallery
+                </a>
+              )}
+              <a href="#reviews" className="text-sm font-semibold tracking-wide text-gray-200 hover:text-white transition">
+                Reviews
+              </a>
+            </div>
+          </nav>
+
           {/* Listings Grid */}
-          <MemoizedListingsGrid
-            standardListings={standardListings}
-            premiumListings={premiumListings}
-            hasAccess={hasAccess}
-            username={safeUsername}
-            user={user}
-            onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
-          />
+          <section id="listings" className="scroll-mt-32">
+            <MemoizedListingsGrid
+              standardListings={standardListings}
+              premiumListings={premiumListings}
+              hasAccess={hasAccess}
+              username={safeUsername}
+              user={user}
+              onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
+            />
+          </section>
 
           {/* Gallery Section */}
           {galleryImages && galleryImages.length > 0 && (
-            <MemoizedProfileGallery
-              galleryImages={galleryImages}
-              slideIndex={slideIndex}
-              isPaused={isPaused}
-              onSlideChange={setSlideIndex}
-              onTogglePause={togglePause}
-              onImageClick={handleImageClick}
-              onPrevSlide={goToPrevSlide}
-              onNextSlide={goToNextSlide}
-            />
+            <section id="gallery" className="scroll-mt-32">
+              <MemoizedProfileGallery
+                galleryImages={galleryImages}
+                slideIndex={slideIndex}
+                isPaused={isPaused}
+                onSlideChange={setSlideIndex}
+                onTogglePause={togglePause}
+                onImageClick={handleImageClick}
+                onPrevSlide={goToPrevSlide}
+                onNextSlide={goToNextSlide}
+              />
+            </section>
           )}
 
           {/* Reviews Section */}
-          <MemoizedReviewsSection
-            reviews={reviews || []}
-            canReview={hasPurchased && !alreadyReviewed && user?.role === 'buyer'}
-            rating={rating}
-            comment={comment}
-            submitted={submitted}
-            onRatingChange={setRating}
-            onCommentChange={setComment}
-            onSubmit={handleReviewSubmit}
-          />
+          <section id="reviews" className="scroll-mt-32">
+            <MemoizedReviewsSection
+              reviews={reviews || []}
+              canReview={hasPurchased && !alreadyReviewed && user?.role === 'buyer'}
+              rating={rating}
+              comment={comment}
+              submitted={submitted}
+              onRatingChange={setRating}
+              onCommentChange={setComment}
+              onSubmit={handleReviewSubmit}
+            />
+          </section>
 
           {/* Modals */}
           {showTipModal && (
