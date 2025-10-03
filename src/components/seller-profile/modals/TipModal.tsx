@@ -134,29 +134,36 @@ export default function TipModal({
   const displayError = localTipError || parentTipError;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
-      <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-[#ff950e] flex items-center gap-2">
-            <Gift className="w-6 h-6" />
-            Send Tip
-          </h2>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur p-4">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/70 p-6 sm:p-8 shadow-[0_25px_70px_-40px_rgba(0,0,0,0.9)]">
+        <div className="mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-white">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+              <Gift className="h-5 w-5 text-[#ff950e]" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">Send a tip</h2>
+              <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Support {sanitizedUsername}</p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition"
+            className="rounded-full border border-white/20 bg-white/5 p-2 text-gray-300 transition hover:text-white"
             aria-label="Close"
             type="button"
             disabled={isProcessing}
           >
-            <X className="w-6 h-6" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
         {displaySuccess ? (
-          <div className="text-center py-8">
-            <div className="text-green-500 text-5xl mb-4">✓</div>
-            <p className="text-xl text-white">Tip sent successfully!</p>
-            <p className="text-gray-400 mt-2">Thank you for supporting {sanitizedUsername}</p>
+          <div className="rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-8 text-center text-emerald-100">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-3xl">
+              ✓
+            </div>
+            <p className="mt-4 text-lg font-semibold">Tip sent successfully!</p>
+            <p className="mt-2 text-sm text-emerald-100/80">Thank you for supporting {sanitizedUsername}</p>
           </div>
         ) : (
           <SecureForm
@@ -164,92 +171,98 @@ export default function TipModal({
             rateLimitKey="tip_send"
             rateLimitConfig={{ maxAttempts: 20, windowMs: 60 * 60 * 1000 }}
           >
-            <p className="mb-6 text-center text-white">
-              Show your appreciation for <strong className="text-[#ff950e]">{sanitizedUsername}</strong>
+            <p className="mb-6 text-center text-sm text-gray-300">
+              Choose a custom amount or tap a quick suggestion to send instant appreciation.
             </p>
 
-            <div className="mb-4">
-              <label className="block text-sm font-medium mb-2 text-gray-300">
-                Amount ($)
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none z-10">
-                  <DollarSign className="w-5 h-5 text-gray-400" />
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-white/80">Amount ($)</label>
+                <div className="relative mt-2">
+                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#ff950e]">
+                    <DollarSign className="h-4 w-4" />
+                  </div>
+                  <SecureInput
+                    type="number"
+                    value={tipAmount}
+                    onChange={handleSecureAmountChange}
+                    onBlur={() => setTouched(true)}
+                    className="w-full rounded-2xl border border-white/15 bg-black/60 py-3 pl-9 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                    placeholder="Enter amount"
+                    min="0.01"
+                    max="500"
+                    step="0.01"
+                    error={displayError}
+                    touched={touched}
+                    sanitize={false}
+                    disabled={isProcessing}
+                  />
                 </div>
-                <SecureInput
-                  type="number"
-                  value={tipAmount}
-                  onChange={handleSecureAmountChange}
-                  onBlur={() => setTouched(true)}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg bg-black text-white border border-gray-700 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-                  placeholder="Enter amount"
-                  min="0.01"
-                  max="500"
-                  step="0.01"
-                  error={displayError}
-                  touched={touched}
-                  sanitize={false}
-                  disabled={isProcessing}
-                />
+
+                <div className="mt-3 grid grid-cols-4 gap-2">
+                  {[5, 10, 20, 50].map((amount) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => {
+                        onAmountChange(amount.toString());
+                        setTouched(true);
+                      }}
+                      disabled={isProcessing || userBalance < amount}
+                      className={`rounded-xl border px-2 py-2 text-sm font-semibold transition ${
+                        userBalance >= amount
+                          ? 'border-[#ff950e]/30 bg-[#ff950e]/10 text-[#ff950e] hover:border-[#ff950e]/50'
+                          : 'border-white/10 bg-white/5 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      ${amount}
+                    </button>
+                  ))}
+                </div>
               </div>
-              
-              {/* Quick amount buttons */}
-              <div className="flex gap-2 mt-3">
-                {[5, 10, 20, 50].map((amount) => (
-                  <button
-                    key={amount}
-                    type="button"
-                    onClick={() => {
-                      onAmountChange(amount.toString());
-                      setTouched(true);
-                    }}
-                    disabled={isProcessing || userBalance < amount}
-                    className={`flex-1 px-3 py-1.5 rounded-lg transition-colors text-sm ${
-                      userBalance >= amount 
-                        ? 'bg-gray-800 text-white hover:bg-gray-700'
-                        : 'bg-gray-900 text-gray-600 cursor-not-allowed'
-                    }`}
-                  >
-                    ${amount}
-                  </button>
-                ))}
-              </div>
+
+              {user && (
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300">
+                  <div className="flex items-center justify-between">
+                    <span>Wallet balance</span>
+                    <span className="text-white font-semibold">${userBalance.toFixed(2)}</span>
+                  </div>
+                  {tipAmount && parseFloat(tipAmount) > 0 && (
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span>After tip</span>
+                      <span
+                        className={`font-semibold ${
+                          userBalance - parseFloat(tipAmount) >= 0 ? 'text-emerald-300' : 'text-red-300'
+                        }`}
+                      >
+                        ${(userBalance - parseFloat(tipAmount)).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {displayError && (
+                <div className="rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200">
+                  {displayError}
+                </div>
+              )}
             </div>
 
-            {/* Balance info */}
-            {user && (
-              <div className="mb-4 p-3 bg-gray-900 rounded-lg text-sm">
-                <div className="flex justify-between mb-1">
-                  <span className="text-gray-400">Your Balance:</span>
-                  <span className="text-white font-medium">${userBalance.toFixed(2)}</span>
-                </div>
-                {tipAmount && parseFloat(tipAmount) > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">After Tip:</span>
-                    <span className={`font-medium ${
-                      userBalance - parseFloat(tipAmount) >= 0 ? 'text-green-400' : 'text-red-400'
-                    }`}>
-                      ${(userBalance - parseFloat(tipAmount)).toFixed(2)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3">
+            <div className="mt-6 flex flex-col gap-3">
               <button
                 type="submit"
                 disabled={disabled || userBalance < parseFloat(tipAmount || '0')}
-                className={`w-full font-bold py-3 rounded-full transition flex items-center justify-center gap-2 ${
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition ${
                   !disabled && userBalance >= parseFloat(tipAmount || '0')
-                    ? 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
-                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                    ? 'bg-gradient-to-r from-[#ff950e] to-[#fb923c] text-black hover:from-[#ffa733] hover:to-[#ffb347]'
+                    : 'border border-white/10 bg-white/5 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 {isProcessing ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    <span>Sending...</span>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
+                    Sending...
                   </>
                 ) : (
                   'Send Tip'
@@ -259,7 +272,7 @@ export default function TipModal({
                 type="button"
                 onClick={onClose}
                 disabled={isProcessing}
-                className="w-full bg-gray-700 text-white font-medium py-3 rounded-full hover:bg-gray-600 transition disabled:opacity-50"
+                className="w-full rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 disabled:opacity-50"
               >
                 Cancel
               </button>

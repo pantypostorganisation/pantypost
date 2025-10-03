@@ -20,27 +20,29 @@ export default function UnsubscribeModal({
   const sanitizedUsername = sanitizeStrict(username);
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
-      <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
-        <h2 className="text-2xl font-bold text-red-500 mb-6 text-center">
-          Confirm Unsubscription
-        </h2>
-        <p className="mb-6 text-center text-white text-base">
-          Are you sure you want to unsubscribe from{' '}
-          <strong className="text-red-400">{sanitizedUsername}</strong>? This will
-          remove your access to premium listings.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-end">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/70 p-8 shadow-[0_25px_70px_-40px_rgba(0,0,0,0.9)]">
+        <div className="flex flex-col items-center text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-red-300">
+            Manage Access
+          </div>
+          <h2 className="mt-4 text-2xl font-bold text-white">Cancel subscription?</h2>
+          <p className="mt-3 text-sm text-gray-300">
+            You’ll immediately lose access to <span className="text-red-300">{sanitizedUsername}</span>'s premium drops and gallery reveals.
+          </p>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-6 py-3 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition font-medium text-lg"
+            className="w-full rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30"
             type="button"
           >
-            Cancel
+            Keep Access
           </button>
           <button
             onClick={onConfirm}
-            className="w-full sm:w-auto px-6 py-3 rounded-full bg-red-600 text-white font-bold hover:bg-red-700 transition text-lg"
+            className="w-full rounded-full border border-red-500/40 bg-red-500/20 px-6 py-3 text-sm font-semibold text-red-200 transition hover:border-red-400 hover:bg-red-500/30"
             type="button"
           >
             Unsubscribe

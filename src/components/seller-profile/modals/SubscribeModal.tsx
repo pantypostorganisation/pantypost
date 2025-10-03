@@ -26,29 +26,33 @@ export default function SubscribeModal({
       : '...';
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-80 flex justify-center items-center z-50 p-4">
-      <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-2xl w-full max-w-sm border border-gray-700">
-        <h2 className="text-2xl font-bold text-[#ff950e] mb-6 text-center">
-          Confirm Subscription
-        </h2>
-        <p className="mb-6 text-center text-white text-base">
-          Subscribe to <strong className="text-[#ff950e]">{sanitizedUsername}</strong> for{' '}
-          <span className="text-xl font-bold text-[#ff950e]">${priceText}/month</span>?
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-end">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur">
+      <div className="w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-black/70 p-8 shadow-[0_25px_70px_-40px_rgba(0,0,0,0.9)]">
+        <div className="flex flex-col items-center text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#ff950e]">
+            Premium Access
+          </div>
+          <h2 className="mt-4 text-2xl font-bold text-white">Subscribe to {sanitizedUsername}</h2>
+          <p className="mt-3 text-sm text-gray-300">
+            Unlock private listings, exclusive gallery drops, and intimate updates. Cancel anytime.
+          </p>
+          <p className="mt-5 text-3xl font-semibold text-[#ff950e]">${priceText}/month</p>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <button
             onClick={onClose}
-            className="w-full sm:w-auto px-6 py-3 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition font-medium text-lg"
+            className="w-full rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30"
             type="button"
           >
-            Cancel
+            Maybe Later
           </button>
           <button
             onClick={onConfirm}
-            className="w-full sm:w-auto px-6 py-3 rounded-full bg-[#ff950e] text-black font-bold hover:bg-[#e0850d] transition text-lg"
+            className="w-full rounded-full bg-gradient-to-r from-[#ff950e] to-[#fb923c] px-6 py-3 text-sm font-semibold text-black shadow-[0_10px_30px_-15px_rgba(255,149,14,0.7)] transition hover:from-[#ffa733] hover:to-[#ffb347]"
             type="button"
           >
-            Confirm
+            Confirm Subscription
           </button>
         </div>
       </div>
