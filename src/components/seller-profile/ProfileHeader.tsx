@@ -3,11 +3,9 @@
 
 import Link from 'next/link';
 import {
-  Lock,
   Mail,
   Gift,
   DollarSign,
-  MessageCircle,
   Camera,
   Video,
   Users,
@@ -95,7 +93,6 @@ const PropsSchema = z.object({
   averageRating: z.number().nullable().optional(),
   reviewsCount: z.number().int().nonnegative().default(0),
   isFavorited: z.boolean().optional(),
-  // ⬇⬇⬇ FIX: accept async functions (Promise<void>) for the favorite toggle
   onToggleFavorite: z.function().args().returns(z.promise(z.void())).optional(),
 });
 
@@ -179,7 +176,10 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
   const safeReviews = Number.isFinite(reviewsCount) ? reviewsCount : 0;
 
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-gray-800 relative overflow-visible">
+    <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-[#ff950e]/20 relative overflow-visible">
+      {/* Subtle glow effect */}
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#ff950e]/5 via-transparent to-[#ff950e]/5 pointer-events-none"></div>
+      
       {/* Favorite button - high z-index and better positioning */}
       {user?.role === 'buyer' && user.username !== username && onToggleFavorite && (
         <button
@@ -202,8 +202,8 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
 
       {/* Profile section with centered profile pic and badge to the right */}
       <div className="flex flex-col items-center relative mb-6 w-full">
-        {/* Profile Picture - Centered */}
-        <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg relative z-10">
+        {/* Profile Picture - Larger size */}
+        <div className="w-40 h-40 sm:w-48 sm:h-48 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden shadow-lg relative z-10">
           {resolvedProfilePic ? (
             <img
               src={resolvedProfilePic}
@@ -219,16 +219,16 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
             </div>
           )}
 
-          {/* Online indicator - bottom left of profile picture */}
+          {/* Online indicator - bottom right of profile picture */}
           {activityStatus.isOnline && !activityLoading && (
-            <div className="absolute bottom-2 left-2 w-4 h-4 bg-green-500 rounded-full border-2 border-[#1a1a1a] z-20" />
+            <div className="absolute bottom-2 right-2 w-5 h-5 bg-[#ff950e] rounded-full border-3 border-[#1a1a1a] z-20 shadow-lg"></div>
           )}
         </div>
 
-        {/* Badge positioned to the right of profile pic */}
+        {/* Badge positioned to the right of profile pic - smaller */}
         {normalizedTier && normalizedTier !== 'None' && (
-          <div className="absolute right-0 sm:right-1/4 top-1/2 transform -translate-y-1/2 z-10">
-            <TierBadge tier={normalizedTier} size="2xl" showTooltip={true} />
+          <div className="absolute right-[15%] sm:right-[20%] top-1/2 transform -translate-y-1/2 z-10">
+            <TierBadge tier={normalizedTier} size="lg" showTooltip={true} />
           </div>
         )}
       </div>
@@ -253,9 +253,8 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
         </div>
 
         <div className="text-sm text-gray-400 mb-1">Location: Private</div>
-        <div className="text-sm text-gray-400 mb-3">{getActivityDisplay()}</div>
 
-        <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed">
+        <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed mt-3">
           <SecureMessageDisplay
             content={
               bio ||
@@ -319,7 +318,6 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
             className="flex items-center gap-2 bg-gray-700 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-red-600 transition text-base"
             type="button"
           >
-            <Lock className="w-5 h-5" />
             Unsubscribe
           </button>
         )}
@@ -343,17 +341,6 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
             <Mail className="w-5 h-5" />
             Message
           </Link>
-        )}
-
-        {user?.role === 'buyer' && user.username !== username && (
-          <button
-            className="flex items-center gap-2 bg-gray-800 text-gray-500 font-bold px-6 py-3 rounded-full shadow-lg cursor-not-allowed text-base"
-            disabled
-            type="button"
-          >
-            <MessageCircle className="w-5 h-5" />
-            Custom Request
-          </button>
         )}
       </div>
     </div>
