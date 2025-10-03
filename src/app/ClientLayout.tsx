@@ -26,6 +26,7 @@ export default function ClientLayout({
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [showContent, setShowContent] = useState(false);
+  const [hasActiveThread, setHasActiveThread] = useState(false);
   const pathname = usePathname();
 
   const hideHeaderRoutes = [
@@ -40,9 +41,10 @@ export default function ClientLayout({
   // Check if we're on a messages page on mobile
   const isMessagesPage = pathname === '/buyers/messages' || pathname === '/sellers/messages';
   
+  // Only hide header if on mobile messages page WITH an active thread
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
-  }) || (isMessagesPage && isMobile);
+  }) || (isMessagesPage && isMobile && hasActiveThread);
 
   useEffect(() => {
     setMounted(true);
@@ -66,6 +68,27 @@ export default function ClientLayout({
     };
   }, []);
 
+  // Listen for thread state changes from messages pages
+  useEffect(() => {
+    const handleThreadStateChange = (event: CustomEvent) => {
+      console.log('Thread state changed:', event.detail);
+      setHasActiveThread(event.detail.hasActiveThread);
+    };
+
+    window.addEventListener('threadStateChange', handleThreadStateChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('threadStateChange', handleThreadStateChange as EventListener);
+    };
+  }, []);
+
+  // Reset thread state when navigating away from messages pages
+  useEffect(() => {
+    if (!isMessagesPage) {
+      setHasActiveThread(false);
+    }
+  }, [isMessagesPage]);
+
   useEffect(() => {
     if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
       window.addEventListener('load', () => {
@@ -87,9 +110,10 @@ export default function ClientLayout({
       console.log('Current pathname:', pathname);
       console.log('Is mobile:', isMobile);
       console.log('Is messages page:', isMessagesPage);
+      console.log('Has active thread:', hasActiveThread);
       console.log('Should hide header:', shouldHideHeader);
     }
-  }, [pathname, shouldHideHeader, isMobile, isMessagesPage]);
+  }, [pathname, shouldHideHeader, isMobile, isMessagesPage, hasActiveThread]);
 
   if (!mounted) {
     return <LoadingFallback />;
