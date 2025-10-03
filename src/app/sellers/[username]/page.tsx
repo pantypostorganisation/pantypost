@@ -201,15 +201,8 @@ export default function SellerProfilePage() {
 
   return (
     <BanCheck>
-      <main className="min-h-screen bg-[#050505] text-white">
-        <div className="relative isolate">
-          <div
-            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,149,14,0.18),_transparent_55%)]"
-            aria-hidden="true"
-          />
-          <div className="pointer-events-none absolute inset-x-0 -top-32 h-64 bg-gradient-to-b from-[#ff950e]/15 via-transparent to-transparent blur-3xl" />
-
-          <div className="relative max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-16">
+      <main className="min-h-screen bg-black text-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
           {showToast && (
             <div className="fixed top-6 right-6 z-50 bg-green-600 text-white px-4 py-2 rounded shadow-lg">
               ✅ Subscribed to {safeUsername} successfully!
@@ -217,70 +210,62 @@ export default function SellerProfilePage() {
           )}
 
           {/* Profile Header */}
-          <section id="overview" className="scroll-mt-24">
-            <MemoizedProfileHeader
-              username={safeUsername}
-              profilePic={profilePic}
-              bio={bio}
-              isVerified={isVerified}
-              sellerTierInfo={sellerTierInfo}
-              user={user}
-              onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
-              onShowUnsubscribeModal={modalHandlers.onShowUnsubscribeModal}
-              onShowTipModal={modalHandlers.onShowTipModal}
-              hasAccess={hasAccess}
-              subscriptionPrice={subscriptionPrice}
-              totalPhotos={totalPhotos}
-              totalVideos={totalVideos}
-              followers={followers}
-              averageRating={averageRating}
-              reviewsCount={reviews?.length || 0}
-              isFavorited={isFavorited}
-              onToggleFavorite={toggleFavorite}
-            />
-          </section>
+          <MemoizedProfileHeader
+            username={safeUsername}
+            profilePic={profilePic}
+            bio={bio}
+            isVerified={isVerified}
+            sellerTierInfo={sellerTierInfo}
+            user={user}
+            onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
+            onShowUnsubscribeModal={modalHandlers.onShowUnsubscribeModal}
+            onShowTipModal={modalHandlers.onShowTipModal}
+            hasAccess={hasAccess}
+            subscriptionPrice={subscriptionPrice}
+            totalPhotos={totalPhotos}
+            totalVideos={totalVideos}
+            followers={followers}
+            averageRating={averageRating}
+            reviewsCount={reviews?.length || 0}
+            isFavorited={isFavorited}
+            onToggleFavorite={toggleFavorite}
+          />
 
           {/* Listings Grid */}
-          <section id="listings" className="scroll-mt-24">
-            <MemoizedListingsGrid
-              standardListings={standardListings}
-              premiumListings={premiumListings}
-              hasAccess={hasAccess}
-              username={safeUsername}
-              user={user}
-              onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
-            />
-          </section>
+          <MemoizedListingsGrid
+            standardListings={standardListings}
+            premiumListings={premiumListings}
+            hasAccess={hasAccess}
+            username={safeUsername}
+            user={user}
+            onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
+          />
 
           {/* Gallery Section */}
           {galleryImages && galleryImages.length > 0 && (
-            <section id="gallery" className="scroll-mt-24">
-              <MemoizedProfileGallery
-                galleryImages={galleryImages}
-                slideIndex={slideIndex}
-                isPaused={isPaused}
-                onSlideChange={setSlideIndex}
-                onTogglePause={togglePause}
-                onImageClick={handleImageClick}
-                onPrevSlide={goToPrevSlide}
-                onNextSlide={goToNextSlide}
-              />
-            </section>
+            <MemoizedProfileGallery
+              galleryImages={galleryImages}
+              slideIndex={slideIndex}
+              isPaused={isPaused}
+              onSlideChange={setSlideIndex}
+              onTogglePause={togglePause}
+              onImageClick={handleImageClick}
+              onPrevSlide={goToPrevSlide}
+              onNextSlide={goToNextSlide}
+            />
           )}
 
           {/* Reviews Section */}
-          <section id="reviews" className="scroll-mt-24 pb-8">
-            <MemoizedReviewsSection
-              reviews={reviews || []}
-              canReview={hasPurchased && !alreadyReviewed && user?.role === 'buyer'}
-              rating={rating}
-              comment={comment}
-              submitted={submitted}
-              onRatingChange={setRating}
-              onCommentChange={setComment}
-              onSubmit={handleReviewSubmit}
-            />
-          </section>
+          <MemoizedReviewsSection
+            reviews={reviews || []}
+            canReview={hasPurchased && !alreadyReviewed && user?.role === 'buyer'}
+            rating={rating}
+            comment={comment}
+            submitted={submitted}
+            onRatingChange={setRating}
+            onCommentChange={setComment}
+            onSubmit={handleReviewSubmit}
+          />
 
           {/* Modals */}
           {showTipModal && (
@@ -326,7 +311,6 @@ export default function SellerProfilePage() {
               onNext={handleNextImage}
             />
           )}
-          </div>
         </div>
       </main>
     </BanCheck>
