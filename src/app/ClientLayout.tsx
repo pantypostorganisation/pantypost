@@ -13,16 +13,9 @@ import { GoogleAnalytics } from '@/components/GoogleAnalytics';
 import { errorTracker } from '@/lib/errorTracking';
 import { usePerformanceMonitoring } from '@/hooks/usePerformanceMonitoring';
 
-// Simple loading component
+// SILENT loading - no spinner, just black screen
 function LoadingFallback() {
-  return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ff950e] mx-auto mb-4"></div>
-        <p className="text-gray-400">Loading PantyPost...</p>
-      </div>
-    </div>
-  );
+  return <div className="min-h-screen bg-black" />;
 }
 
 export default function ClientLayout({
@@ -32,6 +25,8 @@ export default function ClientLayout({
 }) {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [showContent, setShowContent] = useState(false);
+  const [hasActiveThread, setHasActiveThread] = useState(false);
   const pathname = usePathname();
 
   const hideHeaderRoutes = [
@@ -46,9 +41,10 @@ export default function ClientLayout({
   // Check if we're on a messages page on mobile
   const isMessagesPage = pathname === '/buyers/messages' || pathname === '/sellers/messages';
   
+  // Only hide header if on mobile messages page WITH an active thread
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
-  }) || (isMessagesPage && isMobile); // Hide header on mobile messages pages
+  }) || (isMessagesPage && isMobile && hasActiveThread);
 
   useEffect(() => {
     setMounted(true);
@@ -61,10 +57,37 @@ export default function ClientLayout({
     checkMobile();
     window.addEventListener('resize', checkMobile);
     
+    // Trigger fade-in after mount
+    const timer = setTimeout(() => {
+      setShowContent(true);
+    }, 100);
+    
     return () => {
       window.removeEventListener('resize', checkMobile);
+      clearTimeout(timer);
     };
   }, []);
+
+  // Listen for thread state changes from messages pages
+  useEffect(() => {
+    const handleThreadStateChange = (event: CustomEvent) => {
+      console.log('Thread state changed:', event.detail);
+      setHasActiveThread(event.detail.hasActiveThread);
+    };
+
+    window.addEventListener('threadStateChange', handleThreadStateChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('threadStateChange', handleThreadStateChange as EventListener);
+    };
+  }, []);
+
+  // Reset thread state when navigating away from messages pages
+  useEffect(() => {
+    if (!isMessagesPage) {
+      setHasActiveThread(false);
+    }
+  }, [isMessagesPage]);
 
   useEffect(() => {
     if ('serviceWorker' in navigator && window.location.hostname !== 'localhost') {
@@ -87,9 +110,10 @@ export default function ClientLayout({
       console.log('Current pathname:', pathname);
       console.log('Is mobile:', isMobile);
       console.log('Is messages page:', isMessagesPage);
+      console.log('Has active thread:', hasActiveThread);
       console.log('Should hide header:', shouldHideHeader);
     }
-  }, [pathname, shouldHideHeader, isMobile, isMessagesPage]);
+  }, [pathname, shouldHideHeader, isMobile, isMessagesPage, hasActiveThread]);
 
   if (!mounted) {
     return <LoadingFallback />;
@@ -102,16 +126,14 @@ export default function ClientLayout({
       
       <Providers>
         <Suspense fallback={<LoadingFallback />}>
-          <div className="flex flex-col fullscreen md:min-h-screen bg-black text-white">
+          <div className={`flex flex-col fullscreen md:min-h-screen bg-black text-white ${showContent ? 'app-fade-in' : 'opacity-0'}`}>
             <BanCheck>
               {!shouldHideHeader && <Header />}
               <main className="flex-1">
                 {children}
               </main>
               <AgeVerificationModal />
-              {/* Keep message area if you still want DM popups; remove the next line if you don't want message popups either */}
               <MessageNotifications />
-              {/* NOTICE: No NotificationToaster mounted here */}
             </BanCheck>
           </div>
         </Suspense>
