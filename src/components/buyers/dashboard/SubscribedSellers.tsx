@@ -12,31 +12,32 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
   const list = (Array.isArray(subscriptions) ? subscriptions : []) as SubscribedSellersProps['subscriptions'];
 
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <Crown className="w-5 h-5 text-[#ff950e]" />
-          Subscriptions
-        </h2>
-        <span className="bg-[#ff950e] text-black text-sm font-bold px-2 py-0.5 rounded">
+    <section className="rounded-3xl border border-white/10 bg-[#111111]/85 p-6 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-200">
+            <Crown className="h-4 w-4" />
+          </span>
+          <h2 className="text-lg font-semibold text-white">Subscriptions</h2>
+        </div>
+        <span className="rounded-full bg-orange-400/20 px-3 py-1 text-xs font-semibold text-orange-200">
           {list.length}
         </span>
       </div>
 
       {list.length === 0 ? (
-        <div className="text-center py-8">
-          <Crown className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400 mb-4">No active subscriptions</p>
+        <div className="mt-8 rounded-2xl border border-dashed border-white/10 bg-[#181818] p-10 text-center">
+          <Crown className="mx-auto mb-3 h-12 w-12 text-gray-600" />
+          <p className="text-sm text-gray-400">No active subscriptions yet.</p>
           <Link
             href="/browse"
-            className="inline-block bg-[#ff950e] hover:bg-[#e88800] text-black font-bold px-6 py-2.5 rounded-lg transition-colors text-base"
-            style={{ color: '#000000' }}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
           >
-            Browse Sellers
+            Browse sellers
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="mt-6 space-y-4">
           {list.map((sub) => {
             const sanitizedUsername = sanitizeUsername(sub.seller);
 
@@ -57,43 +58,46 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
                 : 0;
 
             return (
-              <div key={sub.seller} className="bg-[#111111] rounded-lg p-4">
-                <div className="flex items-start justify-between">
+              <article
+                key={sub.seller}
+                className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-gradient-to-br from-[#181818] to-[#0f0f0f] p-4 transition hover:border-[#ff950e]/40 hover:bg-[#161616]"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     {sub.pic ? (
                       <SecureImage
                         src={sub.pic}
                         alt={sub.seller}
-                        className="w-12 h-12 rounded-full object-cover border-2 border-gray-700"
+                        className="h-12 w-12 rounded-full border border-white/10 object-cover"
                         fallbackSrc="/placeholder-avatar.png"
                       />
                     ) : (
-                      <div className="w-12 h-12 rounded-full bg-gray-8 00 flex items-center justify-center">
-                        <Crown className="w-5 h-5 text-gray-600" />
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-800 text-slate-400">
+                        <Crown className="h-5 w-5" />
                       </div>
                     )}
 
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={`/sellers/${sanitizedUsername}`}
-                          className="font-medium text-white hover:text-[#ff950e] transition-colors"
+                          className="text-sm font-medium text-white transition hover:text-[#ff950e]"
                         >
                           <SecureMessageDisplay content={sub.seller} allowBasicFormatting={false} className="inline" />
                         </Link>
                         {sub.verified && (
-                          <span title="Verified">
-                            <CheckCircle className="w-4 h-4 text-blue-400" />
+                          <span title="Verified" className="text-blue-200">
+                            <CheckCircle className="h-4 w-4" />
                           </span>
                         )}
                         {sub.tier && (
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${getTierColor(sub.tier)}`}>
+                          <span className={`text-[10px] uppercase tracking-wide ${getTierColor(sub.tier)}`}>
                             {sub.tier}
                           </span>
                         )}
                       </div>
 
-                      <div className="text-sm text-gray-400 line-clamp-2 mb-2">
+                      <div className="mt-2 text-xs text-gray-500 line-clamp-2">
                         <SecureMessageDisplay
                           content={sub.bio}
                           allowBasicFormatting={false}
@@ -101,43 +105,43 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
                           className="inline"
                         />
                       </div>
-
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span>{newListings} new listings</span>
-                        <span>•</span>
-                        <span>${priceDisplay}/month</span>
-                      </div>
                     </div>
                   </div>
 
                   <Link
                     href={`/sellers/${sanitizedUsername}`}
-                    className="text-gray-400 hover:text-[#ff950e] transition-colors"
-                    title="View Profile"
+                    className="rounded-full border border-white/10 p-2 text-gray-500 transition hover:border-[#ff950e] hover:text-[#ff950e]"
+                    title="View profile"
                   >
-                    <ExternalLink className="w-4 h-4" />
+                    <ExternalLink className="h-4 w-4" />
                   </Link>
                 </div>
-              </div>
+
+                <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-wide text-gray-500">
+                  <span>{newListings} new listings</span>
+                  <span className="text-white/20">•</span>
+                  <span>${priceDisplay}/month</span>
+                </div>
+              </article>
             );
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
 const getTierColor = (tier?: string) => {
   switch (tier) {
     case 'Goddess':
-      return 'text-purple-400 bg-purple-400/20';
+      return 'text-purple-200';
     case 'Desire':
-      return 'text-pink-400 bg-pink-400/20';
+      return 'text-pink-200';
     case 'Obsession':
-      return 'text-red-400 bg-red-400/20';
+      return 'text-red-200';
     case 'Flirt':
-      return 'text-orange-400 bg-orange-400/20';
+      return 'text-orange-200';
     default:
-      return 'text-yellow-400 bg-yellow-400/20';
+      return 'text-amber-200';
   }
 };
