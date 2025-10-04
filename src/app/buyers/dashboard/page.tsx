@@ -16,7 +16,6 @@ import { Truck, Clock, CheckCircle, Heart, Star, X, AlertCircle } from 'lucide-r
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import TierBadge from '@/components/TierBadge';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -185,87 +184,83 @@ function DashboardContent() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <main className="min-h-screen bg-black text-white">
-          <div className="max-w-7xl mx-auto px-6 py-8">
-            {/* Header Section */}
+        <main className="min-h-screen bg-slate-950 text-slate-100">
+          <div className="max-w-6xl mx-auto px-6 py-10 space-y-10">
             {isLoading ? (
-              <div className="mb-12">
-                <Skeleton className="h-10 w-64 mb-4" />
-                <Skeleton className="h-6 w-48" />
+              <div className="space-y-4">
+                <Skeleton className="h-44 rounded-3xl" />
               </div>
             ) : (
               <DashboardHeader username={user?.username || authUser?.username || ''} />
             )}
 
-            {/* Stats Grid */}
-            {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {[...Array(4)].map((_, i) => (
-                  <Skeleton key={i} className="h-32" />
-                ))}
-              </div>
-            ) : (
-              <StatsGrid stats={safeStats} />
-            )}
+            <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+              <div className="space-y-6">
+                {isLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    {[...Array(4)].map((_, i) => (
+                      <Skeleton key={i} className="h-32 rounded-2xl" />
+                    ))}
+                  </div>
+                ) : (
+                  <StatsGrid stats={safeStats} />
+                )}
 
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-              {/* Main Content Area */}
-              <div className="xl:col-span-2 space-y-8">
-                {/* Quick Actions */}
                 <QuickActions />
 
-                {/* Favorite Sellers Section */}
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-5">
+                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6 shadow-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                     <div className="flex items-center gap-2">
-                      <Heart className="w-5 h-5 text-[#ff950e]" />
-                      <h2 className="text-xl font-bold text-white">Favorite Sellers</h2>
-                      <span className="text-sm text-gray-400">({favoriteCount})</span>
+                      <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-orange-500/15 text-orange-300">
+                        <Heart className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <h2 className="text-lg font-semibold">Favorite sellers</h2>
+                        <p className="text-xs text-slate-400">{favoriteCount} creators you follow closely</p>
+                      </div>
                     </div>
-                    {favoriteCount > 3 && (
-                      <button
-                        onClick={() => router.push('/browse')}
-                        className="text-sm text-[#ff950e] hover:text-[#ff7a00] transition-colors"
-                      >
-                        Browse more →
-                      </button>
-                    )}
+                    <button
+                      onClick={() => router.push('/browse')}
+                      className="text-sm font-medium text-orange-300 transition hover:text-orange-200"
+                    >
+                      Discover more
+                    </button>
                   </div>
 
                   {loadingFavorites ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                       {[...Array(3)].map((_, i) => (
-                        <Skeleton key={i} className="h-24" />
+                        <Skeleton key={i} className="h-28 rounded-2xl" />
                       ))}
                     </div>
                   ) : favoriteCount === 0 ? (
-                    <div className="text-center py-8">
-                      <Heart className="mx-auto mb-3 text-gray-600" size={32} />
-                      <p className="text-gray-400 mb-4">No favorite sellers yet</p>
+                    <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/80 p-10 text-center">
+                      <Heart className="mx-auto mb-4 h-8 w-8 text-slate-500" />
+                      <p className="text-sm text-slate-300">You haven&apos;t saved any sellers yet.</p>
                       <button
                         onClick={() => router.push('/browse')}
-                        className="px-4 py-2 bg-[#ff950e] text-black rounded-lg text-sm font-medium hover:bg-[#ff7a00] transition-colors"
+                        className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-400 px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-orange-300"
                       >
-                        Browse Sellers
+                        Explore marketplace
                       </button>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                       {safeFavorites.slice(0, 6).map((favorite) => {
                         if (!favorite?.sellerId || !favorite?.sellerUsername) return null;
-                        
+
                         return (
                           <div
                             key={favorite.sellerId}
-                            className="bg-[#111] rounded-lg p-4 hover:bg-[#222] transition-colors group"
+                            className="group rounded-2xl border border-white/5 bg-slate-950/40 p-4 transition hover:border-orange-400/40 hover:bg-slate-900/80"
                           >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-3">
-                                <div 
-                                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 cursor-pointer"
-                                  onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                                >
+                            <div className="flex items-start justify-between gap-3">
+                              <button
+                                type="button"
+                                onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                                className="flex items-center gap-3 text-left"
+                              >
+                                <div className="relative h-11 w-11 overflow-hidden rounded-full border border-white/10 bg-slate-800">
                                   {favorite.profilePicture && !imageErrors[favorite.sellerId] ? (
                                     <Image
                                       src={favorite.profilePicture}
@@ -276,124 +271,156 @@ function DashboardContent() {
                                       onLoad={() => handleImageLoad(favorite.sellerId)}
                                     />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-600">
-                                      <Heart size={16} />
+                                    <div className="flex h-full w-full items-center justify-center text-slate-500">
+                                      <Heart className="h-4 w-4" />
                                     </div>
                                   )}
                                 </div>
                                 <div>
-                                  <h3 
-                                    className="font-medium text-white hover:text-[#ff950e] cursor-pointer transition-colors"
-                                    onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                                  >
+                                  <p className="font-medium text-slate-100 transition group-hover:text-orange-200">
                                     {favorite.sellerUsername}
-                                  </h3>
-                                  <div className="flex items-center gap-1 mt-0.5">
+                                  </p>
+                                  <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
                                     {favorite.isVerified && (
-                                      <Star className="text-[#ff950e]" size={12} />
+                                      <span className="flex items-center gap-1 text-blue-300">
+                                        <Star className="h-3 w-3" /> Verified
+                                      </span>
                                     )}
-                                    {favorite.tier && (
-                                      <span className="text-xs text-gray-400">{favorite.tier}</span>
-                                    )}
+                                    {favorite.tier && <span className="rounded-full bg-slate-800 px-2 py-0.5">{favorite.tier}</span>}
                                   </div>
                                 </div>
-                              </div>
+                              </button>
                               <button
                                 onClick={() => handleRemoveFavorite(favorite)}
-                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                                className="rounded-full p-1 text-slate-500 transition hover:bg-slate-800 hover:text-red-400"
                                 aria-label="Remove from favorites"
                               >
-                                <X size={16} />
+                                <X className="h-4 w-4" />
                               </button>
                             </div>
-                            <button
-                              onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                              className="w-full px-3 py-1.5 bg-[#222] text-white rounded text-xs font-medium hover:bg-[#333] transition-colors"
-                            >
-                              View Profile
-                            </button>
+                            <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                              <button
+                                onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                                className="inline-flex items-center gap-1 font-medium text-orange-200 transition hover:text-orange-100"
+                              >
+                                View profile
+                              </button>
+                              <span className="rounded-full bg-slate-800 px-2 py-0.5 uppercase tracking-wide text-[10px] text-slate-300">
+                                Favorite
+                              </span>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   )}
-                  
-                  {/* Error message for favorites */}
+
                   {favError && (
-                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      <p className="text-red-400 text-sm">{favError}</p>
+                    <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+                      {favError}
                     </div>
                   )}
-                </div>
+                </section>
 
-                {/* Recent Activity */}
                 {isLoading ? (
-                  <Skeleton className="h-96" />
+                  <Skeleton className="h-96 rounded-3xl" />
                 ) : (
                   <RecentActivity activities={recentActivity || []} />
                 )}
               </div>
 
-              {/* Sidebar */}
-              <div className="xl:col-span-1 space-y-8">
-                {/* Subscriptions */}
+              <div className="space-y-6">
+                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6 shadow-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-wider text-slate-400">Account snapshot</p>
+                      <p className="mt-2 text-2xl font-semibold text-slate-100">
+                        ${balance.toFixed(2)}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-400">Available wallet balance</p>
+                    </div>
+                    <button
+                      onClick={() => router.push('/wallet/buyer')}
+                      className="rounded-full border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-orange-300 hover:text-orange-200"
+                    >
+                      Manage funds
+                    </button>
+                  </div>
+                  <dl className="mt-6 grid grid-cols-1 gap-3 text-sm text-slate-300">
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-3">
+                      <dt className="text-slate-400">Orders this month</dt>
+                      <dd className="font-medium text-slate-100">{safeStats.thisMonthOrders}</dd>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-3">
+                      <dt className="text-slate-400">Active subscriptions</dt>
+                      <dd className="font-medium text-slate-100">{safeStats.activeSubscriptions}</dd>
+                    </div>
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-3">
+                      <dt className="text-slate-400">Open requests</dt>
+                      <dd className="font-medium text-slate-100">{safeStats.pendingRequests}</dd>
+                    </div>
+                  </dl>
+                </section>
+
                 {isLoading ? (
-                  <Skeleton className="h-64" />
+                  <Skeleton className="h-64 rounded-3xl" />
                 ) : (
                   <SubscribedSellers subscriptions={subscribedSellers || []} />
                 )}
 
-                {/* Order Status */}
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center gap-2 mb-5">
-                    <Truck className="w-5 h-5 text-blue-400" />
-                    <h2 className="text-xl font-bold text-white">Order Status</h2>
+                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6 shadow-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/15 text-blue-200">
+                      <Truck className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-100">Order status</h2>
+                      <p className="text-xs text-slate-400">Snapshot of your active deliveries</p>
+                    </div>
                   </div>
-                  
+
                   {isLoading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-16" />
-                      <Skeleton className="h-16" />
+                    <div className="mt-6 space-y-3">
+                      <Skeleton className="h-16 rounded-2xl" />
+                      <Skeleton className="h-16 rounded-2xl" />
                     </div>
                   ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-[#111111] rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Clock className="w-4 h-4 text-yellow-400" />
-                          <span className="text-sm text-gray-300">Processing</span>
+                    <div className="mt-6 space-y-3 text-sm">
+                      <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-4">
+                        <div className="flex items-center gap-3 text-slate-300">
+                          <Clock className="h-4 w-4 text-yellow-300" />
+                          Processing
                         </div>
-                        <span className="text-sm font-bold text-white">{safeStats.pendingShipments}</span>
+                        <span className="font-semibold text-slate-100">{safeStats.pendingShipments}</span>
                       </div>
-                      
-                      <div className="flex items-center justify-between p-3 bg-[#111111] rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                          <span className="text-sm text-gray-300">Delivered</span>
+                      <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-4">
+                        <div className="flex items-center gap-3 text-slate-300">
+                          <CheckCircle className="h-4 w-4 text-emerald-300" />
+                          Delivered
                         </div>
-                        <span className="text-sm font-bold text-white">{safeStats.completedOrders}</span>
+                        <span className="font-semibold text-slate-100">{safeStats.completedOrders}</span>
                       </div>
                     </div>
                   )}
-                </div>
+                </section>
 
-                {/* Quick Stats */}
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <h2 className="text-lg font-bold text-white mb-4">Quick Stats</h2>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">This Week Spent</span>
-                      <span className="text-white font-bold">${safeStats.thisWeekSpent.toFixed(2)}</span>
+                <section className="rounded-3xl border border-white/10 bg-slate-900/60 p-6 shadow-lg">
+                  <h2 className="text-lg font-semibold text-slate-100">Spending insights</h2>
+                  <div className="mt-5 space-y-4 text-sm text-slate-300">
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-3">
+                      <span className="text-slate-400">This week</span>
+                      <span className="font-medium text-slate-100">${safeStats.thisWeekSpent.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">Average Order</span>
-                      <span className="text-white font-bold">${safeStats.averageOrderValue.toFixed(2)}</span>
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-3">
+                      <span className="text-slate-400">Average order value</span>
+                      <span className="font-medium text-slate-100">${safeStats.averageOrderValue.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">Favorite Sellers</span>
-                      <span className="text-white font-bold">{favoriteCount}</span>
+                    <div className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-4 py-3">
+                      <span className="text-slate-400">Favorite sellers</span>
+                      <span className="font-medium text-slate-100">{favoriteCount}</span>
                     </div>
                   </div>
-                </div>
+                </section>
               </div>
             </div>
           </div>
