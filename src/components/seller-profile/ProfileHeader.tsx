@@ -178,7 +178,7 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
   return (
     <div className="bg-[#1a1a1a] rounded-2xl shadow-xl p-6 sm:p-8 flex flex-col items-center border border-[#ff950e]/20 relative overflow-visible">
       {/* Subtle glow effect */}
-      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#ff950e]/[0.03] via-transparent to-[#ff950e]/[0.03] pointer-events-none"></div>
+      <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-[#ff950e]/5 via-transparent to-[#ff950e]/5 pointer-events-none"></div>
       
       {/* Favorite button - high z-index and better positioning */}
       {user?.role === 'buyer' && user.username !== username && onToggleFavorite && (
@@ -336,7 +336,7 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
         {user?.role === 'buyer' && user.username !== username && (
           <Link
             href={`/buyers/messages?thread=${encodeURIComponent(username)}`}
-            className="flex items-center gap-2 bg-gray-800 text-black font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
+            className="flex items-center gap-2 bg-gray-800 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
           >
             <Mail className="w-5 h-5" />
             Message
