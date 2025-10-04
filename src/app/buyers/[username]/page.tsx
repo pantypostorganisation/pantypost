@@ -414,11 +414,6 @@ export default function BuyerProfilePage() {
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-                        <span className="rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-[#ffb347]">
-                          Buyer Profile
-                        </span>
-                      </div>
                     </div>
 
                     <div className="flex-1 space-y-6">
