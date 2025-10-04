@@ -371,13 +371,13 @@ export default function BuyerProfilePage() {
     <BanCheck>
       <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-black via-neutral-950 to-black text-white">
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute left-1/2 top-[-10%] h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-[#ff950e]/20 blur-[120px] opacity-60" />
-          <div className="absolute bottom-[-20%] right-[-10%] h-[420px] w-[420px] rounded-full bg-[#ff5f1f]/10 blur-[160px]" />
+          <div className="absolute left-1/2 top-[-10%] h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-[#ff950e]/12 blur-[110px] opacity-40" />
+          <div className="absolute bottom-[-20%] right-[-10%] h-[420px] w-[420px] rounded-full bg-[#ff5f1f]/8 blur-[150px]" />
         </div>
 
         <div className="relative mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-10">
-          <div className="relative overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-950/70 shadow-[0_0_60px_rgba(255,149,14,0.12)]">
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/15 via-transparent to-transparent opacity-80" />
+          <div className="relative overflow-hidden rounded-3xl border border-neutral-800 bg-neutral-950/70 shadow-[0_0_50px_rgba(255,149,14,0.08)]">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/10 via-transparent to-transparent opacity-60" />
             <div className="relative p-6 sm:p-10">
               {loading ? (
                 <div className="space-y-10 animate-pulse">
@@ -409,8 +409,8 @@ export default function BuyerProfilePage() {
                   <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
                     <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
                       <div className="relative">
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#ff950e]/50 to-transparent blur-2xl opacity-70" />
-                        <div className="relative h-32 w-32 overflow-hidden rounded-full border border-[#ff950e]/40 bg-neutral-900/80 p-[3px] sm:h-36 sm:w-36">
+                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#ff950e]/30 to-transparent blur-2xl opacity-50" />
+                        <div className="relative h-32 w-32 overflow-hidden rounded-full border border-[#ff950e]/30 bg-neutral-900/80 p-[3px] sm:h-36 sm:w-36">
                           <div className="relative h-full w-full overflow-hidden rounded-full bg-neutral-950">
                             <SafeAvatar
                               src={profileData?.profile?.profilePic || null}
@@ -421,7 +421,7 @@ export default function BuyerProfilePage() {
                         </div>
                       </div>
                       <div className="flex flex-wrap items-center justify-center gap-3 lg:justify-start">
-                        <span className="rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-[#ffb347]">
+                        <span className="rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-[#ffb347]">
                           Buyer Profile
                         </span>
                       </div>
@@ -446,7 +446,7 @@ export default function BuyerProfilePage() {
                       <div className="flex flex-wrap gap-3">
                         <Link
                           href={`/buyers/messages`}
-                          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff7b1f] to-[#ff5f1f] px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-[#ff950e]/30 transition hover:shadow-[#ff950e]/50 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/80 focus:ring-offset-2 focus:ring-offset-black"
+                          className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff7b1f] px-5 py-2.5 text-sm font-semibold text-black shadow-lg shadow-[#ff950e]/20 transition hover:shadow-[#ff950e]/35 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
                         >
                           <MessageCircle size={18} />
                           Message
@@ -455,7 +455,7 @@ export default function BuyerProfilePage() {
                         {isOwner && (
                           <Link
                             href={`/buyers/profile`}
-                            className="inline-flex items-center gap-2 rounded-full border border-neutral-700/70 bg-neutral-900/70 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
+                            className="inline-flex items-center gap-2 rounded-full border border-neutral-700/70 bg-neutral-900/70 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/50 focus:ring-offset-2 focus:ring-offset-black"
                             title="Edit your buyer profile"
                           >
                             Edit profile
@@ -467,9 +467,9 @@ export default function BuyerProfilePage() {
 
                   <div className="mt-12 grid gap-5 sm:grid-cols-2">
                     <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
-                      <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 -translate-y-1/2 translate-x-1/3 rounded-full bg-[#ff950e]/20 blur-2xl" />
+                      <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 -translate-y-1/2 translate-x-1/3 rounded-full bg-[#ff950e]/12 blur-2xl" />
                       <div className="relative flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/15 text-[#ffb347]">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/10 text-[#ffb347]">
                           <CalendarDays size={18} />
                         </span>
                         <div>
@@ -485,9 +485,9 @@ export default function BuyerProfilePage() {
                     </div>
 
                     <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
-                      <div className="pointer-events-none absolute bottom-0 right-0 h-24 w-24 translate-y-1/2 translate-x-1/4 rounded-full bg-[#ff5f1f]/15 blur-2xl" />
+                      <div className="pointer-events-none absolute bottom-0 right-0 h-24 w-24 translate-y-1/2 translate-x-1/4 rounded-full bg-[#ff5f1f]/12 blur-2xl" />
                       <div className="relative flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/15 text-[#ffb347]">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/10 text-[#ffb347]">
                           <MapPin size={18} />
                         </span>
                         <div>
@@ -512,14 +512,14 @@ export default function BuyerProfilePage() {
                     </div>
 
                     <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 sm:col-span-2">
-                      <div className="pointer-events-none absolute left-0 top-0 h-24 w-24 -translate-x-1/3 -translate-y-1/3 rounded-full bg-[#ff950e]/20 blur-2xl" />
+                      <div className="pointer-events-none absolute left-0 top-0 h-24 w-24 -translate-x-1/3 -translate-y-1/3 rounded-full bg-[#ff950e]/12 blur-2xl" />
                       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex items-start gap-4">
                           <span
                             className={`flex h-10 w-10 items-center justify-center rounded-full ${
                               profileData?.user?.isBanned
                                 ? 'bg-red-500/20 text-red-300'
-                                : 'bg-[#ff950e]/15 text-[#ffb347]'
+                                : 'bg-[#ff950e]/10 text-[#ffb347]'
                             }`}
                           >
                             {profileData?.user?.isBanned ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}

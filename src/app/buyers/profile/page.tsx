@@ -1,7 +1,7 @@
 // src/app/buyers/profile/page.tsx
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { getGlobalAuthToken } from '@/context/AuthContext';
 import { buildApiUrl, API_BASE_URL } from '@/services/api.config';
@@ -132,6 +132,7 @@ const COUNTRY_TO_CODE: Record<string, string> = {
   Ukraine: 'UA',
   Russia: 'RU',
 };
+const COUNTRY_OPTIONS = Object.keys(COUNTRY_TO_CODE).sort((a, b) => a.localeCompare(b));
 function flagFromIso2(code?: string | null): string {
   if (!code || code.length !== 2) return '🌐';
   const base = 0x1f1e6;
@@ -161,6 +162,13 @@ export default function BuyerSelfProfilePage() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
+
+  const countryOptions = useMemo(() => {
+    if (form.country && !COUNTRY_OPTIONS.includes(form.country)) {
+      return [...COUNTRY_OPTIONS, form.country].sort((a, b) => a.localeCompare(b));
+    }
+    return COUNTRY_OPTIONS;
+  }, [form.country]);
 
   // GET current buyer profile
   const fetchMe = useCallback(async () => {
@@ -371,14 +379,25 @@ export default function BuyerSelfProfilePage() {
                 <label htmlFor="country" className="block text-sm text-gray-400 mb-1">
                   Country
                 </label>
-                <input
-                  id="country"
-                  value={form.country}
-                  onChange={(e) => setForm((f) => ({ ...f, country: e.target.value.slice(0, 56) }))}
-                  placeholder="Your country"
-                  className="w-full rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 text-gray-200 placeholder:text-gray-500"
-                  disabled={disabled}
-                />
+                <div className="relative">
+                  <select
+                    id="country"
+                    value={form.country}
+                    onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
+                    className="w-full appearance-none rounded-lg bg-neutral-900 border border-neutral-700 px-3 py-2 pr-10 text-gray-200 focus:outline-none disabled:opacity-60"
+                    disabled={disabled}
+                  >
+                    <option value="">🌐 Select country</option>
+                    {countryOptions.map((country) => (
+                      <option key={country} value={country}>
+                        {`${flagFromCountryName(country)} ${country}`}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500">
+                    ▼
+                  </div>
+                </div>
               </div>
 
               {/* Bio */}
