@@ -7,7 +7,7 @@ import BanCheck from '@/components/BanCheck';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import Image from 'next/image';
 import Link from 'next/link';
-import { CalendarDays, MapPin, MessageCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { CalendarDays, MapPin, MessageCircle } from 'lucide-react';
 import { getGlobalAuthToken } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/services/api.config';
 
@@ -348,12 +348,6 @@ export default function BuyerProfilePage() {
     return sanitizeStrict(rawCountry);
   }, [profileData?.profile?.country]);
 
-  const sanitizedBanReason = useMemo(() => {
-    const rawReason = profileData?.user?.banReason;
-    if (!rawReason) return '';
-    return sanitizeStrict(rawReason);
-  }, [profileData?.user?.banReason]);
-
   if (!usernameForRequest) {
     return (
       <BanCheck>
@@ -511,43 +505,6 @@ export default function BuyerProfilePage() {
                       </div>
                     </div>
 
-                    <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5 sm:col-span-2">
-                      <div className="pointer-events-none absolute left-0 top-0 h-24 w-24 -translate-x-1/3 -translate-y-1/3 rounded-full bg-[#ff950e]/12 blur-2xl" />
-                      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="flex items-start gap-4">
-                          <span
-                            className={`flex h-10 w-10 items-center justify-center rounded-full ${
-                              profileData?.user?.isBanned
-                                ? 'bg-red-500/20 text-red-300'
-                                : 'bg-[#ff950e]/10 text-[#ffb347]'
-                            }`}
-                          >
-                            {profileData?.user?.isBanned ? <AlertTriangle size={18} /> : <ShieldCheck size={18} />}
-                          </span>
-                          <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Account status</p>
-                            <p
-                              className={`mt-2 text-lg font-semibold ${
-                                profileData?.user?.isBanned ? 'text-red-200' : 'text-white'
-                              }`}
-                            >
-                              {profileData?.user?.isBanned ? 'Account suspended' : 'Active buyer'}
-                            </p>
-                            <p className="mt-1 text-sm text-neutral-400">
-                              {profileData?.user?.isBanned
-                                ? 'This account has been suspended.'
-                                : 'Everything looks good. Enjoy browsing and connecting with sellers.'}
-                            </p>
-                          </div>
-                        </div>
-
-                        {profileData?.user?.isBanned && sanitizedBanReason && (
-                          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs text-red-200">
-                            {sanitizedBanReason}
-                          </div>
-                        )}
-                      </div>
-                    </div>
                   </div>
                 </>
               )}
