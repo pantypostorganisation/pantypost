@@ -30,6 +30,8 @@ export interface UsernameCheckResponse {
 
 export interface PasswordResetResponse {
   message: string;
+  email?: string;
+  expiresIn?: number;
 }
 
 /**
@@ -401,13 +403,13 @@ export class AuthService {
   }
 
   /**
-   * Request password reset
+   * Request password reset - accepts email OR username
    */
-  async forgotPassword(email: string): Promise<ApiResponse<PasswordResetResponse>> {
+  async forgotPassword(emailOrUsername: string): Promise<ApiResponse<PasswordResetResponse>> {
     try {
       return await apiCall<PasswordResetResponse>(API_ENDPOINTS.AUTH.FORGOT_PASSWORD, {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ emailOrUsername }),
       });
     } catch (error) {
       console.error('Forgot password error:', error);
@@ -421,14 +423,38 @@ export class AuthService {
   }
 
   /**
-   * Reset password with token
+   * Verify reset code
    */
-  async resetPassword(token: string, newPassword: string): Promise<ApiResponse<PasswordResetResponse>> {
+  async verifyResetCode(email: string, code: string): Promise<ApiResponse<{ valid: boolean; message: string; token?: string }>> {
+    try {
+      return await apiCall<{ valid: boolean; message: string; token?: string }>(
+        '/auth/verify-reset-code',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email, code }),
+        }
+      );
+    } catch (error) {
+      console.error('Verify reset code error:', error);
+      return {
+        success: false,
+        error: {
+          message: 'Failed to verify code. Please try again.',
+        },
+      };
+    }
+  }
+
+  /**
+   * Reset password with code
+   */
+  async resetPassword(email: string, code: string, newPassword: string): Promise<ApiResponse<PasswordResetResponse>> {
     try {
       return await apiCall<PasswordResetResponse>(API_ENDPOINTS.AUTH.RESET_PASSWORD, {
         method: 'POST',
         body: JSON.stringify({
-          token,
+          email,
+          code,
           newPassword,
         }),
       });

@@ -516,42 +516,82 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
   }
 });
 
-// ===== Password reset routes =====
+// ===== Password reset routes - FIXED =====
+
+// POST /api/auth/forgot-password - Now accepts username OR email
 router.post('/forgot-password', async (req, res) => {
   try {
-    const { email } = req.body || {};
-    if (!email || !isValidEmail(email)) {
+    const { emailOrUsername } = req.body || {};
+    
+    if (!emailOrUsername || typeof emailOrUsername !== 'string' || !emailOrUsername.trim()) {
       return res.status(400).json({ 
         success: false, 
         error: { 
           code: ERROR_CODES.MISSING_REQUIRED_FIELD, 
-          message: 'Please enter a valid email address to reset your password.' 
+          message: 'Please enter your email address or username to reset your password.' 
         }
       });
     }
-    const user = await User.findOne({ email: cleanEmail(email) });
+    
+    const input = emailOrUsername.trim();
+    let user = null;
+    
+    // Check if input looks like an email
+    if (input.includes('@')) {
+      // Try to find by email
+      if (isValidEmail(input)) {
+        user = await User.findOne({ email: cleanEmail(input) });
+      }
+    } else {
+      // Try to find by username
+      user = await User.findOne({ username: input });
+    }
+    
+    // Always return success to avoid revealing if account exists
     if (!user) {
-      // Don't reveal if email exists for security
       return res.json({ 
         success: true, 
-        message: 'If that email is registered to an account, we\'ve sent you a verification code. Check your inbox!' 
+        message: 'If that account exists, we\'ve sent you a verification code. Check your inbox!',
+        data: { email: input.includes('@') ? input : null }
       });
     }
+    
+    // Delete any existing reset requests for this user
     await PasswordReset.deleteMany({ email: user.email });
+    
+    // Generate new reset token and code
     const resetToken = PasswordReset.generateToken();
     const hashedToken = PasswordReset.hashToken(resetToken);
     const verificationCode = PasswordReset.generateVerificationCode();
-    const passwordReset = new PasswordReset({ email: user.email, username: user.username, token: hashedToken, verificationCode });
+    
+    // Save reset request
+    const passwordReset = new PasswordReset({ 
+      email: user.email, 
+      username: user.username, 
+      token: hashedToken, 
+      verificationCode,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+    });
     await passwordReset.save();
+    
+    // Send email
     try {
-      await sendEmail({ to: user.email, ...emailTemplates.passwordResetCode(user.username, verificationCode) });
-    } catch (e) {
-      console.error('Failed to send password reset email:', e);
+      await sendEmail({ 
+        to: user.email, 
+        ...emailTemplates.passwordResetCode(user.username, verificationCode) 
+      });
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+      // Don't reveal email errors to user
     }
+    
     res.json({ 
       success: true, 
-      message: 'If that email is registered to an account, we\'ve sent you a verification code. Check your inbox!', 
-      data: { resetToken, expiresIn: 900 }
+      message: 'If that account exists, we\'ve sent you a verification code. Check your inbox!',
+      data: { 
+        email: user.email, // Return the actual email for the frontend to store
+        expiresIn: 900 
+      }
     });
   } catch (error) {
     console.error('Password reset error:', error);
@@ -565,9 +605,11 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
+// POST /api/auth/verify-reset-code - Verify the 6-digit code
 router.post('/verify-reset-code', async (req, res) => {
   try {
     const { email, code } = req.body || {};
+    
     if (!email || !code) {
       return res.status(400).json({ 
         success: false, 
@@ -577,8 +619,15 @@ router.post('/verify-reset-code', async (req, res) => {
         }
       });
     }
-    const resetRequest = await PasswordReset.findOne({ email: cleanEmail(email), verificationCode: code });
+    
+    // Find the reset request
+    const resetRequest = await PasswordReset.findOne({ 
+      email: cleanEmail(email), 
+      verificationCode: code.trim() 
+    });
+    
     if (!resetRequest) {
+      // Check if there's any request for this email to handle attempts
       const anyRequest = await PasswordReset.findOne({ email: cleanEmail(email) });
       if (anyRequest && anyRequest.isValid()) {
         const maxAttempts = await anyRequest.incrementAttempts();
@@ -600,6 +649,8 @@ router.post('/verify-reset-code', async (req, res) => {
         }
       });
     }
+    
+    // Check if the request is valid
     if (!resetRequest.isValid()) {
       return res.status(400).json({ 
         success: false, 
@@ -611,11 +662,14 @@ router.post('/verify-reset-code', async (req, res) => {
         }
       });
     }
+    
+    // Code is valid!
     res.json({ 
       success: true, 
       data: { 
         valid: true, 
-        message: 'Perfect! Your code is verified. You can now set a new password.' 
+        message: 'Perfect! Your code is verified. You can now set a new password.',
+        token: resetRequest.token // Send token for the final step
       }
     });
   } catch (error) {
@@ -630,9 +684,11 @@ router.post('/verify-reset-code', async (req, res) => {
   }
 });
 
+// POST /api/auth/reset-password - Final step to reset password
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, code, newPassword } = req.body || {};
+    
     if (!email || !code || !newPassword) {
       return res.status(400).json({ 
         success: false, 
@@ -642,6 +698,7 @@ router.post('/reset-password', async (req, res) => {
         }
       });
     }
+    
     if (!isValidPassword(newPassword)) {
       return res.status(400).json({ 
         success: false, 
@@ -651,7 +708,13 @@ router.post('/reset-password', async (req, res) => {
         }
       });
     }
-    const resetRequest = await PasswordReset.findOne({ email: cleanEmail(email), verificationCode: code });
+    
+    // Find and validate the reset request
+    const resetRequest = await PasswordReset.findOne({ 
+      email: cleanEmail(email), 
+      verificationCode: code.trim() 
+    });
+    
     if (!resetRequest || !resetRequest.isValid()) {
       return res.status(400).json({ 
         success: false, 
@@ -661,6 +724,8 @@ router.post('/reset-password', async (req, res) => {
         }
       });
     }
+    
+    // Find the user
     const user = await User.findOne({ email: resetRequest.email });
     if (!user) {
       return res.status(404).json({ 
@@ -671,15 +736,26 @@ router.post('/reset-password', async (req, res) => {
         }
       });
     }
+    
+    // Update the password
     user.password = newPassword;
     await user.save();
+    
+    // Mark the reset request as used
     resetRequest.used = true;
     await resetRequest.save();
+    
+    // Send confirmation email
     try {
-      await sendEmail({ to: user.email, ...emailTemplates.passwordResetSuccess(user.username) });
-    } catch (e) {
-      console.error('Failed to send confirmation email:', e);
+      await sendEmail({ 
+        to: user.email, 
+        ...emailTemplates.passwordResetSuccess(user.username) 
+      });
+    } catch (emailError) {
+      console.error('Failed to send confirmation email:', emailError);
+      // Don't fail the request if email fails
     }
+    
     res.json({ 
       success: true, 
       message: 'Success! Your password has been reset. You can now log in with your new password.' 
