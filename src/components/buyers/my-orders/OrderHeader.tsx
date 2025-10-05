@@ -1,8 +1,8 @@
 // src/components/buyers/my-orders/OrderHeader.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Settings, Star } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Settings, Star, ShoppingBag, Gavel } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
 import { OrderStyles } from '@/utils/orderUtils';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
@@ -16,6 +16,35 @@ interface OrderHeaderProps {
 export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   const isCustom = type === 'custom';
   const isAuction = type === 'auction';
+
+  const accentColor = styles.accentColor;
+  const accentWithAlpha = (alpha: string) => `${accentColor}${alpha}`;
+
+  const accentGlowStyle: React.CSSProperties = {
+    boxShadow: `0 25px 60px -30px ${accentWithAlpha('88')}`,
+  };
+  const accentBorderStyle: React.CSSProperties = {
+    borderColor: `${accentWithAlpha('55')}`,
+  };
+  const accentPillStyle: React.CSSProperties = {
+    background: `linear-gradient(120deg, ${accentWithAlpha('24')}, rgba(17,17,17,0.65))`,
+    borderColor: `${accentWithAlpha('55')}`,
+    color: accentColor,
+  };
+
+  const typeMeta = useMemo(() => {
+    if (isAuction) {
+      return { label: 'Auction win', icon: Gavel } as const;
+    }
+
+    if (isCustom) {
+      return { label: 'Custom request', icon: Settings } as const;
+    }
+
+    return { label: 'Direct purchase', icon: ShoppingBag } as const;
+  }, [isAuction, isCustom]);
+
+  const TypeIcon = typeMeta.icon;
 
   const [imageSrc, setImageSrc] = useState<string>('');
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -77,64 +106,79 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 items-start">
+    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       {/* Product Image or Custom Request Icon */}
-      <div className="relative">
-        {isCustom ? (
-          <div className="w-24 h-24 bg-gradient-to-br from-blue-900/30 to-cyan-900/30 rounded-xl border-2 border-blue-500/30 flex items-center justify-center shadow-lg">
-            <Settings className="w-10 h-10 text-blue-400" />
-          </div>
-        ) : (
-          <div className="relative w-24 h-24">
-            {!imageLoaded && !imageError && imageSrc && !imageSrc.startsWith('data:') && (
-              <div className="absolute inset-0 bg-gray-700 rounded-xl border-2 border-gray-600 animate-pulse" />
-            )}
-            {imageSrc && (
-              <img
-                src={imageSrc}
-                alt={order.title}
-                className={`w-24 h-24 object-cover rounded-xl border-2 border-gray-600 shadow-lg transition-opacity duration-200 ${
-                  imageLoaded || imageSrc.startsWith('data:') ? 'opacity-100' : 'opacity-0'
-                }`}
-                onLoad={handleImageLoad}
-                onError={handleImageError}
-              />
-            )}
-            {!imageSrc && (
-              <div className="w-24 h-24 bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl border-2 border-gray-600 flex items-center justify-center shadow-lg">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-gray-500 mb-1">
-                    {(order.title || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="text-xs text-gray-500">No Image</div>
+      <div className="relative flex-shrink-0" style={accentGlowStyle}>
+        <div className="relative h-28 w-28 overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+          {isCustom ? (
+            <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),_transparent)]">
+              <Settings className="h-10 w-10 text-sky-300" />
+            </div>
+          ) : (
+            <>
+              {!imageLoaded && !imageError && imageSrc && !imageSrc.startsWith('data:') && (
+                <div className="absolute inset-0 animate-pulse rounded-2xl bg-white/5" />
+              )}
+              {imageSrc ? (
+                <img
+                  src={imageSrc}
+                  alt={order.title}
+                  className={`h-full w-full object-cover transition-opacity duration-200 ${
+                    imageLoaded || imageSrc.startsWith('data:') ? 'opacity-100' : 'opacity-0'
+                  }`}
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
+                />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent)] text-gray-500">
+                  <span className="text-3xl font-semibold">{(order.title || '?').charAt(0).toUpperCase()}</span>
+                  <span className="text-xs uppercase tracking-widest">No image</span>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
-        {styles.badgeContent}
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
+          <span
+            className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider"
+            style={accentPillStyle}
+          >
+            <TypeIcon className="h-3.5 w-3.5" />
+            {typeMeta.label}
+          </span>
+        </div>
       </div>
 
       {/* Order Title and Price */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <h3 className="font-bold text-xl text-white truncate">
+      <div className="flex min-w-0 flex-1 flex-col gap-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-2">
+            <h3 className="text-2xl font-semibold text-white sm:text-[1.6rem]">
               <SecureMessageDisplay content={order.title} allowBasicFormatting={false} as="span" />
             </h3>
-            {isAuction && <Star className="w-5 h-5 text-purple-400 flex-shrink-0" />}
-            {isCustom && <Settings className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-medium text-gray-300">
+                Order ID: <span className="font-mono text-[11px] text-gray-400">{order.id ? order.id.slice(0, 10) : '—'}</span>
+              </span>
+              {isAuction && <Star className="h-4 w-4 text-purple-300" />}
+              {isCustom && <Settings className="h-4 w-4 text-sky-300" />}
+            </div>
           </div>
 
-          <div className="bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg px-3 py-2 ml-4">
-            <div className="text-xs text-[#ff950e]/80 font-medium text-center">Total Paid</div>
-            <div className="text-[#ff950e] font-bold text-lg text-center">
+          <div
+            className="flex flex-col rounded-2xl border px-4 py-3 text-right"
+            style={accentBorderStyle}
+          >
+            <span className="text-xs font-medium uppercase tracking-wider text-gray-400">Total paid</span>
+            <span className="text-2xl font-bold" style={{ color: accentColor }}>
               ${(order.markedUpPrice || order.price).toFixed(2)}
-            </div>
+            </span>
+            <span className="text-[11px] text-gray-500">Includes seller payout & platform fee</span>
           </div>
         </div>
 
-        <div className="text-gray-300 text-sm mb-4 line-clamp-2">
+        <div className="text-sm text-gray-300">
           <SecureMessageDisplay content={order.description} allowBasicFormatting={false} />
         </div>
       </div>

@@ -49,36 +49,46 @@ export default function OrderCard({
   const needsAddress = order.wasAuction && !hasDeliveryAddress;
 
   return (
-    <div className={`relative overflow-hidden transition-all duration-300 ${
-      isExpanded 
-        ? 'bg-black/40 backdrop-blur-sm shadow-2xl' 
-        : 'bg-black/20 hover:bg-black/30 shadow-lg hover:shadow-xl'
-    }`}>
-      {/* Subtle type indicator bar */}
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${
-        type === 'auction' ? 'from-purple-500 to-violet-500' :
-        type === 'custom' ? 'from-blue-500 to-cyan-500' :
-        'from-[#ff950e] to-orange-500'
-      }`} />
+    <div
+      className={`group relative overflow-hidden rounded-3xl border transition-all duration-300 ${
+        isExpanded
+          ? `bg-black/45 shadow-[0_35px_90px_-40px_rgba(0,0,0,0.85)] ${styles.borderStyle}`
+          : `bg-black/35 ${styles.borderStyle} hover:-translate-y-1 hover:shadow-[0_40px_95px_-45px_rgba(0,0,0,0.9)]`
+      }`}
+    >
+      <div className={`pointer-events-none absolute inset-0 opacity-80 transition-opacity duration-500 group-hover:opacity-100 bg-gradient-to-br ${styles.gradientStyle}`} />
+      <div className="absolute inset-0 bg-black/30" />
 
-      {/* Auction Won Badge - Refined */}
+      {/* Accent border glow */}
+      <div
+        className="pointer-events-none absolute inset-0 rounded-3xl border border-white/5"
+        aria-hidden
+      />
+
+      {/* Action indicator */}
+      <div
+        className={`pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${
+          type === 'auction'
+            ? 'from-purple-500 via-purple-400 to-violet-500'
+            : type === 'custom'
+              ? 'from-blue-500 via-sky-400 to-cyan-500'
+              : 'from-[#ff950e] via-[#ffb469] to-orange-500'
+        }`}
+      />
+
+      {/* Auction action badge */}
       {order.wasAuction && needsAddress && (
-        <div className="absolute top-4 right-4 z-10">
-          <div className="bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-emerald-400 px-4 py-1.5 rounded-full text-xs font-medium flex items-center gap-2">
+        <div className="absolute right-6 top-6 z-10">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/50 bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-200 shadow-[0_12px_30px_-20px_rgba(16,185,129,0.8)]">
             <span className="text-base">🏆</span>
-            <span>Action Required</span>
+            <span>Confirm address</span>
           </div>
         </div>
       )}
 
-      {/* Main Content */}
-      <div className={`p-6 transition-all duration-300 ${isExpanded ? 'pb-0' : ''}`}>
-        <OrderHeader
-          order={order}
-          type={type}
-          styles={styles}
-        />
-        
+      <div className="relative z-10 p-6 sm:p-8">
+        <OrderHeader order={order} type={type} styles={styles} />
+
         <OrderDetails
           order={order}
           type={type}
@@ -89,7 +99,6 @@ export default function OrderCard({
         />
       </div>
 
-      {/* Expanded Content - Seamless transition */}
       {isExpanded && (
         <ExpandedOrderContent
           order={order}
