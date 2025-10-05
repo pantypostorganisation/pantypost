@@ -95,89 +95,260 @@ const sendEmail = async (options) => {
 
 // Email templates
 const emailTemplates = {
-  // New template for verification code
+  // New template for verification code - SAFE VERSION
   passwordResetCode: (username, code) => ({
     subject: 'Your PantyPost Password Reset Code',
     html: `
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
           body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            background-color: #000000;
           }
           .container {
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
+            background-color: #000000;
           }
           .header {
-            background-color: #ff1493;
-            color: white;
-            padding: 20px;
+            background-color: #0a0a0a;
+            padding: 30px 20px;
             text-align: center;
-            border-radius: 10px 10px 0 0;
+            border-bottom: 3px solid #ff950e;
+          }
+          .header h1 {
+            color: #ffffff;
+            font-size: 26px;
+            margin: 15px 0 5px 0;
+            font-weight: normal;
+          }
+          .logo-text {
+            color: #ff950e;
+            font-size: 32px;
+            font-weight: bold;
+            margin: 0 0 10px 0;
           }
           .content {
-            background-color: #f9f9f9;
-            padding: 30px;
-            border-radius: 0 0 10px 10px;
+            background-color: #0a0a0a;
+            padding: 40px 30px;
+          }
+          .greeting {
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: bold;
+            margin: 0 0 20px 0;
+          }
+          .message {
+            color: #cccccc;
+            font-size: 16px;
+            margin: 0 0 30px 0;
+            line-height: 1.6;
           }
           .code-box {
-            background-color: #fff;
-            border: 2px solid #ff1493;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            background-color: #1a1a1a;
+            border: 2px solid #ff950e;
+            border-radius: 12px;
+            padding: 30px 20px;
+            margin: 30px 0;
             text-align: center;
           }
-          .code {
-            font-size: 36px;
+          .code-label {
+            color: #ff950e;
+            font-size: 12px;
             font-weight: bold;
-            color: #ff1493;
-            letter-spacing: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 0 0 15px 0;
+          }
+          .code {
             font-family: monospace;
+            font-size: 38px;
+            font-weight: bold;
+            color: #ff950e;
+            letter-spacing: 10px;
+            margin: 0;
+            padding: 10px;
+          }
+          .expiry-notice {
+            background-color: #1a0a00;
+            border-left: 3px solid #ff950e;
+            padding: 15px 20px;
+            margin: 25px 0;
+            border-radius: 6px;
+          }
+          .expiry-text {
+            color: #ffb347;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 0;
+          }
+          .button-container {
+            text-align: center;
+            margin: 35px 0;
+          }
+          .button {
+            display: inline-block;
+            padding: 14px 35px;
+            background-color: #ff950e;
+            color: #000000;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 16px;
+          }
+          .link-container {
+            text-align: center;
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #0f0f0f;
+            border-radius: 8px;
+          }
+          .link-text {
+            color: #999999;
+            font-size: 13px;
+            margin: 0 0 8px 0;
+          }
+          .link {
+            color: #ff950e;
+            font-size: 14px;
+            word-break: break-all;
+          }
+          .security-notice {
+            background-color: #0f0f0f;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+          }
+          .security-text {
+            color: #999999;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 0;
           }
           .footer {
-            margin-top: 30px;
+            background-color: #000000;
+            padding: 30px 20px;
+            text-align: center;
+            border-top: 1px solid #333333;
+          }
+          .footer-logo {
+            color: #ff950e;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0 0 10px 0;
+          }
+          .footer-tagline {
+            color: #666666;
             font-size: 12px;
-            color: #666;
+            margin: 0 0 20px 0;
+          }
+          .footer-links {
+            margin: 20px 0;
+          }
+          .footer-link {
+            color: #999999;
+            text-decoration: none;
+            font-size: 12px;
+            margin: 0 15px;
+          }
+          .copyright {
+            color: #555555;
+            font-size: 11px;
+            margin: 20px 0 0 0;
+          }
+          .automated-notice {
+            color: #444444;
+            font-size: 10px;
+            margin: 10px 0 0 0;
+            font-style: italic;
+          }
+          @media only screen and (max-width: 600px) {
+            .content {
+              padding: 30px 20px;
+            }
+            .greeting {
+              font-size: 20px;
+            }
+            .code {
+              font-size: 28px;
+              letter-spacing: 6px;
+            }
+            .button {
+              padding: 12px 30px;
+              font-size: 14px;
+            }
           }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
+            <div class="logo-text">PantyPost</div>
             <h1>Password Reset Request</h1>
           </div>
+          
           <div class="content">
-            <h2>Hello ${username}!</h2>
-            <p>We received a request to reset your PantyPost password.</p>
+            <h2 class="greeting">Hello ${username}!</h2>
             
-            <p>Your verification code is:</p>
+            <p class="message">
+              We received a request to reset your PantyPost account password. Use the verification code below to proceed with resetting your password.
+            </p>
             
             <div class="code-box">
-              <div class="code">${code}</div>
+              <p class="code-label">Your Verification Code</p>
+              <p class="code">${code}</p>
             </div>
             
-            <p><strong>This code will expire in 15 minutes.</strong></p>
-            
-            <p>Enter this code on the password reset page to continue.</p>
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/verify-reset-code" style="display: inline-block; padding: 12px 30px; background-color: #ff1493; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Enter Reset Code</a>
+            <div class="expiry-notice">
+              <p class="expiry-text">⏱ This code expires in 15 minutes</p>
             </div>
             
-            <p style="text-align: center; color: #666; font-size: 14px;">Or visit this link: <a href="${process.env.FRONTEND_URL}/verify-reset-code" style="color: #ff1493;">${process.env.FRONTEND_URL}/verify-reset-code</a></p>
+            <p class="message">
+              Enter this code on the password reset page to create your new password.
+            </p>
             
-            <p>If you didn't request this password reset, you can safely ignore this email. Your password won't be changed.</p>
-            
-            <div class="footer">
-              <p>Best regards,<br>The PantyPost Team</p>
-              <p>This is an automated message, please do not reply to this email.</p>
+            <div class="button-container">
+              <a href="${process.env.FRONTEND_URL}/verify-reset-code" class="button">
+                Enter Reset Code
+              </a>
             </div>
+            
+            <div class="link-container">
+              <p class="link-text">Or copy and paste this link into your browser:</p>
+              <a href="${process.env.FRONTEND_URL}/verify-reset-code" class="link">
+                ${process.env.FRONTEND_URL}/verify-reset-code
+              </a>
+            </div>
+            
+            <div class="security-notice">
+              <p class="security-text">
+                <strong>Didn't request this?</strong><br>
+                If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged and your account is secure.
+              </p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <p class="footer-logo">PantyPost</p>
+            <p class="footer-tagline">The premium marketplace for authentic items</p>
+            
+            <div class="footer-links">
+              <a href="${process.env.FRONTEND_URL}/terms" class="footer-link">Terms</a>
+              <a href="${process.env.FRONTEND_URL}/help" class="footer-link">Support</a>
+              <a href="${process.env.FRONTEND_URL}/browse" class="footer-link">Browse</a>
+            </div>
+            
+            <p class="copyright">© ${new Date().getFullYear()} PantyPost. All rights reserved.</p>
+            <p class="automated-notice">This is an automated message, please do not reply to this email.</p>
           </div>
         </div>
       </body>
@@ -186,18 +357,23 @@ const emailTemplates = {
     text: `
 Hello ${username}!
 
-We received a request to reset your PantyPost password.
+We received a request to reset your PantyPost account password.
 
 Your verification code is: ${code}
 
-This code will expire in 15 minutes.
+This code expires in 15 minutes.
 
-Enter this code on the password reset page to continue.
+Enter this code on the password reset page to create your new password:
+${process.env.FRONTEND_URL}/verify-reset-code
 
-If you didn't request this password reset, you can safely ignore this email. Your password won't be changed.
+Didn't request this?
+If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged and your account is secure.
 
 Best regards,
 The PantyPost Team
+
+© ${new Date().getFullYear()} PantyPost. All rights reserved.
+This is an automated message, please do not reply to this email.
     `
   }),
 
@@ -304,49 +480,126 @@ The PantyPost Team
           body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
-            color: #333;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+            background-color: #000000;
           }
           .container {
             max-width: 600px;
             margin: 0 auto;
-            padding: 20px;
+            background-color: #000000;
           }
           .header {
-            background-color: #28a745;
+            background-color: #0a0a0a;
             color: white;
-            padding: 20px;
+            padding: 30px 20px;
             text-align: center;
-            border-radius: 10px 10px 0 0;
+            border-bottom: 3px solid #28a745;
+          }
+          .header h1 {
+            color: #28a745;
+            font-size: 26px;
+            margin: 15px 0 5px 0;
+            font-weight: normal;
+          }
+          .logo-text {
+            color: #ff950e;
+            font-size: 32px;
+            font-weight: bold;
+            margin: 0 0 10px 0;
           }
           .content {
-            background-color: #f9f9f9;
-            padding: 30px;
-            border-radius: 0 0 10px 10px;
+            background-color: #0a0a0a;
+            padding: 40px 30px;
+          }
+          .success-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 30px;
+            background-color: #28a745;
+            border-radius: 50%;
+            display: table;
+            text-align: center;
+          }
+          .checkmark {
+            color: white;
+            font-size: 40px;
+            font-weight: bold;
+            line-height: 80px;
+          }
+          .greeting {
+            color: #ffffff;
+            font-size: 22px;
+            font-weight: bold;
+            margin: 0 0 20px 0;
+          }
+          .message {
+            color: #cccccc;
+            font-size: 16px;
+            margin: 0 0 30px 0;
+          }
+          .button-container {
+            text-align: center;
+            margin: 35px 0;
+          }
+          .button {
+            display: inline-block;
+            padding: 14px 35px;
+            background-color: #ff950e;
+            color: #000000;
+            text-decoration: none;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 16px;
           }
           .footer {
-            margin-top: 30px;
+            background-color: #000000;
+            padding: 30px 20px;
+            text-align: center;
+            border-top: 1px solid #333333;
+          }
+          .footer-text {
+            color: #666666;
             font-size: 12px;
-            color: #666;
+            margin: 0;
           }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>Password Reset Successful</h1>
+            <div class="logo-text">PantyPost</div>
+            <h1>Password Successfully Reset</h1>
           </div>
+          
           <div class="content">
-            <h2>Hello ${username}!</h2>
-            <p>Your PantyPost password has been successfully reset.</p>
-            
-            <p>You can now log in with your new password.</p>
-            
-            <p>If you didn't make this change, please contact our support team immediately.</p>
-            
-            <div class="footer">
-              <p>Best regards,<br>The PantyPost Team</p>
-              <p>This is an automated message, please do not reply to this email.</p>
+            <div class="success-icon">
+              <div class="checkmark">✓</div>
             </div>
+            
+            <h2 class="greeting">Great news, ${username}!</h2>
+            
+            <p class="message">
+              Your PantyPost password has been successfully reset. You can now log in with your new password.
+            </p>
+            
+            <div class="button-container">
+              <a href="${process.env.FRONTEND_URL}/login" class="button">
+                Log In Now
+              </a>
+            </div>
+            
+            <p class="message">
+              If you didn't make this change, please contact our support team immediately.
+            </p>
+          </div>
+          
+          <div class="footer">
+            <p class="footer-text">
+              © ${new Date().getFullYear()} PantyPost. All rights reserved.<br>
+              This is an automated message, please do not reply to this email.
+            </p>
           </div>
         </div>
       </body>
@@ -355,14 +608,17 @@ The PantyPost Team
     text: `
 Hello ${username}!
 
-Your PantyPost password has been successfully reset.
+Great news! Your PantyPost password has been successfully reset.
 
-You can now log in with your new password.
+You can now log in with your new password at:
+${process.env.FRONTEND_URL}/login
 
 If you didn't make this change, please contact our support team immediately.
 
 Best regards,
 The PantyPost Team
+
+© ${new Date().getFullYear()} PantyPost. All rights reserved.
     `
   })
 };
