@@ -33,6 +33,7 @@ export default function OrderCard({
   const sellerUser = users?.[order.seller ?? ''];
   const isSellerVerified = sellerUser?.verified || sellerUser?.verificationStatus === 'verified';
   const hasDeliveryAddress = !!order.deliveryAddress;
+  const totalPaid = (order.markedUpPrice ?? order.price ?? 0).toFixed(2);
 
   useEffect(() => {
     const loadProfilePic = async () => {
@@ -65,15 +66,23 @@ export default function OrderCard({
         }`}
       />
 
-      {/* Auction action badge */}
-      {order.wasAuction && needsAddress && (
-        <div className="absolute right-6 top-6 z-10">
+      <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-2 text-right">
+        <div className="flex flex-col items-end text-right">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Total paid</span>
+          <span className="text-xl font-bold" style={{ color: styles.accentColor }}>
+            ${totalPaid}
+          </span>
+          <span className="text-[10px] text-gray-500">Includes seller payout & platform fee</span>
+        </div>
+
+        {/* Auction action badge */}
+        {order.wasAuction && needsAddress && (
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/50 bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-200">
             <span className="text-base">🏆</span>
             <span>Confirm address</span>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="relative z-10 p-4 sm:p-5">
         <OrderHeader order={order} type={type} styles={styles} />

@@ -100,7 +100,7 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   };
 
   return (
-    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[auto,1fr,auto] lg:items-start lg:gap-5">
+    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[auto,1fr] lg:items-start lg:gap-5">
       {/* Product Image or Custom Request Icon */}
       <div className="flex flex-shrink-0 flex-col items-center gap-2.5 lg:items-start">
         <div className="relative h-20 w-20 overflow-hidden rounded-xl border border-white/10 bg-black/40">
@@ -165,13 +165,6 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
         </div>
       </div>
 
-      <div className="flex flex-col items-end text-right lg:min-w-[190px] lg:self-start">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Total paid</span>
-        <span className="text-xl font-bold" style={{ color: accentColor }}>
-          ${(order.markedUpPrice || order.price).toFixed(2)}
-        </span>
-        <span className="text-[10px] text-gray-500">Includes seller payout & platform fee</span>
-      </div>
     </div>
   );
 }
