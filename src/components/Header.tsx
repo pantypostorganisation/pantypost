@@ -504,7 +504,7 @@ export default function Header(): React.ReactElement | null {
       </div>
       <span className="flex-1">{label}</span>
       {badge && badge > 0 && (
-        <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
+        <span className="bg-[#ff950e] text-black text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
           {badge}
         </span>
       )}
@@ -704,14 +704,14 @@ export default function Header(): React.ReactElement | null {
                     <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg relative">
                       <Bell className="w-5 h-5" />
                       {processedNotifications.active.length > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-[#ff950e] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[16px] text-center font-bold">
+                        <span className="absolute -top-1 -right-1 bg-[#ff950e] text-black text-[10px] rounded-full px-1.5 py-0.5 min-w-[16px] text-center font-bold">
                           {processedNotifications.active.length}
                         </span>
                       )}
                     </div>
                     <span className="flex-1">Notifications</span>
                     {processedNotifications.active.length > 0 && (
-                      <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
+                      <span className="bg-[#ff950e] text-black text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
                         {processedNotifications.active.length}
                       </span>
                     )}
@@ -736,7 +736,7 @@ export default function Header(): React.ReactElement | null {
                   <div className="pt-4 space-y-2">
                     <Link
                       href="/login"
-                      className="block text-center bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50"
+                      className="block text-center bg-gradient-to-r from-[#2a2a2a] to-[#333] hover:from-[#333] hover:to-[#444] text-white font-bold px-4 py-3 rounded-lg transition-all duration-300 border border-[#444] hover:border-[#555]"
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       Log In
