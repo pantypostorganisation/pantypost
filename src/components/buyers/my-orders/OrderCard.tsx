@@ -67,7 +67,7 @@ export default function OrderCard({
         }`}
       />
 
-      <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-3 text-right">
+      <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-3 text-right sm:top-1/2 sm:-translate-y-1/2">
         <div className="flex flex-col items-end text-right">
           <span className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Total paid</span>
           <span className="text-xl font-bold" style={{ color: styles.accentColor }}>
