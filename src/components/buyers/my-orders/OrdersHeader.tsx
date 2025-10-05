@@ -6,18 +6,13 @@ import { ShoppingBag, TrendingUp, Package, Sparkles, ShieldCheck } from 'lucide-
 
 export default function OrdersHeader() {
   return (
-    <div className="relative flex flex-col gap-8">
-      {/* Background glows */}
-      <div className="pointer-events-none absolute -top-10 left-0 h-40 w-40 rounded-full bg-[#ff950e]/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-12 right-6 h-48 w-48 rounded-full bg-[#ff7a00]/10 blur-3xl" />
-
-      <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
         {/* Title section */}
         <div className="flex flex-1 flex-col gap-6">
           <div className="flex items-center gap-4">
-            <div className="relative inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-[#ff950e]/40 bg-gradient-to-br from-[#ff950e]/40 via-[#ff7a00]/60 to-[#ff6b00]/70 shadow-[0_15px_40px_-25px_rgba(255,149,14,0.9)]">
-              <span className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.25),_transparent_60%)]" />
-              <ShoppingBag className="relative z-10 h-6 w-6 text-white" />
+            <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/15">
+              <ShoppingBag className="h-6 w-6 text-white" />
             </div>
             <div>
               <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-gray-200/70">
@@ -29,7 +24,7 @@ export default function OrdersHeader() {
                 </span>
               </h1>
               <p className="mt-2 max-w-xl text-sm text-gray-400 sm:text-base">
-                Track purchases, review deliveries, and stay in sync with every seller you're supporting.
+                Track purchases, review deliveries, and stay in sync with every seller you&apos;re supporting.
               </p>
             </div>
           </div>
@@ -66,7 +61,7 @@ export default function OrdersHeader() {
         </div>
 
         {/* Trust panel */}
-        <div className="relative flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-white/10 bg-black/40 p-6 text-sm text-gray-300 shadow-[0_15px_45px_-30px_rgba(255,149,14,0.6)]">
+        <div className="flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-white/10 bg-black/40 p-6 text-sm text-gray-300">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10">
               <ShieldCheck className="h-6 w-6 text-[#ff950e]" />
@@ -78,7 +73,7 @@ export default function OrdersHeader() {
           </div>
           <div className="rounded-2xl border border-white/5 bg-black/30 p-4 text-xs text-gray-400">
             <p>
-              Keep an eye on address confirmations for auction wins and leave reviews to unlock loyalty bonuses with your favorite sellers.
+              Keep an eye on address confirmations for auction wins and leave reviews to unlock loyalty bonuses with your favourite sellers.
             </p>
           </div>
         </div>

@@ -48,10 +48,10 @@ export default function OrderSections({
   };
 
   const tabConfig = [
-    { id: 'all', label: 'All orders', count: allOrders.length, icon: ShoppingBag, gradient: 'from-[#ff950e]/35 to-[#ff7a00]/30', iconBg: 'bg-[#ff950e]/15 text-[#ffb469]' },
-    { id: 'purchases', label: 'Direct', count: directOrders.length, icon: Package, show: directOrders.length > 0, gradient: 'from-emerald-500/25 to-teal-500/25', iconBg: 'bg-emerald-500/15 text-emerald-300' },
-    { id: 'custom', label: 'Custom', count: customRequestOrders.length, icon: Settings, show: customRequestOrders.length > 0, gradient: 'from-sky-500/25 to-cyan-500/20', iconBg: 'bg-sky-500/15 text-sky-300' },
-    { id: 'auctions', label: 'Auctions', count: auctionOrders.length, icon: Gavel, show: auctionOrders.length > 0, gradient: 'from-purple-500/25 to-violet-500/20', iconBg: 'bg-purple-500/15 text-purple-300' },
+    { id: 'all', label: 'All orders', count: allOrders.length, icon: ShoppingBag, iconBg: 'bg-[#ff950e]/15 text-[#ffb469]' },
+    { id: 'purchases', label: 'Direct', count: directOrders.length, icon: Package, show: directOrders.length > 0, iconBg: 'bg-emerald-500/15 text-emerald-300' },
+    { id: 'custom', label: 'Custom', count: customRequestOrders.length, icon: Settings, show: customRequestOrders.length > 0, iconBg: 'bg-sky-500/15 text-sky-300' },
+    { id: 'auctions', label: 'Auctions', count: auctionOrders.length, icon: Gavel, show: auctionOrders.length > 0, iconBg: 'bg-purple-500/15 text-purple-300' },
   ] as const;
 
   const activeTabConfig = tabConfig.find((tab) => tab.id === activeTab);
@@ -71,10 +71,8 @@ export default function OrderSections({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`group relative flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
-                    isActive
-                      ? `bg-gradient-to-r ${tab.gradient} text-white shadow-[0_18px_45px_-35px_rgba(255,149,14,0.8)]`
-                      : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                  className={`group relative flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors duration-200 ${
+                    isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
                   }`}
                 >
                   <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tab.iconBg} transition-transform duration-200 group-hover:scale-105`}>
