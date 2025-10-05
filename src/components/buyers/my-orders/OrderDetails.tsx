@@ -65,24 +65,24 @@ export default function OrderDetails({
         </div>
       )}
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/5 bg-black/30 px-4 py-4">
+      <div className="mt-8 flex flex-col gap-3 rounded-2xl border border-white/5 bg-black/30 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         {!hasDeliveryAddress ? (
           <button
             onClick={() => onOpenAddressModal(order.id)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition-colors hover:border-amber-300/60 hover:bg-amber-500/15"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition-colors hover:border-amber-300/60 hover:bg-amber-500/15 sm:w-auto sm:justify-start"
           >
             <MapPin className="h-4 w-4" />
             Confirm delivery address
           </button>
         ) : (
-          <div className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200">
+          <div className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 sm:w-auto sm:justify-start">
             <CheckCircle className="h-4 w-4" />
             Address confirmed
           </div>
         )}
 
         <button
-          className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors sm:w-auto sm:justify-start ${
             isExpanded
               ? 'text-gray-300 hover:text-white'
               : 'bg-[#ff950e]/15 text-[#ffb469] hover:bg-[#ff950e]/25'
