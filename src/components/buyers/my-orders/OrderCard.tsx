@@ -76,13 +76,13 @@ export default function OrderCard({
           <span className="text-[10px] text-gray-500">Includes seller payout & platform fee</span>
         </div>
 
-        <div className="flex flex-wrap justify-end gap-2 text-[10px] text-gray-400 sm:text-xs">
+        <div className="flex flex-col items-end gap-2 text-right text-[10px] text-gray-400 sm:text-xs">
+          {getShippingStatusBadge(order.shippingStatus)}
+
           <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1">
             <Calendar className="h-3.5 w-3.5 text-white/60" />
             <span>{formatOrderDate(order.date)}</span>
           </div>
-
-          {getShippingStatusBadge(order.shippingStatus)}
         </div>
 
         {/* Auction action badge */}
