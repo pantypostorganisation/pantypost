@@ -95,156 +95,265 @@ const sendEmail = async (options) => {
 
 // Email templates
 const emailTemplates = {
-  // AGGRESSIVE DARK MODE - Multiple techniques combined
+  // Responsive light/dark mode template
   passwordResetCode: (username, code) => ({
     subject: 'Your PantyPost Password Reset Code',
     html: `
-      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-      <html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+      <!DOCTYPE html>
+      <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
       <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="color-scheme" content="dark">
-        <meta name="supported-color-schemes" content="dark">
-        <!--[if !mso]><!-->
         <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <!--<![endif]-->
-        <style type="text/css">
+        <meta name="x-apple-disable-message-reformatting">
+        <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
+        <title>Password Reset - PantyPost</title>
+        <!--[if mso]>
+        <noscript>
+          <xml>
+            <o:OfficeDocumentSettings>
+              <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+          </xml>
+        </noscript>
+        <![endif]-->
+        <style>
+          :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+          }
+          
+          /* Reset styles */
+          body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+          table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+          img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+          
+          /* Light mode (default) */
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background-color: #f4f4f4 !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          }
+          
+          .email-container {
+            max-width: 600px;
+            margin: auto;
+          }
+          
+          .email-header {
+            background-color: #ffffff;
+            border-bottom: 3px solid #ff950e;
+          }
+          
+          .email-body {
+            background-color: #ffffff;
+          }
+          
+          .code-box {
+            background-color: #fff5e6;
+            border: 2px solid #ff950e;
+          }
+          
+          .timer-box {
+            background-color: #fff9f0;
+            border-left: 3px solid #ff950e;
+          }
+          
+          .alt-link-box {
+            background-color: #f8f8f8;
+            border: 1px solid #e0e0e0;
+          }
+          
+          .security-box {
+            background-color: #f8f8f8;
+            border: 1px solid #e0e0e0;
+          }
+          
+          .text-primary { color: #333333 !important; }
+          .text-secondary { color: #666666 !important; }
+          .text-muted { color: #999999 !important; }
+          .text-orange { color: #ff950e !important; }
+          
+          /* Dark mode overrides */
           @media (prefers-color-scheme: dark) {
-            body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
-            table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
-            img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+            body {
+              background-color: #202124 !important;
+            }
+            
+            .email-header {
+              background-color: #303134 !important;
+            }
+            
+            .email-body {
+              background-color: #202124 !important;
+            }
+            
+            .code-box {
+              background-color: #303134 !important;
+            }
+            
+            .timer-box {
+              background-color: #3c2a1a !important;
+            }
+            
+            .alt-link-box {
+              background-color: #303134 !important;
+              border-color: #5f6368 !important;
+            }
+            
+            .security-box {
+              background-color: #303134 !important;
+              border-color: #5f6368 !important;
+            }
+            
+            .text-primary { color: #e8eaed !important; }
+            .text-secondary { color: #9aa0a6 !important; }
+            .text-muted { color: #5f6368 !important; }
+            .text-orange { color: #ff950e !important; }
+            
+            .dark-invert { filter: invert(1) !important; }
+          }
+          
+          /* Outlook Dark Mode */
+          [data-ogsc] body { background-color: #202124 !important; }
+          [data-ogsc] .email-header { background-color: #303134 !important; }
+          [data-ogsc] .email-body { background-color: #202124 !important; }
+          [data-ogsc] .text-primary { color: #e8eaed !important; }
+          [data-ogsc] .text-secondary { color: #9aa0a6 !important; }
+          
+          /* Mobile styles */
+          @media screen and (max-width: 600px) {
+            .email-container { width: 100% !important; }
+            .email-padding { padding: 25px 20px !important; }
+            .code-text { font-size: 24px !important; letter-spacing: 4px !important; }
           }
         </style>
-        <!--[if mso]>
-        <xml>
-          <o:OfficeDocumentSettings>
-            <o:AllowPNG/>
-            <o:PixelsPerInch>96</o:PixelsPerInch>
-          </o:OfficeDocumentSettings>
-        </xml>
-        <![endif]-->
       </head>
-      <body bgcolor="#202124" style="margin:0;padding:0;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;background-color:#202124;">
-        <!--[if mso | IE]>
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#202124">
-        <tr>
-        <td>
-        <![endif]-->
-        
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;mso-table-lspace:0;mso-table-rspace:0;background-color:#202124;">
-          <tbody>
+      <body>
+        <div role="article" aria-roledescription="email" aria-label="Password Reset" lang="en" style="width: 100%;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
-              <td align="center" bgcolor="#202124" style="padding:0;background-color:#202124;">
-                
-                <!--[if mso | IE]>
-                <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;">
-                <v:fill type="tile" color="#202124"/>
-                <v:textbox style="mso-fit-shape-to-text:true" inset="0,0,0,0">
-                <![endif]-->
-                
-                <div style="max-width:600px;margin:0 auto;background-color:#202124;">
-                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#202124;">
+              <td align="center">
+                <div class="email-container">
+                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                     
-                    <!-- HEADER -->
+                    <!-- Header -->
                     <tr>
-                      <td align="center" bgcolor="#303134" style="padding:30px;background-color:#303134;border-bottom:3px solid #ff950e;">
-                        <a href="https://pantypost.com/">
-                          <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" border="0" style="display:block;">
+                      <td class="email-header" style="padding: 30px; text-align: center;">
+                        <a href="https://pantypost.com/" style="text-decoration: none;">
+                          <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" style="display: block; margin: 0 auto; max-width: 100%; height: auto;">
                         </a>
-                        <h1 style="color:#e8eaed;font-family:Arial,sans-serif;font-size:22px;font-weight:normal;margin:20px 0 0 0;mso-line-height-rule:exactly;line-height:28px;">
+                        <h1 class="text-primary" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
                           Password Reset Request
                         </h1>
                       </td>
                     </tr>
                     
-                    <!-- CONTENT -->
+                    <!-- Body -->
                     <tr>
-                      <td align="left" bgcolor="#202124" style="padding:35px 30px;background-color:#202124;">
-                        <h2 style="color:#e8eaed;font-family:Arial,sans-serif;font-size:18px;font-weight:bold;margin:0 0 15px 0;mso-line-height-rule:exactly;">
+                      <td class="email-body email-padding" style="padding: 35px 30px;">
+                        <h2 class="text-primary" style="font-size: 18px; margin: 0 0 15px 0;">
                           Hello ${username}! 👋
                         </h2>
                         
-                        <p style="color:#9aa0a6;font-family:Arial,sans-serif;font-size:15px;line-height:22px;margin:0 0 25px 0;mso-line-height-rule:exactly;">
-                          We received a request to reset your PantyPost account password. Use the verification code below:
+                        <p class="text-secondary" style="font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
+                          We received a request to reset your PantyPost account password. Use the verification code below to proceed with resetting your password.
                         </p>
                         
-                        <!-- CODE BOX -->
-                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                        <!-- Code Box -->
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 30px 0;">
                           <tr>
-                            <td align="center" style="padding:0;">
-                              <table role="presentation" border="0" cellpadding="25" cellspacing="0" style="background-color:#303134;border:2px solid #ff950e;border-radius:8px;">
-                                <tr>
-                                  <td align="center" bgcolor="#303134" style="background-color:#303134;">
-                                    <p style="color:#ff950e;font-family:Arial,sans-serif;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px 0;mso-line-height-rule:exactly;">
-                                      Your Verification Code
-                                    </p>
-                                    <p style="color:#ff950e;font-family:'Courier New',monospace;font-size:28px;font-weight:bold;letter-spacing:5px;margin:0;mso-line-height-rule:exactly;">
-                                      ${code}
-                                    </p>
-                                  </td>
-                                </tr>
-                              </table>
+                            <td align="center">
+                              <div class="code-box" style="padding: 25px; text-align: center; border-radius: 8px;">
+                                <div class="text-orange" style="font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+                                  Your Verification Code
+                                </div>
+                                <div class="text-orange code-text" style="font-size: 28px; font-weight: bold; letter-spacing: 5px; font-family: 'Courier New', monospace;">
+                                  ${code}
+                                </div>
+                              </div>
                             </td>
                           </tr>
                         </table>
                         
-                        <!-- TIMER -->
-                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin:20px 0;">
-                          <tr>
-                            <td bgcolor="#3c2a1a" style="background-color:#3c2a1a;border-left:3px solid #ff950e;padding:12px;">
-                              <p style="color:#ffb347;font-family:Arial,sans-serif;font-size:13px;margin:0;mso-line-height-rule:exactly;">
-                                ⏱ This code expires in 15 minutes
-                              </p>
-                            </td>
-                          </tr>
-                        </table>
+                        <!-- Timer -->
+                        <div class="timer-box" style="padding: 12px; margin: 25px 0; border-radius: 4px;">
+                          <p style="color: #ffb347; font-size: 13px; margin: 0;">
+                            ⏱ This code expires in 15 minutes
+                          </p>
+                        </div>
                         
-                        <p style="color:#9aa0a6;font-family:Arial,sans-serif;font-size:15px;line-height:22px;margin:20px 0 25px 0;mso-line-height-rule:exactly;">
-                          Enter this code on the password reset page.
+                        <p class="text-secondary" style="font-size: 15px; line-height: 1.6; margin: 20px 0 25px 0;">
+                          Enter this code on the password reset page to create your new password.
                         </p>
                         
-                        <!-- BUTTON -->
-                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center">
+                        <!-- CTA Button -->
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 30px auto;">
                           <tr>
-                            <td align="center" bgcolor="#ff950e" style="background-color:#ff950e;border-radius:25px;">
-                              <a href="${process.env.FRONTEND_URL}/verify-reset-code" target="_blank" style="display:inline-block;padding:12px 30px;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;text-decoration:none;color:#202124;mso-line-height-rule:exactly;">
+                            <td style="background-color: #ff950e; border-radius: 25px;">
+                              <a href="${process.env.FRONTEND_URL}/verify-reset-code" style="display: inline-block; padding: 12px 30px; color: #000000; font-size: 15px; font-weight: bold; text-decoration: none;">
                                 Enter Reset Code →
                               </a>
                             </td>
                           </tr>
                         </table>
                         
+                        <!-- Alternative Link -->
+                        <div class="alt-link-box" style="padding: 18px; text-align: center; border-radius: 8px; margin: 20px 0;">
+                          <p class="text-secondary" style="font-size: 13px; margin: 0 0 6px 0;">
+                            Or copy and paste this link into your browser:
+                          </p>
+                          <a href="${process.env.FRONTEND_URL}/verify-reset-code" class="text-orange" style="font-size: 13px; text-decoration: underline;">
+                            ${process.env.FRONTEND_URL}/verify-reset-code
+                          </a>
+                        </div>
+                        
+                        <!-- Security Notice -->
+                        <div class="security-box" style="padding: 18px; border-radius: 8px; margin-top: 25px;">
+                          <p class="text-secondary" style="font-size: 13px; line-height: 1.6; margin: 0;">
+                            <strong class="text-primary">🔒 Didn't request this?</strong><br>
+                            If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged and your account is secure.
+                          </p>
+                        </div>
                       </td>
                     </tr>
                     
-                    <!-- FOOTER -->
+                    <!-- Footer -->
                     <tr>
-                      <td align="center" bgcolor="#202124" style="padding:25px;background-color:#202124;border-top:1px solid #5f6368;">
-                        <p style="color:#5f6368;font-family:Arial,sans-serif;font-size:10px;margin:0;mso-line-height-rule:exactly;">
-                          © ${new Date().getFullYear()} PantyPost. All rights reserved.
+                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #333333;">
+                        <p class="text-orange" style="font-weight: bold; font-size: 16px; margin: 0;">PantyPost</p>
+                        <p class="text-secondary" style="font-size: 11px; margin: 5px 0 15px 0;">The premium marketplace for authentic items</p>
+                        
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center">
+                          <tr>
+                            <td style="padding: 0 10px;">
+                              <a href="${process.env.FRONTEND_URL}/terms" class="text-orange" style="font-size: 12px; text-decoration: none;">Terms</a>
+                            </td>
+                            <td style="padding: 0 10px;">
+                              <a href="${process.env.FRONTEND_URL}/help" class="text-orange" style="font-size: 12px; text-decoration: none;">Support</a>
+                            </td>
+                            <td style="padding: 0 10px;">
+                              <a href="${process.env.FRONTEND_URL}/browse" class="text-orange" style="font-size: 12px; text-decoration: none;">Browse</a>
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <p class="text-muted" style="font-size: 10px; margin: 15px 0 0 0;">
+                          © ${new Date().getFullYear()} PantyPost. All rights reserved.<br>
+                          This is an automated message, please do not reply to this email.
                         </p>
                       </td>
                     </tr>
                     
                   </table>
                 </div>
-                
-                <!--[if mso | IE]>
-                </v:textbox>
-                </v:rect>
-                <![endif]-->
-                
               </td>
             </tr>
-          </tbody>
-        </table>
-        
-        <!--[if mso | IE]>
-        </td>
-        </tr>
-        </table>
-        <![endif]-->
+          </table>
+        </div>
       </body>
       </html>
     `,
@@ -363,74 +472,140 @@ The PantyPost Team
     `
   }),
   
-  // Password reset success email
+  // Password reset success email - responsive light/dark
   passwordResetSuccess: (username) => ({
     subject: 'Your PantyPost Password Has Been Reset',
     html: `
-      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-      <html xmlns="http://www.w3.org/1999/xhtml">
+      <!DOCTYPE html>
+      <html lang="en">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="color-scheme" content="dark">
-        <meta name="supported-color-schemes" content="dark">
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
+        <title>Password Reset Success - PantyPost</title>
+        <style>
+          :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+          }
+          
+          body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          }
+          
+          .email-container {
+            max-width: 600px;
+            margin: auto;
+          }
+          
+          .email-header {
+            background-color: #ffffff;
+            border-bottom: 3px solid #28a745;
+          }
+          
+          .email-body {
+            background-color: #ffffff;
+          }
+          
+          .success-icon {
+            width: 70px;
+            height: 70px;
+            background-color: #28a745;
+            border-radius: 50%;
+            margin: 0 auto 25px;
+            line-height: 70px;
+            text-align: center;
+          }
+          
+          .text-primary { color: #333333; }
+          .text-secondary { color: #666666; }
+          .text-success { color: #28a745; }
+          
+          @media (prefers-color-scheme: dark) {
+            body { background-color: #202124; }
+            .email-header { background-color: #303134; }
+            .email-body { background-color: #202124; }
+            .text-primary { color: #e8eaed; }
+            .text-secondary { color: #9aa0a6; }
+          }
+          
+          @media screen and (max-width: 600px) {
+            .email-container { width: 100% !important; }
+          }
+        </style>
       </head>
-      <body bgcolor="#202124" style="margin:0;padding:0;background-color:#202124;">
-        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" bgcolor="#202124">
-          <tr>
-            <td align="center" style="padding:0;">
-              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="600" style="background-color:#202124;">
-                <!-- Header -->
-                <tr>
-                  <td align="center" bgcolor="#303134" style="padding:30px;background-color:#303134;border-bottom:3px solid #28a745;">
-                    <a href="https://pantypost.com/">
-                      <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" border="0" style="display:block;">
-                    </a>
-                    <h1 style="color:#28a745;font-family:Arial,sans-serif;font-size:22px;font-weight:normal;margin:20px 0 0 0;">
-                      Password Successfully Reset
-                    </h1>
-                  </td>
-                </tr>
-                
-                <!-- Content -->
-                <tr>
-                  <td align="center" bgcolor="#202124" style="padding:35px 30px;background-color:#202124;">
-                    <div style="width:70px;height:70px;background-color:#28a745;border-radius:50%;margin:0 auto 25px;line-height:70px;text-align:center;">
-                      <span style="color:white;font-size:35px;">✓</span>
-                    </div>
+      <body>
+        <div role="article" aria-roledescription="email" lang="en" style="width: 100%;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td align="center">
+                <div class="email-container">
+                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                     
-                    <h2 style="color:#e8eaed;font-family:Arial,sans-serif;font-size:18px;margin:0 0 15px 0;">
-                      Great news, ${username}! 🎉
-                    </h2>
+                    <!-- Header -->
+                    <tr>
+                      <td class="email-header" style="padding: 30px; text-align: center;">
+                        <a href="https://pantypost.com/">
+                          <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" style="display: block; margin: 0 auto;">
+                        </a>
+                        <h1 class="text-success" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
+                          Password Successfully Reset
+                        </h1>
+                      </td>
+                    </tr>
                     
-                    <p style="color:#9aa0a6;font-family:Arial,sans-serif;font-size:15px;line-height:22px;margin:0 0 25px 0;">
-                      Your password has been reset successfully.
-                    </p>
+                    <!-- Body -->
+                    <tr>
+                      <td class="email-body" style="padding: 35px 30px; text-align: center;">
+                        <div class="success-icon">
+                          <span style="color: white; font-size: 35px;">✓</span>
+                        </div>
+                        
+                        <h2 class="text-primary" style="font-size: 18px; margin: 0 0 15px 0;">
+                          Great news, ${username}! 🎉
+                        </h2>
+                        
+                        <p class="text-secondary" style="font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
+                          Your PantyPost password has been successfully reset.<br>
+                          You can now log in with your new password.
+                        </p>
+                        
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center">
+                          <tr>
+                            <td style="background-color: #ff950e; border-radius: 25px;">
+                              <a href="${process.env.FRONTEND_URL}/login" style="display: inline-block; padding: 12px 30px; color: #000000; font-size: 15px; font-weight: bold; text-decoration: none;">
+                                Log In Now →
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <p class="text-secondary" style="font-size: 13px; margin: 25px 0 0 0;">
+                          If you didn't make this change, please contact our support team immediately.
+                        </p>
+                      </td>
+                    </tr>
                     
-                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center">
-                      <tr>
-                        <td align="center" bgcolor="#ff950e" style="background-color:#ff950e;border-radius:25px;">
-                          <a href="${process.env.FRONTEND_URL}/login" target="_blank" style="display:inline-block;padding:12px 30px;font-family:Arial,sans-serif;font-size:15px;font-weight:bold;text-decoration:none;color:#202124;">
-                            Log In Now →
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-                
-                <!-- Footer -->
-                <tr>
-                  <td align="center" bgcolor="#202124" style="padding:25px;background-color:#202124;border-top:1px solid #5f6368;">
-                    <p style="color:#5f6368;font-family:Arial,sans-serif;font-size:10px;margin:0;">
-                      © ${new Date().getFullYear()} PantyPost. All rights reserved.
-                    </p>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
+                    <!-- Footer -->
+                    <tr>
+                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #333333;">
+                        <p style="color: #999999; font-size: 10px; margin: 0;">
+                          © ${new Date().getFullYear()} PantyPost. All rights reserved.<br>
+                          This is an automated message, please do not reply to this email.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                  </table>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
       </body>
       </html>
     `,
