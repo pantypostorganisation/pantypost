@@ -20,9 +20,6 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   const accentColor = styles.accentColor;
   const accentWithAlpha = (alpha: string) => `${accentColor}${alpha}`;
 
-  const accentBorderStyle: React.CSSProperties = {
-    borderColor: `${accentWithAlpha('55')}`,
-  };
   const accentPillStyle: React.CSSProperties = {
     backgroundColor: accentWithAlpha('24'),
     borderColor: `${accentWithAlpha('55')}`,
@@ -168,10 +165,7 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
         </div>
       </div>
 
-      <div
-        className="flex flex-col rounded-xl border px-3 py-2.5 text-right lg:min-w-[190px] lg:self-start"
-        style={accentBorderStyle}
-      >
+      <div className="flex flex-col items-end text-right lg:min-w-[190px] lg:self-start">
         <span className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Total paid</span>
         <span className="text-xl font-bold" style={{ color: accentColor }}>
           ${(order.markedUpPrice || order.price).toFixed(2)}
