@@ -29,14 +29,14 @@ export default function OrderDetails({
   return (
     <>
       {/* Streamlined Meta Info */}
-      <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-gray-400 sm:text-sm">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-[11px] text-gray-400 sm:text-xs">
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5">
           <Calendar className="h-4 w-4 text-white/60" />
           <span>{formatOrderDate(order.date)}</span>
         </div>
 
         {order.tags && order.tags.length > 0 && (
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5">
             <Tag className="h-4 w-4 text-white/60" />
             <span className="opacity-80">
               {order.tags.slice(0, 2).join(', ')}
@@ -45,44 +45,44 @@ export default function OrderDetails({
           </div>
         )}
 
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs sm:text-sm">
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5">
           {getShippingStatusBadge(order.shippingStatus)}
         </div>
       </div>
 
       {/* Type-specific highlight - More subtle */}
       {isAuction && (
-        <div className="mt-5 rounded-2xl border border-purple-500/30 bg-purple-500/10 px-5 py-4 text-sm text-purple-100">
+        <div className="mt-4 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm text-purple-100">
           Winning bid
           <span className="ml-2 font-semibold text-white">${order.finalBid?.toFixed(2) || order.price.toFixed(2)}</span>
         </div>
       )}
 
       {isCustom && order.originalRequestId && (
-        <div className="mt-5 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-5 py-4 text-sm text-sky-100">
+        <div className="mt-4 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3 text-sm text-sky-100">
           Custom Request •
           <span className="ml-2 font-mono text-xs text-sky-200/80">#{order.originalRequestId.slice(0, 8)}</span>
         </div>
       )}
 
-      <div className="mt-8 flex flex-col gap-3 rounded-2xl border border-white/5 bg-black/30 px-4 py-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+      <div className="mt-6 flex flex-col gap-2.5 rounded-xl border border-white/5 bg-black/30 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         {!hasDeliveryAddress ? (
           <button
             onClick={() => onOpenAddressModal(order.id)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition-colors hover:border-amber-300/60 hover:bg-amber-500/15 sm:w-auto sm:justify-start"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition-colors hover:border-amber-300/60 hover:bg-amber-500/15 sm:w-auto sm:justify-start"
           >
             <MapPin className="h-4 w-4" />
             Confirm delivery address
           </button>
         ) : (
-          <div className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 sm:w-auto sm:justify-start">
+          <div className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200 sm:w-auto sm:justify-start">
             <CheckCircle className="h-4 w-4" />
             Address confirmed
           </div>
         )}
 
         <button
-          className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors sm:w-auto sm:justify-start ${
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors sm:w-auto sm:justify-start ${
             isExpanded
               ? 'text-gray-300 hover:text-white'
               : 'bg-[#ff950e]/15 text-[#ffb469] hover:bg-[#ff950e]/25'
