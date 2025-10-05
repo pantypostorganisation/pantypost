@@ -447,7 +447,7 @@ const emailTemplates = {
           <div class="container" style="background-color: #000000 !important;">
             <!-- Header with logo image -->
             <div class="header" style="background-color: #0a0a0a !important;">
-              <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" height="60" style="display: block; margin: 0 auto; border: 0; outline: none;">
+              <img src="https://pantypost.com/logo.png" alt="PantyPost" style="display: block; margin: 0 auto; border: 0; outline: none; width: 240px; height: auto; max-width: 90%;">
               <h1 style="color: #ffffff !important;">Password Reset Request</h1>
             </div>
             
