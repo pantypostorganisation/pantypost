@@ -203,18 +203,19 @@ export default function AdminHealthSection({
     }).format(Number.isFinite(amount) ? amount : 0);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 mb-8">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-4">
       {/* Platform Health */}
-      <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <Activity className="h-5 w-5 text-[#ff950e]" />
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-7 backdrop-blur-sm shadow-xl shadow-black/30">
+        <div className="pointer-events-none absolute -top-16 -right-14 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl" aria-hidden="true" />
+        <h3 className="relative mb-4 flex items-center gap-2 text-lg font-bold text-white">
+          <Activity className="h-5 w-5 text-emerald-300" />
           Platform Health
         </h3>
-        <div className="space-y-4">
-          <div className="flex justify-between items-center p-4 bg-[#252525] rounded-lg">
+        <div className="relative space-y-4">
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex items-center gap-3">
-              <Users className="h-5 w-5 text-blue-400" />
-              <span className="text-white">Total Users</span>
+              <Users className="h-5 w-5 text-sky-300" />
+              <span className="text-sm font-medium text-white/80">Total Users</span>
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold text-white">{totalUsersCount}</span>
@@ -224,10 +225,10 @@ export default function AdminHealthSection({
             </div>
           </div>
 
-          <div className="flex justify-between items-center p-4 bg-[#252525] rounded-lg">
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-green-400" />
-              <span className="text-white">Verified Sellers</span>
+              <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+              <span className="text-sm font-medium text-white/80">Verified Sellers</span>
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold text-white">{verifiedSellers.length}</span>
@@ -237,10 +238,10 @@ export default function AdminHealthSection({
             </div>
           </div>
 
-          <div className="flex justify-between items-center p-4 bg-[#252525] rounded-lg">
+          <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] p-4">
             <div className="flex items-center gap-3">
-              <ShoppingBag className="h-5 w-5 text-purple-400" />
-              <span className="text-white">Active Listings</span>
+              <ShoppingBag className="h-5 w-5 text-purple-300" />
+              <span className="text-sm font-medium text-white/80">Active Listings</span>
             </div>
             <div className="text-right">
               <span className="text-2xl font-bold text-white">{activeListings}</span>
@@ -251,25 +252,29 @@ export default function AdminHealthSection({
       </div>
 
       {/* Top Earning Sellers */}
-      <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <Star className="h-5 w-5 text-[#ff950e]" />
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-7 backdrop-blur-sm shadow-xl shadow-black/30">
+        <div className="pointer-events-none absolute -bottom-16 -left-12 h-48 w-48 rounded-full bg-[#ff6b00]/15 blur-3xl" aria-hidden="true" />
+        <h3 className="relative mb-4 flex items-center gap-2 text-lg font-bold text-white">
+          <Star className="h-5 w-5 text-[#ffbf7f]" />
           Top Earning Sellers
         </h3>
-        <div className="space-y-3">
+        <div className="relative space-y-3">
           {topSellers.length > 0 ? (
             topSellers.map(([username, balance], index) => (
-              <div key={username} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
+              <div
+                key={username}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+              >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
                       index === 0
-                        ? 'bg-yellow-500 text-black'
+                        ? 'bg-yellow-400 text-black'
                         : index === 1
-                        ? 'bg-gray-400 text-black'
+                        ? 'bg-slate-300 text-black'
                         : index === 2
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-[#333] text-gray-300'
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-white/10 text-gray-300'
                     }`}
                     aria-label={`Rank ${index + 1}`}
                   >
@@ -285,14 +290,14 @@ export default function AdminHealthSection({
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-white">{formatCurrency(Number(balance))}</p>
-                  <p className="text-xs text-gray-500">earned</p>
+                  <p className="font-semibold text-white">{formatCurrency(Number(balance))}</p>
+                  <p className="text-xs text-gray-400">earned</p>
                 </div>
               </div>
             ))
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Star className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] py-8 text-center text-gray-400">
+              <Star className="mx-auto mb-2 h-8 w-8 text-gray-600" />
               <p>No seller earnings yet</p>
             </div>
           )}
@@ -300,25 +305,29 @@ export default function AdminHealthSection({
       </div>
 
       {/* Top Depositors */}
-      <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <Download className="h-5 w-5 text-[#ff950e]" />
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-7 backdrop-blur-sm shadow-xl shadow-black/30">
+        <div className="pointer-events-none absolute -top-12 right-0 h-44 w-44 rounded-full bg-sky-500/10 blur-3xl" aria-hidden="true" />
+        <h3 className="relative mb-4 flex items-center gap-2 text-lg font-bold text-white">
+          <Download className="h-5 w-5 text-sky-300" />
           Top Depositors
         </h3>
-        <div className="space-y-3">
+        <div className="relative space-y-3">
           {topDepositors.length > 0 ? (
             topDepositors.map(([username, totalDeposited], index) => (
-              <div key={username} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
+              <div
+                key={username}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+              >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
                       index === 0
-                        ? 'bg-blue-500 text-white'
+                        ? 'bg-sky-400 text-black'
                         : index === 1
-                        ? 'bg-blue-400 text-white'
+                        ? 'bg-sky-300 text-black'
                         : index === 2
-                        ? 'bg-blue-300 text-black'
-                        : 'bg-[#333] text-gray-300'
+                        ? 'bg-sky-200 text-black'
+                        : 'bg-white/10 text-gray-300'
                     }`}
                     aria-label={`Rank ${index + 1}`}
                   >
@@ -334,14 +343,14 @@ export default function AdminHealthSection({
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-blue-400">{formatCurrency(Number(totalDeposited))}</p>
-                  <p className="text-xs text-gray-500">deposited</p>
+                  <p className="font-semibold text-sky-200">{formatCurrency(Number(totalDeposited))}</p>
+                  <p className="text-xs text-gray-400">deposited</p>
                 </div>
               </div>
             ))
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Download className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] py-8 text-center text-gray-400">
+              <Download className="mx-auto mb-2 h-8 w-8 text-gray-600" />
               <p>No deposits yet</p>
             </div>
           )}
@@ -349,25 +358,29 @@ export default function AdminHealthSection({
       </div>
 
       {/* Top Withdrawers */}
-      <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <Upload className="h-5 w-5 text-[#ff950e]" />
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-7 backdrop-blur-sm shadow-xl shadow-black/30">
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-40 rounded-full bg-red-500/10 blur-3xl" aria-hidden="true" />
+        <h3 className="relative mb-4 flex items-center gap-2 text-lg font-bold text-white">
+          <Upload className="h-5 w-5 text-red-300" />
           Top Withdrawers
         </h3>
-        <div className="space-y-3">
+        <div className="relative space-y-3">
           {Object.keys(sellerWithdrawals || {}).length > 0 ? (
             topWithdrawers.map((withdrawer, index) => (
-              <div key={withdrawer.seller} className="flex items-center justify-between p-3 bg-[#252525] rounded-lg">
+              <div
+                key={withdrawer.seller}
+                className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+              >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                    className={`flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ${
                       index === 0
-                        ? 'bg-red-500 text-white'
-                        : index === 1
                         ? 'bg-red-400 text-white'
-                        : index === 2
+                        : index === 1
                         ? 'bg-red-300 text-black'
-                        : 'bg-[#333] text-gray-300'
+                        : index === 2
+                        ? 'bg-red-200 text-black'
+                        : 'bg-white/10 text-gray-300'
                     }`}
                     aria-label={`Rank ${index + 1}`}
                   >
@@ -383,14 +396,14 @@ export default function AdminHealthSection({
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-red-400">{formatCurrency(Number(withdrawer.totalWithdrawn))}</p>
-                  <p className="text-xs text-gray-500">withdrawn</p>
+                  <p className="font-semibold text-red-200">{formatCurrency(Number(withdrawer.totalWithdrawn))}</p>
+                  <p className="text-xs text-gray-400">withdrawn</p>
                 </div>
               </div>
             ))
           ) : (
-            <div className="text-center py-8 text-gray-500">
-              <Upload className="h-8 w-8 mx-auto mb-2 text-gray-600" />
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] py-8 text-center text-gray-400">
+              <Upload className="mx-auto mb-2 h-8 w-8 text-gray-600" />
               <p>No withdrawals yet</p>
             </div>
           )}
