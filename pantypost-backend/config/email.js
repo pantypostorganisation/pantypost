@@ -100,24 +100,30 @@ const emailTemplates = {
     subject: 'Your PantyPost Password Reset Code',
     html: `
       <!DOCTYPE html>
-      <html>
+      <html style="background-color: #000000 !important;">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="color-scheme" content="dark">
-        <meta name="supported-color-schemes" content="dark">
+        <meta name="color-scheme" content="only light">
+        <meta name="supported-color-schemes" content="only light">
+        <!--[if mso]>
+        <style type="text/css">
+          body, table, td {color: #ffffff !important; background-color: #000000 !important;}
+        </style>
+        <![endif]-->
         <style>
-          /* Force dark mode colors */
+          /* Force light mode to prevent inversion */
           :root {
-            color-scheme: dark !important;
+            color-scheme: only light !important;
+            supported-color-schemes: only light !important;
           }
           
           body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
             color: #ffffff !important;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
             background-color: #000000 !important;
             -webkit-text-size-adjust: 100%;
             -ms-text-size-adjust: 100%;
@@ -126,6 +132,7 @@ const emailTemplates = {
           /* Main container */
           .wrapper {
             background-color: #000000 !important;
+            background: #000000 !important;
             width: 100%;
             table-layout: fixed;
             -webkit-text-size-adjust: 100%;
@@ -136,6 +143,7 @@ const emailTemplates = {
             max-width: 600px;
             margin: 0 auto;
             background-color: #000000 !important;
+            background: #000000 !important;
           }
           
           /* Force dark backgrounds on all elements */
@@ -146,6 +154,7 @@ const emailTemplates = {
           /* Header section */
           .header {
             background-color: #0a0a0a !important;
+            background: #0a0a0a !important;
             padding: 30px 20px;
             text-align: center;
             border-bottom: 3px solid #ff950e;
@@ -158,9 +167,17 @@ const emailTemplates = {
             font-weight: normal;
           }
           
+          /* Logo protection from dark mode */
+          .logo-img {
+            opacity: 0.999 !important;
+            isolation: isolate !important;
+            mix-blend-mode: normal !important;
+          }
+          
           /* Content section */
           .content {
             background-color: #0a0a0a !important;
+            background: #0a0a0a !important;
             padding: 40px 30px;
           }
           
@@ -181,6 +198,7 @@ const emailTemplates = {
           /* Code display box */
           .code-box {
             background-color: #1a1a1a !important;
+            background: #1a1a1a !important;
             border: 2px solid #ff950e;
             border-radius: 12px;
             padding: 25px 15px;
@@ -212,6 +230,7 @@ const emailTemplates = {
           /* Timer notice */
           .expiry-notice {
             background-color: #1a0a00 !important;
+            background: #1a0a00 !important;
             border-left: 3px solid #ff950e;
             padding: 15px 20px;
             margin: 25px 0;
@@ -235,6 +254,7 @@ const emailTemplates = {
             display: inline-block;
             padding: 14px 35px;
             background-color: #ff950e !important;
+            background: #ff950e !important;
             color: #000000 !important;
             text-decoration: none;
             border-radius: 25px;
@@ -249,6 +269,7 @@ const emailTemplates = {
             margin: 20px 0;
             padding: 20px;
             background-color: #0f0f0f !important;
+            background: #0f0f0f !important;
             border-radius: 8px;
             border: 1px solid #222222;
           }
@@ -269,6 +290,7 @@ const emailTemplates = {
           /* Security notice */
           .security-notice {
             background-color: #0f0f0f !important;
+            background: #0f0f0f !important;
             border: 1px solid #333333;
             border-radius: 8px;
             padding: 20px;
@@ -289,6 +311,7 @@ const emailTemplates = {
           /* Footer section */
           .footer {
             background-color: #000000 !important;
+            background: #000000 !important;
             padding: 30px 20px;
             text-align: center;
             border-top: 1px solid #333333;
@@ -404,55 +427,33 @@ const emailTemplates = {
             }
           }
           
-          /* Force dark mode for Gmail and others */
+          /* Override ALL dark mode attempts */
           @media (prefers-color-scheme: dark) {
-            body, .wrapper, .container {
-              background-color: #000000 !important;
-            }
-            
-            .header, .content {
-              background-color: #0a0a0a !important;
-            }
-            
-            .code-box {
-              background-color: #1a1a1a !important;
-            }
-            
-            * {
-              color: inherit !important;
-            }
+            /* Intentionally empty - we don't want ANY dark mode changes */
           }
           
-          /* Outlook dark mode */
-          [data-ogsc] .wrapper,
-          [data-ogsc] .container,
-          [data-ogsc] .header,
-          [data-ogsc] .content,
-          [data-ogsc] .footer {
+          /* Gmail specific dark mode override */
+          u + .body {
             background-color: #000000 !important;
           }
           
-          /* Apple Mail dark mode */
-          @supports (color-scheme: dark) {
-            @media (prefers-color-scheme: dark) {
-              .wrapper, .container {
-                background-color: #000000 !important;
-              }
-            }
+          /* Outlook dark mode prevention */
+          [data-ogsc] {
+            background-color: #000000 !important;
           }
         </style>
       </head>
-      <body style="background-color: #000000 !important; color: #ffffff !important;">
-        <div class="wrapper" style="background-color: #000000 !important;">
-          <div class="container" style="background-color: #000000 !important;">
+      <body class="body" style="background-color: #000000 !important; background: #000000 !important; color: #ffffff !important;">
+        <div class="wrapper" style="background-color: #000000 !important; background: #000000 !important;">
+          <div class="container" style="background-color: #000000 !important; background: #000000 !important;">
             <!-- Header with logo image -->
-            <div class="header" style="background-color: #0a0a0a !important;">
-              <img src="https://pantypost.com/logo.png" alt="PantyPost" style="display: block; margin: 0 auto; border: 0; outline: none; width: 240px; height: auto; max-width: 90%;">
+            <div class="header" style="background-color: #0a0a0a !important; background: #0a0a0a !important;">
+              <img src="https://pantypost.com/logo.png" alt="PantyPost" class="logo-img" style="display: block; margin: 0 auto; border: 0; outline: none; width: 240px; height: auto; max-width: 90%; opacity: 0.999;">
               <h1 style="color: #ffffff !important;">Password Reset Request</h1>
             </div>
             
             <!-- Main content -->
-            <div class="content" style="background-color: #0a0a0a !important;">
+            <div class="content" style="background-color: #0a0a0a !important; background: #0a0a0a !important;">
               <h2 class="greeting" style="color: #ffffff !important;">Hello ${username}! 👋</h2>
               
               <p class="message" style="color: #cccccc !important;">
@@ -460,13 +461,13 @@ const emailTemplates = {
               </p>
               
               <!-- Verification code -->
-              <div class="code-box" style="background-color: #1a1a1a !important;">
+              <div class="code-box" style="background-color: #1a1a1a !important; background: #1a1a1a !important;">
                 <span class="code-label" style="color: #ff950e !important;">Your Verification Code</span>
                 <span class="code" style="color: #ff950e !important;">${code}</span>
               </div>
               
               <!-- Timer -->
-              <div class="expiry-notice" style="background-color: #1a0a00 !important;">
+              <div class="expiry-notice" style="background-color: #1a0a00 !important; background: #1a0a00 !important;">
                 <p class="expiry-text" style="color: #ffb347 !important;">⏱ This code expires in 15 minutes</p>
               </div>
               
@@ -476,13 +477,13 @@ const emailTemplates = {
               
               <!-- CTA button -->
               <div class="button-container">
-                <a href="${process.env.FRONTEND_URL}/verify-reset-code" class="button" style="background-color: #ff950e !important; color: #000000 !important;">
+                <a href="${process.env.FRONTEND_URL}/verify-reset-code" class="button" style="background-color: #ff950e !important; background: #ff950e !important; color: #000000 !important;">
                   Enter Reset Code →
                 </a>
               </div>
               
               <!-- Alternative link -->
-              <div class="link-container" style="background-color: #0f0f0f !important;">
+              <div class="link-container" style="background-color: #0f0f0f !important; background: #0f0f0f !important;">
                 <p class="link-text" style="color: #999999 !important;">Or copy and paste this link into your browser:</p>
                 <a href="${process.env.FRONTEND_URL}/verify-reset-code" class="link" style="color: #ff950e !important;">
                   ${process.env.FRONTEND_URL}/verify-reset-code
@@ -490,7 +491,7 @@ const emailTemplates = {
               </div>
               
               <!-- Security notice -->
-              <div class="security-notice" style="background-color: #0f0f0f !important;">
+              <div class="security-notice" style="background-color: #0f0f0f !important; background: #0f0f0f !important;">
                 <p class="security-text" style="color: #999999 !important;">
                   <strong style="color: #ffffff !important;">🔒 Didn't request this?</strong><br>
                   If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged and your account is secure.
@@ -499,7 +500,7 @@ const emailTemplates = {
             </div>
             
             <!-- Footer -->
-            <div class="footer" style="background-color: #000000 !important;">
+            <div class="footer" style="background-color: #000000 !important; background: #000000 !important;">
               <p class="footer-logo" style="color: #ff950e !important;">PantyPost</p>
               <p class="footer-tagline" style="color: #666666 !important;">The premium marketplace for authentic items</p>
               
@@ -637,28 +638,35 @@ The PantyPost Team
     subject: 'Your PantyPost Password Has Been Reset',
     html: `
       <!DOCTYPE html>
-      <html>
+      <html style="background-color: #000000 !important;">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta name="color-scheme" content="dark">
-        <meta name="supported-color-schemes" content="dark">
+        <meta name="color-scheme" content="only light">
+        <meta name="supported-color-schemes" content="only light">
+        <!--[if mso]>
+        <style type="text/css">
+          body, table, td {color: #ffffff !important; background-color: #000000 !important;}
+        </style>
+        <![endif]-->
         <style>
           :root {
-            color-scheme: dark !important;
+            color-scheme: only light !important;
+            supported-color-schemes: only light !important;
           }
           
           body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
             color: #ffffff !important;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
             background-color: #000000 !important;
           }
           
           .wrapper {
             background-color: #000000 !important;
+            background: #000000 !important;
             width: 100%;
           }
           
@@ -666,10 +674,12 @@ The PantyPost Team
             max-width: 600px;
             margin: 0 auto;
             background-color: #000000 !important;
+            background: #000000 !important;
           }
           
           .header {
             background-color: #0a0a0a !important;
+            background: #0a0a0a !important;
             color: white;
             padding: 30px 20px;
             text-align: center;
@@ -683,8 +693,15 @@ The PantyPost Team
             font-weight: normal;
           }
           
+          .logo-img {
+            opacity: 0.999 !important;
+            isolation: isolate !important;
+            mix-blend-mode: normal !important;
+          }
+          
           .content {
             background-color: #0a0a0a !important;
+            background: #0a0a0a !important;
             padding: 40px 30px;
           }
           
@@ -693,6 +710,7 @@ The PantyPost Team
             height: 80px;
             margin: 0 auto 30px;
             background-color: #28a745 !important;
+            background: #28a745 !important;
             border-radius: 50%;
             display: table;
             text-align: center;
@@ -727,6 +745,7 @@ The PantyPost Team
             display: inline-block;
             padding: 14px 35px;
             background-color: #ff950e !important;
+            background: #ff950e !important;
             color: #000000 !important;
             text-decoration: none;
             border-radius: 25px;
@@ -736,6 +755,7 @@ The PantyPost Team
           
           .footer {
             background-color: #000000 !important;
+            background: #000000 !important;
             padding: 30px 20px;
             text-align: center;
             border-top: 1px solid #333333;
@@ -759,27 +779,30 @@ The PantyPost Team
             }
           }
           
+          /* Override ALL dark mode attempts */
           @media (prefers-color-scheme: dark) {
-            body, .wrapper, .container {
-              background-color: #000000 !important;
-            }
-            
-            .header, .content {
-              background-color: #0a0a0a !important;
-            }
+            /* Intentionally empty */
+          }
+          
+          u + .body {
+            background-color: #000000 !important;
+          }
+          
+          [data-ogsc] {
+            background-color: #000000 !important;
           }
         </style>
       </head>
-      <body style="background-color: #000000 !important;">
-        <div class="wrapper" style="background-color: #000000 !important;">
-          <div class="container" style="background-color: #000000 !important;">
-            <div class="header" style="background-color: #0a0a0a !important;">
-              <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" height="60" style="display: block; margin: 0 auto; border: 0; outline: none;">
+      <body class="body" style="background-color: #000000 !important; background: #000000 !important;">
+        <div class="wrapper" style="background-color: #000000 !important; background: #000000 !important;">
+          <div class="container" style="background-color: #000000 !important; background: #000000 !important;">
+            <div class="header" style="background-color: #0a0a0a !important; background: #0a0a0a !important;">
+              <img src="https://pantypost.com/logo.png" alt="PantyPost" class="logo-img" style="display: block; margin: 0 auto; border: 0; outline: none; width: 240px; height: auto; max-width: 90%; opacity: 0.999;">
               <h1 style="color: #28a745 !important;">Password Successfully Reset</h1>
             </div>
             
-            <div class="content" style="background-color: #0a0a0a !important;">
-              <div class="success-icon" style="background-color: #28a745 !important;">
+            <div class="content" style="background-color: #0a0a0a !important; background: #0a0a0a !important;">
+              <div class="success-icon" style="background-color: #28a745 !important; background: #28a745 !important;">
                 <div class="checkmark" style="color: white !important;">✓</div>
               </div>
               
@@ -790,7 +813,7 @@ The PantyPost Team
               </p>
               
               <div class="button-container">
-                <a href="${process.env.FRONTEND_URL}/login" class="button" style="background-color: #ff950e !important; color: #000000 !important;">
+                <a href="${process.env.FRONTEND_URL}/login" class="button" style="background-color: #ff950e !important; background: #ff950e !important; color: #000000 !important;">
                   Log In Now →
                 </a>
               </div>
@@ -800,7 +823,7 @@ The PantyPost Team
               </p>
             </div>
             
-            <div class="footer" style="background-color: #000000 !important;">
+            <div class="footer" style="background-color: #000000 !important; background: #000000 !important;">
               <p class="footer-text" style="color: #666666 !important;">
                 © ${new Date().getFullYear()} PantyPost. All rights reserved.<br>
                 This is an automated message, please do not reply to this email.
