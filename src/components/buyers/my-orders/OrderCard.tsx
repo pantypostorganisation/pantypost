@@ -50,8 +50,8 @@ export default function OrderCard({
 
   return (
     <div
-      className={`relative overflow-hidden rounded-2xl border bg-black/30 transition-colors duration-300 ${
-        isExpanded ? 'bg-black/45' : 'hover:bg-black/40'
+      className={`relative overflow-hidden rounded-xl border bg-black/25 transition-colors duration-300 ${
+        isExpanded ? 'bg-black/40' : 'hover:bg-black/35'
       } ${styles.borderStyle}`}
     >
       {/* Action indicator */}
@@ -75,7 +75,7 @@ export default function OrderCard({
         </div>
       )}
 
-      <div className="relative z-10 p-5 sm:p-6">
+      <div className="relative z-10 p-4 sm:p-5">
         <OrderHeader order={order} type={type} styles={styles} />
 
         <OrderDetails

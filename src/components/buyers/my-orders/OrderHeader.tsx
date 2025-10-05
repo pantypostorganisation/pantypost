@@ -103,10 +103,10 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   };
 
   return (
-    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[auto,1fr,auto] lg:items-start lg:gap-6">
+    <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[auto,1fr,auto] lg:items-start lg:gap-5">
       {/* Product Image or Custom Request Icon */}
-      <div className="flex flex-shrink-0 flex-col items-center gap-3 lg:items-start">
-        <div className="relative h-24 w-24 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+      <div className="flex flex-shrink-0 flex-col items-center gap-2.5 lg:items-start">
+        <div className="relative h-20 w-20 overflow-hidden rounded-xl border border-white/10 bg-black/40">
           {isCustom ? (
             <div className="flex h-full w-full items-center justify-center bg-black/40">
               <Settings className="h-10 w-10 text-sky-300" />
@@ -114,7 +114,7 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
           ) : (
             <>
               {!imageLoaded && !imageError && imageSrc && !imageSrc.startsWith('data:') && (
-                <div className="absolute inset-0 animate-pulse rounded-2xl bg-white/5" />
+                <div className="absolute inset-0 animate-pulse rounded-xl bg-white/5" />
               )}
               {imageSrc ? (
                 <img
@@ -138,7 +138,7 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
 
         <div className="flex justify-center lg:justify-start">
           <span
-            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-widest"
+            className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest"
             style={accentPillStyle}
           >
             <TypeIcon className="h-3.5 w-3.5" />
@@ -148,27 +148,28 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
       </div>
 
       {/* Order Title and Price */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3 lg:pr-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 lg:pr-4">
         <div className="flex min-w-0 flex-col gap-1.5">
-          <h3 className="text-xl font-semibold text-white sm:text-[1.35rem]">
+          <h3 className="text-lg font-semibold text-white sm:text-[1.25rem]">
             <SecureMessageDisplay content={order.title} allowBasicFormatting={false} as="span" />
           </h3>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-500 sm:text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-medium text-gray-300">
-              Order ID: <span className="font-mono text-[10px] text-gray-400 sm:text-[11px]">{order.id ? order.id.slice(0, 10) : '—'}</span>
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-500 sm:text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 font-medium text-gray-300">
+              Order ID:{' '}
+              <span className="font-mono text-[10px] text-gray-400 sm:text-[11px]">{order.id ? order.id.slice(0, 10) : '—'}</span>
             </span>
             {isAuction && <Star className="h-4 w-4 text-purple-300" />}
             {isCustom && <Settings className="h-4 w-4 text-sky-300" />}
           </div>
         </div>
 
-        <div className="text-sm text-gray-300 sm:text-[0.95rem]">
+        <div className="text-[13px] leading-relaxed text-gray-300 sm:text-sm">
           <SecureMessageDisplay content={order.description} allowBasicFormatting={false} />
         </div>
       </div>
 
       <div
-        className="flex flex-col rounded-xl border px-3.5 py-3 text-right lg:min-w-[200px] lg:self-start"
+        className="flex flex-col rounded-xl border px-3 py-2.5 text-right lg:min-w-[190px] lg:self-start"
         style={accentBorderStyle}
       >
         <span className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Total paid</span>
