@@ -474,9 +474,6 @@ export default function BuyerProfilePage() {
                           <p className="mt-2 text-lg font-semibold text-white">
                             {formatDate(profileData?.user?.joinedAt || profileData?.user?.createdAt)}
                           </p>
-                          <p className="mt-1 text-sm text-neutral-400">
-                            Welcome aboard! Thanks for being part of the community.
-                          </p>
                         </div>
                       </div>
                     </div>
