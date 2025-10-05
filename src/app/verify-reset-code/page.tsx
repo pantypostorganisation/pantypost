@@ -1,12 +1,13 @@
 // src/app/verify-reset-code/page.tsx
 'use client';
 
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { KeyRound, ArrowLeft, AlertCircle } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
 import PublicRouteWrapper from '@/components/PublicRouteWrapper';
+import { authService } from '@/services/auth.service';
 
 // Mark this as a public page
 if (typeof window !== 'undefined') {
@@ -22,61 +23,13 @@ function VerifyResetCodeContent() {
   const [emailInput, setEmailInput] = useState('');
   const [needsEmail, setNeedsEmail] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Prevent any early redirects
-  useLayoutEffect(() => {
-    console.log('[Verify Reset Code] Page mounted, preventing redirects');
-    console.log('[Verify Reset Code] Window location:', window.location.href);
-    console.log('[Verify Reset Code] Session storage keys:', Object.keys(sessionStorage));
-    console.log('[Verify Reset Code] Local storage keys:', Object.keys(localStorage));
-    
-    // Check for service workers
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(registrations => {
-        console.log('[Verify Reset Code] Service workers:', registrations.length);
-      });
-    }
-    
-    // Store current path to detect unwanted navigation
-    const currentPath = window.location.pathname;
-    
-    // Check if we're still on the correct page after a short delay
-    const checkPath = setTimeout(() => {
-      if (window.location.pathname !== currentPath) {
-        console.error('[Verify Reset Code] Unwanted redirect detected!', {
-          from: currentPath,
-          to: window.location.pathname
-        });
-      }
-    }, 100);
-    
-    return () => clearTimeout(checkPath);
-  }, []);
-
   useEffect(() => {
-    // Skip if already initialized
-    if (isInitialized) return;
-    
-    // Disable router prefetching
-    router.prefetch = () => Promise.resolve();
-    
-    // Prevent any auth-related redirects
+    // Check for email in session storage
     const checkSession = () => {
       console.log('[Verify Reset Code] Initializing page...');
-      console.log('[Verify Reset Code] Current URL:', window.location.href);
-      console.log('[Verify Reset Code] Current pathname:', window.location.pathname);
       
-      // Clear any potentially conflicting auth data
-      const authKeys = ['token', 'refreshToken', 'authToken'];
-      authKeys.forEach(key => {
-        if (sessionStorage.getItem(key)) {
-          console.log(`[Verify Reset Code] Clearing conflicting key: ${key}`);
-          sessionStorage.removeItem(key);
-        }
-      });
-
       // Get email from session storage
       const storedEmail = sessionStorage.getItem('resetEmail');
       console.log('[Verify Reset Code] Stored email:', storedEmail);
@@ -90,32 +43,19 @@ function VerifyResetCodeContent() {
         setEmail(storedEmail);
       }
       
-      // Mark as initialized and ready
-      setIsInitialized(true);
+      // Mark as ready
       setIsReady(true);
     };
 
-    // Use requestAnimationFrame to ensure we run after any potential redirects
+    // Use requestAnimationFrame to ensure DOM is ready
     requestAnimationFrame(() => {
       checkSession();
     });
-  }, [isInitialized, router]);
-
-  // Check for navigation away
-  useEffect(() => {
-    const handleRouteChange = () => {
-      console.log('[Verify Reset Code] Navigation detected, current path:', window.location.pathname);
-    };
-
-    window.addEventListener('popstate', handleRouteChange);
-    
-    return () => {
-      window.removeEventListener('popstate', handleRouteChange);
-    };
   }, []);
 
   const handleCodeChange = (index: number, value: string) => {
-    if (value.length > 1) return; // Only allow single digit
+    // Only allow digits
+    if (value && !/^\d$/.test(value)) return;
     
     const newCode = [...code];
     newCode[index] = value;
@@ -156,26 +96,23 @@ function VerifyResetCodeContent() {
     setError('');
 
     try {
-      const response = await fetch('/api/auth/verify-reset-code', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, code: fullCode })
-      });
+      // Use the auth service instead of direct fetch
+      const response = await authService.verifyResetCode(email, fullCode);
 
-      const result = await response.json();
-
-      if (result.success) {
+      if (response.success && response.data?.valid) {
         // Store verification data for the next step
         sessionStorage.setItem('resetCode', fullCode);
+        // Navigate to password reset page
         router.push('/reset-password-final');
       } else {
-        setError(result.error?.message || 'Invalid verification code');
+        setError(response.error?.message || 'Invalid verification code');
         // Clear code on error
         setCode(['', '', '', '', '', '']);
         inputRefs.current[0]?.focus();
       }
     } catch (err) {
-      setError('An unexpected error occurred');
+      console.error('Error verifying code:', err);
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -183,6 +120,15 @@ function VerifyResetCodeContent() {
 
   const handleResend = async () => {
     router.push('/forgot-password');
+  };
+
+  const handleEmailSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (emailInput) {
+      sessionStorage.setItem('resetEmail', emailInput);
+      setEmail(emailInput);
+      setNeedsEmail(false);
+    }
   };
 
   // Don't render until we've checked session storage
@@ -234,14 +180,7 @@ function VerifyResetCodeContent() {
           <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl">
             {needsEmail ? (
               // Email input form
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                if (emailInput) {
-                  sessionStorage.setItem('resetEmail', emailInput);
-                  setEmail(emailInput);
-                  setNeedsEmail(false);
-                }
-              }}>
+              <form onSubmit={handleEmailSubmit}>
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Email Address

@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
 import { sanitizeStrict } from '@/utils/security/sanitization';
+import { authService } from '@/services/auth.service';
 
 export default function ResetPasswordFinalPage() {
   const router = useRouter();
@@ -64,19 +65,10 @@ export default function ResetPasswordFinalPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          code,
-          newPassword
-        })
-      });
+      // Use the auth service instead of direct fetch
+      const response = await authService.resetPassword(email, code, newPassword);
 
-      const result = await response.json();
-
-      if (result.success) {
+      if (response.success) {
         setSuccess(true);
         
         // Clear session storage
@@ -88,9 +80,10 @@ export default function ResetPasswordFinalPage() {
           router.push('/login');
         }, 3000);
       } else {
-        setError(result.error?.message || 'Failed to reset password');
+        setError(response.error?.message || 'Failed to reset password');
       }
     } catch (err) {
+      console.error('Error resetting password:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);
