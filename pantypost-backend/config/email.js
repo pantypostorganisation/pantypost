@@ -95,7 +95,7 @@ const sendEmail = async (options) => {
 
 // Email templates
 const emailTemplates = {
-  // Responsive light/dark mode template with email logo
+  // Responsive light/dark mode template with dual logos
   passwordResetCode: (username, code) => ({
     subject: 'Your PantyPost Password Reset Code',
     html: `
@@ -177,14 +177,17 @@ const emailTemplates = {
           .text-muted { color: #999999 !important; }
           .text-orange { color: #ff950e !important; }
           
-          /* Desktop logo - visible by default */
-          .desktop-logo {
+          /* Logo visibility - light logo by default */
+          .light-logo {
             display: block !important;
+            max-width: 100%;
+            height: auto;
           }
           
-          /* Mobile logo - hidden by default */
-          .mobile-logo {
+          .dark-logo {
             display: none !important;
+            max-width: 100%;
+            height: auto;
           }
           
           /* Dark mode overrides */
@@ -223,6 +226,15 @@ const emailTemplates = {
             .text-secondary { color: #9aa0a6 !important; }
             .text-muted { color: #5f6368 !important; }
             .text-orange { color: #ff950e !important; }
+            
+            /* Switch logos in dark mode */
+            .light-logo {
+              display: none !important;
+            }
+            
+            .dark-logo {
+              display: block !important;
+            }
           }
           
           /* Outlook Dark Mode */
@@ -231,20 +243,14 @@ const emailTemplates = {
           [data-ogsc] .email-body { background-color: #202124 !important; }
           [data-ogsc] .text-primary { color: #e8eaed !important; }
           [data-ogsc] .text-secondary { color: #9aa0a6 !important; }
+          [data-ogsc] .light-logo { display: none !important; }
+          [data-ogsc] .dark-logo { display: block !important; }
           
           /* Mobile styles */
           @media screen and (max-width: 600px) {
             .email-container { width: 100% !important; }
             .email-padding { padding: 25px 20px !important; }
             .code-text { font-size: 24px !important; letter-spacing: 4px !important; }
-            
-            /* Logo swap for mobile */
-            .desktop-logo {
-              display: none !important;
-            }
-            .mobile-logo {
-              display: block !important;
-            }
           }
         </style>
       </head>
@@ -256,22 +262,22 @@ const emailTemplates = {
                 <div class="email-container">
                   <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                     
-                    <!-- Header with email logo -->
+                    <!-- Header with dual logos -->
                     <tr>
                       <td class="email-header" style="padding: 30px; text-align: center;">
                         <a href="https://pantypost.com/" style="text-decoration: none;">
-                          <!-- Desktop logo with dark background embedded -->
-                          <img src="https://pantypost.com/emaillogo.png" 
+                          <!-- Light mode logo -->
+                          <img src="https://pantypost.com/emaillogowhite.png" 
                                alt="PantyPost" 
-                               width="240" 
-                               class="desktop-logo"
-                               style="display: block; margin: 0 auto; max-width: 100%; height: auto;">
-                          <!-- Mobile logo (same image, different size) -->
-                          <img src="https://pantypost.com/emaillogo.png" 
+                               width="220" 
+                               class="light-logo"
+                               style="display: block; margin: 0 auto;">
+                          <!-- Dark mode logo -->
+                          <img src="https://pantypost.com/logo.png" 
                                alt="PantyPost" 
-                               width="200" 
-                               class="mobile-logo"
-                               style="display: none; margin: 0 auto; max-width: 90%; height: auto;">
+                               width="220" 
+                               class="dark-logo"
+                               style="display: none; margin: 0 auto;">
                         </a>
                         <h1 class="text-primary" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
                           Password Reset Request
@@ -308,7 +314,7 @@ const emailTemplates = {
                         
                         <!-- Timer -->
                         <div class="timer-box" style="padding: 12px; margin: 25px 0; border-radius: 4px;">
-                          <p style="color: #ffb347; font-size: 13px; margin: 0;">
+                          <p style="color: #ff950e; font-size: 13px; margin: 0; font-weight: 600;">
                             ⏱ This code expires in 15 minutes
                           </p>
                         </div>
@@ -350,7 +356,7 @@ const emailTemplates = {
                     
                     <!-- Footer -->
                     <tr>
-                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #333333;">
+                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #e0e0e0;">
                         <p class="text-orange" style="font-weight: bold; font-size: 16px; margin: 0;">PantyPost</p>
                         <p class="text-secondary" style="font-size: 11px; margin: 5px 0 15px 0;">The premium marketplace for authentic items</p>
                         
@@ -499,7 +505,7 @@ The PantyPost Team
     `
   }),
   
-  // Password reset success email - responsive light/dark with email logo
+  // Password reset success email - responsive light/dark with dual logos
   passwordResetSuccess: (username) => ({
     subject: 'Your PantyPost Password Has Been Reset',
     html: `
@@ -552,11 +558,11 @@ The PantyPost Team
           .text-secondary { color: #666666; }
           .text-success { color: #28a745; }
           
-          .desktop-logo {
+          .light-logo {
             display: block !important;
           }
           
-          .mobile-logo {
+          .dark-logo {
             display: none !important;
           }
           
@@ -566,12 +572,13 @@ The PantyPost Team
             .email-body { background-color: #202124; }
             .text-primary { color: #e8eaed; }
             .text-secondary { color: #9aa0a6; }
+            
+            .light-logo { display: none !important; }
+            .dark-logo { display: block !important; }
           }
           
           @media screen and (max-width: 600px) {
             .email-container { width: 100% !important; }
-            .desktop-logo { display: none !important; }
-            .mobile-logo { display: block !important; }
           }
         </style>
       </head>
@@ -583,22 +590,22 @@ The PantyPost Team
                 <div class="email-container">
                   <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                     
-                    <!-- Header with email logo -->
+                    <!-- Header with dual logos -->
                     <tr>
                       <td class="email-header" style="padding: 30px; text-align: center;">
                         <a href="https://pantypost.com/">
-                          <!-- Desktop logo -->
-                          <img src="https://pantypost.com/emaillogo.png" 
+                          <!-- Light mode logo -->
+                          <img src="https://pantypost.com/emaillogowhite.png" 
                                alt="PantyPost" 
-                               width="240" 
-                               class="desktop-logo"
-                               style="display: block; margin: 0 auto; max-width: 100%; height: auto;">
-                          <!-- Mobile logo -->
-                          <img src="https://pantypost.com/emaillogo.png" 
+                               width="220" 
+                               class="light-logo"
+                               style="display: block; margin: 0 auto;">
+                          <!-- Dark mode logo -->
+                          <img src="https://pantypost.com/logo.png" 
                                alt="PantyPost" 
-                               width="200" 
-                               class="mobile-logo"
-                               style="display: none; margin: 0 auto; max-width: 90%; height: auto;">
+                               width="220" 
+                               class="dark-logo"
+                               style="display: none; margin: 0 auto;">
                         </a>
                         <h1 class="text-success" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
                           Password Successfully Reset
@@ -640,8 +647,9 @@ The PantyPost Team
                     
                     <!-- Footer -->
                     <tr>
-                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #333333;">
-                        <p style="color: #999999; font-size: 10px; margin: 0;">
+                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #e0e0e0;">
+                        <p style="color: #ff950e; font-weight: bold; font-size: 16px; margin: 0;">PantyPost</p>
+                        <p style="color: #999999; font-size: 10px; margin: 10px 0 0 0;">
                           © ${new Date().getFullYear()} PantyPost. All rights reserved.<br>
                           This is an automated message, please do not reply to this email.
                         </p>
