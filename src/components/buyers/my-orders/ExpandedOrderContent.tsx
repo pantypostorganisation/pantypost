@@ -56,112 +56,105 @@ export default function ExpandedOrderContent({
   const trackingNumber = getTrackingNumber(order);
 
   return (
-    <div className="px-6 pb-6 space-y-6 animate-in slide-in-from-top-2 duration-200">
-      {/* Seller Info - Cleaner layout */}
-      <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
-        <Link
-          href={`/sellers/${sanitizedUsername}`}
-          className="flex items-center gap-3 group"
-        >
-          {sellerProfilePic ? (
-            <SecureImage
-              src={sellerProfilePic}
-              alt={order.seller}
-              className="w-12 h-12 rounded-full object-cover ring-2 ring-white/10 group-hover:ring-[#ff950e]/50 transition-all"
-              fallbackSrc="/placeholder-avatar.png"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-700 to-gray-600 flex items-center justify-center text-white font-bold ring-2 ring-white/10 group-hover:ring-[#ff950e]/50 transition-all">
-              {order.seller ? order.seller.charAt(0).toUpperCase() : '?'}
-            </div>
-          )}
-          <div>
-            <div className="font-semibold text-white group-hover:text-[#ff950e] transition-colors flex items-center gap-2">
-              <SecureMessageDisplay
-                content={order.seller}
-                allowBasicFormatting={false}
-                as="span"
+    <div className="relative z-10 border-t border-white/10 bg-black/25 px-6 pb-8 pt-6 sm:px-8">
+      <div className="space-y-8">
+        {/* Seller Info */}
+        <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <Link
+            href={`/sellers/${sanitizedUsername}`}
+            className="group flex items-center gap-4"
+          >
+            {sellerProfilePic ? (
+              <SecureImage
+                src={sellerProfilePic}
+                alt={order.seller}
+                className="h-14 w-14 rounded-full object-cover ring-2 ring-white/10 transition duration-300 group-hover:ring-[#ff950e]/60"
+                fallbackSrc="/placeholder-avatar.png"
               />
-              {isSellerVerified && (
-                <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,_rgba(255,149,14,0.25),_transparent)] text-lg font-semibold text-white ring-2 ring-white/10 transition duration-300 group-hover:ring-[#ff950e]/60">
+                {order.seller ? order.seller.charAt(0).toUpperCase() : '?'}
+              </div>
+            )}
+            <div>
+              <div className="flex items-center gap-2 text-base font-semibold text-white transition-colors duration-300 group-hover:text-[#ffb469]">
+                <SecureMessageDisplay content={order.seller} allowBasicFormatting={false} as="span" />
+                {isSellerVerified && <img src="/verification_badge.png" alt="Verified" className="h-4 w-4" />}
+              </div>
+              <p className="text-xs uppercase tracking-widest text-gray-500">View seller profile</p>
+            </div>
+          </Link>
+
+          <Link
+            href={`/buyers/messages?thread=${sanitizedUsername}`}
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-white/10"
+          >
+            <MessageCircle className="h-4 w-4" />
+            Message seller
+          </Link>
+        </div>
+
+        {/* Info Grid */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+            <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+              <Package className="h-4 w-4" />
+              Order details
+            </h4>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Order ID</span>
+                <span className="font-mono text-xs text-gray-300">
+                  {order.id ? `${order.id.slice(0, 12)}...` : '—'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Type</span>
+                <span className="text-gray-200 capitalize">{type} purchase</span>
+              </div>
+              {trackingNumber && (
+                <div className="flex items-center justify-between text-gray-400">
+                  <span>Tracking</span>
+                  <span className="font-mono text-xs text-gray-200">{trackingNumber}</span>
+                </div>
               )}
             </div>
-            <div className="text-xs text-gray-500">View Profile</div>
           </div>
-        </Link>
 
-        <Link
-          href={`/buyers/messages?thread=${sanitizedUsername}`}
-          className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all text-sm font-medium"
-        >
-          <MessageCircle className="w-4 h-4" />
-          Message
-        </Link>
-      </div>
-
-      {/* Info Grid - Cleaner presentation */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Order Info */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
-            <Package className="w-4 h-4" />
-            ORDER DETAILS
-          </h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Order ID</span>
-              <span className="text-gray-300 font-mono">
-                {order.id ? `${order.id.slice(0, 12)}...` : '—'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Type</span>
-              <span className="text-gray-300 capitalize">{type} Purchase</span>
-            </div>
-            {trackingNumber && (
-              <div className="flex justify-between">
-                <span className="text-gray-500">Tracking</span>
-                <span className="text-gray-300 font-mono">{trackingNumber}</span>
+          <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+            <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+              <CreditCard className="h-4 w-4" />
+              Payment summary
+            </h4>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Item price</span>
+                <span className="text-gray-200">${order.price.toFixed(2)}</span>
               </div>
-            )}
+              <div className="flex items-center justify-between text-gray-400">
+                <span>Platform fee</span>
+                <span className="text-gray-200">
+                  ${((order.markedUpPrice || order.price) - order.price).toFixed(2)}
+                </span>
+              </div>
+              {order.tierCreditAmount && order.tierCreditAmount > 0 && (
+                <div className="flex items-center justify-between text-emerald-300">
+                  <span>Bonus credit</span>
+                  <span>+${order.tierCreditAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between border-t border-white/10 pt-3 text-base font-semibold text-white">
+                <span>Total</span>
+                <span className="text-[#ffb469]">
+                  ${(order.markedUpPrice || order.price).toFixed(2)}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Payment Summary */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
-            <CreditCard className="w-4 h-4" />
-            PAYMENT SUMMARY
-          </h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Item Price</span>
-              <span className="text-gray-300">${order.price.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Platform Fee</span>
-              <span className="text-gray-300">
-                ${((order.markedUpPrice || order.price) - order.price).toFixed(2)}
-              </span>
-            </div>
-            {order.tierCreditAmount && order.tierCreditAmount > 0 && (
-              <div className="flex justify-between text-green-400">
-                <span>Bonus Credit</span>
-                <span>+${order.tierCreditAmount.toFixed(2)}</span>
-              </div>
-            )}
-            <div className="flex justify-between pt-2 border-t border-white/5 font-semibold">
-              <span className="text-white">Total</span>
-              <span className="text-[#ff950e]">
-                ${(order.markedUpPrice || order.price).toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
+        <ReviewSection order={order} />
       </div>
-
-      {/* Review Section */}
-      <ReviewSection order={order} />
     </div>
   );
 }
