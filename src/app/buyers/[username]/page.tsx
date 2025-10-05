@@ -27,6 +27,7 @@ type NormalizedBuyerProfile = {
     country?: string | null;
   };
 };
+
 type MeProfile = {
   username: string;
   role: 'buyer' | 'seller' | 'admin';
@@ -46,6 +47,7 @@ function formatDate(dateLike?: string) {
     return '—';
   }
 }
+
 type BackendProfileData = {
   username?: unknown;
   role?: unknown;
@@ -64,6 +66,11 @@ type BackendProfileResponse = {
   error?: { message?: string } | null;
 };
 
+// Type guard for role validation
+function isValidRole(role: unknown): role is 'buyer' | 'seller' | 'admin' {
+  return typeof role === 'string' && ['buyer', 'seller', 'admin'].includes(role);
+}
+
 function normalizeProfileFromBackend(raw: unknown): NormalizedBuyerProfile | null {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -77,9 +84,7 @@ function normalizeProfileFromBackend(raw: unknown): NormalizedBuyerProfile | nul
   const role = 'role' in data ? data.role : undefined;
 
   if (typeof username !== 'string') return null;
-
-  const allowedRoles = new Set(['buyer', 'seller', 'admin']);
-  if (typeof role !== 'string' || !allowedRoles.has(role)) return null;
+  if (!isValidRole(role)) return null;
 
   const joinedAt =
     typeof data.joinedDate === 'string'
@@ -108,7 +113,7 @@ function normalizeProfileFromBackend(raw: unknown): NormalizedBuyerProfile | nul
   return {
     user: {
       username,
-      role,
+      role, // Now TypeScript knows this is the correct type
       joinedAt,
       createdAt,
       isBanned,
@@ -121,6 +126,7 @@ function normalizeProfileFromBackend(raw: unknown): NormalizedBuyerProfile | nul
     },
   };
 }
+
 const API_ORIGIN = (() => {
   try {
     const parsed = new URL(API_BASE_URL);
@@ -172,6 +178,7 @@ const COUNTRY_TO_CODE: Record<string, string> = {
   India: 'IN',
   'New Zealand': 'NZ',
 };
+
 function flagFromIso2(code?: string | null): string {
   if (!code || code.length !== 2) return '🌐';
   const base = 0x1f1e6;
@@ -180,6 +187,7 @@ function flagFromIso2(code?: string | null): string {
   const cps = chars.map((c) => base + (c.charCodeAt(0) - A));
   return String.fromCodePoint(...cps);
 }
+
 function flagFromCountryName(name?: string | null): string {
   if (!name) return '🌐';
   const code = COUNTRY_TO_CODE[name] || null;

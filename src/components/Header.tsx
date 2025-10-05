@@ -628,20 +628,17 @@ export default function Header(): React.ReactElement | null {
           <MobileNotificationsPanel />
         ) : (
           <>
-            {/* Header */}
-            <div className="p-4 border-b border-[#ff950e]/30">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <img src="/logo.png" alt="PantyPost" className="w-8 h-auto" />
-                  <span className="text-[#ff950e] font-bold">PantyPost</span>
-                </div>
-                <button
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="text-[#ff950e] hover:text-white transition-colors p-2"
-                  aria-label="Close menu"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+            {/* Header with Centered Logo */}
+            <div className="relative p-6 border-b border-[#ff950e]/30">
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="absolute top-4 right-4 text-[#ff950e] hover:text-white transition-colors p-2 z-10"
+                aria-label="Close menu"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <div className="flex items-center justify-center">
+                <img src="/logo.png" alt="PantyPost" className="w-20 h-auto drop-shadow-2xl" />
               </div>
             </div>
 
