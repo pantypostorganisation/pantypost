@@ -2,9 +2,8 @@
 'use client';
 
 import React from 'react';
-import { Calendar, Tag, MapPin, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Tag, MapPin, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
-import { formatOrderDate, getShippingStatusBadge } from '@/utils/orderUtils';
 
 interface OrderDetailsProps {
   order: Order;
@@ -28,14 +27,8 @@ export default function OrderDetails({
 
   return (
     <>
-      {/* Streamlined Meta Info */}
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-gray-400 sm:text-xs">
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1">
-          <Calendar className="h-4 w-4 text-white/60" />
-          <span>{formatOrderDate(order.date)}</span>
-        </div>
-
-        {order.tags && order.tags.length > 0 && (
+      {order.tags && order.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-gray-400 sm:text-xs">
           <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1">
             <Tag className="h-4 w-4 text-white/60" />
             <span className="opacity-80">
@@ -43,12 +36,8 @@ export default function OrderDetails({
               {order.tags.length > 2 && ` +${order.tags.length - 2}`}
             </span>
           </div>
-        )}
-
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1">
-          {getShippingStatusBadge(order.shippingStatus)}
         </div>
-      </div>
+      )}
 
       {/* Type-specific highlight - More subtle */}
       {isAuction && (

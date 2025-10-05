@@ -8,7 +8,8 @@ import { getUserProfilePic } from '@/utils/profileUtils';
 import OrderHeader from './OrderHeader';
 import OrderDetails from './OrderDetails';
 import ExpandedOrderContent from './ExpandedOrderContent';
-import { getOrderStyles } from '@/utils/orderUtils';
+import { formatOrderDate, getOrderStyles, getShippingStatusBadge } from '@/utils/orderUtils';
+import { Calendar } from 'lucide-react';
 
 interface OrderCardProps {
   order: Order;
@@ -66,13 +67,22 @@ export default function OrderCard({
         }`}
       />
 
-      <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-2 text-right">
+      <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-3 text-right">
         <div className="flex flex-col items-end text-right">
           <span className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Total paid</span>
           <span className="text-xl font-bold" style={{ color: styles.accentColor }}>
             ${totalPaid}
           </span>
           <span className="text-[10px] text-gray-500">Includes seller payout & platform fee</span>
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2 text-[10px] text-gray-400 sm:text-xs">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1">
+            <Calendar className="h-3.5 w-3.5 text-white/60" />
+            <span>{formatOrderDate(order.date)}</span>
+          </div>
+
+          {getShippingStatusBadge(order.shippingStatus)}
         </div>
 
         {/* Auction action badge */}
