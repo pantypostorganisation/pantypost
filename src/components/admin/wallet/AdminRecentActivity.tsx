@@ -119,13 +119,10 @@ export default function AdminRecentActivity({
   }, [filteredDeposits, filteredSellerWithdrawals, filteredAdminWithdrawals, filteredActions, filteredOrders]);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8 backdrop-blur-sm shadow-xl shadow-black/30">
-      <div className="pointer-events-none absolute -top-20 -left-20 h-64 w-64 rounded-full bg-[#ff6b00]/15 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute bottom-0 right-0 h-56 w-56 rounded-full bg-purple-500/10 blur-3xl" aria-hidden="true" />
-
-      <div className="relative mb-6 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-bold text-white">
-          <Clock className="h-5 w-5 text-[#ffbf7f]" />
+    <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <Clock className="h-5 w-5 text-[#ff950e]" />
           Recent Money Activity
         </h3>
         <div className="text-sm text-gray-400">
@@ -134,8 +131,8 @@ export default function AdminRecentActivity({
       </div>
 
       {allActivities.length > 0 ? (
-        <div className="relative overflow-hidden">
-          <div className="max-h-80 overflow-y-auto pr-1">
+        <div className="overflow-hidden">
+          <div className="max-h-80 overflow-y-auto">
             <div className="space-y-3">
               {allActivities.map((item, index) => {
                 if (!item || !item.data) return null;
@@ -144,72 +141,63 @@ export default function AdminRecentActivity({
                   const deposit = item.data;
                   const method = typeof deposit?.method === 'string' ? deposit.method.replace('_', ' ') : 'unknown';
                   return (
-                    <div
-                      key={`deposit-${index}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-blue-500/30 bg-blue-500/5 p-4 transition-colors hover:border-blue-400/40"
-                    >
-                      <div className="min-w-0 flex-1 flex items-center gap-4">
-                        <div className="flex-shrink-0 rounded-xl bg-blue-500/20 p-2 text-blue-300">
+                    <div key={`deposit-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-blue-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-blue-500/20 text-blue-400">
                           <Download className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-white">💳 Deposit Received</p>
-                          <div className="truncate text-sm text-gray-300">
+                          <p className="font-medium text-white truncate">💳 Deposit Received</p>
+                          <div className="text-sm text-gray-400 truncate">
                             <SecureMessageDisplay content={deposit?.username || 'Unknown'} allowBasicFormatting={false} className="inline" />
                             <span> via {method}</span>
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4 flex-shrink-0 text-right">
-                        <p className="font-bold text-blue-300">+{formatCurrency(Number(deposit?.amount) || 0)}</p>
-                        <p className="text-xs text-gray-400">{formatDate(deposit?.date)}</p>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-blue-400">+{formatCurrency(Number(deposit?.amount) || 0)}</p>
+                        <p className="text-xs text-gray-500">{formatDate(deposit?.date)}</p>
                       </div>
                     </div>
                   );
                 } else if (item.type === 'seller_withdrawal') {
                   const withdrawal = item.data;
                   return (
-                    <div
-                      key={`seller-withdrawal-${index}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-red-500/30 bg-red-500/5 p-4 transition-colors hover:border-red-400/40"
-                    >
-                      <div className="min-w-0 flex-1 flex items-center gap-4">
-                        <div className="flex-shrink-0 rounded-xl bg-red-500/20 p-2 text-red-300">
+                    <div key={`seller-withdrawal-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-red-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-red-500/20 text-red-400">
                           <Upload className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-white">💸 Seller Withdrawal</p>
-                          <div className="truncate text-sm text-gray-300">
+                          <p className="font-medium text-white truncate">💸 Seller Withdrawal</p>
+                          <div className="text-sm text-gray-400 truncate">
                             <SecureMessageDisplay content={withdrawal?.seller || 'Unknown'} allowBasicFormatting={false} className="inline" />
                             <span> cashed out</span>
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4 flex-shrink-0 text-right">
-                        <p className="font-bold text-red-300">-{formatCurrency(Number(withdrawal?.amount) || 0)}</p>
-                        <p className="text-xs text-gray-400">{formatDate(withdrawal?.date)}</p>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-red-400">-{formatCurrency(Number(withdrawal?.amount) || 0)}</p>
+                        <p className="text-xs text-gray-500">{formatDate(withdrawal?.date)}</p>
                       </div>
                     </div>
                   );
                 } else if (item.type === 'admin_withdrawal') {
                   const withdrawal = item.data;
                   return (
-                    <div
-                      key={`admin-withdrawal-${index}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 transition-colors hover:border-purple-400/40"
-                    >
-                      <div className="min-w-0 flex-1 flex items-center gap-4">
-                        <div className="flex-shrink-0 rounded-xl bg-purple-500/20 p-2 text-purple-200">
+                    <div key={`admin-withdrawal-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-purple-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-purple-500/20 text-purple-400">
                           <Wallet className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-white">👑 Admin Withdrawal</p>
-                          <p className="truncate text-sm text-gray-300">Platform profit withdrawal</p>
+                          <p className="font-medium text-white truncate">👑 Admin Withdrawal</p>
+                          <p className="text-sm text-gray-400 truncate">Platform profit withdrawal</p>
                         </div>
                       </div>
-                      <div className="ml-4 flex-shrink-0 text-right">
-                        <p className="font-bold text-purple-200">-{formatCurrency(Number(withdrawal?.amount) || 0)}</p>
-                        <p className="text-xs text-gray-400">{formatDate(withdrawal?.date)}</p>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-purple-400">-{formatCurrency(Number(withdrawal?.amount) || 0)}</p>
+                        <p className="text-xs text-gray-500">{formatDate(withdrawal?.date)}</p>
                       </div>
                     </div>
                   );
@@ -221,17 +209,14 @@ export default function AdminRecentActivity({
                   const adminShare = Number(action?.amount) || 0;
                   const fullAmount = adminShare * 4; // 25% admin share → full price approx
                   return (
-                    <div
-                      key={`subscription-${index}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-pink-500/30 bg-pink-500/5 p-4 transition-colors hover:border-pink-400/40"
-                    >
-                      <div className="min-w-0 flex-1 flex items-center gap-4">
-                        <div className="flex-shrink-0 rounded-xl bg-pink-500/20 p-2 text-pink-300">
+                    <div key={`subscription-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-pink-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-pink-500/20 text-pink-400">
                           <TrendingUp className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-white">🎉 Subscription Revenue</p>
-                          <div className="truncate text-sm text-gray-300">
+                          <p className="font-medium text-white truncate">🎉 Subscription Revenue</p>
+                          <div className="text-sm text-gray-400 truncate">
                             <SecureMessageDisplay content={buyer} allowBasicFormatting={false} className="inline" />
                             <span> → </span>
                             <SecureMessageDisplay content={seller} allowBasicFormatting={false} className="inline" />
@@ -239,9 +224,9 @@ export default function AdminRecentActivity({
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4 flex-shrink-0 text-right">
-                        <p className="font-bold text-pink-300">+{formatCurrency(adminShare)}</p>
-                        <p className="text-xs text-gray-400">{formatDate(action?.date)}</p>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-pink-400">+{formatCurrency(adminShare)}</p>
+                        <p className="text-xs text-gray-500">{formatDate(action?.date)}</p>
                       </div>
                     </div>
                   );
@@ -257,17 +242,14 @@ export default function AdminRecentActivity({
                   const bonusPercent = percentMatch ? percentMatch[1] : '';
 
                   return (
-                    <div
-                      key={`tier-credit-${index}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-yellow-500/30 bg-yellow-500/5 p-4 transition-colors hover:border-yellow-400/40"
-                    >
-                      <div className="min-w-0 flex-1 flex items-center gap-4">
-                        <div className="flex-shrink-0 rounded-xl bg-yellow-500/20 p-2 text-yellow-200">
+                    <div key={`tier-credit-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-yellow-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-yellow-500/20 text-yellow-400">
                           <Award className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-white">🏆 Tier Credit Paid Out</p>
-                          <div className="truncate text-sm text-gray-300">
+                          <p className="font-medium text-white truncate">🏆 Tier Credit Paid Out</p>
+                          <div className="text-sm text-gray-400 truncate">
                             <span>To </span>
                             <SecureMessageDisplay content={seller} allowBasicFormatting={false} className="inline" />
                             {tierName && <span> ({tierName} tier)</span>}
@@ -275,9 +257,9 @@ export default function AdminRecentActivity({
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4 flex-shrink-0 text-right">
-                        <p className="font-bold text-yellow-200">-{formatCurrency(Math.abs(Number(action?.amount) || 0))}</p>
-                        <p className="text-xs text-gray-400">{formatDate(action?.date)}</p>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-yellow-400">-{formatCurrency(Math.abs(Number(action?.amount) || 0))}</p>
+                        <p className="text-xs text-gray-500">{formatDate(action?.date)}</p>
                       </div>
                     </div>
                   );
@@ -286,17 +268,14 @@ export default function AdminRecentActivity({
                   const base = Number(order?.finalBid ?? order?.price ?? 0);
                   const platformProfit = base * 0.2;
                   return (
-                    <div
-                      key={`auction-${index}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-purple-500/30 bg-purple-500/5 p-4 transition-colors hover:border-purple-400/40"
-                    >
-                      <div className="min-w-0 flex-1 flex items-center gap-4">
-                        <div className="flex-shrink-0 rounded-xl bg-purple-500/20 p-2 text-purple-200">
+                    <div key={`auction-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-purple-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-purple-500/20 text-purple-400">
                           <Gavel className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-white">🔨 Auction Completed</p>
-                          <div className="truncate text-sm text-gray-300">
+                          <p className="font-medium text-white truncate">🔨 Auction Completed</p>
+                          <div className="text-sm text-gray-400 truncate">
                             <SecureMessageDisplay content={order?.buyer || 'Unknown'} allowBasicFormatting={false} className="inline" />
                             <span> won "</span>
                             <SecureMessageDisplay content={order?.title || 'Unknown Item'} allowBasicFormatting={false} className="inline" maxLength={50} />
@@ -304,9 +283,9 @@ export default function AdminRecentActivity({
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4 flex-shrink-0 text-right">
-                        <p className="font-bold text-purple-200">+{formatCurrency(platformProfit)}</p>
-                        <p className="text-xs text-gray-400">{formatDate(order?.date)}</p>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-purple-400">+{formatCurrency(platformProfit)}</p>
+                        <p className="text-xs text-gray-500">{formatDate(order?.date)}</p>
                       </div>
                     </div>
                   );
@@ -315,17 +294,14 @@ export default function AdminRecentActivity({
                   const price = Number(order?.price) || 0;
                   const platformProfit = price * 0.2;
                   return (
-                    <div
-                      key={`sale-${index}`}
-                      className="flex items-center justify-between gap-4 rounded-2xl border border-green-500/30 bg-green-500/5 p-4 transition-colors hover:border-green-400/40"
-                    >
-                      <div className="min-w-0 flex-1 flex items-center gap-4">
-                        <div className="flex-shrink-0 rounded-xl bg-green-500/20 p-2 text-green-300">
+                    <div key={`sale-${index}`} className="flex items-center justify-between p-4 bg-[#252525] rounded-lg hover:bg-[#2a2a2a] transition-colors border-l-4 border-green-500/50">
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <div className="p-2 rounded-lg flex-shrink-0 bg-green-500/20 text-green-400">
                           <ShoppingBag className="w-4 h-4" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium text-white">🛍️ Regular Sale</p>
-                          <div className="truncate text-sm text-gray-300">
+                          <p className="font-medium text-white truncate">🛍️ Regular Sale</p>
+                          <div className="text-sm text-gray-400 truncate">
                             <SecureMessageDisplay content={order?.buyer || 'Unknown'} allowBasicFormatting={false} className="inline" />
                             <span> bought "</span>
                             <SecureMessageDisplay content={order?.title || 'Unknown Item'} allowBasicFormatting={false} className="inline" maxLength={50} />
@@ -333,9 +309,9 @@ export default function AdminRecentActivity({
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4 flex-shrink-0 text-right">
-                        <p className="font-bold text-green-300">+{formatCurrency(platformProfit)}</p>
-                        <p className="text-xs text-gray-400">{formatDate(order?.date)}</p>
+                      <div className="text-right flex-shrink-0 ml-4">
+                        <p className="font-bold text-green-400">+{formatCurrency(platformProfit)}</p>
+                        <p className="text-xs text-gray-500">{formatDate(order?.date)}</p>
                       </div>
                     </div>
                   );
@@ -346,10 +322,10 @@ export default function AdminRecentActivity({
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] py-12 text-center text-gray-400">
-          <Activity className="mx-auto mb-4 h-12 w-12 text-gray-600" />
-          <h4 className="mb-2 text-lg font-medium text-gray-300">No Activity Yet</h4>
-          <p className="text-sm text-gray-400">
+        <div className="text-center py-12 text-gray-500">
+          <Activity className="h-12 w-12 mx-auto mb-4 text-gray-600" />
+          <h4 className="text-lg font-medium text-gray-400 mb-2">No Activity Yet</h4>
+          <p className="text-sm">
             {timeFilter === 'all'
               ? "Start making money and it'll show up here! 🚀"
               : `No activity for ${getPeriodDisplayName().toLowerCase()}`}

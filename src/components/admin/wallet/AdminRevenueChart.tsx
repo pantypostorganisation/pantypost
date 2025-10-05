@@ -55,40 +55,37 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
   };
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-6 sm:p-8 backdrop-blur-sm shadow-xl shadow-black/30">
-      <div className="pointer-events-none absolute -top-24 -right-16 h-56 w-56 rounded-full bg-[#ff6b00]/15 blur-3xl" aria-hidden="true" />
-      <div className="pointer-events-none absolute bottom-0 left-0 h-48 w-48 rounded-full bg-purple-500/10 blur-3xl" aria-hidden="true" />
-
-      <div className="relative flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <h3 className="flex items-center gap-2 text-lg font-bold text-white">
-          <BarChart3 className="h-5 w-5 text-[#ffbf7f]" />
+    <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 mb-8 overflow-hidden">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-[#ff950e]" />
           Revenue Trend
         </h3>
         <div className="text-sm text-gray-400">{getChartPeriodDescription()}</div>
       </div>
 
       {chartData.length === 0 ? (
-        <div className="relative py-12 text-center text-gray-500">No revenue data for this period</div>
+        <div className="text-center text-gray-500 py-12">No revenue data for this period</div>
       ) : (
-        <div className="relative mt-8">
+        <>
           <div className="overflow-x-auto">
-            <div className="flex h-64 min-w-[600px] items-end justify-between gap-1">
+            <div className="min-w-[600px] h-64 flex items-end justify-between gap-1 mb-4">
               {chartData.map((period, index) => {
                 const heightPx = Math.max((period.revenue / maxRevenue) * 200, 4); // min bar height for visibility
                 return (
-                  <div key={index} className="group flex flex-1 flex-col items-center">
-                    <div className="relative mb-2 flex w-full justify-center">
+                  <div key={index} className="flex-1 flex flex-col items-center group">
+                    <div className="relative w-full flex justify-center mb-2">
                       <div
-                        className="min-h-[4px] w-8 rounded-t-lg bg-gradient-to-t from-[#ff950e] to-[#ff6b00] transition-all duration-300 group-hover:from-[#ff6b00] group-hover:to-[#ff950e]"
+                        className="w-8 bg-gradient-to-t from-[#ff950e] to-[#ff6b00] rounded-t-lg transition-all duration-300 group-hover:from-[#ff6b00] group-hover:to-[#ff950e] min-h-[4px]"
                         style={{ height: `${heightPx}px` }}
                         aria-label={`${period.date}: ${formatCurrency(period.revenue)}`}
                         role="img"
                       />
-                      <div className="absolute -top-8 z-10 whitespace-nowrap rounded bg-black/80 px-2 py-1 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="absolute -top-8 bg-black/80 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
                         {formatCurrency(period.revenue)}
                       </div>
                     </div>
-                    <span className="mt-1 block origin-center -rotate-45 whitespace-nowrap text-xs text-gray-500">
+                    <span className="text-xs text-gray-500 transform -rotate-45 origin-center whitespace-nowrap block mt-1">
                       {period.date}
                     </span>
                   </div>
@@ -96,27 +93,26 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
               })}
             </div>
           </div>
-          <div className="mt-6 grid grid-cols-1 gap-4 border-t border-white/10 pt-4 text-center sm:grid-cols-3">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">
+
+          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-800">
+            <div className="text-center">
+              <p className="text-xs text-gray-500">
                 Highest {timeFilter === 'today' ? 'Hour' : timeFilter === 'year' ? 'Month' : 'Day'}
               </p>
-              <p className="font-semibold text-emerald-300">
-                {formatCurrency(chartData.reduce((m, d) => Math.max(m, d.revenue), 0))}
-              </p>
+              <p className="font-bold text-green-400">{formatCurrency(chartData.reduce((m, d) => Math.max(m, d.revenue), 0))}</p>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">
+            <div className="text-center">
+              <p className="text-xs text-gray-500">
                 Average {timeFilter === 'today' ? 'Hour' : timeFilter === 'year' ? 'Month' : 'Day'}
               </p>
-              <p className="font-semibold text-white">{formatCurrency(averageChartRevenue)}</p>
+              <p className="font-bold text-white">{formatCurrency(averageChartRevenue)}</p>
             </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">Total Period</p>
-              <p className="font-semibold text-[#ffbf7f]">{formatCurrency(totalChartRevenue)}</p>
+            <div className="text-center">
+              <p className="text-xs text-gray-500">Total Period</p>
+              <p className="font-bold text-[#ff950e]">{formatCurrency(totalChartRevenue)}</p>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
