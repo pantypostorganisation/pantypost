@@ -39,9 +39,9 @@ export const API_ENDPOINTS = {
     REFRESH: '/auth/refresh',
     ME: '/auth/me',
     VERIFY_USERNAME: '/auth/verify-username',
-    // Password reset endpoints
+    // Password reset endpoints - FIXED
     FORGOT_PASSWORD: '/auth/forgot-password',
-    VERIFY_RESET_TOKEN: '/auth/verify-reset-token',
+    VERIFY_RESET_CODE: '/auth/verify-reset-code',  // FIXED: Changed from VERIFY_RESET_TOKEN
     RESET_PASSWORD: '/auth/reset-password',
   },
   
