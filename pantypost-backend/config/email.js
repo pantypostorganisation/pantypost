@@ -95,7 +95,7 @@ const sendEmail = async (options) => {
 
 // Email templates
 const emailTemplates = {
-  // Responsive light/dark mode template
+  // Responsive light/dark mode template with email logo
   passwordResetCode: (username, code) => ({
     subject: 'Your PantyPost Password Reset Code',
     html: `
@@ -177,6 +177,16 @@ const emailTemplates = {
           .text-muted { color: #999999 !important; }
           .text-orange { color: #ff950e !important; }
           
+          /* Desktop logo - visible by default */
+          .desktop-logo {
+            display: block !important;
+          }
+          
+          /* Mobile logo - hidden by default */
+          .mobile-logo {
+            display: none !important;
+          }
+          
           /* Dark mode overrides */
           @media (prefers-color-scheme: dark) {
             body {
@@ -213,8 +223,6 @@ const emailTemplates = {
             .text-secondary { color: #9aa0a6 !important; }
             .text-muted { color: #5f6368 !important; }
             .text-orange { color: #ff950e !important; }
-            
-            .dark-invert { filter: invert(1) !important; }
           }
           
           /* Outlook Dark Mode */
@@ -229,6 +237,14 @@ const emailTemplates = {
             .email-container { width: 100% !important; }
             .email-padding { padding: 25px 20px !important; }
             .code-text { font-size: 24px !important; letter-spacing: 4px !important; }
+            
+            /* Logo swap for mobile */
+            .desktop-logo {
+              display: none !important;
+            }
+            .mobile-logo {
+              display: block !important;
+            }
           }
         </style>
       </head>
@@ -240,11 +256,22 @@ const emailTemplates = {
                 <div class="email-container">
                   <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                     
-                    <!-- Header -->
+                    <!-- Header with email logo -->
                     <tr>
                       <td class="email-header" style="padding: 30px; text-align: center;">
                         <a href="https://pantypost.com/" style="text-decoration: none;">
-                          <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" style="display: block; margin: 0 auto; max-width: 100%; height: auto;">
+                          <!-- Desktop logo with dark background embedded -->
+                          <img src="https://pantypost.com/emaillogo.png" 
+                               alt="PantyPost" 
+                               width="240" 
+                               class="desktop-logo"
+                               style="display: block; margin: 0 auto; max-width: 100%; height: auto;">
+                          <!-- Mobile logo (same image, different size) -->
+                          <img src="https://pantypost.com/emaillogo.png" 
+                               alt="PantyPost" 
+                               width="200" 
+                               class="mobile-logo"
+                               style="display: none; margin: 0 auto; max-width: 90%; height: auto;">
                         </a>
                         <h1 class="text-primary" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
                           Password Reset Request
@@ -472,7 +499,7 @@ The PantyPost Team
     `
   }),
   
-  // Password reset success email - responsive light/dark
+  // Password reset success email - responsive light/dark with email logo
   passwordResetSuccess: (username) => ({
     subject: 'Your PantyPost Password Has Been Reset',
     html: `
@@ -525,6 +552,14 @@ The PantyPost Team
           .text-secondary { color: #666666; }
           .text-success { color: #28a745; }
           
+          .desktop-logo {
+            display: block !important;
+          }
+          
+          .mobile-logo {
+            display: none !important;
+          }
+          
           @media (prefers-color-scheme: dark) {
             body { background-color: #202124; }
             .email-header { background-color: #303134; }
@@ -535,6 +570,8 @@ The PantyPost Team
           
           @media screen and (max-width: 600px) {
             .email-container { width: 100% !important; }
+            .desktop-logo { display: none !important; }
+            .mobile-logo { display: block !important; }
           }
         </style>
       </head>
@@ -546,11 +583,22 @@ The PantyPost Team
                 <div class="email-container">
                   <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                     
-                    <!-- Header -->
+                    <!-- Header with email logo -->
                     <tr>
                       <td class="email-header" style="padding: 30px; text-align: center;">
                         <a href="https://pantypost.com/">
-                          <img src="https://pantypost.com/logo.png" alt="PantyPost" width="180" style="display: block; margin: 0 auto;">
+                          <!-- Desktop logo -->
+                          <img src="https://pantypost.com/emaillogo.png" 
+                               alt="PantyPost" 
+                               width="240" 
+                               class="desktop-logo"
+                               style="display: block; margin: 0 auto; max-width: 100%; height: auto;">
+                          <!-- Mobile logo -->
+                          <img src="https://pantypost.com/emaillogo.png" 
+                               alt="PantyPost" 
+                               width="200" 
+                               class="mobile-logo"
+                               style="display: none; margin: 0 auto; max-width: 90%; height: auto;">
                         </a>
                         <h1 class="text-success" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
                           Password Successfully Reset
