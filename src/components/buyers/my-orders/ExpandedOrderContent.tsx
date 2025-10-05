@@ -24,23 +24,21 @@ interface ExpandedOrderContentProps {
  *  - order.shipping?.trackingNumber: string
  */
 function getTrackingNumber(o: unknown): string | null {
-  if (!o || typeof o !== 'object') return null;
-
-  const anyOrder = o as Record<string, any>;
-
-  // Direct property (some code paths may attach it here)
-  if (typeof anyOrder.trackingNumber === 'string' && anyOrder.trackingNumber.trim().length > 0) {
-    return anyOrder.trackingNumber.trim();
+  if (!o || typeof o !== 'object' || o === null) {
+    return null;
   }
 
-  // Nested under shipping
-  if (
-    anyOrder.shipping &&
-    typeof anyOrder.shipping === 'object' &&
-    typeof anyOrder.shipping.trackingNumber === 'string' &&
-    anyOrder.shipping.trackingNumber.trim().length > 0
-  ) {
-    return anyOrder.shipping.trackingNumber.trim();
+  const orderRecord = o as Record<string, unknown>;
+  const directTracking = orderRecord.trackingNumber;
+
+  if (typeof directTracking === 'string' && directTracking.trim().length > 0) {
+    return directTracking.trim();
+  }
+
+  const shipping = orderRecord.shipping as { trackingNumber?: unknown } | undefined;
+
+  if (shipping && typeof shipping.trackingNumber === 'string' && shipping.trackingNumber.trim().length > 0) {
+    return shipping.trackingNumber.trim();
   }
 
   return null;
@@ -72,7 +70,7 @@ export default function ExpandedOrderContent({
                 fallbackSrc="/placeholder-avatar.png"
               />
             ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[radial-gradient(circle_at_top,_rgba(255,149,14,0.25),_transparent)] text-lg font-semibold text-white ring-2 ring-white/10 transition duration-300 group-hover:ring-[#ff950e]/60">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-lg font-semibold text-white ring-2 ring-white/10 transition duration-300 group-hover:ring-[#ff950e]/60">
                 {order.seller ? order.seller.charAt(0).toUpperCase() : '?'}
               </div>
             )}
@@ -87,7 +85,7 @@ export default function ExpandedOrderContent({
 
           <Link
             href={`/buyers/messages?thread=${sanitizedUsername}`}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
           >
             <MessageCircle className="h-4 w-4" />
             Message seller

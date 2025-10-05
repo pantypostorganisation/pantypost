@@ -5,7 +5,6 @@ import React from 'react';
 import { Calendar, Tag, MapPin, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
 import { formatOrderDate, getShippingStatusBadge } from '@/utils/orderUtils';
-import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface OrderDetailsProps {
   order: Order;
@@ -70,7 +69,7 @@ export default function OrderDetails({
         {!hasDeliveryAddress ? (
           <button
             onClick={() => onOpenAddressModal(order.id)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition-all hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-500/15"
+            className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition-colors hover:border-amber-300/60 hover:bg-amber-500/15"
           >
             <MapPin className="h-4 w-4" />
             Confirm delivery address
@@ -83,10 +82,10 @@ export default function OrderDetails({
         )}
 
         <button
-          className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-all ${
+          className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-colors ${
             isExpanded
-              ? 'text-gray-300 hover:-translate-y-0.5 hover:text-white'
-              : 'bg-gradient-to-r from-[#ff950e]/20 to-[#ff7a00]/20 text-[#ffb469] hover:-translate-y-0.5 hover:from-[#ff950e]/30 hover:to-[#ff7a00]/30'
+              ? 'text-gray-300 hover:text-white'
+              : 'bg-[#ff950e]/15 text-[#ffb469] hover:bg-[#ff950e]/25'
           }`}
           onClick={() => onToggleExpanded(isExpanded ? null : order.id)}
         >

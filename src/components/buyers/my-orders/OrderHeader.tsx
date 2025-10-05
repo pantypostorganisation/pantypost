@@ -20,14 +20,11 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   const accentColor = styles.accentColor;
   const accentWithAlpha = (alpha: string) => `${accentColor}${alpha}`;
 
-  const accentGlowStyle: React.CSSProperties = {
-    boxShadow: `0 25px 60px -30px ${accentWithAlpha('88')}`,
-  };
   const accentBorderStyle: React.CSSProperties = {
     borderColor: `${accentWithAlpha('55')}`,
   };
   const accentPillStyle: React.CSSProperties = {
-    background: `linear-gradient(120deg, ${accentWithAlpha('24')}, rgba(17,17,17,0.65))`,
+    backgroundColor: accentWithAlpha('24'),
     borderColor: `${accentWithAlpha('55')}`,
     color: accentColor,
   };
@@ -108,10 +105,10 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       {/* Product Image or Custom Request Icon */}
-      <div className="relative flex-shrink-0" style={accentGlowStyle}>
+      <div className="relative flex-shrink-0">
         <div className="relative h-28 w-28 overflow-hidden rounded-2xl border border-white/10 bg-black/40">
           {isCustom ? (
-            <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.25),_transparent)]">
+            <div className="flex h-full w-full items-center justify-center bg-black/40">
               <Settings className="h-10 w-10 text-sky-300" />
             </div>
           ) : (
@@ -130,7 +127,7 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
                   onError={handleImageError}
                 />
               ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.08),_transparent)] text-gray-500">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-black/40 text-gray-500">
                   <span className="text-3xl font-semibold">{(order.title || '?').charAt(0).toUpperCase()}</span>
                   <span className="text-xs uppercase tracking-widest">No image</span>
                 </div>
