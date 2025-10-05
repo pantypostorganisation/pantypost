@@ -103,9 +103,9 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
   };
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[auto,1fr,auto] lg:items-start lg:gap-8">
       {/* Product Image or Custom Request Icon */}
-      <div className="relative flex-shrink-0">
+      <div className="flex flex-shrink-0 flex-col items-center gap-4 lg:items-start">
         <div className="relative h-28 w-28 overflow-hidden rounded-2xl border border-white/10 bg-black/40">
           {isCustom ? (
             <div className="flex h-full w-full items-center justify-center bg-black/40">
@@ -136,7 +136,7 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
           )}
         </div>
 
-        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2">
+        <div className="flex justify-center lg:justify-start">
           <span
             className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wider"
             style={accentPillStyle}
@@ -148,36 +148,34 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
       </div>
 
       {/* Order Title and Price */}
-      <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 flex-col gap-2">
-            <h3 className="text-2xl font-semibold text-white sm:text-[1.6rem]">
-              <SecureMessageDisplay content={order.title} allowBasicFormatting={false} as="span" />
-            </h3>
-            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-medium text-gray-300">
-                Order ID: <span className="font-mono text-[11px] text-gray-400">{order.id ? order.id.slice(0, 10) : '—'}</span>
-              </span>
-              {isAuction && <Star className="h-4 w-4 text-purple-300" />}
-              {isCustom && <Settings className="h-4 w-4 text-sky-300" />}
-            </div>
-          </div>
-
-          <div
-            className="flex flex-col rounded-2xl border px-4 py-3 text-right"
-            style={accentBorderStyle}
-          >
-            <span className="text-xs font-medium uppercase tracking-wider text-gray-400">Total paid</span>
-            <span className="text-2xl font-bold" style={{ color: accentColor }}>
-              ${(order.markedUpPrice || order.price).toFixed(2)}
+      <div className="flex min-w-0 flex-1 flex-col gap-4 lg:pr-4">
+        <div className="flex min-w-0 flex-col gap-2">
+          <h3 className="text-2xl font-semibold text-white sm:text-[1.6rem]">
+            <SecureMessageDisplay content={order.title} allowBasicFormatting={false} as="span" />
+          </h3>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-medium text-gray-300">
+              Order ID: <span className="font-mono text-[11px] text-gray-400">{order.id ? order.id.slice(0, 10) : '—'}</span>
             </span>
-            <span className="text-[11px] text-gray-500">Includes seller payout & platform fee</span>
+            {isAuction && <Star className="h-4 w-4 text-purple-300" />}
+            {isCustom && <Settings className="h-4 w-4 text-sky-300" />}
           </div>
         </div>
 
         <div className="text-sm text-gray-300">
           <SecureMessageDisplay content={order.description} allowBasicFormatting={false} />
         </div>
+      </div>
+
+      <div
+        className="flex flex-col rounded-2xl border px-4 py-3 text-right lg:min-w-[220px] lg:self-start"
+        style={accentBorderStyle}
+      >
+        <span className="text-xs font-medium uppercase tracking-wider text-gray-400">Total paid</span>
+        <span className="text-2xl font-bold" style={{ color: accentColor }}>
+          ${(order.markedUpPrice || order.price).toFixed(2)}
+        </span>
+        <span className="text-[11px] text-gray-500">Includes seller payout & platform fee</span>
       </div>
     </div>
   );
