@@ -2,84 +2,54 @@
 'use client';
 
 import React from 'react';
-import { ShoppingBag, TrendingUp, Package, Sparkles, ShieldCheck } from 'lucide-react';
+import { ShoppingBag, TrendingUp, Package, Sparkles } from 'lucide-react';
 
 export default function OrdersHeader() {
   return (
-    <div className="relative flex flex-col gap-8">
-      {/* Background glows */}
-      <div className="pointer-events-none absolute -top-10 left-0 h-40 w-40 rounded-full bg-[#ff950e]/20 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-12 right-6 h-48 w-48 rounded-full bg-[#ff7a00]/10 blur-3xl" />
-
-      <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-        {/* Title section */}
-        <div className="flex flex-1 flex-col gap-6">
+    <div className="relative">
+      {/* Background decorations */}
+      <div className="absolute -top-6 -left-6 w-32 h-32 bg-[#ff950e]/10 rounded-full blur-3xl" />
+      <div className="absolute -top-10 -right-10 w-40 h-40 bg-[#ff950e]/5 rounded-full blur-3xl" />
+      
+      <div className="relative">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          {/* Title section */}
           <div className="flex items-center gap-4">
-            <div className="relative inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-[#ff950e]/40 bg-gradient-to-br from-[#ff950e]/40 via-[#ff7a00]/60 to-[#ff6b00]/70 shadow-[0_15px_40px_-25px_rgba(255,149,14,0.9)]">
-              <span className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.25),_transparent_60%)]" />
-              <ShoppingBag className="relative z-10 h-6 w-6 text-white" />
+            {/* Animated icon container */}
+            <div className="relative group">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur-lg opacity-40 group-hover:opacity-60 transition-opacity duration-300" />
+              <div className="relative bg-gradient-to-r from-[#ff950e] to-[#ff6b00] p-3.5 md:p-4 rounded-xl shadow-xl">
+                <ShoppingBag className="w-7 h-7 md:w-8 md:h-8 text-white" />
+              </div>
             </div>
+            
+            {/* Title with gradient */}
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-gray-200/70">
-                Buyer hub
-              </span>
-              <h1 className="mt-3 text-3xl font-bold sm:text-4xl lg:text-5xl">
-                <span className="bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold">
+                <span className="bg-gradient-to-r from-white via-gray-100 to-gray-300 bg-clip-text text-transparent">
                   My Orders
                 </span>
               </h1>
-              <p className="mt-2 max-w-xl text-sm text-gray-400 sm:text-base">
-                Track purchases, review deliveries, and stay in sync with every seller you're supporting.
+              <p className="text-gray-400 text-sm md:text-base mt-1">
+                Track purchases & manage deliveries
               </p>
             </div>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15">
-                <TrendingUp className="h-5 w-5 text-emerald-300" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Live Tracking</p>
-                <p className="text-sm font-semibold text-white">Real-time updates</p>
-              </div>
+          
+          {/* Quick stats/tags */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-gradient-to-r from-green-500/10 to-emerald-500/10 px-4 py-2 rounded-full border border-green-500/20">
+              <TrendingUp className="w-4 h-4 text-green-400" />
+              <span className="text-green-400 text-sm font-medium">Live Tracking</span>
             </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15">
-                <Package className="h-5 w-5 text-sky-300" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Fulfillment</p>
-                <p className="text-sm font-semibold text-white">Secure delivery</p>
-              </div>
+            <div className="flex items-center gap-2 bg-gradient-to-r from-blue-500/10 to-sky-500/10 px-4 py-2 rounded-full border border-blue-500/20">
+              <Package className="w-4 h-4 text-blue-400" />
+              <span className="text-blue-400 text-sm font-medium">Secure Delivery</span>
             </div>
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/15">
-                <Sparkles className="h-5 w-5 text-purple-300" />
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wider text-gray-500">Aftercare</p>
-                <p className="text-sm font-semibold text-white">Premium support</p>
-              </div>
+            <div className="flex items-center gap-2 bg-gradient-to-r from-purple-500/10 to-violet-500/10 px-4 py-2 rounded-full border border-purple-500/20">
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span className="text-purple-400 text-sm font-medium">Premium Support</span>
             </div>
-          </div>
-        </div>
-
-        {/* Trust panel */}
-        <div className="relative flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-white/10 bg-black/40 p-6 text-sm text-gray-300 shadow-[0_15px_45px_-30px_rgba(255,149,14,0.6)]">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10">
-              <ShieldCheck className="h-6 w-6 text-[#ff950e]" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Buyer protection enabled</p>
-              <p className="text-xs text-gray-500">Encrypted payments & escrow on every transaction.</p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/5 bg-black/30 p-4 text-xs text-gray-400">
-            <p>
-              Keep an eye on address confirmations for auction wins and leave reviews to unlock loyalty bonuses with your favorite sellers.
-            </p>
           </div>
         </div>
       </div>

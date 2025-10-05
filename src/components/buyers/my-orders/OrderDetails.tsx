@@ -30,15 +30,15 @@ export default function OrderDetails({
   return (
     <>
       {/* Streamlined Meta Info */}
-      <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-gray-400 sm:text-sm">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-          <Calendar className="h-4 w-4 text-white/60" />
+      <div className="flex flex-wrap items-center gap-6 mt-4 text-sm">
+        <div className="flex items-center gap-2 text-gray-400">
+          <Calendar className="w-4 h-4 opacity-60" />
           <span>{formatOrderDate(order.date)}</span>
         </div>
-
+        
         {order.tags && order.tags.length > 0 && (
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5">
-            <Tag className="h-4 w-4 text-white/60" />
+          <div className="flex items-center gap-2 text-gray-400">
+            <Tag className="w-4 h-4 opacity-60" />
             <span className="opacity-80">
               {order.tags.slice(0, 2).join(', ')}
               {order.tags.length > 2 && ` +${order.tags.length - 2}`}
@@ -46,59 +46,61 @@ export default function OrderDetails({
           </div>
         )}
 
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs sm:text-sm">
-          {getShippingStatusBadge(order.shippingStatus)}
-        </div>
+        {/* Inline status badge */}
+        {getShippingStatusBadge(order.shippingStatus)}
       </div>
 
       {/* Type-specific highlight - More subtle */}
       {isAuction && (
-        <div className="mt-5 rounded-2xl border border-purple-500/30 bg-purple-500/10 px-5 py-4 text-sm text-purple-100">
-          Winning bid
-          <span className="ml-2 font-semibold text-white">${order.finalBid?.toFixed(2) || order.price.toFixed(2)}</span>
+        <div className="mt-4 pl-4 border-l-2 border-purple-500/30">
+          <p className="text-sm text-purple-300">
+            Winning bid: <span className="font-semibold">${order.finalBid?.toFixed(2) || order.price.toFixed(2)}</span>
+          </p>
         </div>
       )}
 
       {isCustom && order.originalRequestId && (
-        <div className="mt-5 rounded-2xl border border-sky-500/30 bg-sky-500/10 px-5 py-4 text-sm text-sky-100">
-          Custom Request •
-          <span className="ml-2 font-mono text-xs text-sky-200/80">#{order.originalRequestId.slice(0, 8)}</span>
+        <div className="mt-4 pl-4 border-l-2 border-blue-500/30">
+          <p className="text-sm text-blue-300">
+            Custom Request • <span className="font-mono text-xs opacity-60">#{order.originalRequestId.slice(0, 8)}</span>
+          </p>
         </div>
       )}
 
-      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/5 bg-black/30 px-4 py-4">
+      {/* Simplified Actions Bar */}
+      <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
         {!hasDeliveryAddress ? (
           <button
             onClick={() => onOpenAddressModal(order.id)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-2 text-sm font-semibold text-amber-200 transition-all hover:-translate-y-0.5 hover:border-amber-300/60 hover:bg-amber-500/15"
+            className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-all text-sm font-medium"
           >
-            <MapPin className="h-4 w-4" />
-            Confirm delivery address
+            <MapPin className="w-4 h-4" />
+            Add Delivery Address
           </button>
         ) : (
-          <div className="inline-flex items-center gap-2 rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-200">
-            <CheckCircle className="h-4 w-4" />
-            Address confirmed
+          <div className="flex items-center gap-2 text-green-400 text-sm">
+            <CheckCircle className="w-4 h-4" />
+            <span>Address Confirmed</span>
           </div>
         )}
-
+        
         <button
-          className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-semibold transition-all ${
-            isExpanded
-              ? 'text-gray-300 hover:-translate-y-0.5 hover:text-white'
-              : 'bg-gradient-to-r from-[#ff950e]/20 to-[#ff7a00]/20 text-[#ffb469] hover:-translate-y-0.5 hover:from-[#ff950e]/30 hover:to-[#ff7a00]/30'
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
+            isExpanded 
+              ? 'text-gray-400 hover:text-white' 
+              : 'text-[#ff950e] hover:bg-[#ff950e]/10'
           }`}
           onClick={() => onToggleExpanded(isExpanded ? null : order.id)}
         >
           {isExpanded ? (
             <>
-              <ChevronUp className="h-4 w-4" />
-              Hide details
+              <ChevronUp className="w-4 h-4" />
+              Less
             </>
           ) : (
             <>
-              View details
-              <ChevronDown className="h-4 w-4" />
+              Details
+              <ChevronDown className="w-4 h-4" />
             </>
           )}
         </button>
