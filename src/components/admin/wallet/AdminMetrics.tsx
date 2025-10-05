@@ -75,8 +75,8 @@ function MetricCard({
   const cleanGrowth = Number.isFinite(growthRate as number) ? (growthRate as number) : 0;
 
   return (
-    <div className={`bg-gradient-to-br ${bgGradient} rounded-xl p-6 border relative overflow-hidden`}>
-      <div className="absolute top-0 right-0 w-32 h-32 bg-black/10 rounded-full -translate-y-16 translate-x-16" aria-hidden="true"></div>
+    <div className={`relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br ${bgGradient} p-6 backdrop-blur-sm`}>
+      <div className="pointer-events-none absolute top-0 right-0 h-32 w-32 -translate-y-16 translate-x-16 rounded-full bg-black/10" aria-hidden="true"></div>
       <div className="relative">
         <div className="flex items-center gap-3 mb-4">
           <div className={`p-3 ${iconColor} rounded-lg`} aria-hidden="true">
