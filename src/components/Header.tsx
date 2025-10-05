@@ -740,8 +740,9 @@ export default function Header(): React.ReactElement | null {
                     </Link>
                     <Link
                       href="/signup"
-                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-[#303030] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30"
+                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30"
                       onClick={() => setMobileMenuOpen(false)}
+                      style={{ color: '#2a2a2a' }}
                     >
                       Sign Up
                     </Link>
