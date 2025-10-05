@@ -446,7 +446,7 @@ export default function BuyerProfilePage() {
                           className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff7b1f] px-5 py-2.5 text-sm font-semibold text-neutral-950 shadow-lg shadow-[#ff950e]/15 transition hover:shadow-[#ff950e]/30 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
                         >
                           <MessageCircle size={18} className="text-neutral-950" />
-                          Message
+                          <span className="text-black">Message</span>
                         </Link>
 
                         {isOwner && (
