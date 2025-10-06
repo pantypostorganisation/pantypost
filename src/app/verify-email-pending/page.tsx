@@ -1,10 +1,114 @@
 // src/app/verify-email-pending/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Mail, RefreshCw, CheckCircle, AlertCircle, Clock, ArrowRight } from 'lucide-react';
+
+// Get API URL from your configuration
+const getApiUrl = () => {
+  if (typeof window === 'undefined') return 'https://api.pantypost.com';
+  
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:5000';
+  }
+  
+  return 'https://api.pantypost.com';
+};
+
+// Floating particle component
+function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: number }) {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
+  const velocityRef = useRef({ x: 0, y: 0 });
+  const animationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      setPosition({
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight
+      });
+      velocityRef.current = {
+        x: (Math.random() - 0.5) * 0.8,
+        y: (Math.random() - 0.5) * 0.8
+      };
+      
+      const handleResize = () => {
+        setDimensions({ width: window.innerWidth, height: window.innerHeight });
+      };
+      
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    const animateParticle = () => {
+      setPosition(prev => {
+        let newX = prev.x + velocityRef.current.x;
+        let newY = prev.y + velocityRef.current.y;
+        
+        if (newX <= 0 || newX >= dimensions.width) {
+          velocityRef.current.x = -velocityRef.current.x + (Math.random() - 0.5) * 0.1;
+          newX = Math.max(0, Math.min(dimensions.width, newX));
+        }
+        
+        if (newY <= 0 || newY >= dimensions.height) {
+          velocityRef.current.y = -velocityRef.current.y + (Math.random() - 0.5) * 0.1;
+          newY = Math.max(0, Math.min(dimensions.height, newY));
+        }
+
+        if (Math.random() < 0.02) {
+          velocityRef.current.x += (Math.random() - 0.5) * 0.1;
+          velocityRef.current.y += (Math.random() - 0.5) * 0.1;
+          velocityRef.current.x = Math.max(-1, Math.min(1, velocityRef.current.x));
+          velocityRef.current.y = Math.max(-1, Math.min(1, velocityRef.current.y));
+        }
+        
+        return { x: newX, y: newY };
+      });
+
+      animationRef.current = requestAnimationFrame(animateParticle);
+    };
+
+    animationRef.current = requestAnimationFrame(animateParticle);
+
+    return () => {
+      if (animationRef.current !== null) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+  }, [dimensions]);
+
+  const colors = ['bg-[#ff950e]/30', 'bg-[#ff950e]/20', 'bg-white/20', 'bg-white/30', 'bg-[#ff6b00]/25'];
+  const particleColor = colors[index % colors.length];
+  const size = 4 + Math.random() * 4;
+  const opacity = 0.3 + Math.random() * 0.4;
+
+  return (
+    <div
+      className={`absolute ${particleColor} rounded-full transition-opacity duration-1000 pointer-events-none`}
+      style={{
+        left: position.x,
+        top: position.y,
+        width: size,
+        height: size,
+        opacity: opacity,
+        transform: 'translate(-50%, -50%)',
+      }}
+    />
+  );
+}
 
 export default function VerifyEmailPendingPage() {
   const router = useRouter();
@@ -20,22 +124,18 @@ export default function VerifyEmailPendingPage() {
   const [verifyError, setVerifyError] = useState('');
 
   useEffect(() => {
-    // Get email and username from query params (passed from signup)
     const emailParam = searchParams.get('email');
     const usernameParam = searchParams.get('username');
     
     if (emailParam) setEmail(decodeURIComponent(emailParam));
     if (usernameParam) setUsername(decodeURIComponent(usernameParam));
     
-    // If no email provided, redirect to signup
     if (!emailParam) {
       router.push('/signup');
     }
-    // No cleanup needed, but return undefined explicitly
     return undefined;
   }, [searchParams, router]);
 
-  // Cooldown timer for resend button
   useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(() => {
@@ -54,9 +154,13 @@ export default function VerifyEmailPendingPage() {
     setResendSuccess(false);
     
     try {
-      const response = await fetch('/api/auth/resend-verification', {
+      const apiBaseUrl = getApiUrl();
+      const response = await fetch(`${apiBaseUrl}/api/auth/resend-verification`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
         body: JSON.stringify({ email, username })
       });
       
@@ -64,12 +168,13 @@ export default function VerifyEmailPendingPage() {
       
       if (data.success) {
         setResendSuccess(true);
-        setResendCooldown(60); // 60 second cooldown
+        setResendCooldown(60);
         setTimeout(() => setResendSuccess(false), 5000);
       } else {
         setResendError(data.error?.message || 'Failed to resend email');
       }
     } catch (error) {
+      console.error('Resend error:', error);
       setResendError('Network error. Please try again.');
     } finally {
       setIsResending(false);
@@ -86,16 +191,19 @@ export default function VerifyEmailPendingPage() {
     setVerifyError('');
     
     try {
-      const response = await fetch('/api/auth/verify-email', {
+      const apiBaseUrl = getApiUrl();
+      const response = await fetch(`${apiBaseUrl}/api/auth/verify-email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
         body: JSON.stringify({ code: verificationCode })
       });
       
       const data = await response.json();
       
       if (data.success) {
-        // Store token if provided
         if (data.data?.token) {
           localStorage.setItem('auth_token', data.data.token);
           sessionStorage.setItem('auth_tokens', JSON.stringify({
@@ -104,12 +212,12 @@ export default function VerifyEmailPendingPage() {
           }));
         }
         
-        // Redirect to success page
         router.push('/email-verified');
       } else {
         setVerifyError(data.error?.message || 'Invalid verification code');
       }
     } catch (error) {
+      console.error('Verify error:', error);
       setVerifyError('Network error. Please try again.');
     } finally {
       setIsVerifying(false);
@@ -122,221 +230,236 @@ export default function VerifyEmailPendingPage() {
     setVerifyError('');
   };
 
-  // Mask email for display
   const maskedEmail = email ? 
     email.replace(/^(.{2})(.*)(@.*)$/, (_, a, b, c) => 
-      a + b.replace(/./g, '*').slice(0, -2) + b.slice(-2) + c
+      a + '*'.repeat(Math.min(b.length - 2, 8)) + (b.length > 2 ? b.slice(-2) : '') + c
     ) : '';
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      {/* Background effects */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black" />
-      <div className="absolute inset-0">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-[#ff950e]/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-[#ff950e]/5 rounded-full blur-3xl" />
+    <div className="min-h-screen bg-black overflow-hidden relative">
+      {/* Enhanced Floating Particles Background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <FloatingParticle key={i} delay={0} index={i} />
+        ))}
       </div>
 
-      {/* Content */}
-      <motion.div
-        className="relative z-10 w-full max-w-md"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-      >
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <img
-            src="/logo.png"
-            alt="PantyPost"
-            className="w-32 h-32 mx-auto mb-4 drop-shadow-2xl"
-            onClick={() => router.push('/')}
-            style={{ cursor: 'pointer' }}
-          />
-        </div>
+      {/* Subtle gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
 
-        {/* Main Card */}
-        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-2xl p-8">
-          {/* Icon */}
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-[#ff950e]/20 rounded-full flex items-center justify-center">
-              <Mail className="w-8 h-8 text-[#ff950e]" />
-            </div>
-          </div>
-
-          {/* Title */}
-          <h1 className="text-2xl font-bold text-white text-center mb-2">
-            Verify Your Email
-          </h1>
-          
-          {/* Description */}
-          <p className="text-gray-400 text-center mb-6">
-            We've sent a verification email to:
-          </p>
-          
-          {/* Email Display */}
-          <div className="bg-black/30 border border-gray-800 rounded-lg p-3 mb-6">
-            <p className="text-[#ff950e] text-center font-mono text-sm">
-              {maskedEmail}
-            </p>
-          </div>
-
-          {/* Instructions */}
-          <div className="space-y-3 mb-6">
-            <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
-              <p className="text-sm text-gray-300">
-                Check your inbox for an email from PantyPost
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
-              <p className="text-sm text-gray-300">
-                Click the verification link in the email
-              </p>
-            </div>
-            <div className="flex items-start gap-3">
-              <CheckCircle className="w-5 h-5 text-green-500 mt-0.5" />
-              <p className="text-sm text-gray-300">
-                Or enter the 6-digit code below
-              </p>
-            </div>
-          </div>
-
-          {/* Code Input Section */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              Have a verification code?
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={verificationCode}
-                onChange={handleCodeChange}
-                placeholder="000000"
-                maxLength={6}
-                className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white text-center font-mono text-lg placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e]"
+      {/* Main Content */}
+      <div className="relative z-10 flex items-center justify-center p-4 min-h-screen">
+        <motion.div
+          className="w-full max-w-md"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          {/* Logo */}
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-6">
+              <img
+                src="/logo.png"
+                alt="PantyPost"
+                className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
+                style={{ width: '160px', height: '160px' }}
+                onClick={() => router.push('/')}
               />
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-1">Verify Your Email</h1>
+            <p className="text-gray-400 text-sm">Check your inbox to continue</p>
+          </div>
+
+          {/* Main Card */}
+          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl">
+            {/* Icon */}
+            <div className="flex justify-center mb-6">
+              <div className="w-16 h-16 bg-[#ff950e]/20 rounded-full flex items-center justify-center">
+                <Mail className="w-8 h-8 text-[#ff950e]" />
+              </div>
+            </div>
+
+            {/* Email Display */}
+            <div className="mb-6">
+              <p className="text-gray-400 text-center text-sm mb-3">
+                We've sent a verification email to:
+              </p>
+              <div className="bg-black/50 border border-gray-700 rounded-lg p-3">
+                <p className="text-[#ff950e] text-center font-mono text-sm break-all">
+                  {maskedEmail}
+                </p>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="space-y-3 mb-6 bg-black/30 border border-gray-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-gray-300">
+                  Check your inbox for an email from PantyPost
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-gray-300">
+                  Click the verification link in the email
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-gray-300">
+                  Or enter the 6-digit code below
+                </p>
+              </div>
+            </div>
+
+            {/* Code Input Section */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Have a verification code?
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={verificationCode}
+                  onChange={handleCodeChange}
+                  placeholder="000000"
+                  maxLength={6}
+                  className="flex-1 px-4 py-3 bg-black/50 border border-gray-700 rounded-lg text-white text-center font-mono text-lg placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
+                />
+                <button
+                  onClick={handleVerifyCode}
+                  disabled={verificationCode.length !== 6 || isVerifying}
+                  className="px-6 py-3 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold rounded-lg transition-all duration-200 flex items-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ color: (verificationCode.length !== 6 || isVerifying) ? undefined : '#000' }}
+                >
+                  {isVerifying ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ArrowRight className="w-4 h-4" />
+                  )}
+                  Verify
+                </button>
+              </div>
+              {verifyError && (
+                <motion.p
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-2 text-sm text-red-400 flex items-center gap-1"
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  {verifyError}
+                </motion.p>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-800"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="px-2 bg-[#111]/80 text-gray-500">OR</span>
+              </div>
+            </div>
+
+            {/* Resend Section */}
+            <div className="text-center">
+              <p className="text-sm text-gray-400 mb-3">
+                Didn't receive the email? Check your spam folder or
+              </p>
+              
+              {resendSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg"
+                >
+                  <p className="text-sm text-green-400 flex items-center justify-center gap-2">
+                    <CheckCircle className="w-4 h-4" />
+                    Verification email sent successfully!
+                  </p>
+                </motion.div>
+              )}
+              
+              {resendError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg"
+                >
+                  <p className="text-sm text-red-400 flex items-center justify-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    {resendError}
+                  </p>
+                </motion.div>
+              )}
+              
               <button
-                onClick={handleVerifyCode}
-                disabled={verificationCode.length !== 6 || isVerifying}
-                className="px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-gray-700 text-black disabled:text-gray-400 font-semibold rounded-lg transition-colors flex items-center gap-2"
+                onClick={handleResendEmail}
+                disabled={isResending || resendCooldown > 0}
+                className="text-[#ff950e] hover:text-[#ff6b00] disabled:text-gray-500 font-medium text-sm transition-colors flex items-center gap-2 mx-auto disabled:cursor-not-allowed"
               >
-                {isVerifying ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                {isResending ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : resendCooldown > 0 ? (
+                  <>
+                    <Clock className="w-4 h-4" />
+                    Resend in {resendCooldown}s
+                  </>
                 ) : (
-                  <ArrowRight className="w-4 h-4" />
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Resend verification email
+                  </>
                 )}
-                Verify
               </button>
             </div>
-            {verifyError && (
-              <p className="mt-2 text-sm text-red-400 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                {verifyError}
+
+            {/* Timer Notice */}
+            <div className="mt-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <p className="text-xs text-yellow-400 flex items-start gap-2">
+                <Clock className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>
+                  The verification link expires in 24 hours. After that, you'll need to request a new one.
+                </span>
               </p>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="relative mb-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-800"></div>
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="px-2 bg-gray-900/50 text-gray-500">OR</span>
             </div>
           </div>
 
-          {/* Resend Section */}
-          <div className="text-center">
-            <p className="text-sm text-gray-400 mb-3">
-              Didn't receive the email? Check your spam folder or
+          {/* Footer Links */}
+          <div className="text-center mt-6 space-y-2">
+            <p className="text-sm text-gray-500">
+              Wrong email?{' '}
+              <button
+                onClick={() => router.push('/signup')}
+                className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors"
+              >
+                Sign up again
+              </button>
             </p>
-            
-            {resendSuccess && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg"
+            <p className="text-sm text-gray-500">
+              Already verified?{' '}
+              <button
+                onClick={() => router.push('/login')}
+                className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors"
               >
-                <p className="text-sm text-green-400 flex items-center justify-center gap-2">
-                  <CheckCircle className="w-4 h-4" />
-                  Verification email sent successfully!
-                </p>
-              </motion.div>
-            )}
-            
-            {resendError && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded-lg"
-              >
-                <p className="text-sm text-red-400 flex items-center justify-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  {resendError}
-                </p>
-              </motion.div>
-            )}
-            
-            <button
-              onClick={handleResendEmail}
-              disabled={isResending || resendCooldown > 0}
-              className="text-[#ff950e] hover:text-[#ff6b00] disabled:text-gray-500 font-medium text-sm transition-colors flex items-center gap-2 mx-auto"
-            >
-              {isResending ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Sending...
-                </>
-              ) : resendCooldown > 0 ? (
-                <>
-                  <Clock className="w-4 h-4" />
-                  Resend in {resendCooldown}s
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4" />
-                  Resend verification email
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Timer Notice */}
-          <div className="mt-6 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-            <p className="text-xs text-yellow-400 flex items-start gap-2">
-              <Clock className="w-4 h-4 mt-0.5" />
-              <span>
-                The verification link expires in 24 hours. After that, you'll need to request a new one.
-              </span>
+                Log in
+              </button>
             </p>
           </div>
-        </div>
 
-        {/* Footer Links */}
-        <div className="text-center mt-6 space-y-2">
-          <p className="text-sm text-gray-500">
-            Wrong email?{' '}
-            <button
-              onClick={() => router.push('/signup')}
-              className="text-[#ff950e] hover:text-[#ff6b00] font-medium"
-            >
-              Sign up again
-            </button>
-          </p>
-          <p className="text-sm text-gray-500">
-            Already verified?{' '}
-            <button
-              onClick={() => router.push('/login')}
-              className="text-[#ff950e] hover:text-[#ff6b00] font-medium"
-            >
-              Log in
-            </button>
-          </p>
-        </div>
-      </motion.div>
+          {/* Trust Indicators */}
+          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
+            <span>🔒 Secure</span>
+            <span>🛡️ Encrypted</span>
+            <span>✓ Verified</span>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
