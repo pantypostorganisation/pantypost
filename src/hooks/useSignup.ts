@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 export const useSignup = () => {
   const router = useRouter();
-  const { user, isAuthReady, apiClient, login } = useAuth();
+  const { user, isAuthReady, apiClient } = useAuth();
   
   // Security features
   const [csrfManager] = useState(() => new CSRFTokenManager());
@@ -153,7 +153,7 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, [field]: sanitizedValue }));
   }, []);
 
-  // Fixed handleSubmit - now uses apiClient properly
+  // UPDATED: Handle signup submission with email verification flow
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     
@@ -233,39 +233,34 @@ export const useSignup = () => {
       console.log('[Signup] Response:', { success: response.success });
       
       if (response.success && response.data) {
-        console.log('[Signup] Success! Now logging in...');
+        console.log('[Signup] Success! Account created.');
         
         // Clear rate limit on success
         resetSignupLimit(state.email);
         
-        // Use the login function from AuthContext to properly set up the session
-        const loginSuccess = await login(state.username, state.password, state.role || 'buyer');
+        // Clear sensitive data from state
+        setState(prev => ({
+          ...prev,
+          password: '',
+          confirmPassword: '',
+          errors: {}
+        }));
         
-        if (loginSuccess) {
-          console.log('[Signup] Auto-login successful, redirecting...');
+        // Check if email verification is required
+        if (response.data.requiresVerification) {
+          console.log('[Signup] Email verification required, redirecting to pending page...');
           
-          // Clear sensitive data from state
-          setState(prev => ({
-            ...prev,
-            password: '',
-            confirmPassword: '',
-            email: '',
-            errors: {}
-          }));
+          // Redirect to email verification pending page with email and username
+          const params = new URLSearchParams({
+            email: encodeURIComponent(response.data.email),
+            username: encodeURIComponent(response.data.username)
+          });
           
-          // Redirect to dashboard
-          router.push('/');
+          router.push(`/verify-email-pending?${params.toString()}`);
         } else {
-          // Signup worked but login failed - this shouldn't happen
-          setState(prev => ({
-            ...prev,
-            errors: { 
-              form: 'Account created successfully! Please try logging in manually.'
-            }
-          }));
-          
-          // Redirect to login page
-          setTimeout(() => router.push('/login'), 2000);
+          // This shouldn't happen with the new flow, but handle it just in case
+          console.log('[Signup] No verification required (unexpected), redirecting to browse...');
+          router.push('/browse');
         }
       } else {
         // Handle API error response

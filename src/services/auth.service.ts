@@ -17,6 +17,16 @@ export interface SignupRequest {
   role: 'buyer' | 'seller';
 }
 
+export interface SignupResponse {
+  message: string;
+  email: string;
+  username: string;
+  requiresVerification: boolean;
+  user?: User;
+  token?: string;
+  refreshToken?: string;
+}
+
 export interface AuthResponse {
   user: User;
   token?: string;
@@ -34,8 +44,15 @@ export interface PasswordResetResponse {
   expiresIn?: number;
 }
 
+export interface EmailVerificationResponse {
+  message: string;
+  user?: User;
+  token?: string;
+  refreshToken?: string;
+}
+
 /**
- * Authentication Service - API Only
+ * Authentication Service - API Only with Email Verification
  */
 export class AuthService {
   private tokenRefreshTimer: NodeJS.Timeout | null = null;
@@ -185,7 +202,7 @@ export class AuthService {
   }
 
   /**
-   * Login user
+   * Login user - UPDATED to check email verification
    */
   async login(request: LoginRequest): Promise<ApiResponse<AuthResponse>> {
     try {
@@ -205,6 +222,15 @@ export class AuthService {
 
         await storageService.setItem('currentUser', response.data.user);
         this.setupTokenRefreshTimer();
+      } else if (response.error && (response.error as any).requiresVerification) {
+        // Email verification required
+        return {
+          success: false,
+          error: {
+            ...response.error,
+            code: 'EMAIL_VERIFICATION_REQUIRED',
+          },
+        };
       }
 
       return response;
@@ -220,24 +246,17 @@ export class AuthService {
   }
 
   /**
-   * Sign up new user
+   * Sign up new user - UPDATED to handle email verification flow
    */
-  async signup(request: SignupRequest): Promise<ApiResponse<AuthResponse>> {
+  async signup(request: SignupRequest): Promise<ApiResponse<SignupResponse>> {
     try {
-      const response = await apiCall<AuthResponse>(API_ENDPOINTS.AUTH.SIGNUP, {
+      const response = await apiCall<SignupResponse>(API_ENDPOINTS.AUTH.SIGNUP, {
         method: 'POST',
         body: JSON.stringify(request),
       });
 
-      if (response.success && response.data) {
-        if (response.data.token) {
-          await this.storeTokens(response.data.token, response.data.refreshToken);
-        }
-
-        await storageService.setItem('currentUser', response.data.user);
-        this.setupTokenRefreshTimer();
-      }
-
+      // Don't auto-login on signup anymore since email verification is required
+      // Just return the response which includes requiresVerification flag
       return response;
     } catch (error) {
       console.error('Signup error:', error);
@@ -245,6 +264,67 @@ export class AuthService {
         success: false,
         error: {
           message: 'Signup failed. Please try again.',
+        },
+      };
+    }
+  }
+
+  /**
+   * Verify email with token or code - NEW METHOD
+   */
+  async verifyEmail(tokenOrCode: string, isCode: boolean = false): Promise<ApiResponse<EmailVerificationResponse>> {
+    try {
+      const payload = isCode ? { code: tokenOrCode } : { token: tokenOrCode };
+      
+      const response = await apiCall<EmailVerificationResponse>('/auth/verify-email', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (response.success && response.data) {
+        // If verification successful and token provided, store it
+        if (response.data.token) {
+          await this.storeTokens(response.data.token, response.data.refreshToken);
+        }
+
+        // Store user if provided
+        if (response.data.user) {
+          await storageService.setItem('currentUser', response.data.user);
+          this.setupTokenRefreshTimer();
+        }
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Email verification error:', error);
+      return {
+        success: false,
+        error: {
+          message: 'Email verification failed. Please try again.',
+        },
+      };
+    }
+  }
+
+  /**
+   * Resend verification email - NEW METHOD
+   */
+  async resendVerificationEmail(emailOrUsername: string): Promise<ApiResponse<{ message: string }>> {
+    try {
+      const payload = emailOrUsername.includes('@') 
+        ? { email: emailOrUsername }
+        : { username: emailOrUsername };
+      
+      return await apiCall<{ message: string }>('/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      return {
+        success: false,
+        error: {
+          message: 'Failed to resend verification email. Please try again.',
         },
       };
     }
@@ -267,7 +347,7 @@ export class AuthService {
   }
 
   /**
-   * Get current authenticated user
+   * Get current authenticated user - UPDATED to include email verification status
    */
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
@@ -284,8 +364,13 @@ export class AuthService {
 
       const response = await apiCall<User>(API_ENDPOINTS.AUTH.ME);
       if (response.success && response.data) {
-        await storageService.setItem('currentUser', response.data);
-        return response;
+        // Ensure emailVerified field is included
+        const userData = {
+          ...response.data,
+          emailVerified: response.data.emailVerified || false,
+        };
+        await storageService.setItem('currentUser', userData);
+        return { ...response, data: userData };
       }
 
       return { success: true, data: user };

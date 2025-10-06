@@ -30,6 +30,16 @@ const userSchema = new mongoose.Schema({
     default: 'buyer'
   },
   
+  // EMAIL VERIFICATION FIELDS (NEW)
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerifiedAt: {
+    type: Date,
+    default: null
+  },
+  
   // PROFILE FIELDS
   bio: {
     type: String,
@@ -223,6 +233,7 @@ userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isVerified: 1 });
 userSchema.index({ isBanned: 1 });
+userSchema.index({ emailVerified: 1 });
 userSchema.index({ 'storage': 1 });
 
 // Hash password before saving
@@ -276,6 +287,18 @@ userSchema.methods.updateLastActive = function() {
 userSchema.methods.setOffline = function() {
   this.isOnline = false;
   this.lastActive = new Date();
+  return this.save();
+};
+
+// Check if email is verified (NEW)
+userSchema.methods.isEmailVerified = function() {
+  return this.emailVerified === true;
+};
+
+// Mark email as verified (NEW)
+userSchema.methods.markEmailAsVerified = async function() {
+  this.emailVerified = true;
+  this.emailVerifiedAt = new Date();
   return this.save();
 };
 

@@ -24,6 +24,8 @@ export interface User {
   email?: string;
   profilePicture?: string;
   isVerified: boolean;
+  emailVerified?: boolean; // NEW - Add this field
+  emailVerifiedAt?: string; // NEW - Add this field
   tier?: 'Tease' | 'Flirt' | 'Obsession' | 'Desire' | 'Goddess';
   subscriberCount?: number;
   totalSales?: number;

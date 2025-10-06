@@ -4,6 +4,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const PasswordReset = require('../models/PasswordReset');
+const EmailVerification = require('../models/EmailVerification');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const { sendEmail, emailTemplates } = require('../config/email');
@@ -46,7 +47,7 @@ function signToken(user) {
 
 // ============= AUTH ROUTES =============
 
-// POST /api/auth/signup
+// POST /api/auth/signup - UPDATED WITH EMAIL VERIFICATION
 router.post('/signup', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -110,22 +111,50 @@ router.post('/signup', async (req, res) => {
       password,
       role,
       tier: role === 'seller' ? 'Tease' : undefined,
-      isOnline: true,
-      lastActive: new Date()
+      isOnline: false, // Don't mark as online until email is verified
+      lastActive: new Date(),
+      emailVerified: false, // NEW: Start with unverified email
+      emailVerifiedAt: null
     });
     await newUser.save();
 
-    if (webSocketService && webSocketService.io) {
-      webSocketService.broadcastUserStatus(newUser.username, true);
+    // Create email verification record
+    const verificationToken = EmailVerification.generateToken();
+    const verificationCode = EmailVerification.generateVerificationCode();
+    
+    const emailVerification = new EmailVerification({
+      userId: newUser._id,
+      email: newUser.email,
+      username: newUser.username,
+      token: EmailVerification.hashToken(verificationToken),
+      verificationCode,
+      verificationType: 'signup',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+    await emailVerification.save();
+
+    // Send verification email
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    
+    try {
+      await sendEmail({
+        to: newUser.email,
+        ...emailTemplates.emailVerification(newUser.username, verificationLink, verificationCode)
+      });
+      console.log(`✅ Verification email sent to ${newUser.email}`);
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Continue even if email fails in development
     }
 
-    const token = signToken(newUser);
+    // Don't create a session token yet - user needs to verify email first
     res.json({
       success: true,
       data: {
-        user: { id: newUser._id, username: newUser.username, email: newUser.email, role: newUser.role, tier: newUser.tier },
-        token,
-        refreshToken: token
+        message: 'Account created successfully! Please check your email to verify your account.',
+        email: newUser.email,
+        username: newUser.username,
+        requiresVerification: true
       }
     });
   } catch (error) {
@@ -140,7 +169,212 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// POST /api/auth/login
+// POST /api/auth/verify-email - NEW ENDPOINT
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { token, code } = req.body;
+    
+    if (!token && !code) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD,
+          message: 'Please provide either a verification token or code.'
+        }
+      });
+    }
+    
+    let verification;
+    
+    // Try to find by token first
+    if (token) {
+      const hashedToken = EmailVerification.hashToken(token);
+      verification = await EmailVerification.findOne({ 
+        token: hashedToken,
+        verified: false
+      });
+    }
+    
+    // If not found by token, try by code
+    if (!verification && code) {
+      verification = await EmailVerification.findOne({
+        verificationCode: code.trim(),
+        verified: false
+      }).sort({ createdAt: -1 }); // Get most recent
+    }
+    
+    if (!verification) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_TOKEN_INVALID,
+          message: 'Invalid or expired verification link. Please request a new one.'
+        }
+      });
+    }
+    
+    // Check if expired
+    if (!verification.isValid()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_TOKEN_INVALID,
+          message: verification.isExpired() 
+            ? 'This verification link has expired. Please request a new one.'
+            : 'This verification link is no longer valid.'
+        }
+      });
+    }
+    
+    // Mark as verified
+    await verification.markAsVerified();
+    
+    // Update user
+    const user = await User.findById(verification.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.NOT_FOUND,
+          message: 'User account not found.'
+        }
+      });
+    }
+    
+    await user.markEmailAsVerified();
+    
+    // Clean up old verifications for this user
+    await EmailVerification.cleanupOldVerifications(user._id);
+    
+    // Send success email
+    try {
+      await sendEmail({
+        to: user.email,
+        ...emailTemplates.emailVerificationSuccess(user.username)
+      });
+    } catch (emailError) {
+      console.error('Failed to send verification success email:', emailError);
+    }
+    
+    // Now create a session token since email is verified
+    const authToken = signToken(user);
+    
+    res.json({
+      success: true,
+      data: {
+        message: 'Email verified successfully! Your account is now active.',
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          emailVerified: true
+        },
+        token: authToken,
+        refreshToken: authToken
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] Email verification error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to verify email. Please try again.'
+      }
+    });
+  }
+});
+
+// POST /api/auth/resend-verification - NEW ENDPOINT
+router.post('/resend-verification', async (req, res) => {
+  try {
+    const { email, username } = req.body;
+    
+    if (!email && !username) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD,
+          message: 'Please provide either email or username.'
+        }
+      });
+    }
+    
+    // Find user
+    let user;
+    if (email) {
+      user = await User.findOne({ email: cleanEmail(email) });
+    } else {
+      user = await User.findOne({ username: cleanUsername(username) });
+    }
+    
+    if (!user) {
+      // Don't reveal if user exists
+      return res.json({
+        success: true,
+        message: 'If that account exists and is unverified, we\'ve sent a new verification email.'
+      });
+    }
+    
+    // Check if already verified
+    if (user.emailVerified) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.ACTION_NOT_ALLOWED,
+          message: 'This email is already verified.'
+        }
+      });
+    }
+    
+    // Delete old verification records
+    await EmailVerification.deleteMany({ userId: user._id });
+    
+    // Create new verification
+    const verificationToken = EmailVerification.generateToken();
+    const verificationCode = EmailVerification.generateVerificationCode();
+    
+    const emailVerification = new EmailVerification({
+      userId: user._id,
+      email: user.email,
+      username: user.username,
+      token: EmailVerification.hashToken(verificationToken),
+      verificationCode,
+      verificationType: 'signup',
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+    await emailVerification.save();
+    
+    // Send verification email
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+    
+    try {
+      await sendEmail({
+        to: user.email,
+        ...emailTemplates.emailVerification(user.username, verificationLink, verificationCode)
+      });
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+    }
+    
+    res.json({
+      success: true,
+      message: 'If that account exists and is unverified, we\'ve sent a new verification email.'
+    });
+  } catch (error) {
+    console.error('[Auth] Resend verification error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to resend verification email. Please try again.'
+      }
+    });
+  }
+});
+
+// POST /api/auth/login - UPDATED TO CHECK EMAIL VERIFICATION
 router.post('/login', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -187,6 +421,19 @@ router.post('/login', async (req, res) => {
         error: { 
           code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, 
           message: 'That password doesn\'t match. Please try again or use "Forgot password" if you need help.' 
+        }
+      });
+    }
+
+    // Check email verification status (except for admins)
+    if (user.role !== 'admin' && !user.emailVerified) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+          message: 'Please verify your email before logging in. Check your inbox for the verification link.',
+          requiresVerification: true,
+          email: user.email
         }
       });
     }
@@ -243,6 +490,7 @@ router.post('/login', async (req, res) => {
           email: user.email,
           role: user.role,
           isVerified: user.isVerified || false,
+          emailVerified: user.emailVerified || false,
           tier: user.tier || 'Tease'
         },
         token,
@@ -290,7 +538,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/auth/me
+// GET /api/auth/me - UPDATED TO INCLUDE EMAIL VERIFICATION STATUS
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -334,6 +582,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         role: user.role,
         email: user.email,
         isVerified: user.isVerified || false,
+        emailVerified: user.emailVerified || false, // Include email verification status
         tier: user.tier || 'Tease',
         tierInfo,
         subscriberCount: user.subscriberCount || 0,
@@ -492,6 +741,9 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
     }
 
     dbUser.role = 'admin';
+    // Admin accounts are automatically email verified
+    dbUser.emailVerified = true;
+    dbUser.emailVerifiedAt = new Date();
     await dbUser.save();
 
     const token = signToken(dbUser);

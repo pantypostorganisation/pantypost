@@ -11,7 +11,7 @@ const createTransporter = () => {
   
   try {
     // Create reusable transporter object using SMTP transport
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       host: 'smtp.gmail.com',
       port: 587,
@@ -61,6 +61,12 @@ const sendEmail = async (options) => {
       console.log('   (Copy the code above and paste it at this link)');
     }
     
+    // Add helpful link for email verification
+    if (options.subject && options.subject.includes('Verify Your Email')) {
+      console.log('\n🔗 Quick Link: ' + process.env.FRONTEND_URL + '/verify-email');
+      console.log('   (Use the link or code in the email content)');
+    }
+    
     console.log('-------------------');
     return { messageId: 'console-only' };
   }
@@ -95,6 +101,390 @@ const sendEmail = async (options) => {
 
 // Email templates
 const emailTemplates = {
+  // EMAIL VERIFICATION TEMPLATE (NEW)
+  emailVerification: (username, verificationLink, verificationCode) => ({
+    subject: 'Verify Your Email - PantyPost',
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
+        <title>Email Verification - PantyPost</title>
+        <style>
+          :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+          }
+          
+          body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          }
+          
+          .email-container {
+            max-width: 600px;
+            margin: auto;
+          }
+          
+          .email-header {
+            background-color: #ffffff;
+            border-bottom: 3px solid #ff950e;
+          }
+          
+          .email-body {
+            background-color: #ffffff;
+          }
+          
+          .verification-box {
+            background-color: #fff5e6;
+            border: 2px solid #ff950e;
+          }
+          
+          .code-box {
+            background-color: #f8f8f8;
+            border: 1px solid #e0e0e0;
+          }
+          
+          .text-primary { color: #333333; }
+          .text-secondary { color: #666666; }
+          .text-orange { color: #ff950e; }
+          
+          .light-logo {
+            display: block !important;
+          }
+          
+          .dark-logo {
+            display: none !important;
+          }
+          
+          @media (prefers-color-scheme: dark) {
+            body { background-color: #202124; }
+            .email-header { background-color: #303134; }
+            .email-body { background-color: #202124; }
+            .verification-box { background-color: #303134; }
+            .code-box { background-color: #303134; border-color: #5f6368; }
+            .text-primary { color: #e8eaed; }
+            .text-secondary { color: #9aa0a6; }
+            
+            .light-logo { display: none !important; }
+            .dark-logo { display: block !important; }
+          }
+          
+          @media screen and (max-width: 600px) {
+            .email-container { width: 100% !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <div role="article" aria-roledescription="email" lang="en" style="width: 100%;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td align="center">
+                <div class="email-container">
+                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                    
+                    <!-- Header with dual logos -->
+                    <tr>
+                      <td class="email-header" style="padding: 30px; text-align: center;">
+                        <a href="https://pantypost.com/">
+                          <!-- Light mode logo -->
+                          <img src="https://pantypost.com/emaillogowhite.png" 
+                               alt="PantyPost" 
+                               width="220" 
+                               class="light-logo"
+                               style="display: block; margin: 0 auto;">
+                          <!-- Dark mode logo -->
+                          <img src="https://pantypost.com/logo.png" 
+                               alt="PantyPost" 
+                               width="220" 
+                               class="dark-logo"
+                               style="display: none; margin: 0 auto;">
+                        </a>
+                        <h1 class="text-primary" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
+                          Welcome to PantyPost!
+                        </h1>
+                      </td>
+                    </tr>
+                    
+                    <!-- Body -->
+                    <tr>
+                      <td class="email-body" style="padding: 35px 30px;">
+                        <h2 class="text-primary" style="font-size: 18px; margin: 0 0 15px 0;">
+                          Hi ${username}! 👋
+                        </h2>
+                        
+                        <p class="text-secondary" style="font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
+                          Thanks for signing up! To complete your registration and activate your account, please verify your email address.
+                        </p>
+                        
+                        <!-- CTA Button -->
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 30px auto;">
+                          <tr>
+                            <td style="background-color: #ff950e; border-radius: 25px;">
+                              <a href="${verificationLink}" style="display: inline-block; padding: 14px 40px; color: #000000; font-size: 16px; font-weight: bold; text-decoration: none;">
+                                Verify Email Address →
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <p class="text-secondary" style="font-size: 14px; text-align: center; margin: 20px 0;">
+                          Or copy and paste this link into your browser:
+                        </p>
+                        
+                        <div class="code-box" style="padding: 15px; border-radius: 8px; margin: 20px 0; word-break: break-all;">
+                          <a href="${verificationLink}" class="text-orange" style="font-size: 13px; text-decoration: none;">
+                            ${verificationLink}
+                          </a>
+                        </div>
+                        
+                        <!-- Backup Code -->
+                        <div class="verification-box" style="padding: 20px; text-align: center; border-radius: 8px; margin: 30px 0;">
+                          <p class="text-secondary" style="font-size: 13px; margin: 0 0 10px 0;">
+                            Having trouble with the link? Use this verification code:
+                          </p>
+                          <div class="text-orange" style="font-size: 24px; font-weight: bold; letter-spacing: 3px; font-family: 'Courier New', monospace;">
+                            ${verificationCode}
+                          </div>
+                        </div>
+                        
+                        <!-- Important Notice -->
+                        <div style="background-color: #f8f8f8; padding: 15px; border-radius: 8px; margin-top: 25px;">
+                          <p class="text-secondary" style="font-size: 13px; line-height: 1.6; margin: 0;">
+                            <strong>⏱ This verification link expires in 24 hours</strong><br>
+                            For security reasons, please verify your email soon. If the link expires, you can request a new one from your account settings.
+                          </p>
+                        </div>
+                        
+                        <p class="text-secondary" style="font-size: 13px; margin: 20px 0 0 0;">
+                          If you didn't create a PantyPost account, you can safely ignore this email.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #e0e0e0;">
+                        <p style="color: #ff950e; font-weight: bold; font-size: 16px; margin: 0;">PantyPost</p>
+                        <p style="color: #999999; font-size: 11px; margin: 5px 0 15px 0;">The premium marketplace for authentic items</p>
+                        
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center">
+                          <tr>
+                            <td style="padding: 0 10px;">
+                              <a href="${process.env.FRONTEND_URL}/terms" style="color: #ff950e; font-size: 12px; text-decoration: none;">Terms</a>
+                            </td>
+                            <td style="padding: 0 10px;">
+                              <a href="${process.env.FRONTEND_URL}/help" style="color: #ff950e; font-size: 12px; text-decoration: none;">Support</a>
+                            </td>
+                          </tr>
+                        </table>
+                        
+                        <p style="color: #999999; font-size: 10px; margin: 15px 0 0 0;">
+                          © ${new Date().getFullYear()} PantyPost. All rights reserved.<br>
+                          This is an automated message, please do not reply to this email.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                  </table>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `
+Welcome to PantyPost, ${username}!
+
+Thanks for signing up! To complete your registration and activate your account, please verify your email address.
+
+Click this link to verify your email:
+${verificationLink}
+
+Or use this verification code: ${verificationCode}
+
+This verification link expires in 24 hours. For security reasons, please verify your email soon.
+
+If you didn't create a PantyPost account, you can safely ignore this email.
+
+Best regards,
+The PantyPost Team
+
+© ${new Date().getFullYear()} PantyPost. All rights reserved.
+    `
+  }),
+
+  // EMAIL VERIFICATION SUCCESS TEMPLATE (NEW)
+  emailVerificationSuccess: (username) => ({
+    subject: 'Email Verified Successfully - PantyPost',
+    html: `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
+        <title>Email Verified - PantyPost</title>
+        <style>
+          :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+          }
+          
+          body {
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          }
+          
+          .email-container {
+            max-width: 600px;
+            margin: auto;
+          }
+          
+          .email-header {
+            background-color: #ffffff;
+            border-bottom: 3px solid #28a745;
+          }
+          
+          .email-body {
+            background-color: #ffffff;
+          }
+          
+          .success-icon {
+            width: 70px;
+            height: 70px;
+            background-color: #28a745;
+            border-radius: 50%;
+            margin: 0 auto 25px;
+            line-height: 70px;
+            text-align: center;
+          }
+          
+          .text-primary { color: #333333; }
+          .text-secondary { color: #666666; }
+          .text-success { color: #28a745; }
+          
+          .light-logo {
+            display: block !important;
+          }
+          
+          .dark-logo {
+            display: none !important;
+          }
+          
+          @media (prefers-color-scheme: dark) {
+            body { background-color: #202124; }
+            .email-header { background-color: #303134; }
+            .email-body { background-color: #202124; }
+            .text-primary { color: #e8eaed; }
+            .text-secondary { color: #9aa0a6; }
+            
+            .light-logo { display: none !important; }
+            .dark-logo { display: block !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <div role="article" aria-roledescription="email" lang="en" style="width: 100%;">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td align="center">
+                <div class="email-container">
+                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                    
+                    <!-- Header -->
+                    <tr>
+                      <td class="email-header" style="padding: 30px; text-align: center;">
+                        <a href="https://pantypost.com/">
+                          <img src="https://pantypost.com/emaillogowhite.png" 
+                               alt="PantyPost" 
+                               width="220" 
+                               class="light-logo"
+                               style="display: block; margin: 0 auto;">
+                          <img src="https://pantypost.com/logo.png" 
+                               alt="PantyPost" 
+                               width="220" 
+                               class="dark-logo"
+                               style="display: none; margin: 0 auto;">
+                        </a>
+                        <h1 class="text-success" style="font-size: 22px; font-weight: normal; margin: 20px 0 0 0;">
+                          Email Verified Successfully!
+                        </h1>
+                      </td>
+                    </tr>
+                    
+                    <!-- Body -->
+                    <tr>
+                      <td class="email-body" style="padding: 35px 30px; text-align: center;">
+                        <div class="success-icon">
+                          <span style="color: white; font-size: 35px;">✓</span>
+                        </div>
+                        
+                        <h2 class="text-primary" style="font-size: 18px; margin: 0 0 15px 0;">
+                          Welcome aboard, ${username}! 🎉
+                        </h2>
+                        
+                        <p class="text-secondary" style="font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
+                          Your email has been successfully verified.<br>
+                          Your account is now fully activated and ready to use!
+                        </p>
+                        
+                        <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center">
+                          <tr>
+                            <td style="background-color: #ff950e; border-radius: 25px;">
+                              <a href="${process.env.FRONTEND_URL}/browse" style="display: inline-block; padding: 12px 30px; color: #000000; font-size: 15px; font-weight: bold; text-decoration: none;">
+                                Start Browsing →
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                      <td class="email-body" style="padding: 25px; text-align: center; border-top: 1px solid #e0e0e0;">
+                        <p style="color: #ff950e; font-weight: bold; font-size: 16px; margin: 0;">PantyPost</p>
+                        <p style="color: #999999; font-size: 10px; margin: 10px 0 0 0;">
+                          © ${new Date().getFullYear()} PantyPost. All rights reserved.
+                        </p>
+                      </td>
+                    </tr>
+                    
+                  </table>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </body>
+      </html>
+    `,
+    text: `
+Welcome aboard, ${username}!
+
+Your email has been successfully verified.
+Your PantyPost account is now fully activated and ready to use!
+
+Start browsing at: ${process.env.FRONTEND_URL}/browse
+
+Best regards,
+The PantyPost Team
+
+© ${new Date().getFullYear()} PantyPost. All rights reserved.
+    `
+  }),
+
   // Responsive light/dark mode template with dual logos
   passwordResetCode: (username, code) => ({
     subject: 'Your PantyPost Password Reset Code',

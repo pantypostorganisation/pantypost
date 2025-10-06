@@ -15,6 +15,16 @@ interface OrderSectionsProps {
   onOpenAddressModal: (orderId: string) => void;
 }
 
+// Define the tab type with optional show property
+type TabConfig = {
+  readonly id: 'all' | 'purchases' | 'custom' | 'auctions';
+  readonly label: string;
+  readonly count: number;
+  readonly icon: React.ComponentType<any>;
+  readonly iconBg: string;
+  readonly show?: boolean;
+};
+
 export default function OrderSections({
   directOrders,
   customRequestOrders,
@@ -47,12 +57,12 @@ export default function OrderSections({
     return false;
   };
 
-  const tabConfig = [
+  const tabConfig: TabConfig[] = [
     { id: 'all', label: 'All orders', count: allOrders.length, icon: ShoppingBag, iconBg: 'bg-[#ff950e]/15 text-[#ffb469]' },
     { id: 'purchases', label: 'Direct', count: directOrders.length, icon: Package, show: directOrders.length > 0, iconBg: 'bg-emerald-500/15 text-emerald-300' },
     { id: 'custom', label: 'Custom', count: customRequestOrders.length, icon: Settings, show: customRequestOrders.length > 0, iconBg: 'bg-sky-500/15 text-sky-300' },
     { id: 'auctions', label: 'Auctions', count: auctionOrders.length, icon: Gavel, show: auctionOrders.length > 0, iconBg: 'bg-purple-500/15 text-purple-300' },
-  ] as const;
+  ];
 
   const activeTabConfig = tabConfig.find((tab) => tab.id === activeTab);
 
