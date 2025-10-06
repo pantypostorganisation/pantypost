@@ -356,6 +356,19 @@ export default function BuyerProfilePage() {
     return sanitizeStrict(rawCountry);
   }, [profileData?.profile?.country]);
 
+  const messageHref = useMemo(() => {
+    if (me?.role === 'seller') {
+      const encodedUsername = usernameForRequest ? encodeURIComponent(usernameForRequest) : '';
+      return encodedUsername ? `/sellers/messages?thread=${encodedUsername}` : '/sellers/messages';
+    }
+
+    if (me?.role === 'buyer') {
+      return '/buyers/messages';
+    }
+
+    return '/buyers/messages';
+  }, [me?.role, usernameForRequest]);
+
   if (!usernameForRequest) {
     return (
       <BanCheck>
@@ -442,7 +455,7 @@ export default function BuyerProfilePage() {
 
                       <div className="flex flex-wrap gap-3">
                         <Link
-                          href={`/buyers/messages`}
+                          href={messageHref}
                           className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff7b1f] px-5 py-2.5 text-sm font-semibold text-neutral-950 shadow-lg shadow-[#ff950e]/15 transition hover:shadow-[#ff950e]/30 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
                         >
                           <MessageCircle size={18} className="text-neutral-950" />
