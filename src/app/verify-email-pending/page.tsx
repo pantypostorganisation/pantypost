@@ -5,22 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Mail, RefreshCw, CheckCircle, AlertCircle, Clock, ArrowRight } from 'lucide-react';
-
-// Get API URL from your configuration
-const getApiUrl = () => {
-  if (typeof window === 'undefined') return 'https://api.pantypost.com';
-  
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  
-  const hostname = window.location.hostname;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:5000';
-  }
-  
-  return 'https://api.pantypost.com';
-};
+import { buildApiUrl } from '@/services/api.config';
 
 // Floating particle component
 function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: number }) {
@@ -154,8 +139,10 @@ export default function VerifyEmailPendingPage() {
     setResendSuccess(false);
     
     try {
-      const apiBaseUrl = getApiUrl();
-      const response = await fetch(`${apiBaseUrl}/api/auth/resend-verification`, {
+      const url = buildApiUrl('/auth/resend-verification');
+      console.log('[Resend] Calling URL:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -165,6 +152,7 @@ export default function VerifyEmailPendingPage() {
       });
       
       const data = await response.json();
+      console.log('[Resend] Response:', data);
       
       if (data.success) {
         setResendSuccess(true);
@@ -191,8 +179,10 @@ export default function VerifyEmailPendingPage() {
     setVerifyError('');
     
     try {
-      const apiBaseUrl = getApiUrl();
-      const response = await fetch(`${apiBaseUrl}/api/auth/verify-email`, {
+      const url = buildApiUrl('/auth/verify-email');
+      console.log('[Verify] Calling URL:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -202,6 +192,7 @@ export default function VerifyEmailPendingPage() {
       });
       
       const data = await response.json();
+      console.log('[Verify] Response:', data);
       
       if (data.success) {
         if (data.data?.token) {
