@@ -35,7 +35,10 @@ export default function ClientLayout({
     '/reset-password',
     '/forgot-password',
     '/verify-reset-code',
-    '/reset-password-final'
+    '/reset-password-final',
+    '/verify-email-pending',
+    '/verify-email',
+    '/email-verified'
   ];
 
   // Check if we're on a messages page on mobile

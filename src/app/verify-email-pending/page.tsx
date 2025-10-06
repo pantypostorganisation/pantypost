@@ -7,7 +7,7 @@ import { motion } from 'framer-motion';
 import { Mail, RefreshCw, CheckCircle, AlertCircle, Clock, ArrowRight } from 'lucide-react';
 import { buildApiUrl } from '@/services/api.config';
 
-// Floating particle component
+// Floating particle component - matching login/signup style
 function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: number }) {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
@@ -228,7 +228,7 @@ export default function VerifyEmailPendingPage() {
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
-      {/* Enhanced Floating Particles Background */}
+      {/* Enhanced Floating Particles Background - matching login/signup */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {Array.from({ length: 35 }).map((_, i) => (
           <FloatingParticle key={i} delay={0} index={i} />
@@ -246,14 +246,14 @@ export default function VerifyEmailPendingPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          {/* Logo */}
+          {/* Logo - matching login/signup style */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-6">
               <img
                 src="/logo.png"
                 alt="PantyPost"
                 className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
-                style={{ width: '160px', height: '160px' }}
+                style={{ width: '220px', height: '220px' }}
                 onClick={() => router.push('/')}
               />
             </div>
@@ -261,7 +261,7 @@ export default function VerifyEmailPendingPage() {
             <p className="text-gray-400 text-sm">Check your inbox to continue</p>
           </div>
 
-          {/* Main Card */}
+          {/* Main Card - matching login/signup style */}
           <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl">
             {/* Icon */}
             <div className="flex justify-center mb-6">
@@ -421,8 +421,8 @@ export default function VerifyEmailPendingPage() {
             </div>
           </div>
 
-          {/* Footer Links */}
-          <div className="text-center mt-6 space-y-2">
+          {/* Footer Links - matching login/signup style */}
+          <div className="text-center mt-6 space-y-3">
             <p className="text-sm text-gray-500">
               Wrong email?{' '}
               <button
@@ -432,7 +432,7 @@ export default function VerifyEmailPendingPage() {
                 Sign up again
               </button>
             </p>
-            <p className="text-sm text-gray-500">
+            <p className="text-base text-gray-500">
               Already verified?{' '}
               <button
                 onClick={() => router.push('/login')}
@@ -443,7 +443,7 @@ export default function VerifyEmailPendingPage() {
             </p>
           </div>
 
-          {/* Trust Indicators */}
+          {/* Trust Indicators - matching login/signup style */}
           <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
             <span>🔒 Secure</span>
             <span>🛡️ Encrypted</span>
