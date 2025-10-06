@@ -11,7 +11,7 @@ const createTransporter = () => {
   
   try {
     // Create reusable transporter object using SMTP transport
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       host: 'smtp.gmail.com',
       port: 587,
