@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Users,
   User,
+  UserCircle,
   LogOut,
   Package,
   ShieldCheck,
@@ -722,6 +723,8 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Buyer Menu</span>
                   </div>
                   {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
+                  {username &&
+                    renderMobileLink(`/buyers/${username}`, <UserCircle className="w-5 h-5" />, 'Profile')}
                   {renderMobileLink('/buyers/my-orders', <Package className="w-5 h-5" />, 'My Orders')}
                   {renderMobileLink('/buyers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/wallet/buyer', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
@@ -1082,6 +1085,16 @@ export default function Header(): React.ReactElement | null {
                 <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>Dashboard</span>
               </Link>
+
+              {username && (
+                <Link
+                  href={`/buyers/${username}`}
+                  className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+                >
+                  <UserCircle className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
+                  <span>Profile</span>
+                </Link>
+              )}
 
               <Link href="/buyers/my-orders" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
