@@ -8,6 +8,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import type { KeyboardEvent } from 'react';
 import {
   Bell,
   ShoppingBag,
@@ -29,11 +30,13 @@ import {
   Ban,
   Menu,
   X,
+  Search,
+  Loader2,
 } from 'lucide-react';
-import { usePathname } from 'next/navigation';
-import { storageService } from '@/services';
+import { usePathname, useRouter } from 'next/navigation';
+import { storageService, usersService } from '@/services';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import { sanitizeStrict, sanitizeSearchQuery } from '@/utils/security/sanitization';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
 
@@ -43,6 +46,13 @@ type UINotification = {
   timestamp?: string | Date;
   cleared: boolean;
   source: 'legacy' | 'ctx';
+};
+
+type SearchUserResult = {
+  username: string;
+  role: 'buyer' | 'seller';
+  profilePicture: string | null;
+  isVerified: boolean;
 };
 
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
@@ -84,6 +94,7 @@ const useInterval = (callback: () => void, delay: number | null) => {
 
 export default function Header(): React.ReactElement | null {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const { sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions } =
     useListings();
@@ -108,16 +119,24 @@ export default function Header(): React.ReactElement | null {
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
 
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
 
   const notifRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+  const searchDesktopRef = useRef<HTMLDivElement | null>(null);
+  const searchMobileRef = useRef<HTMLDivElement | null>(null);
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
   const hasRefreshedAdminData = useRef(false);
+  const latestSearchId = useRef(0);
 
   const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
@@ -128,6 +147,11 @@ export default function Header(): React.ReactElement | null {
     setMobileMenuOpen(false);
     setShowMobileNotifications(false);
   });
+  const handleCloseSearch = useCallback(() => {
+    setShowSearchDropdown(false);
+  }, []);
+  useClickOutside(searchDesktopRef, handleCloseSearch);
+  useClickOutside(searchMobileRef, handleCloseSearch);
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -135,6 +159,260 @@ export default function Header(): React.ReactElement | null {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  useEffect(() => {
+    const sanitizedQuery = sanitizeSearchQuery(searchQuery).trim();
+
+    if (!sanitizedQuery) {
+      setIsSearchingUsers(false);
+      setSearchResults([]);
+      setSearchError(null);
+      setShowSearchDropdown(false);
+      return;
+    }
+
+    if (sanitizedQuery.length < 2) {
+      setIsSearchingUsers(false);
+      setSearchResults([]);
+      setSearchError('Type at least 2 characters to search');
+      return;
+    }
+
+    let cancelled = false;
+    const searchId = ++latestSearchId.current;
+
+    setIsSearchingUsers(true);
+    setSearchError(null);
+
+    const timer = setTimeout(async () => {
+      try {
+        const response = await usersService.getUsers({ query: sanitizedQuery, limit: 8 });
+        if (cancelled || latestSearchId.current !== searchId) return;
+
+        if (response.success && response.data) {
+          const mappedResults = Object.values(response.data)
+            .filter((rawUser) => rawUser && (rawUser.role === 'buyer' || rawUser.role === 'seller'))
+            .map((rawUser) => {
+              const safeUsername = sanitizeStrict(rawUser.username);
+              if (!safeUsername) {
+                return null;
+              }
+
+              const picture =
+                rawUser.profilePicture ||
+                (rawUser as unknown as { profilePic?: string | null })?.profilePic ||
+                null;
+              const verified = Boolean(rawUser.isVerified || rawUser.verificationStatus === 'verified');
+
+              return {
+                username: safeUsername,
+                role: rawUser.role,
+                profilePicture: picture,
+                isVerified: verified,
+              } as SearchUserResult;
+            })
+            .filter((result): result is SearchUserResult => Boolean(result));
+
+          if (mappedResults.length === 0) {
+            setSearchResults([]);
+            setSearchError('No matching users found');
+          } else {
+            setSearchResults(mappedResults.slice(0, 8));
+            setSearchError(null);
+          }
+        } else {
+          setSearchResults([]);
+          setSearchError('No matching users found');
+        }
+      } catch (error) {
+        console.error('User search error:', error);
+        if (!cancelled && latestSearchId.current === searchId) {
+          setSearchResults([]);
+          setSearchError('Unable to search users right now');
+        }
+      } finally {
+        if (!cancelled && latestSearchId.current === searchId) {
+          setIsSearchingUsers(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) {
+      setShowSearchDropdown(false);
+    }
+  }, [mobileMenuOpen]);
+
+  const handleSearchInputChange = useCallback((value: string) => {
+    const sanitizedValue = sanitizeSearchQuery(value);
+    setSearchQuery(sanitizedValue);
+
+    const trimmed = sanitizedValue.trim();
+
+    if (!trimmed) {
+      setSearchResults([]);
+      setSearchError(null);
+      setIsSearchingUsers(false);
+      setShowSearchDropdown(false);
+      return;
+    }
+
+    setShowSearchDropdown(true);
+
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setIsSearchingUsers(false);
+      setSearchError('Type at least 2 characters to search');
+    } else {
+      setSearchError(null);
+    }
+  }, []);
+
+  const handleSearchFocus = useCallback(() => {
+    if (searchQuery.trim()) {
+      setShowSearchDropdown(true);
+    }
+  }, [searchQuery]);
+
+  const resetSearchState = useCallback(() => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchError(null);
+    setIsSearchingUsers(false);
+    setShowSearchDropdown(false);
+  }, []);
+
+  const prepareForNavigation = useCallback(
+    (closeMenu?: boolean) => {
+      resetSearchState();
+      if (closeMenu) {
+        setMobileMenuOpen(false);
+        setShowMobileNotifications(false);
+      }
+    },
+    [resetSearchState],
+  );
+
+  const getProfilePath = useCallback((result: SearchUserResult) => {
+    const encodedUsername = encodeURIComponent(result.username);
+    return result.role === 'seller' ? `/sellers/${encodedUsername}` : `/buyers/${encodedUsername}`;
+  }, []);
+
+  const navigateToResult = useCallback(
+    (result: SearchUserResult, options?: { closeMenu?: boolean }) => {
+      const path = getProfilePath(result);
+      prepareForNavigation(options?.closeMenu);
+      router.push(path);
+    },
+    [getProfilePath, prepareForNavigation, router],
+  );
+
+  const handleSearchKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        handleCloseSearch();
+        (event.target as HTMLInputElement).blur();
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        const firstResult = searchResults[0];
+        if (firstResult) {
+          event.preventDefault();
+          navigateToResult(firstResult, { closeMenu: isMobile && mobileMenuOpen });
+        }
+      }
+    },
+    [handleCloseSearch, searchResults, navigateToResult, isMobile, mobileMenuOpen],
+  );
+
+  const handleClearSearch = useCallback(() => {
+    resetSearchState();
+  }, [resetSearchState]);
+
+  const shouldShowSearchDropdown = showSearchDropdown && (isSearchingUsers || !!searchError || searchResults.length > 0);
+  const trimmedSearchQuery = searchQuery.trim();
+  const hasMinimumSearchTerm = trimmedSearchQuery.length >= 2;
+
+  const renderSearchDropdown = (variant: 'desktop' | 'mobile') => {
+    if (!shouldShowSearchDropdown) return null;
+
+    return (
+      <div
+        className={`absolute top-full left-0 right-0 mt-2 z-50 overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
+          variant === 'desktop' ? 'max-h-80' : 'max-h-72'
+        }`}
+      >
+        {isSearchingUsers && (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300">
+            <Loader2 className="w-4 h-4 animate-spin text-[#ff950e]" />
+            <span>Searching users...</span>
+          </div>
+        )}
+
+        {!isSearchingUsers && searchResults.length > 0 && (
+          <ul className="max-h-72 overflow-y-auto divide-y divide-[#ff950e]/10">
+            {searchResults.map((result) => {
+              const profilePath = getProfilePath(result);
+              const initial = result.username.charAt(0).toUpperCase();
+              const roleLabel = result.role === 'seller' ? 'Seller profile' : 'Buyer profile';
+
+              return (
+                <li key={`${result.role}-${result.username}`}>
+                  <Link
+                    href={profilePath}
+                    prefetch={false}
+                    onClick={() => prepareForNavigation(variant === 'mobile')}
+                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10"
+                  >
+                    <div className="w-10 h-10 rounded-full border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/10 to-[#ff6b00]/10 flex items-center justify-center overflow-hidden shadow-inner">
+                      {result.profilePicture ? (
+                        <img
+                          src={result.profilePicture}
+                          alt={`${result.username}'s avatar`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-sm font-semibold text-[#ff950e]">{initial}</span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center gap-1">
+                        <span className="text-sm font-semibold text-white">{result.username}</span>
+                        {result.role === 'seller' && result.isVerified && (
+                          <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
+                        )}
+                      </div>
+                      <span className="text-xs uppercase tracking-wide text-gray-400">{roleLabel}</span>
+                    </div>
+
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-[#ff950e] bg-[#ff950e]/10 px-2 py-0.5 rounded-full">
+                      View
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {!isSearchingUsers && searchError && searchResults.length === 0 && (
+          <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400">
+            <Search className="w-4 h-4 text-[#ff950e]" />
+            <span>{searchError}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Calculate pending orders count for sellers
   const pendingOrdersCount = useMemo(() => {
@@ -660,8 +938,43 @@ export default function Header(): React.ReactElement | null {
               </div>
             )}
 
+            <div className="p-4 border-b border-[#ff950e]/20">
+              <div ref={searchMobileRef} className="relative group">
+                <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/15 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => handleSearchInputChange(event.target.value)}
+                    onFocus={handleSearchFocus}
+                    onKeyDown={handleSearchKeyDown}
+                    placeholder="Search buyers and sellers..."
+                    className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
+                    aria-label="Search users"
+                    aria-expanded={shouldShowSearchDropdown}
+                    aria-autocomplete="list"
+                  />
+                  {trimmedSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={handleClearSearch}
+                      className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {isSearchingUsers && hasMinimumSearchTerm && (
+                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
+                  )}
+                </div>
+                {renderSearchDropdown('mobile')}
+              </div>
+            </div>
+
             {/* Navigation Links */}
-            <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+            <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
               {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
 
               {isAdminUser && (
@@ -781,7 +1094,7 @@ export default function Header(): React.ReactElement | null {
 
   return (
     <>
-      <header className="bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#0a0a0a] text-white shadow-2xl px-4 lg:px-6 py-3 flex justify-between items-center z-40 relative border-b border-[#ff950e]/20 backdrop-blur-sm">
+      <header className="bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#0a0a0a] text-white shadow-2xl px-4 lg:px-6 py-3 flex items-center gap-3 w-full z-40 relative border-b border-[#ff950e]/20 backdrop-blur-sm">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
@@ -789,17 +1102,53 @@ export default function Header(): React.ReactElement | null {
           </div>
         </Link>
 
-        {isMobile && (
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="lg:hidden flex items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-            aria-label="Open menu"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
-        )}
+        <div className="hidden md:flex flex-1 px-4 max-w-xl">
+          <div ref={searchDesktopRef} className="relative w-full group">
+            <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/10 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => handleSearchInputChange(event.target.value)}
+                onFocus={handleSearchFocus}
+                onKeyDown={handleSearchKeyDown}
+                placeholder="Search buyers and sellers..."
+                className="w-full bg-[#111111] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200 shadow-inner"
+                aria-label="Search users"
+                aria-expanded={shouldShowSearchDropdown}
+                aria-autocomplete="list"
+              />
+              {trimmedSearchQuery && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {isSearchingUsers && hasMinimumSearchTerm && (
+                <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
+              )}
+            </div>
+            {renderSearchDropdown('desktop')}
+          </div>
+        </div>
 
-        <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
+        <div className="flex items-center gap-2 ml-auto">
+          {isMobile && (
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden flex items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+              aria-label="Open menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+          )}
+
+          <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
           <Link
             href="/browse"
             className="group flex items-center gap-1.5 bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20 text-xs"
@@ -1167,6 +1516,7 @@ export default function Header(): React.ReactElement | null {
             </div>
           )}
         </nav>
+      </div>
       </header>
 
       <MobileMenu />
