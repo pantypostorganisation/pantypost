@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle, XCircle, Mail } from 'lucide-react';
+import { authService } from '@/services/auth.service';
 
 // Floating particle component - matching login/signup style
 function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: number }) {
@@ -100,7 +101,6 @@ export default function VerifyEmailPage() {
   const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
   const [mounted, setMounted] = useState(false);
-  const [authToken, setAuthToken] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -113,42 +113,38 @@ export default function VerifyEmailPage() {
       // Get token from URL
       const token = searchParams.get('token');
       
+      console.log('[Verify Email] Starting verification...');
+      console.log('[Verify Email] Token from URL:', token ? 'Present' : 'Missing');
+      
       if (!token) {
+        console.log('[Verify Email] No token provided');
         setVerificationStatus('error');
         setErrorMessage('No verification token provided. Please check your email for the correct link.');
         return;
       }
 
       try {
-        const response = await fetch('/api/auth/verify-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token }),
-        });
+        console.log('[Verify Email] Calling authService.verifyEmail...');
+        const response = await authService.verifyEmail(token, false);
+        console.log('[Verify Email] Response:', response);
 
-        const data = await response.json();
-
-        if (data.success) {
+        if (response.success && response.data) {
+          console.log('[Verify Email] Verification successful!');
           setVerificationStatus('success');
-          
-          // Store auth token in state if provided
-          if (data.data?.token) {
-            setAuthToken(data.data.token);
-          }
 
           // Redirect to success page after a short delay
           setTimeout(() => {
-            const tokenParam = data.data?.token ? `?token=${encodeURIComponent(data.data.token)}` : '';
+            const tokenParam = response.data?.token ? `?token=${encodeURIComponent(response.data.token)}` : '';
+            console.log('[Verify Email] Redirecting to email-verified page...');
             router.push(`/email-verified${tokenParam}`);
           }, 2000);
         } else {
+          console.log('[Verify Email] Verification failed:', response.error);
           setVerificationStatus('error');
-          setErrorMessage(data.error?.message || 'Failed to verify email. The link may be expired or invalid.');
+          setErrorMessage(response.error?.message || 'Failed to verify email. The link may be expired or invalid.');
         }
       } catch (error) {
-        console.error('Verification error:', error);
+        console.error('[Verify Email] Verification error:', error);
         setVerificationStatus('error');
         setErrorMessage('Network error. Please check your connection and try again.');
       }
