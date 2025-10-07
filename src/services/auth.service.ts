@@ -130,21 +130,62 @@ export class AuthService {
   }
 
   /**
-   * Get valid token from storage
+   * Get valid token from storage - FIXED to use sessionStorage directly
    */
   private async getValidToken(): Promise<string | null> {
-    const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
-    return token;
+    // CRITICAL FIX: Read directly from sessionStorage to avoid circular dependency
+    if (typeof window === 'undefined') return null;
+    
+    try {
+      // Try sessionStorage first (where AuthContext stores tokens)
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (authTokens) {
+        const parsed = JSON.parse(authTokens);
+        return parsed.token || null;
+      }
+      
+      // Fallback to direct token
+      return sessionStorage.getItem(AUTH_TOKEN_KEY) || 
+             localStorage.getItem(AUTH_TOKEN_KEY);
+    } catch (error) {
+      console.error('Error getting token:', error);
+      return null;
+    }
   }
 
   /**
-   * Store tokens securely
+   * Store tokens securely - FIXED to use sessionStorage directly
    */
   private async storeTokens(token: string, refreshToken?: string): Promise<void> {
-    await storageService.setItem(AUTH_TOKEN_KEY, token);
+    console.log('[AuthService] Storing tokens...');
     
-    if (refreshToken) {
-      await storageService.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    if (typeof window === 'undefined') return;
+    
+    try {
+      // CRITICAL FIX: Store directly in sessionStorage (where AuthContext reads from)
+      const tokens = {
+        token,
+        refreshToken: refreshToken || token,
+        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days
+      };
+      
+      sessionStorage.setItem('auth_tokens', JSON.stringify(tokens));
+      sessionStorage.setItem(AUTH_TOKEN_KEY, token);
+      
+      if (refreshToken) {
+        sessionStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+      }
+      
+      console.log('[AuthService] Tokens stored successfully');
+      
+      // Fire token update event for WebSocket and AuthContext
+      window.dispatchEvent(
+        new CustomEvent('auth-token-updated', {
+          detail: { token },
+        })
+      );
+    } catch (error) {
+      console.error('[AuthService] Failed to store tokens:', error);
     }
   }
 
@@ -153,14 +194,13 @@ export class AuthService {
    */
   private async initializeSessionPersistence() {
     try {
-      const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
-      const user = await storageService.getItem<User | null>('currentUser', null);
-
-      if (token && user) {
+      const token = await this.getValidToken();
+      
+      if (token) {
+        // Verify token is still valid
         const result = await apiCall<User>(API_ENDPOINTS.AUTH.ME);
         
         if (result.success && result.data) {
-          await storageService.setItem('currentUser', result.data);
           this.setupTokenRefreshTimer();
         } else {
           await this.clearAuthState();
@@ -191,14 +231,23 @@ export class AuthService {
    * Clear authentication state
    */
   private async clearAuthState() {
-    await storageService.removeItem('currentUser');
-    await storageService.removeItem(AUTH_TOKEN_KEY);
-    await storageService.removeItem(REFRESH_TOKEN_KEY);
+    if (typeof window === 'undefined') return;
+    
+    sessionStorage.removeItem('auth_tokens');
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+    sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    sessionStorage.removeItem('currentUser');
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    localStorage.removeItem('currentUser');
     
     if (this.tokenRefreshTimer) {
       clearTimeout(this.tokenRefreshTimer);
       this.tokenRefreshTimer = null;
     }
+    
+    // Fire token cleared event
+    window.dispatchEvent(new CustomEvent('auth-token-cleared'));
   }
 
   /**
@@ -220,7 +269,11 @@ export class AuthService {
           await this.storeTokens(response.data.token, response.data.refreshToken);
         }
 
-        await storageService.setItem('currentUser', response.data.user);
+        // Store user data
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('currentUser', JSON.stringify(response.data.user));
+        }
+        
         this.setupTokenRefreshTimer();
       } else if (response.error && (response.error as any).requiresVerification) {
         // Email verification required
@@ -270,28 +323,38 @@ export class AuthService {
   }
 
   /**
-   * Verify email with token or code - NEW METHOD
+   * Verify email with token or code - FIXED with proper token storage
    */
   async verifyEmail(tokenOrCode: string, isCode: boolean = false): Promise<ApiResponse<EmailVerificationResponse>> {
     try {
       const payload = isCode ? { code: tokenOrCode } : { token: tokenOrCode };
+      
+      console.log('[AuthService] Verifying email with:', isCode ? 'code' : 'token');
       
       const response = await apiCall<EmailVerificationResponse>('/auth/verify-email', {
         method: 'POST',
         body: JSON.stringify(payload),
       });
 
+      console.log('[AuthService] Verification response:', response);
+
       if (response.success && response.data) {
-        // If verification successful and token provided, store it
+        // CRITICAL FIX: Store token and user IMMEDIATELY after verification
         if (response.data.token) {
+          console.log('[AuthService] Storing verification token...');
           await this.storeTokens(response.data.token, response.data.refreshToken);
         }
 
         // Store user if provided
         if (response.data.user) {
-          await storageService.setItem('currentUser', response.data.user);
+          console.log('[AuthService] Storing user data...');
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('currentUser', JSON.stringify(response.data.user));
+          }
           this.setupTokenRefreshTimer();
         }
+        
+        console.log('[AuthService] Email verification complete - user should be logged in');
       }
 
       return response;
@@ -351,29 +414,21 @@ export class AuthService {
    */
   async getCurrentUser(): Promise<ApiResponse<User | null>> {
     try {
-      const user = await storageService.getItem<User | null>('currentUser', null);
-      
-      if (!user) {
-        return { success: true, data: null };
-      }
-
-      const token = await storageService.getItem<string | null>(AUTH_TOKEN_KEY, null);
+      const token = await this.getValidToken();
       if (!token) {
         return { success: true, data: null };
       }
 
       const response = await apiCall<User>(API_ENDPOINTS.AUTH.ME);
       if (response.success && response.data) {
-        // Ensure emailVerified field is included
-        const userData = {
-          ...response.data,
-          emailVerified: response.data.emailVerified || false,
-        };
-        await storageService.setItem('currentUser', userData);
-        return { ...response, data: userData };
+        // Store user data
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('currentUser', JSON.stringify(response.data));
+        }
+        return response;
       }
 
-      return { success: true, data: user };
+      return { success: true, data: null };
     } catch (error) {
       console.error('Get current user error:', error);
       return {
@@ -407,7 +462,9 @@ export class AuthService {
       );
 
       if (response.success && response.data) {
-        await storageService.setItem('currentUser', response.data);
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('currentUser', JSON.stringify(response.data));
+        }
       }
 
       return response;
@@ -442,7 +499,7 @@ export class AuthService {
    */
   async refreshToken(): Promise<ApiResponse<{ token: string; refreshToken: string }>> {
     try {
-      const refreshToken = await storageService.getItem<string | null>(REFRESH_TOKEN_KEY, null);
+      const refreshToken = await this.getValidToken();
       if (!refreshToken) {
         return {
           success: false,
