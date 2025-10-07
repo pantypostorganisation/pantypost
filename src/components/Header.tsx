@@ -140,6 +140,7 @@ export default function Header(): React.ReactElement | null {
 
   const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
+  const canUseSearch = Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller'));
   const username = user?.username ? sanitizeStrict(user.username) : '';
 
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
@@ -161,6 +162,14 @@ export default function Header(): React.ReactElement | null {
   }, []);
 
   useEffect(() => {
+    if (!canUseSearch) {
+      setIsSearchingUsers(false);
+      setSearchResults([]);
+      setSearchError(null);
+      setShowSearchDropdown(false);
+      return;
+    }
+
     const sanitizedQuery = sanitizeSearchQuery(searchQuery).trim();
 
     if (!sanitizedQuery) {
@@ -241,7 +250,7 @@ export default function Header(): React.ReactElement | null {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searchQuery]);
+  }, [searchQuery, canUseSearch]);
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -250,6 +259,8 @@ export default function Header(): React.ReactElement | null {
   }, [mobileMenuOpen]);
 
   const handleSearchInputChange = useCallback((value: string) => {
+    if (!canUseSearch) return;
+
     const sanitizedValue = sanitizeSearchQuery(value);
     setSearchQuery(sanitizedValue);
 
@@ -272,13 +283,15 @@ export default function Header(): React.ReactElement | null {
     } else {
       setSearchError(null);
     }
-  }, []);
+  }, [canUseSearch]);
 
   const handleSearchFocus = useCallback(() => {
+    if (!canUseSearch) return;
+
     if (searchQuery.trim()) {
       setShowSearchDropdown(true);
     }
-  }, [searchQuery]);
+  }, [searchQuery, canUseSearch]);
 
   const resetSearchState = useCallback(() => {
     setSearchQuery('');
@@ -315,6 +328,8 @@ export default function Header(): React.ReactElement | null {
 
   const handleSearchKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
+      if (!canUseSearch) return;
+
       if (event.key === 'Escape') {
         event.preventDefault();
         handleCloseSearch();
@@ -330,19 +345,20 @@ export default function Header(): React.ReactElement | null {
         }
       }
     },
-    [handleCloseSearch, searchResults, navigateToResult, isMobile, mobileMenuOpen],
+    [handleCloseSearch, searchResults, navigateToResult, isMobile, mobileMenuOpen, canUseSearch],
   );
 
   const handleClearSearch = useCallback(() => {
     resetSearchState();
   }, [resetSearchState]);
 
-  const shouldShowSearchDropdown = showSearchDropdown && (isSearchingUsers || !!searchError || searchResults.length > 0);
+  const shouldShowSearchDropdown =
+    canUseSearch && showSearchDropdown && (isSearchingUsers || !!searchError || searchResults.length > 0);
   const trimmedSearchQuery = searchQuery.trim();
   const hasMinimumSearchTerm = trimmedSearchQuery.length >= 2;
 
   const renderSearchDropdown = (variant: 'desktop' | 'mobile') => {
-    if (!shouldShowSearchDropdown) return null;
+    if (!canUseSearch || !shouldShowSearchDropdown) return null;
 
     return (
       <div
@@ -938,13 +954,14 @@ export default function Header(): React.ReactElement | null {
               </div>
             )}
 
-            <div className="p-4 border-b border-[#ff950e]/20">
-              <div ref={searchMobileRef} className="relative group">
-                <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/15 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
-                  <input
-                    type="search"
+            {canUseSearch && (
+              <div className="p-4 border-b border-[#ff950e]/20">
+                <div ref={searchMobileRef} className="relative group">
+                  <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/15 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
+                  <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
+                    <input
+                      type="search"
                     value={searchQuery}
                     onChange={(event) => handleSearchInputChange(event.target.value)}
                     onFocus={handleSearchFocus}
@@ -969,9 +986,10 @@ export default function Header(): React.ReactElement | null {
                     <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
                   )}
                 </div>
-                {renderSearchDropdown('mobile')}
+                  {renderSearchDropdown('mobile')}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Navigation Links */}
             <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
@@ -1102,13 +1120,14 @@ export default function Header(): React.ReactElement | null {
           </div>
         </Link>
 
-        <div className="hidden md:flex flex-1 px-4 max-w-xl">
-          <div ref={searchDesktopRef} className="relative w-full group">
-            <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/10 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
-              <input
-                type="search"
+        {canUseSearch && (
+          <div className="hidden md:flex flex-1 px-4 max-w-xl">
+            <div ref={searchDesktopRef} className="relative w-full group">
+              <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/10 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
+                <input
+                  type="search"
                 value={searchQuery}
                 onChange={(event) => handleSearchInputChange(event.target.value)}
                 onFocus={handleSearchFocus}
@@ -1133,9 +1152,10 @@ export default function Header(): React.ReactElement | null {
                 <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
               )}
             </div>
-            {renderSearchDropdown('desktop')}
+                {renderSearchDropdown('desktop')}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex items-center gap-2 ml-auto">
           {isMobile && (
