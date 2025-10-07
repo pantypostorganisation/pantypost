@@ -57,13 +57,40 @@ type SearchUserResult = {
 
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
+    const handleEvent = (event: MouseEvent | TouchEvent | PointerEvent) => {
+      const element = ref.current;
+      if (!element) return;
+
+      const target = event.target as Node | null;
+      if (!target) return;
+
+      const eventWithPath = event as Event & { composedPath?: () => EventTarget[] };
+      const path = eventWithPath.composedPath?.();
+      const isInside = path ? path.includes(element) : element.contains(target);
+
+      if (!isInside) {
         callback();
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+
+    const listener = (event: Event) => handleEvent(event as PointerEvent);
+
+    const supportsPointerEvents = typeof window !== 'undefined' && 'PointerEvent' in window;
+    if (supportsPointerEvents) {
+      document.addEventListener('pointerdown', listener);
+    } else {
+      document.addEventListener('mousedown', listener);
+      document.addEventListener('touchstart', listener);
+    }
+
+    return () => {
+      if (supportsPointerEvents) {
+        document.removeEventListener('pointerdown', listener);
+      } else {
+        document.removeEventListener('mousedown', listener);
+        document.removeEventListener('touchstart', listener);
+      }
+    };
   }, [ref, callback]);
 };
 
