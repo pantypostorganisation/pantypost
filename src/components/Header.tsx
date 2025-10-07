@@ -984,7 +984,6 @@ export default function Header(): React.ReactElement | null {
                   {isSearchingUsers && hasMinimumSearchTerm && (
                     <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
                   )}
-                </div>
                   {renderSearchDropdown('mobile')}
                 </div>
               </div>
@@ -1150,8 +1149,7 @@ export default function Header(): React.ReactElement | null {
               {isSearchingUsers && hasMinimumSearchTerm && (
                 <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
               )}
-            </div>
-                {renderSearchDropdown('desktop')}
+              {renderSearchDropdown('desktop')}
             </div>
           </div>
         )}
