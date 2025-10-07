@@ -107,8 +107,10 @@ export default function VerifyEmailPendingPage() {
   const [verificationCode, setVerificationCode] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyError, setVerifyError] = useState('');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const emailParam = searchParams.get('email');
     const usernameParam = searchParams.get('username');
     
@@ -195,15 +197,9 @@ export default function VerifyEmailPendingPage() {
       console.log('[Verify] Response:', data);
       
       if (data.success) {
-        if (data.data?.token) {
-          localStorage.setItem('auth_token', data.data.token);
-          sessionStorage.setItem('auth_tokens', JSON.stringify({
-            token: data.data.token,
-            refreshToken: data.data.refreshToken || data.data.token
-          }));
-        }
-        
-        router.push('/email-verified');
+        // Pass token via URL to email-verified page
+        const tokenParam = data.data?.token ? `?token=${encodeURIComponent(data.data.token)}` : '';
+        router.push(`/email-verified${tokenParam}`);
       } else {
         setVerifyError(data.error?.message || 'Invalid verification code');
       }
@@ -225,6 +221,14 @@ export default function VerifyEmailPendingPage() {
     email.replace(/^(.{2})(.*)(@.*)$/, (_, a, b, c) => 
       a + '*'.repeat(Math.min(b.length - 2, 8)) + (b.length > 2 ? b.slice(-2) : '') + c
     ) : '';
+
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">

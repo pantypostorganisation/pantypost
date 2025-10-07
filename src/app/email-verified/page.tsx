@@ -2,15 +2,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { CheckCircle, ArrowRight, ShoppingBag, User, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function EmailVerifiedPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [countdown, setCountdown] = useState(5);
   const [userRole, setUserRole] = useState<'buyer' | 'seller' | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
 
   useEffect(() => {
     // Trigger confetti animation
@@ -26,25 +28,26 @@ export default function EmailVerifiedPage() {
     // Delay confetti slightly for better effect
     const confettiTimer = setTimeout(triggerConfetti, 500);
 
-    // Check user role from session/storage
-    try {
-      const authTokens = sessionStorage.getItem('auth_tokens');
-      if (authTokens) {
-        const parsed = JSON.parse(authTokens);
-        if (parsed.token) {
-          // Decode JWT to get user role (basic decode, not verification)
-          const payload = parsed.token.split('.')[1];
-          const decoded = JSON.parse(atob(payload));
-          setUserRole(decoded.role || 'buyer');
-        }
+    // Get token from URL params if provided
+    const tokenParam = searchParams.get('token');
+    if (tokenParam) {
+      setAuthToken(decodeURIComponent(tokenParam));
+      
+      // Decode JWT to get user role (basic decode, not verification)
+      try {
+        const payload = tokenParam.split('.')[1];
+        const decoded = JSON.parse(atob(payload));
+        setUserRole(decoded.role || 'buyer');
+      } catch (error) {
+        console.error('Error decoding token:', error);
+        setUserRole('buyer'); // Default to buyer
       }
-    } catch (error) {
-      console.error('Error getting user role:', error);
-      setUserRole('buyer'); // Default to buyer
+    } else {
+      setUserRole('buyer'); // Default to buyer if no token
     }
 
     return () => clearTimeout(confettiTimer);
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     // Countdown timer for auto-redirect
@@ -118,8 +121,21 @@ export default function EmailVerifiedPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        {/* Success Card */}
-        <div className="bg-gray-900/50 backdrop-blur-sm border border-gray-800 rounded-3xl p-8 md:p-12">
+        {/* Logo - matching login/signup style */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-6">
+            <img
+              src="/logo.png"
+              alt="PantyPost"
+              className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
+              style={{ width: '220px', height: '220px' }}
+              onClick={() => router.push('/')}
+            />
+          </div>
+        </div>
+
+        {/* Success Card - matching login/signup style */}
+        <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-8 md:p-12 shadow-xl">
           {/* Success Icon */}
           <motion.div
             className="flex justify-center mb-8"
@@ -191,7 +207,8 @@ export default function EmailVerifiedPage() {
           >
             <button
               onClick={handleContinue}
-              className="w-full py-4 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-3 group"
+              className="w-full py-4 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-3 group hover:scale-[1.02] active:scale-[0.98]"
+              style={{ color: '#000' }}
             >
               <span className="text-lg">
                 {userRole === 'seller' ? 'Go to Your Dashboard' : 'Start Browsing'}
@@ -258,13 +275,22 @@ export default function EmailVerifiedPage() {
         >
           <p className="text-sm text-gray-500">
             Need help getting started?{' '}
-            <a
-              href="/help"
-              className="text-[#ff950e] hover:text-[#ff6b00] font-medium"
-            >
+            <a href="/help" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
               Visit our Help Center
             </a>
           </p>
+        </motion.div>
+
+        {/* Trust Indicators - matching login/signup style */}
+        <motion.div
+          className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.6 }}
+        >
+          <span>🔒 Secure</span>
+          <span>🛡️ Encrypted</span>
+          <span>✓ Verified</span>
         </motion.div>
       </motion.div>
 

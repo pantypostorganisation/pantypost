@@ -100,6 +100,7 @@ export default function VerifyEmailPage() {
   const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
   const [mounted, setMounted] = useState(false);
+  const [authToken, setAuthToken] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -132,18 +133,15 @@ export default function VerifyEmailPage() {
         if (data.success) {
           setVerificationStatus('success');
           
-          // Store auth token if provided
+          // Store auth token in state if provided
           if (data.data?.token) {
-            localStorage.setItem('auth_token', data.data.token);
-            sessionStorage.setItem('auth_tokens', JSON.stringify({
-              token: data.data.token,
-              refreshToken: data.data.refreshToken || data.data.token
-            }));
+            setAuthToken(data.data.token);
           }
 
           // Redirect to success page after a short delay
           setTimeout(() => {
-            router.push('/email-verified');
+            const tokenParam = data.data?.token ? `?token=${encodeURIComponent(data.data.token)}` : '';
+            router.push(`/email-verified${tokenParam}`);
           }, 2000);
         } else {
           setVerificationStatus('error');
@@ -194,13 +192,15 @@ export default function VerifyEmailPage() {
         >
           {/* Logo - matching login/signup style */}
           <div className="text-center mb-8">
-            <img
-              src="/logo.png"
-              alt="PantyPost"
-              className="mx-auto mb-4 drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
-              style={{ width: '220px', height: '220px' }}
-              onClick={() => router.push('/')}
-            />
+            <div className="flex justify-center mb-6">
+              <img
+                src="/logo.png"
+                alt="PantyPost"
+                className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
+                style={{ width: '220px', height: '220px' }}
+                onClick={() => router.push('/')}
+              />
+            </div>
           </div>
 
           {/* Status Card - matching login/signup style */}
@@ -310,7 +310,13 @@ export default function VerifyEmailPage() {
           {/* Footer - matching login/signup style */}
           <div className="text-center mt-6 space-y-3">
             <p className="text-sm text-gray-500">
-              Having trouble? <a href="mailto:support@pantypost.com" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">Contact Support</a>
+              Having trouble?{' '}
+              <a 
+                href="mailto:support@pantypost.com" 
+                className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors"
+              >
+                Contact Support
+              </a>
             </p>
           </div>
 

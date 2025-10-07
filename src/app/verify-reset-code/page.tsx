@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { KeyRound, ArrowLeft, AlertCircle } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
@@ -16,6 +16,7 @@ if (typeof window !== 'undefined') {
 
 function VerifyResetCodeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -23,24 +24,25 @@ function VerifyResetCodeContent() {
   const [emailInput, setEmailInput] = useState('');
   const [needsEmail, setNeedsEmail] = useState(false);
   const [isReady, setIsReady] = useState(false);
+  const [resetCode, setResetCode] = useState('');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Check for email in session storage
+    // Check for email in URL params
     const checkSession = () => {
       console.log('[Verify Reset Code] Initializing page...');
       
-      // Get email from session storage
-      const storedEmail = sessionStorage.getItem('resetEmail');
-      console.log('[Verify Reset Code] Stored email:', storedEmail);
+      // Get email from URL params
+      const emailParam = searchParams.get('email');
+      console.log('[Verify Reset Code] Email from URL:', emailParam);
       
-      if (!storedEmail) {
-        // If no email in session, ask for it
+      if (!emailParam) {
+        // If no email in URL, ask for it
         console.log('[Verify Reset Code] No email found, showing email input');
         setNeedsEmail(true);
       } else {
-        console.log('[Verify Reset Code] Email found:', storedEmail);
-        setEmail(storedEmail);
+        console.log('[Verify Reset Code] Email found:', emailParam);
+        setEmail(decodeURIComponent(emailParam));
       }
       
       // Mark as ready
@@ -51,7 +53,7 @@ function VerifyResetCodeContent() {
     requestAnimationFrame(() => {
       checkSession();
     });
-  }, []);
+  }, [searchParams]);
 
   const handleCodeChange = (index: number, value: string) => {
     // Only allow digits
@@ -100,10 +102,10 @@ function VerifyResetCodeContent() {
       const response = await authService.verifyResetCode(email, fullCode);
 
       if (response.success && response.data?.valid) {
-        // Store verification data for the next step
-        sessionStorage.setItem('resetCode', fullCode);
-        // Navigate to password reset page
-        router.push('/reset-password-final');
+        // Store verification data in state for the next step
+        setResetCode(fullCode);
+        // Navigate to password reset page with email and code in URL
+        router.push(`/reset-password-final?email=${encodeURIComponent(email)}&code=${fullCode}`);
       } else {
         setError(response.error?.message || 'Invalid verification code');
         // Clear code on error
@@ -125,44 +127,43 @@ function VerifyResetCodeContent() {
   const handleEmailSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (emailInput) {
-      sessionStorage.setItem('resetEmail', emailInput);
       setEmail(emailInput);
       setNeedsEmail(false);
     }
   };
 
-  // Don't render until we've checked session storage
+  // Don't render until we've checked URL params
   if (!isReady) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+        <div className="w-6 h-6 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
-      {/* Floating Particles Background */}
+      {/* Enhanced Floating Particles Background - matching login/signup */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {Array.from({ length: 35 }).map((_, i) => (
           <FloatingParticle key={i} delay={0} index={i} />
         ))}
       </div>
 
-      {/* Gradient overlay */}
+      {/* Subtle gradient overlay for depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
 
       {/* Main Content */}
       <div className="relative z-10 flex items-center justify-center p-4 min-h-screen">
         <div className="w-full max-w-md">
-          {/* Logo */}
+          {/* Logo - matching login/signup style */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-6">
               <img 
                 src="/logo.png" 
                 alt="PantyPost" 
                 className="object-contain drop-shadow-2xl transition-all duration-500 hover:drop-shadow-[0_0_20px_rgba(255,149,14,0.4)] cursor-pointer hover:scale-105 active:scale-95"
-                style={{ width: '180px', height: '180px' }}
+                style={{ width: '220px', height: '220px' }}
                 onClick={() => router.push('/')}
               />
             </div>
@@ -176,7 +177,7 @@ function VerifyResetCodeContent() {
             </p>
           </div>
 
-          {/* Form Card */}
+          {/* Form Card - matching login/signup style */}
           <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl">
             {needsEmail ? (
               // Email input form
@@ -201,6 +202,7 @@ function VerifyResetCodeContent() {
                 <button
                   type="submit"
                   className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-semibold py-3 px-4 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                  style={{ color: '#000' }}
                 >
                   Continue
                 </button>
@@ -297,10 +299,20 @@ function VerifyResetCodeContent() {
             )}
           </div>
 
-          {/* Trust Indicators */}
-          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600 transition-all duration-500">
+          {/* Footer Links - matching login/signup style */}
+          <div className="text-center mt-6 space-y-3">
+            <p className="text-sm text-gray-500">
+              Need help?{' '}
+              <a href="mailto:support@pantypost.com" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
+                Contact Support
+              </a>
+            </p>
+          </div>
+
+          {/* Trust Indicators - matching login/signup style */}
+          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
             <span>🔒 Secure</span>
-            <span>🛡️ 2FA Protected</span>
+            <span>🛡️ Encrypted</span>
             <span>✓ Verified</span>
           </div>
         </div>
