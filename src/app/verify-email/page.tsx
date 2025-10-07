@@ -130,13 +130,17 @@ export default function VerifyEmailPage() {
 
         if (response.success && response.data) {
           console.log('[Verify Email] Verification successful!');
+          console.log('[Verify Email] User data:', response.data.user);
+          console.log('[Verify Email] Token received:', response.data.token ? 'Yes' : 'No');
           setVerificationStatus('success');
 
-          // Redirect to success page after a short delay
+          // Token is already stored by authService.verifyEmail()
+          // Now redirect to success page which will auto-detect logged in state
           setTimeout(() => {
-            const tokenParam = response.data?.token ? `?token=${encodeURIComponent(response.data.token)}` : '';
-            console.log('[Verify Email] Redirecting to email-verified page...');
-            router.push(`/email-verified${tokenParam}`);
+            console.log('[Verify Email] Redirecting to email-verified page with auto-login...');
+            // Pass the user role in URL so email-verified page knows where to redirect
+            const role = response.data?.user?.role || 'buyer';
+            router.push(`/email-verified?role=${role}`);
           }, 2000);
         } else {
           console.log('[Verify Email] Verification failed:', response.error);

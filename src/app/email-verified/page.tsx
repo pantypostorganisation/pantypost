@@ -12,7 +12,6 @@ export default function EmailVerifiedPage() {
   const searchParams = useSearchParams();
   const [countdown, setCountdown] = useState(5);
   const [userRole, setUserRole] = useState<'buyer' | 'seller' | null>(null);
-  const [authToken, setAuthToken] = useState<string | null>(null);
 
   useEffect(() => {
     // Trigger confetti animation
@@ -28,22 +27,15 @@ export default function EmailVerifiedPage() {
     // Delay confetti slightly for better effect
     const confettiTimer = setTimeout(triggerConfetti, 500);
 
-    // Get token from URL params if provided
-    const tokenParam = searchParams.get('token');
-    if (tokenParam) {
-      setAuthToken(decodeURIComponent(tokenParam));
-      
-      // Decode JWT to get user role (basic decode, not verification)
-      try {
-        const payload = tokenParam.split('.')[1];
-        const decoded = JSON.parse(atob(payload));
-        setUserRole(decoded.role || 'buyer');
-      } catch (error) {
-        console.error('Error decoding token:', error);
-        setUserRole('buyer'); // Default to buyer
-      }
+    // Get role from URL params (passed from verify-email page)
+    const roleParam = searchParams.get('role');
+    console.log('[Email Verified] Role from URL:', roleParam);
+    
+    if (roleParam) {
+      setUserRole(roleParam as 'buyer' | 'seller');
     } else {
-      setUserRole('buyer'); // Default to buyer if no token
+      // Default to buyer if no role specified
+      setUserRole('buyer');
     }
 
     return () => clearTimeout(confettiTimer);
@@ -58,7 +50,7 @@ export default function EmailVerifiedPage() {
       return () => clearTimeout(timer);
     }
     
-    // When countdown reaches 0, redirect
+    // When countdown reaches 0, redirect to homepage
     handleContinue();
     // No cleanup needed for this path
     return undefined;
@@ -66,11 +58,8 @@ export default function EmailVerifiedPage() {
   }, [countdown]);
 
   const handleContinue = () => {
-    if (userRole === 'seller') {
-      router.push('/sellers/my-listings');
-    } else {
-      router.push('/browse');
-    }
+    // Always redirect to homepage - user is already logged in!
+    router.push('/');
   };
 
   const features = userRole === 'seller' ? [
@@ -211,7 +200,7 @@ export default function EmailVerifiedPage() {
               style={{ color: '#000' }}
             >
               <span className="text-lg">
-                {userRole === 'seller' ? 'Go to Your Dashboard' : 'Start Browsing'}
+                Get Started
               </span>
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </button>
@@ -234,16 +223,16 @@ export default function EmailVerifiedPage() {
           >
             <div className="grid md:grid-cols-2 gap-4">
               <button
-                onClick={() => router.push('/profile')}
+                onClick={() => router.push(userRole === 'seller' ? '/sellers/profile' : '/buyers/profile')}
                 className="py-3 px-4 bg-gray-800/50 hover:bg-gray-800 text-white rounded-lg transition-colors text-sm"
               >
                 Complete Your Profile
               </button>
               <button
-                onClick={() => router.push(userRole === 'seller' ? '/sellers/verify' : '/settings')}
+                onClick={() => router.push(userRole === 'seller' ? '/sellers/verify' : '/browse')}
                 className="py-3 px-4 bg-gray-800/50 hover:bg-gray-800 text-white rounded-lg transition-colors text-sm"
               >
-                {userRole === 'seller' ? 'Get Verified' : 'Account Settings'}
+                {userRole === 'seller' ? 'Get Verified' : 'Start Browsing'}
               </button>
             </div>
           </motion.div>
