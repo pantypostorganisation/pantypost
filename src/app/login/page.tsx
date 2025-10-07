@@ -44,6 +44,7 @@ export default function LoginPage() {
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
   const [showAdminMode, setShowAdminMode] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Rate limiting
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -247,7 +248,7 @@ export default function LoginPage() {
       clearError?.();
       
       try {
-        const success = await login(username.trim(), password, role);
+        const success = await login(username.trim(), password, role, rememberMe);
         
         if (isDev) console.log('[Login] Login result:', success);
         
@@ -268,7 +269,7 @@ export default function LoginPage() {
         setIsLoading(false);
       }
     },
-    [username, password, role, login, isRateLimited, authError, clearError]
+    [username, password, role, rememberMe, login, isRateLimited, authError, clearError]
   );
 
   const handleKeyPress = useCallback(
@@ -384,6 +385,8 @@ export default function LoginPage() {
                   role={role}
                   roleOptions={roleOptions}
                   onRoleSelect={(selectedRole) => setRole(selectedRole as 'buyer' | 'seller' | 'admin')}
+                  rememberMe={rememberMe}
+                  onRememberMeChange={setRememberMe}
                 />
               )}
             </div>
