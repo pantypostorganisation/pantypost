@@ -23,6 +23,8 @@ interface PasswordStepProps {
     icon: any;
   }>;
   onRoleSelect: (role: string) => void;
+  rememberMe: boolean;
+  onRememberMeChange: (remember: boolean) => void;
 }
 
 export default function PasswordStep({
@@ -38,7 +40,9 @@ export default function PasswordStep({
   rateLimitWaitTime = 0,
   role,
   roleOptions,
-  onRoleSelect
+  onRoleSelect,
+  rememberMe,
+  onRememberMeChange
 }: PasswordStepProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
@@ -226,6 +230,20 @@ export default function PasswordStep({
               );
             })}
           </div>
+        </div>
+
+        <div className="mb-6 flex items-center justify-between text-sm text-gray-300">
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => onRememberMeChange(event.target.checked)}
+              disabled={isLoading || isRateLimited}
+              className="h-4 w-4 rounded border-gray-600 bg-black text-[#ff950e] focus:ring-[#ff950e]"
+            />
+            <span>Keep me signed in</span>
+          </label>
+          <span className="text-xs text-gray-500">Use on trusted devices only</span>
         </div>
 
         <button

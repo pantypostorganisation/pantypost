@@ -55,7 +55,8 @@ interface AuthContextType {
   login: (
     username: string,
     password: string,
-    role?: 'buyer' | 'seller' | 'admin'
+    role?: 'buyer' | 'seller' | 'admin',
+    rememberMe?: boolean
   ) => Promise<boolean>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
@@ -364,18 +365,32 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const API_BASE_URL =
   apiConfig?.baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+const AUTH_TOKENS_STORAGE_KEY = 'auth_tokens';
+
 // Enhanced Token storage with WebSocket event support
 class TokenStorage {
   private memoryTokens: AuthTokens | null = null;
+  private persistence: 'session' | 'local' = 'session';
 
   constructor() {
-    // Try to restore from sessionStorage on initialization
     if (typeof window !== 'undefined') {
       try {
-        const stored = sessionStorage.getItem('auth_tokens');
+        const sessionValue = window.sessionStorage.getItem(AUTH_TOKENS_STORAGE_KEY);
+        const localValue = !sessionValue
+          ? window.localStorage?.getItem(AUTH_TOKENS_STORAGE_KEY) ?? null
+          : null;
+
+        const stored = sessionValue ?? localValue;
+
         if (stored) {
           this.memoryTokens = JSON.parse(stored);
-          // Fire initial token event if we have tokens
+          this.persistence = sessionValue ? 'session' : 'local';
+
+          // Ensure sessionStorage is populated for cross-tab compatibility
+          if (!sessionValue && localValue) {
+            window.sessionStorage.setItem(AUTH_TOKENS_STORAGE_KEY, localValue);
+          }
+
           if (this.memoryTokens?.token) {
             setTimeout(() => {
               window.dispatchEvent(
@@ -392,26 +407,37 @@ class TokenStorage {
     }
   }
 
+  setPersistence(remember: boolean) {
+    this.persistence = remember ? 'local' : 'session';
+  }
+
   setTokens(tokens: AuthTokens | null) {
     this.memoryTokens = tokens;
 
     if (typeof window !== 'undefined') {
-      if (tokens) {
-        try {
-          sessionStorage.setItem('auth_tokens', JSON.stringify(tokens));
-          // Fire token update event
+      try {
+        if (tokens) {
+          const serialized = JSON.stringify(tokens);
+          window.sessionStorage.setItem(AUTH_TOKENS_STORAGE_KEY, serialized);
+
+          if (this.persistence === 'local') {
+            window.localStorage?.setItem(AUTH_TOKENS_STORAGE_KEY, serialized);
+          } else {
+            window.localStorage?.removeItem(AUTH_TOKENS_STORAGE_KEY);
+          }
+
           window.dispatchEvent(
             new CustomEvent('auth-token-updated', {
               detail: { token: tokens.token },
             })
           );
-        } catch (error) {
-          console.error('Failed to store tokens:', error);
+        } else {
+          window.sessionStorage.removeItem(AUTH_TOKENS_STORAGE_KEY);
+          window.localStorage?.removeItem(AUTH_TOKENS_STORAGE_KEY);
+          window.dispatchEvent(new CustomEvent('auth-token-cleared'));
         }
-      } else {
-        sessionStorage.removeItem('auth_tokens');
-        // Fire token cleared event
-        window.dispatchEvent(new CustomEvent('auth-token-cleared'));
+      } catch (error) {
+        console.error('Failed to store tokens:', error);
       }
     }
   }
@@ -422,9 +448,14 @@ class TokenStorage {
 
   clear() {
     this.memoryTokens = null;
+    this.persistence = 'session';
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('auth_tokens');
-      // Fire token cleared event
+      try {
+        window.sessionStorage.removeItem(AUTH_TOKENS_STORAGE_KEY);
+        window.localStorage?.removeItem(AUTH_TOKENS_STORAGE_KEY);
+      } catch (error) {
+        console.error('Failed to clear tokens:', error);
+      }
       window.dispatchEvent(new CustomEvent('auth-token-cleared'));
     }
   }
@@ -528,7 +559,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       username: string,
       password: string,
-      role: 'buyer' | 'seller' | 'admin' = 'buyer'
+      role: 'buyer' | 'seller' | 'admin' = 'buyer',
+      rememberMe = false
     ): Promise<boolean> => {
       console.log('[Auth] Login attempt:', { username, role, hasPassword: !!password });
 
@@ -602,6 +634,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             refreshToken: response.data.refreshToken,
             expiresAt,
           };
+
+          // Respect persistence preference before storing tokens
+          tokenStorageRef.current.setPersistence(rememberMe);
 
           // Store tokens securely (fires auth-token-updated)
           tokenStorageRef.current.setTokens(tokens);
@@ -711,13 +746,23 @@ export const getGlobalAuthToken = (): string | null => {
   if (typeof window === 'undefined') return null;
 
   try {
-    const stored = sessionStorage.getItem('auth_tokens');
+    const stored = sessionStorage.getItem(AUTH_TOKENS_STORAGE_KEY);
     if (stored) {
       const tokens = JSON.parse(stored);
       return tokens?.token || null;
     }
   } catch (error) {
     console.error('Failed to get global auth token:', error);
+  }
+
+  try {
+    const stored = localStorage.getItem(AUTH_TOKENS_STORAGE_KEY);
+    if (stored) {
+      const tokens = JSON.parse(stored);
+      return tokens?.token || null;
+    }
+  } catch (error) {
+    console.error('Failed to get global auth token from localStorage:', error);
   }
 
   return null;
