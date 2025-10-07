@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle, XCircle, Mail } from 'lucide-react';
 import { authService } from '@/services/auth.service';
+import { useAuth } from '@/context/AuthContext';
 
 // Floating particle component - matching login/signup style
 function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: number }) {
@@ -98,6 +99,7 @@ function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: nu
 export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refreshSession } = useAuth(); // CRITICAL: Get refreshSession from AuthContext
   const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
   const [mounted, setMounted] = useState(false);
@@ -134,10 +136,14 @@ export default function VerifyEmailPage() {
           console.log('[Verify Email] Token received:', response.data.token ? 'Yes' : 'No');
           setVerificationStatus('success');
 
-          // Token and user are already stored by authService.verifyEmail()
-          // Redirect directly to homepage - user is logged in!
+          // CRITICAL FIX: Refresh AuthContext to pick up the new token
+          console.log('[Verify Email] Refreshing AuthContext session...');
+          await refreshSession();
+          console.log('[Verify Email] AuthContext refreshed - user is now logged in!');
+
+          // Now redirect to homepage - user will be logged in immediately!
           setTimeout(() => {
-            console.log('[Verify Email] Redirecting to homepage - user is logged in!');
+            console.log('[Verify Email] Redirecting to homepage...');
             router.push('/');
           }, 2000);
         } else {
@@ -158,7 +164,7 @@ export default function VerifyEmailPage() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [mounted, searchParams, router]);
+  }, [mounted, searchParams, router, refreshSession]);
 
   if (!mounted) {
     return (
@@ -249,7 +255,7 @@ export default function VerifyEmailPage() {
                   Email Verified!
                 </h2>
                 <p className="text-gray-400 mb-6">
-                  Your email has been successfully verified.
+                  Your email has been successfully verified. You're now logged in!
                 </p>
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                   <p className="text-green-400 text-sm">
