@@ -374,19 +374,18 @@ export default function Header(): React.ReactElement | null {
         )}
 
         {!isSearchingUsers && searchResults.length > 0 && (
-          <ul className="max-h-72 overflow-y-auto divide-y divide-[#ff950e]/10">
+          <ul className="max-h-72 overflow-y-auto divide-y divide-[#ff950e]/10" role="listbox">
             {searchResults.map((result) => {
-              const profilePath = getProfilePath(result);
               const initial = result.username.charAt(0).toUpperCase();
               const roleLabel = result.role === 'seller' ? 'Seller profile' : 'Buyer profile';
 
               return (
                 <li key={`${result.role}-${result.username}`}>
-                  <Link
-                    href={profilePath}
-                    prefetch={false}
-                    onClick={() => prepareForNavigation(variant === 'mobile')}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10"
+                  <button
+                    type="button"
+                    role="option"
+                    onClick={() => navigateToResult(result, { closeMenu: variant === 'mobile' })}
+                    className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10 text-left"
                   >
                     <div className="w-10 h-10 rounded-full border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/10 to-[#ff6b00]/10 flex items-center justify-center overflow-hidden shadow-inner">
                       {result.profilePicture ? (
@@ -413,7 +412,7 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-[10px] font-semibold uppercase tracking-widest text-[#ff950e] bg-[#ff950e]/10 px-2 py-0.5 rounded-full">
                       View
                     </span>
-                  </Link>
+                  </button>
                 </li>
               );
             })}
