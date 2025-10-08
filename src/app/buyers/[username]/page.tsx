@@ -209,14 +209,14 @@ function SafeAvatar({
     typeof url === 'string' &&
     (url.startsWith('https://res.cloudinary.com') || url.startsWith('http://res.cloudinary.com'));
   if (url && isCloudinary) {
-    return <Image src={url} alt={alt} fill sizes="112px" className="rounded-full object-cover" priority={false} />;
+    return <Image src={url} alt={alt} fill sizes="112px" className="rounded-[18px] object-cover" priority={false} />;
   }
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={alt} className="w-full h-full rounded-full object-cover" />;
+    return <img src={url} alt={alt} className="h-full w-full rounded-[18px] object-cover" />;
   }
   return (
-    <div className="w-full h-full rounded-full bg-neutral-800 flex items-center justify-center text-2xl">
+    <div className="flex h-full w-full items-center justify-center rounded-[18px] bg-neutral-800 text-2xl">
       {letterFallback}
     </div>
   );
@@ -386,12 +386,16 @@ export default function BuyerProfilePage() {
     <BanCheck>
       <div className="min-h-screen bg-neutral-950 text-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-10">
-          <div className="rounded-3xl border border-neutral-800 bg-neutral-950">
-            <div className="p-6 sm:p-10">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111111]/85 shadow-[0_18px_60px_-30px_rgba(0,0,0,0.9)]">
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.18),rgba(255,255,255,0)_55%)]"
+              aria-hidden="true"
+            />
+            <div className="relative p-6 sm:p-10">
               {loading ? (
                 <div className="space-y-10 animate-pulse">
                   <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-                    <div className="h-28 w-28 rounded-full bg-neutral-800/80" />
+                    <div className="h-28 w-28 rounded-2xl bg-neutral-800/80" />
                     <div className="flex-1 space-y-4">
                       <div className="h-6 w-48 rounded bg-neutral-800/80" />
                       <div className="h-4 w-72 rounded bg-neutral-800/80" />
@@ -417,8 +421,8 @@ export default function BuyerProfilePage() {
                 <>
                   <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
                     <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
-                      <div className="h-32 w-32 overflow-hidden rounded-full border border-neutral-800 bg-neutral-900 p-[3px] sm:h-36 sm:w-36">
-                        <div className="h-full w-full overflow-hidden rounded-full bg-neutral-950">
+                      <div className="h-32 w-32 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70 p-[3px] sm:h-36 sm:w-36">
+                        <div className="h-full w-full overflow-hidden rounded-[18px] bg-neutral-950">
                           <SafeAvatar
                             src={profileData?.profile?.profilePic || null}
                             alt={`${usernameForDisplay}'s avatar`}
@@ -469,7 +473,7 @@ export default function BuyerProfilePage() {
                   <div className="mt-12 grid gap-5 sm:grid-cols-2">
                     <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
                       <div className="flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800 text-[#ffb347]">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-800/80 text-[#ffb347]">
                           <CalendarDays size={18} />
                         </span>
                         <div>
@@ -483,7 +487,7 @@ export default function BuyerProfilePage() {
 
                     <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
                       <div className="flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800 text-[#ffb347]">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-800/80 text-[#ffb347]">
                           <MapPin size={18} />
                         </span>
                         <div>
