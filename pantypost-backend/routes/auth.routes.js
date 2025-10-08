@@ -442,7 +442,7 @@ router.post('/login', async (req, res) => {
           username: user.username,
           token: EmailVerification.hashToken(verificationToken),
           verificationCode,
-          verificationType: 'login_attempt',
+          verificationType: 'signup',
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
         });
         await emailVerification.save();
