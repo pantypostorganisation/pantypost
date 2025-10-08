@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { CalendarDays, MapPin, MessageCircle } from 'lucide-react';
 import { getGlobalAuthToken } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/services/api.config';
+import { flagFromCountryName } from '@/constants/countries';
 
 /* ==== Types ==== */
 type NormalizedBuyerProfile = {
@@ -164,34 +165,6 @@ function resolveAvatarUrl(raw?: string | null): string | null {
     }
   }
   return null;
-}
-
-/** Minimal map for flag emoji */
-const COUNTRY_TO_CODE: Record<string, string> = {
-  Australia: 'AU',
-  Canada: 'CA',
-  'United States': 'US',
-  'United Kingdom': 'GB',
-  Germany: 'DE',
-  France: 'FR',
-  Japan: 'JP',
-  India: 'IN',
-  'New Zealand': 'NZ',
-};
-
-function flagFromIso2(code?: string | null): string {
-  if (!code || code.length !== 2) return '🌐';
-  const base = 0x1f1e6;
-  const A = 'A'.charCodeAt(0);
-  const chars = code.toUpperCase().split('');
-  const cps = chars.map((c) => base + (c.charCodeAt(0) - A));
-  return String.fromCodePoint(...cps);
-}
-
-function flagFromCountryName(name?: string | null): string {
-  if (!name) return '🌐';
-  const code = COUNTRY_TO_CODE[name] || null;
-  return flagFromIso2(code);
 }
 
 function isRegionalIndicator(cp?: number | null): boolean {

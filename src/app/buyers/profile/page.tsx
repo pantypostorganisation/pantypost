@@ -5,6 +5,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { getGlobalAuthToken } from '@/context/AuthContext';
 import { buildApiUrl, API_BASE_URL } from '@/services/api.config';
+import { COUNTRY_TO_CODE, flagFromCountryName } from '@/constants/countries';
 import { AlertTriangle, Loader2, MapPin, ShieldCheck, Upload } from 'lucide-react';
 
 type MeProfile = {
@@ -85,67 +86,7 @@ function getToken(): string {
 }
 
 /* Country helpers */
-const COUNTRY_TO_CODE: Record<string, string> = {
-  Australia: 'AU',
-  Canada: 'CA',
-  'United States': 'US',
-  'United Kingdom': 'GB',
-  Ireland: 'IE',
-  Germany: 'DE',
-  France: 'FR',
-  Spain: 'ES',
-  Italy: 'IT',
-  Netherlands: 'NL',
-  Belgium: 'BE',
-  Switzerland: 'CH',
-  Austria: 'AT',
-  Sweden: 'SE',
-  Norway: 'NO',
-  Denmark: 'DK',
-  Finland: 'FI',
-  Poland: 'PL',
-  Portugal: 'PT',
-  Greece: 'GR',
-  Brazil: 'BR',
-  Mexico: 'MX',
-  Argentina: 'AR',
-  Chile: 'CL',
-  Colombia: 'CO',
-  Peru: 'PE',
-  Japan: 'JP',
-  'South Korea': 'KR',
-  China: 'CN',
-  India: 'IN',
-  Indonesia: 'ID',
-  Philippines: 'PH',
-  Thailand: 'TH',
-  Vietnam: 'VN',
-  Singapore: 'SG',
-  Malaysia: 'MY',
-  'New Zealand': 'NZ',
-  'South Africa': 'ZA',
-  Nigeria: 'NG',
-  Egypt: 'EG',
-  Turkey: 'TR',
-  Israel: 'IL',
-  'United Arab Emirates': 'AE',
-  'Saudi Arabia': 'SA',
-  Ukraine: 'UA',
-  Russia: 'RU',
-};
 const COUNTRY_OPTIONS = Object.keys(COUNTRY_TO_CODE).sort((a, b) => a.localeCompare(b));
-function flagFromIso2(code?: string | null): string {
-  if (!code || code.length !== 2) return '🌐';
-  const base = 0x1f1e6;
-  const A = 'A'.charCodeAt(0);
-  const cps = code.toUpperCase().split('').map((c) => base + (c.charCodeAt(0) - A));
-  return String.fromCodePoint(...cps);
-}
-function flagFromCountryName(name?: string | null): string {
-  if (!name) return '🌐';
-  const code = COUNTRY_TO_CODE[name] || null;
-  return flagFromIso2(code);
-}
 
 export default function BuyerSelfProfilePage() {
   const [loading, setLoading] = useState(true);
