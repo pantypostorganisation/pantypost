@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Loader2, CheckCircle, XCircle, Mail } from 'lucide-react';
 import { authService } from '@/services/auth.service';
-import { useAuth } from '@/context/AuthContext';
 
 // Floating particle component - matching login/signup style
 function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: number }) {
@@ -99,7 +98,6 @@ function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: nu
 export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refreshSession } = useAuth(); // CRITICAL: Get refreshSession from AuthContext
   const [verificationStatus, setVerificationStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
   const [errorMessage, setErrorMessage] = useState('');
   const [mounted, setMounted] = useState(false);
@@ -134,17 +132,15 @@ export default function VerifyEmailPage() {
           console.log('[Verify Email] Verification successful!');
           console.log('[Verify Email] User data:', response.data.user);
           console.log('[Verify Email] Token received:', response.data.token ? 'Yes' : 'No');
+          
+          // Show success animation
           setVerificationStatus('success');
 
-          // CRITICAL FIX: Refresh AuthContext to pick up the new token
-          console.log('[Verify Email] Refreshing AuthContext session...');
-          await refreshSession();
-          console.log('[Verify Email] AuthContext refreshed - user is now logged in!');
-
-          // Now redirect to homepage - user will be logged in immediately!
+          // Wait 2 seconds to show the beautiful success animation
+          // Then do a hard reload to ensure AuthContext picks up the new token
           setTimeout(() => {
-            console.log('[Verify Email] Redirecting to homepage...');
-            router.push('/');
+            console.log('[Verify Email] Redirecting to homepage with hard reload...');
+            window.location.href = '/';
           }, 2000);
         } else {
           console.log('[Verify Email] Verification failed:', response.error);
@@ -164,7 +160,7 @@ export default function VerifyEmailPage() {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [mounted, searchParams, router, refreshSession]);
+  }, [mounted, searchParams, router]);
 
   if (!mounted) {
     return (
@@ -259,7 +255,7 @@ export default function VerifyEmailPage() {
                 </p>
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                   <p className="text-green-400 text-sm">
-                    Redirecting you to your account...
+                    Taking you to your account...
                   </p>
                 </div>
               </motion.div>
