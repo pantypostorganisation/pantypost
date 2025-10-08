@@ -261,12 +261,6 @@ export default function LoginPage() {
         if (!success) {
           setIsLoading(false);
           
-          // NEW: Try to get structured error data from auth context
-          // The auth context might have more detailed error information
-          if ((authData as any).errorDetails) {
-            setErrorData((authData as any).errorDetails);
-          }
-          
           if (!authError) {
             setError('Invalid username or password');
           }
@@ -274,12 +268,29 @@ export default function LoginPage() {
       } catch (err: any) {
         if (isDev) console.error('[Login] login() error:', err);
         
-        // NEW: Check if error has structured data
+        // CRITICAL FIX: Check if this is an email verification error
         if (err?.requiresVerification) {
-          setErrorData(err);
+          console.log('[Login] Email verification error caught:', {
+            requiresVerification: err.requiresVerification,
+            email: err.email,
+            username: err.username,
+            message: err.message
+          });
+          
+          // Set the structured error data
+          setErrorData({
+            requiresVerification: true,
+            email: err.email,
+            username: err.username
+          });
+          
+          // Set the error message
+          setError(err.message);
+        } else {
+          // Regular error
+          setError(err?.message || 'An unexpected error occurred. Please try again.');
         }
         
-        setError(err?.message || 'An unexpected error occurred. Please try again.');
         setIsLoading(false);
       }
     },
