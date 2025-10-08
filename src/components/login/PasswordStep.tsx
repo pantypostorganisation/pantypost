@@ -1,7 +1,7 @@
 // src/components/login/PasswordStep.tsx
 'use client';
 
-import { Lock, AlertCircle, Eye, EyeOff, Mail } from 'lucide-react';
+import { Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -9,7 +9,7 @@ interface PasswordStepProps {
   username: string;
   password: string;
   error: string | null;
-  errorData?: any; // Structured error data with requiresVerification, email, username
+  errorData?: any;
   onPasswordChange: (password: string) => void;
   onBack: () => void;
   onSubmit: (e?: React.FormEvent) => void;
@@ -33,7 +33,7 @@ export default function PasswordStep({
   username,
   password,
   error,
-  errorData, // NEW: Use this structured data
+  errorData,
   onPasswordChange,
   onBack,
   onSubmit,
@@ -51,14 +51,35 @@ export default function PasswordStep({
   const [showPassword, setShowPassword] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   
-  // Reset attempt flag when error changes
   useEffect(() => {
     if (!error) {
       setHasAttemptedSubmit(false);
     }
   }, [error]);
   
-  // Format wait time for display
+  useEffect(() => {
+    if (errorData?.requiresVerification) {
+      console.log('[PasswordStep] Email verification required - redirecting silently...');
+      
+      const params = new URLSearchParams();
+      
+      if (errorData?.email) {
+        params.set('email', errorData.email);
+      }
+      
+      if (errorData?.username) {
+        params.set('username', errorData.username);
+      } else {
+        params.set('username', username);
+      }
+      
+      const redirectUrl = `/verify-email-pending?${params.toString()}`;
+      console.log('[PasswordStep] Redirecting to:', redirectUrl);
+      
+      router.push(redirectUrl);
+    }
+  }, [errorData, username, router]);
+  
   const formatWaitTime = (totalSeconds: number): string => {
     if (totalSeconds < 60) {
       return `${totalSeconds} second${totalSeconds === 1 ? '' : 's'}`;
@@ -68,19 +89,15 @@ export default function PasswordStep({
     return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds} second${seconds === 1 ? '' : 's'}`;
   };
 
-  // Basic sanitization for password
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/<[^>]*>/g, ''); // Remove HTML tags
+    const value = e.target.value.replace(/<[^>]*>/g, '');
     onPasswordChange(value);
     
-    // Clear error when user starts typing after a failed attempt
     if (hasAttemptedSubmit && error) {
-      // This will trigger the parent to clear the error
       onPasswordChange(value);
     }
   };
 
-  // Handle Enter key in password field
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && password && role && !isLoading && !isRateLimited) {
       e.preventDefault();
@@ -88,7 +105,6 @@ export default function PasswordStep({
     }
   };
 
-  // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     console.log('[PasswordStep] Form submitted', { 
@@ -107,36 +123,8 @@ export default function PasswordStep({
     }
   };
 
-  // FIXED: Handle redirect to verification page using errorData
-  const handleGoToVerification = () => {
-    console.log('[PasswordStep] Redirecting to verification with errorData:', errorData);
-    
-    const params = new URLSearchParams();
-    
-    // Use errorData if available (structured error from backend)
-    if (errorData?.email) {
-      params.set('email', errorData.email);
-    }
-    
-    if (errorData?.username) {
-      params.set('username', errorData.username);
-    } else {
-      // Fallback to the username from the form
-      params.set('username', username);
-    }
-    
-    const redirectUrl = `/verify-email-pending?${params.toString()}`;
-    console.log('[PasswordStep] Redirecting to:', redirectUrl);
-    
-    router.push(redirectUrl);
-  };
-
-  // Check if this is an email verification error
-  const isEmailVerificationError = errorData?.requiresVerification || (error && error.includes('verify your email'));
-  
   return (
     <div className="transition-all duration-300">
-      {/* Back Button */}
       <button
         onClick={onBack}
         disabled={isLoading}
@@ -145,7 +133,6 @@ export default function PasswordStep({
         ← Back to username
       </button>
 
-      {/* Username Display */}
       <div className="mb-4 p-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-400">Signing in as:</span>
@@ -153,28 +140,7 @@ export default function PasswordStep({
         </div>
       </div>
 
-      {/* Email Verification Error - Special Handling */}
-      {isEmailVerificationError && (
-        <div className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg animate-in fade-in duration-200">
-          <div className="flex items-start gap-3 mb-3">
-            <Mail className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-yellow-400 mb-1">Email Verification Required</p>
-              <p className="text-xs text-gray-300">{error}</p>
-            </div>
-          </div>
-          <button
-            onClick={handleGoToVerification}
-            className="w-full py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            <Mail className="w-4 h-4" />
-            Go to Email Verification
-          </button>
-        </div>
-      )}
-
-      {/* Regular Error display - Show authentication errors prominently */}
-      {error && !error.includes('Too many') && !isEmailVerificationError && (
+      {error && !error.includes('Too many') && !errorData?.requiresVerification && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-sm text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -183,7 +149,6 @@ export default function PasswordStep({
         </div>
       )}
 
-      {/* Rate limit warning */}
       {((isRateLimited && rateLimitWaitTime > 0) || (error && error.includes('Too many'))) && (
         <div className="mb-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-orange-400">
@@ -206,7 +171,7 @@ export default function PasswordStep({
               onKeyPress={handleKeyPress}
               placeholder="Enter your password"
               className={`w-full px-4 py-3 pr-10 bg-black/50 backdrop-blur-sm border ${
-                error && !error.includes('Too many') && !isEmailVerificationError ? 'border-red-500/50' : 'border-gray-700'
+                error && !error.includes('Too many') && !errorData?.requiresVerification ? 'border-red-500/50' : 'border-gray-700'
               } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors`}
               autoFocus
               disabled={isLoading || isRateLimited}
@@ -228,7 +193,6 @@ export default function PasswordStep({
           )}
         </div>
 
-        {/* Role Selection */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-3">
             Select your role
@@ -257,7 +221,6 @@ export default function PasswordStep({
                         : 'bg-black/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-black/70'
                   }`}
                 >
-                  {/* Sheen Effect for All Role Options */}
                   <div className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12" />
                   
                   <div className="flex items-center gap-3 relative z-10">
@@ -327,7 +290,6 @@ export default function PasswordStep({
         </button>
       </form>
 
-      {/* Help text for authentication failures */}
       {error && error.includes('Invalid') && !isLoading && (
         <div className="mt-4 text-center">
           <p className="text-xs text-gray-500">

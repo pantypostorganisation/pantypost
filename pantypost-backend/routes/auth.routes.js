@@ -374,7 +374,7 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// POST /api/auth/login - UPDATED TO CHECK EMAIL VERIFICATION AND AUTO-RESEND
+// POST /api/auth/login - SILENT REDIRECT FOR EMAIL VERIFICATION
 router.post('/login', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -426,6 +426,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Check email verification status (except for admins)
+    // SILENT REDIRECT: Return special response with user data but no error message
     if (user.role !== 'admin' && !user.emailVerified) {
       // AUTO-RESEND verification email when user tries to login
       try {
@@ -460,11 +461,12 @@ router.post('/login', async (req, res) => {
         console.error('Failed to auto-send verification email:', emailError);
       }
       
+      // MODIFIED: Return success=false but with special flag for silent redirect
       return res.status(403).json({
         success: false,
         error: {
           code: 'EMAIL_VERIFICATION_REQUIRED',
-          message: 'Please verify your email before logging in. We just sent you a new verification link - check your inbox!',
+          message: '', // EMPTY MESSAGE - frontend will handle redirect silently
           requiresVerification: true,
           email: user.email,
           username: user.username

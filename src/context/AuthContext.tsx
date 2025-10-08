@@ -592,24 +592,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           return true;
         } else {
-          // CRITICAL FIX: Check for email verification error in response
+          // MODIFIED: Check for email verification error - throw silently without message
           const errorObj = response.error || (response as any);
           
           if (errorObj.code === 'EMAIL_VERIFICATION_REQUIRED' || errorObj.requiresVerification) {
-            // Throw structured error for email verification
-            const verificationError: any = new Error(
-              errorObj.message || 'Please verify your email before logging in.'
-            );
+            // Throw structured error for email verification WITHOUT setting error message
+            const verificationError: any = new Error('EMAIL_VERIFICATION_REQUIRED');
             verificationError.requiresVerification = true;
             verificationError.email = errorObj.email;
             verificationError.username = errorObj.username;
             
-            console.log('[Auth] Email verification required:', verificationError);
+            console.log('[Auth] Email verification required - silent redirect:', verificationError);
             
-            setError(verificationError.message);
             setLoading(false);
             
-            // Throw the error so the login page can catch it with structured data
+            // Throw the error so the login page can catch it and redirect
             throw verificationError;
           }
           
@@ -621,7 +618,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error: any) {
         console.error('[Auth] Login error:', error);
         
-        // If this is already a structured error (like email verification), re-throw it
+        // If this is an email verification error, re-throw it for silent redirect
         if (error.requiresVerification) {
           throw error;
         }
