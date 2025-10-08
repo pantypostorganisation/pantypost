@@ -209,14 +209,14 @@ function SafeAvatar({
     typeof url === 'string' &&
     (url.startsWith('https://res.cloudinary.com') || url.startsWith('http://res.cloudinary.com'));
   if (url && isCloudinary) {
-    return <Image src={url} alt={alt} fill sizes="112px" className="rounded-[18px] object-cover" priority={false} />;
+    return <Image src={url} alt={alt} fill sizes="112px" className="rounded-full object-cover" priority={false} />;
   }
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={alt} className="h-full w-full rounded-[18px] object-cover" />;
+    return <img src={url} alt={alt} className="h-full w-full rounded-full object-cover" />;
   }
   return (
-    <div className="flex h-full w-full items-center justify-center rounded-[18px] bg-neutral-800 text-2xl">
+    <div className="flex h-full w-full items-center justify-center rounded-full bg-neutral-800 text-2xl">
       {letterFallback}
     </div>
   );
@@ -421,8 +421,8 @@ export default function BuyerProfilePage() {
                 <>
                   <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
                     <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
-                      <div className="h-32 w-32 overflow-hidden rounded-2xl border border-white/10 bg-neutral-900/70 p-[3px] sm:h-36 sm:w-36">
-                        <div className="h-full w-full overflow-hidden rounded-[18px] bg-neutral-950">
+                      <div className="flex h-32 w-32 items-center justify-center rounded-2xl border border-white/10 bg-neutral-900/70 p-3 sm:h-36 sm:w-36">
+                        <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-[#a855f7] bg-neutral-950 shadow-[0_0_32px_-18px_rgba(168,85,247,0.8)]">
                           <SafeAvatar
                             src={profileData?.profile?.profilePic || null}
                             alt={`${usernameForDisplay}'s avatar`}
