@@ -8,7 +8,6 @@ import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import type { KeyboardEvent } from 'react';
 import {
   Bell,
   ShoppingBag,
@@ -30,15 +29,14 @@ import {
   Ban,
   Menu,
   X,
-  Search,
-  Loader2,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { storageService, usersService } from '@/services';
+import { storageService } from '@/services';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
-import { sanitizeStrict, sanitizeSearchQuery } from '@/utils/security/sanitization';
+import { sanitizeStrict } from '@/utils/security/sanitization';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
+import { HeaderSearch } from '@/components/HeaderSearch';
 
 type UINotification = {
   id: string;
@@ -46,13 +44,6 @@ type UINotification = {
   timestamp?: string | Date;
   cleared: boolean;
   source: 'legacy' | 'ctx';
-};
-
-type SearchUserResult = {
-  username: string;
-  role: 'buyer' | 'seller';
-  profilePicture: string | null;
-  isVerified: boolean;
 };
 
 const useClickOutside = (ref: React.RefObject<HTMLElement | null>, callback: () => void) => {
@@ -119,28 +110,16 @@ export default function Header(): React.ReactElement | null {
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
-  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [mobileSearchFocused, setMobileSearchFocused] = useState(false); // Track mobile search focus
 
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
 
   const notifRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
-  const searchDesktopRef = useRef<HTMLDivElement | null>(null);
-  const searchMobileRef = useRef<HTMLDivElement | null>(null);
-  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const desktopSearchInputRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
   const hasRefreshedAdminData = useRef(false);
-  const latestSearchId = useRef(0);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
@@ -152,13 +131,6 @@ export default function Header(): React.ReactElement | null {
     setMobileMenuOpen(false);
     setShowMobileNotifications(false);
   });
-  
-  const handleCloseSearch = useCallback(() => {
-    setShowSearchDropdown(false);
-  }, []);
-  
-  useClickOutside(searchDesktopRef, handleCloseSearch);
-  useClickOutside(searchMobileRef, handleCloseSearch);
 
   // Mobile detection
   useEffect(() => {
@@ -171,11 +143,11 @@ export default function Header(): React.ReactElement | null {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // FIX: Only lock scroll for mobile menu, NOT for search dropdown
+  // Body scroll lock for mobile menu only
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
-    // Only lock when mobile menu or notifications are open, NOT search dropdown
+    // Only lock when mobile menu or notifications are open
     if (isMobile && (mobileMenuOpen || showMobileNotifications)) {
       const scrollY = window.scrollY;
       document.body.style.position = 'fixed';
@@ -199,335 +171,7 @@ export default function Header(): React.ReactElement | null {
       document.body.style.width = '';
       document.body.style.overflow = '';
     };
-  }, [isMobile, mobileMenuOpen, showMobileNotifications]); // Removed showSearchDropdown
-
-  // Search functionality with debouncing
-  useEffect(() => {
-    if (!canUseSearch) {
-      setIsSearchingUsers(false);
-      setSearchResults([]);
-      setSearchError(null);
-      setShowSearchDropdown(false);
-      return;
-    }
-
-    const sanitizedQuery = sanitizeSearchQuery(searchQuery).trim();
-
-    if (!sanitizedQuery) {
-      setIsSearchingUsers(false);
-      setSearchResults([]);
-      setSearchError(null);
-      setShowSearchDropdown(false);
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    if (sanitizedQuery.length < 3) {
-      // Don't hide dropdown immediately to prevent focus loss
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    let cancelled = false;
-    const searchId = ++latestSearchId.current;
-
-    setIsSearchingUsers(true);
-    setSearchError(null);
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-
-    const debounceTime = isMobile ? 700 : 300; // Longer debounce for mobile
-    
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const response = await usersService.getUsers({ query: sanitizedQuery, limit: 8 });
-        if (cancelled || latestSearchId.current !== searchId) return;
-
-        if (response.success && response.data) {
-          const mappedResults = Object.values(response.data)
-            .filter((rawUser) => rawUser && (rawUser.role === 'buyer' || rawUser.role === 'seller'))
-            .map((rawUser) => {
-              const safeUsername = sanitizeStrict(rawUser.username);
-              if (!safeUsername) {
-                return null;
-              }
-
-              const picture =
-                rawUser.profilePicture ||
-                (rawUser as unknown as { profilePic?: string | null })?.profilePic ||
-                null;
-              const verified = Boolean(rawUser.isVerified || rawUser.verificationStatus === 'verified');
-
-              return {
-                username: safeUsername,
-                role: rawUser.role,
-                profilePicture: picture,
-                isVerified: verified,
-              } as SearchUserResult;
-            })
-            .filter((result): result is SearchUserResult => Boolean(result));
-
-          if (mappedResults.length === 0) {
-            setSearchResults([]);
-            setSearchError('No matching users found');
-          } else {
-            setSearchResults(mappedResults.slice(0, 8));
-            setSearchError(null);
-          }
-          
-          // Show dropdown after results are ready
-          if (mappedResults.length > 0 || searchError) {
-            setShowSearchDropdown(true);
-          }
-        } else {
-          setSearchResults([]);
-          setSearchError('No matching users found');
-          setShowSearchDropdown(true);
-        }
-      } catch (error) {
-        console.error('User search error:', error);
-        if (!cancelled && latestSearchId.current === searchId) {
-          setSearchResults([]);
-          setSearchError('Unable to search users right now');
-        }
-      } finally {
-        if (!cancelled && latestSearchId.current === searchId) {
-          setIsSearchingUsers(false);
-        }
-      }
-    }, debounceTime);
-
-    return () => {
-      cancelled = true;
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-        searchTimeoutRef.current = null;
-      }
-    };
-  }, [searchQuery, canUseSearch, isMobile]);
-
-  // FIX: Maintain mobile search input focus
-  useEffect(() => {
-    if (mobileSearchFocused && mobileSearchInputRef.current) {
-      // Re-focus the input if it lost focus during render
-      const activeElement = document.activeElement;
-      if (activeElement !== mobileSearchInputRef.current) {
-        mobileSearchInputRef.current.focus();
-      }
-    }
-  }, [mobileSearchFocused, searchResults]); // Re-run when search results change
-
-  // Close search dropdown when mobile menu closes
-  useEffect(() => {
-    if (!mobileMenuOpen) {
-      setShowSearchDropdown(false);
-    }
-  }, [mobileMenuOpen]);
-
-  // FIX: Improved input handler - no character limit
-  const handleSearchInputChange = useCallback((value: string) => {
-    if (!canUseSearch) return;
-    
-    const sanitizedValue = sanitizeSearchQuery(value);
-    setSearchQuery(sanitizedValue);
-    
-    // Don't change dropdown state while typing to prevent re-renders
-    // Let the search effect handle showing dropdown
-  }, [canUseSearch]);
-
-  // FIX: Better focus handling
-  const handleSearchFocus = useCallback(() => {
-    if (!canUseSearch) return;
-    
-    const trimmed = searchQuery.trim();
-    if (trimmed.length >= 3 && searchResults.length > 0) {
-      setShowSearchDropdown(true);
-    }
-  }, [searchQuery, searchResults, canUseSearch]);
-
-  const resetSearchState = useCallback(() => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setSearchError(null);
-    setIsSearchingUsers(false);
-    setShowSearchDropdown(false);
-    setMobileSearchFocused(false); // Reset focus state
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-      searchTimeoutRef.current = null;
-    }
-  }, []);
-
-  const getProfilePath = useCallback((result: SearchUserResult) => {
-    const encodedUsername = encodeURIComponent(result.username);
-    return result.role === 'seller' ? `/sellers/${encodedUsername}` : `/buyers/${encodedUsername}`;
-  }, []);
-
-  // FIX: Improved navigation - use window.location for mobile reliability
-  const navigateToResult = useCallback(
-    (result: SearchUserResult, closeMenu?: boolean) => {
-      const path = getProfilePath(result);
-      
-      // Reset search state first
-      resetSearchState();
-      
-      // Close mobile menu if needed
-      if (closeMenu) {
-        setMobileMenuOpen(false);
-        setShowMobileNotifications(false);
-      }
-      
-      // Use window.location.href for better mobile compatibility
-      // Safari on iOS sometimes has issues with router.push
-      if (isMobile) {
-        window.location.href = path;
-      } else {
-        router.push(path);
-      }
-    },
-    [getProfilePath, resetSearchState, router, isMobile],
-  );
-
-  const handleSearchKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLInputElement>) => {
-      if (!canUseSearch) return;
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        handleCloseSearch();
-        (event.target as HTMLInputElement).blur();
-        return;
-      }
-
-      if (event.key === 'Enter') {
-        const firstResult = searchResults[0];
-        if (firstResult) {
-          event.preventDefault();
-          navigateToResult(firstResult, isMobile && mobileMenuOpen);
-        }
-      }
-    },
-    [handleCloseSearch, searchResults, navigateToResult, isMobile, mobileMenuOpen, canUseSearch],
-  );
-
-  const handleClearSearch = useCallback(() => {
-    resetSearchState();
-    if (isMobile && mobileSearchInputRef.current) {
-      mobileSearchInputRef.current.focus();
-    } else if (desktopSearchInputRef.current) {
-      desktopSearchInputRef.current.focus();
-    }
-  }, [resetSearchState, isMobile]);
-
-  const shouldShowSearchDropdown =
-    canUseSearch && 
-    showSearchDropdown && 
-    searchQuery.trim().length >= 3 && 
-    (isSearchingUsers || searchResults.length > 0 || searchError !== null);
-    
-  const trimmedSearchQuery = searchQuery.trim();
-  const hasMinimumSearchTerm = trimmedSearchQuery.length >= 3;
-
-  const renderSearchDropdown = (variant: 'desktop' | 'mobile') => {
-    if (!canUseSearch || !shouldShowSearchDropdown) return null;
-
-    return (
-      <div
-        className={`absolute top-full left-0 right-0 mt-2 z-50 overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
-          variant === 'desktop' ? 'max-h-80' : 'max-h-72'
-        }`}
-      >
-        {isSearchingUsers && (
-          <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300">
-            <Loader2 className="w-4 h-4 animate-spin text-[#ff950e]" />
-            <span>Searching users...</span>
-          </div>
-        )}
-
-        {!isSearchingUsers && searchResults.length > 0 && (
-          <ul className="max-h-72 overflow-y-auto divide-y divide-[#ff950e]/10" role="listbox">
-            {searchResults.map((result) => {
-              const initial = result.username.charAt(0).toUpperCase();
-              const roleLabel = result.role === 'seller' ? 'Seller profile' : 'Buyer profile';
-
-              return (
-                <li key={`${result.role}-${result.username}`}>
-                  <button
-                    type="button"
-                    role="option"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      // Small delay to ensure state updates properly on mobile
-                      setTimeout(() => {
-                        navigateToResult(result, variant === 'mobile' && mobileMenuOpen);
-                      }, 0);
-                    }}
-                    onTouchEnd={(e) => {
-                      // Better mobile touch handling
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setTimeout(() => {
-                        navigateToResult(result, variant === 'mobile' && mobileMenuOpen);
-                      }, 0);
-                    }}
-                    className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10 text-left"
-                  >
-                    <div className="w-10 h-10 rounded-full border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/10 to-[#ff6b00]/10 flex items-center justify-center overflow-hidden shadow-inner">
-                      {result.profilePicture ? (
-                        <img
-                          src={result.profilePicture}
-                          alt={`${result.username}'s avatar`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-sm font-semibold text-[#ff950e]">{initial}</span>
-                      )}
-                    </div>
-
-                    <div className="flex-1 text-left">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm font-semibold text-white">{result.username}</span>
-                        {result.role === 'seller' && result.isVerified && (
-                          <img
-                            src="/verification_badge.png"
-                            alt="Verified"
-                            className="w-4 h-4"
-                          />
-                        )}
-                      </div>
-                      <span className="text-xs uppercase tracking-wide text-gray-400">{roleLabel}</span>
-                    </div>
-
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-[#ff950e] bg-[#ff950e]/10 px-2 py-0.5 rounded-full">
-                      View
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {!isSearchingUsers && searchError && searchResults.length === 0 && (
-          <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-400">
-            <Search className="w-4 h-4 text-[#ff950e]" />
-            <span>{searchError}</span>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ... rest of component calculation remains the same ...
+  }, [isMobile, mobileMenuOpen, showMobileNotifications]);
 
   const pendingOrdersCount = useMemo(() => {
     if (!user?.username || user.role !== 'seller') return 0;
@@ -655,8 +299,6 @@ export default function Header(): React.ReactElement | null {
     if (isAdminUser && user) return adminBalance || 0;
     return 0;
   }, [isAdminUser, user, adminBalance, balanceUpdateTrigger]);
-
-  // ... rest of useEffects and handlers remain the same ...
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1041,66 +683,14 @@ export default function Header(): React.ReactElement | null {
 
             {canUseSearch && (
               <div className="p-4 border-b border-[#ff950e]/20">
-                <div ref={searchMobileRef} className="relative group">
-                  <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/15 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
-                  <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
-                    <input
-                      ref={mobileSearchInputRef}
-                      type="search" // Changed from "text" to "search" for better mobile support
-                      inputMode="search" // Changed to "search" for better keyboard
-                      value={searchQuery}
-                      onChange={(event) => {
-                        handleSearchInputChange(event.target.value);
-                      }}
-                      onFocus={(event) => {
-                        event.preventDefault(); // Prevent default focus behavior
-                        setMobileSearchFocused(true); // Track focus state
-                        handleSearchFocus();
-                      }}
-                      onBlur={(event) => {
-                        // Don't hide dropdown when clicking on results
-                        if (!event.relatedTarget?.closest('[role="option"]')) {
-                          setTimeout(() => {
-                            if (!document.activeElement?.closest('[role="listbox"]')) {
-                              setShowSearchDropdown(false);
-                              setMobileSearchFocused(false); // Clear focus state
-                            }
-                          }, 200);
-                        }
-                      }}
-                      onKeyDown={handleSearchKeyDown}
-                      placeholder="Search buyers and sellers..."
-                      style={{ 
-                        fontSize: '16px', // Prevent iOS zoom
-                        WebkitAppearance: 'none', // Remove iOS styling
-                        appearance: 'none'
-                      }}
-                      className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
-                      aria-label="Search users"
-                      aria-expanded={shouldShowSearchDropdown}
-                      aria-autocomplete="list"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      spellCheck="false"
-                    />
-                    {trimmedSearchQuery && (
-                      <button
-                        type="button"
-                        onClick={handleClearSearch}
-                        className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                        aria-label="Clear search"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {isSearchingUsers && hasMinimumSearchTerm && (
-                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
-                    )}
-                  </div>
-                  {renderSearchDropdown('mobile')}
-                </div>
+                <HeaderSearch 
+                  variant="mobile" 
+                  canUseSearch={canUseSearch}
+                  onResultClick={() => {
+                    setMobileMenuOpen(false);
+                    setShowMobileNotifications(false);
+                  }}
+                />
               </div>
             )}
 
@@ -1228,7 +818,6 @@ export default function Header(): React.ReactElement | null {
 
   if (pathname === '/login' || pathname === '/signup') return null;
 
-  // Continue with rest of the component JSX (desktop search, navigation, etc.)
   return (
     <>
       <header className="bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#0a0a0a] text-white shadow-2xl px-4 lg:px-6 py-3 flex items-center gap-3 w-full z-40 relative border-b border-[#ff950e]/20 backdrop-blur-sm">
@@ -1241,44 +830,10 @@ export default function Header(): React.ReactElement | null {
 
         {canUseSearch && (
           <div className="hidden md:flex flex-1 px-4 max-w-md">
-            <div ref={searchDesktopRef} className="relative w-full group">
-              <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/10 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
-                <input
-                  ref={desktopSearchInputRef}
-                  type="text"
-                  inputMode="text"
-                  value={searchQuery}
-                  onChange={(event) => handleSearchInputChange(event.target.value)}
-                  onFocus={handleSearchFocus}
-                  onKeyDown={handleSearchKeyDown}
-                  placeholder="Search buyers and sellers..."
-                  className="w-full bg-[#111111] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200 shadow-inner"
-                  aria-label="Search users"
-                  aria-expanded={shouldShowSearchDropdown}
-                  aria-autocomplete="list"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck="false"
-                />
-                {trimmedSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={handleClearSearch}
-                    className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {isSearchingUsers && hasMinimumSearchTerm && (
-                  <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
-                )}
-              </div>
-              {renderSearchDropdown('desktop')}
-            </div>
+            <HeaderSearch 
+              variant="desktop" 
+              canUseSearch={canUseSearch} 
+            />
           </div>
         )}
 
