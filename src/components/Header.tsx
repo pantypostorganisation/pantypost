@@ -139,7 +139,6 @@ export default function Header(): React.ReactElement | null {
   const lastAuctionCheck = useRef(0);
   const hasRefreshedAdminData = useRef(false);
   const latestSearchId = useRef(0);
-  const isTypingRef = useRef(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isAdminUser = isAdmin(user);
@@ -160,7 +159,7 @@ export default function Header(): React.ReactElement | null {
   useClickOutside(searchDesktopRef, handleCloseSearch);
   useClickOutside(searchMobileRef, handleCloseSearch);
 
-  // FIX 1: Better mobile detection and overflow management
+  // Mobile detection
   useEffect(() => {
     const checkMobile = () => {
       const mobile = window.innerWidth < 768;
@@ -171,19 +170,18 @@ export default function Header(): React.ReactElement | null {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // FIX 2: Improved body scroll lock - only when mobile menu OR mobile notifications are shown
+  // FIX: Only lock scroll for mobile menu, NOT for search dropdown
   useEffect(() => {
     if (typeof window === 'undefined') return;
     
+    // Only lock when mobile menu or notifications are open, NOT search dropdown
     if (isMobile && (mobileMenuOpen || showMobileNotifications)) {
-      // Save current scroll position
       const scrollY = window.scrollY;
       document.body.style.position = 'fixed';
       document.body.style.top = `-${scrollY}px`;
       document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
     } else {
-      // Restore scroll position
       const scrollY = document.body.style.top;
       document.body.style.position = '';
       document.body.style.top = '';
@@ -200,9 +198,9 @@ export default function Header(): React.ReactElement | null {
       document.body.style.width = '';
       document.body.style.overflow = '';
     };
-  }, [isMobile, mobileMenuOpen, showMobileNotifications]);
+  }, [isMobile, mobileMenuOpen, showMobileNotifications]); // Removed showSearchDropdown
 
-  // FIX 3: Debounced search with better mobile handling
+  // Search functionality with debouncing
   useEffect(() => {
     if (!canUseSearch) {
       setIsSearchingUsers(false);
@@ -241,12 +239,10 @@ export default function Header(): React.ReactElement | null {
     setIsSearchingUsers(true);
     setSearchError(null);
 
-    // Clear existing timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // FIX: Longer debounce for mobile (500ms vs 300ms)
     const debounceTime = isMobile ? 500 : 300;
     
     searchTimeoutRef.current = setTimeout(async () => {
@@ -285,6 +281,11 @@ export default function Header(): React.ReactElement | null {
             setSearchResults(mappedResults.slice(0, 8));
             setSearchError(null);
           }
+          
+          // FIX: Show dropdown after results are ready
+          if (mappedResults.length > 0) {
+            setShowSearchDropdown(true);
+          }
         } else {
           setSearchResults([]);
           setSearchError('No matching users found');
@@ -318,46 +319,30 @@ export default function Header(): React.ReactElement | null {
     }
   }, [mobileMenuOpen]);
 
-  // FIX 4: Improved search input handling for mobile
+  // FIX: Improved input handler - no character limit
   const handleSearchInputChange = useCallback((value: string) => {
     if (!canUseSearch) return;
-
-    isTypingRef.current = true;
+    
     const sanitizedValue = sanitizeSearchQuery(value);
     setSearchQuery(sanitizedValue);
-
-    const trimmed = sanitizedValue.trim();
-
-    // FIX: Don't auto-show dropdown while typing on mobile
-    if (trimmed.length >= 3 && !isMobile) {
-      setShowSearchDropdown(true);
-    } else if (trimmed.length === 0) {
+    
+    // Show dropdown when we have enough characters
+    if (sanitizedValue.trim().length >= 3) {
+      // Results will show dropdown when ready
+    } else {
       setShowSearchDropdown(false);
     }
+  }, [canUseSearch]);
 
-    // FIX: Longer timeout for mobile typing indicator
-    const timeout = isMobile ? 200 : 100;
-    setTimeout(() => {
-      isTypingRef.current = false;
-    }, timeout);
-  }, [canUseSearch, isMobile]);
-
-  // FIX 5: Better focus handling for mobile
+  // FIX: Better focus handling
   const handleSearchFocus = useCallback(() => {
     if (!canUseSearch) return;
-
+    
     const trimmed = searchQuery.trim();
-    if (trimmed && trimmed.length >= 3) {
-      // FIX: Small delay before showing dropdown on mobile to prevent bounce
-      if (isMobile) {
-        setTimeout(() => {
-          setShowSearchDropdown(true);
-        }, 100);
-      } else {
-        setShowSearchDropdown(true);
-      }
+    if (trimmed.length >= 3 && searchResults.length > 0) {
+      setShowSearchDropdown(true);
     }
-  }, [searchQuery, canUseSearch, isMobile]);
+  }, [searchQuery, searchResults, canUseSearch]);
 
   const resetSearchState = useCallback(() => {
     setSearchQuery('');
@@ -371,44 +356,27 @@ export default function Header(): React.ReactElement | null {
     }
   }, []);
 
-  // FIX 6: Improved navigation handler
-  const prepareForNavigation = useCallback(
-    (closeMenu?: boolean) => {
-      // Clear search state
-      resetSearchState();
-      
-      // Close menus if requested
-      if (closeMenu) {
-        setMobileMenuOpen(false);
-        setShowMobileNotifications(false);
-      }
-    },
-    [resetSearchState],
-  );
-
   const getProfilePath = useCallback((result: SearchUserResult) => {
     const encodedUsername = encodeURIComponent(result.username);
     return result.role === 'seller' ? `/sellers/${encodedUsername}` : `/buyers/${encodedUsername}`;
   }, []);
 
-  // FIX 7: Better navigation with proper async handling
+  // FIX: Improved navigation
   const navigateToResult = useCallback(
-    (result: SearchUserResult, options?: { closeMenu?: boolean }) => {
+    (result: SearchUserResult, closeMenu?: boolean) => {
       const path = getProfilePath(result);
       
-      // Close everything first
-      if (options?.closeMenu) {
+      // Reset search state first
+      resetSearchState();
+      
+      // Close mobile menu if needed
+      if (closeMenu) {
         setMobileMenuOpen(false);
         setShowMobileNotifications(false);
       }
       
-      // Reset search
-      resetSearchState();
-      
-      // Small delay to ensure state updates before navigation
-      setTimeout(() => {
-        router.push(path);
-      }, 50);
+      // Navigate immediately
+      router.push(path);
     },
     [getProfilePath, resetSearchState, router],
   );
@@ -428,7 +396,7 @@ export default function Header(): React.ReactElement | null {
         const firstResult = searchResults[0];
         if (firstResult) {
           event.preventDefault();
-          navigateToResult(firstResult, { closeMenu: isMobile && mobileMenuOpen });
+          navigateToResult(firstResult, isMobile && mobileMenuOpen);
         }
       }
     },
@@ -437,11 +405,10 @@ export default function Header(): React.ReactElement | null {
 
   const handleClearSearch = useCallback(() => {
     resetSearchState();
-    // FIX: Better focus handling on mobile
     if (isMobile && mobileSearchInputRef.current) {
-      setTimeout(() => {
-        mobileSearchInputRef.current?.focus();
-      }, 100);
+      mobileSearchInputRef.current.focus();
+    } else if (desktopSearchInputRef.current) {
+      desktopSearchInputRef.current.focus();
     }
   }, [resetSearchState, isMobile]);
 
@@ -449,7 +416,7 @@ export default function Header(): React.ReactElement | null {
     canUseSearch && 
     showSearchDropdown && 
     searchQuery.trim().length >= 3 && 
-    (isSearchingUsers || searchResults.length > 0);
+    (isSearchingUsers || searchResults.length > 0 || searchError !== null);
     
   const trimmedSearchQuery = searchQuery.trim();
   const hasMinimumSearchTerm = trimmedSearchQuery.length >= 3;
@@ -462,10 +429,6 @@ export default function Header(): React.ReactElement | null {
         className={`absolute top-full left-0 right-0 mt-2 z-50 overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
           variant === 'desktop' ? 'max-h-80' : 'max-h-72'
         }`}
-        style={{ 
-          // FIX: Prevent dropdown from causing scroll on mobile
-          ...(variant === 'mobile' && { position: 'absolute', top: '100%', left: 0, right: 0 })
-        }}
       >
         {isSearchingUsers && (
           <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300">
@@ -488,7 +451,7 @@ export default function Header(): React.ReactElement | null {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      navigateToResult(result, { closeMenu: variant === 'mobile' });
+                      navigateToResult(result, variant === 'mobile' && mobileMenuOpen);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10 text-left"
                   >
@@ -538,7 +501,7 @@ export default function Header(): React.ReactElement | null {
     );
   };
 
-  // ... rest of the component remains the same, but I'll include key sections for completeness
+  // ... rest of component calculation remains the same ...
 
   const pendingOrdersCount = useMemo(() => {
     if (!user?.username || user.role !== 'seller') return 0;
@@ -666,6 +629,8 @@ export default function Header(): React.ReactElement | null {
     if (isAdminUser && user) return adminBalance || 0;
     return 0;
   }, [isAdminUser, user, adminBalance, balanceUpdateTrigger]);
+
+  // ... rest of useEffects and handlers remain the same ...
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1069,7 +1034,7 @@ export default function Header(): React.ReactElement | null {
                       }}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search buyers and sellers..."
-                      style={{ fontSize: '16px' }}
+                      style={{ fontSize: '16px' }} // FIX: Prevent iOS zoom
                       className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
                       aria-label="Search users"
                       aria-expanded={shouldShowSearchDropdown}
@@ -1222,6 +1187,7 @@ export default function Header(): React.ReactElement | null {
 
   if (pathname === '/login' || pathname === '/signup') return null;
 
+  // Continue with rest of the component JSX (desktop search, navigation, etc.)
   return (
     <>
       <header className="bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#0a0a0a] text-white shadow-2xl px-4 lg:px-6 py-3 flex items-center gap-3 w-full z-40 relative border-b border-[#ff950e]/20 backdrop-blur-sm">
