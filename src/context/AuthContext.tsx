@@ -626,7 +626,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             deriveExpiry(
               // try common fields the backend might send
               response.data.expiresIn ?? response.data.tokenExpiresIn,
-              7 * 24 * 60 * 60 * 1000 // fallback 7 days
+              31 * 24 * 60 * 60 * 1000 // fallback 31 days
             );
 
           const tokens: AuthTokens = {
