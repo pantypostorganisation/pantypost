@@ -181,11 +181,12 @@ export default function Header(): React.ReactElement | null {
       return;
     }
 
-    // CHANGED: Minimum 3 characters instead of 2
     if (sanitizedQuery.length < 3) {
       setIsSearchingUsers(false);
       setSearchResults([]);
       setSearchError('Type at least 3 characters to search');
+      // KEY FIX: Don't show dropdown for error message
+      setShowSearchDropdown(false);
       return;
     }
 
@@ -276,22 +277,20 @@ export default function Header(): React.ReactElement | null {
       return;
     }
 
-    setShowSearchDropdown(true);
-
-    // CHANGED: Minimum 3 characters instead of 2
-    if (trimmed.length < 3) {
-      setSearchResults([]);
-      setIsSearchingUsers(false);
-      setSearchError('Type at least 3 characters to search');
+    // KEY FIX: Only show dropdown when we have 3+ characters
+    if (trimmed.length >= 3) {
+      setShowSearchDropdown(true);
     } else {
-      setSearchError(null);
+      setShowSearchDropdown(false);
     }
   }, [canUseSearch]);
 
   const handleSearchFocus = useCallback(() => {
     if (!canUseSearch) return;
 
-    if (searchQuery.trim()) {
+    const trimmed = searchQuery.trim();
+    // KEY FIX: Only show dropdown if we have 3+ characters
+    if (trimmed && trimmed.length >= 3) {
       setShowSearchDropdown(true);
     }
   }, [searchQuery, canUseSearch]);
@@ -353,7 +352,6 @@ export default function Header(): React.ReactElement | null {
 
   const handleClearSearch = useCallback(() => {
     resetSearchState();
-    // Keep focus on mobile input
     if (mobileSearchInputRef.current && isMobile) {
       setTimeout(() => {
         mobileSearchInputRef.current?.focus();
@@ -361,10 +359,14 @@ export default function Header(): React.ReactElement | null {
     }
   }, [resetSearchState, isMobile]);
 
+  // KEY FIX: Only show dropdown when we have meaningful content AND 3+ characters
   const shouldShowSearchDropdown =
-    canUseSearch && showSearchDropdown && (isSearchingUsers || !!searchError || searchResults.length > 0);
+    canUseSearch && 
+    showSearchDropdown && 
+    searchQuery.trim().length >= 3 && 
+    (isSearchingUsers || searchResults.length > 0);
+    
   const trimmedSearchQuery = searchQuery.trim();
-  // CHANGED: Minimum 3 characters instead of 2
   const hasMinimumSearchTerm = trimmedSearchQuery.length >= 3;
 
   const renderSearchDropdown = (variant: 'desktop' | 'mobile') => {
@@ -444,7 +446,6 @@ export default function Header(): React.ReactElement | null {
     if (!user?.username || user.role !== 'seller') return 0;
     
     try {
-      // Filter orders for this seller that are not yet shipped
       const sellerOrders = orderHistory.filter(order => 
         order.seller === user.username && 
         (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
@@ -465,13 +466,10 @@ export default function Header(): React.ReactElement | null {
     const addNotificationEmojis = (message: string): string => {
       const sanitizedMessage = sanitizeStrict(message);
       
-      // Check if the message already starts with emoji characters
-      // If it does, return it as-is (backend already added emojis)
       if (sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
         return sanitizedMessage;
       }
       
-      // Only add emojis if they're not already present
       if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
       if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `💸 ${sanitizedMessage}`;
       if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
@@ -493,7 +491,7 @@ export default function Header(): React.ReactElement | null {
       for (const n of notifications) {
         const cleanMessage = (n.message || '').replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
         const timestamp = new Date(n.timestamp || Date.now());
-        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000)); // 1 minute window
+        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000));
         const key = `${cleanMessage}_${timeWindow}`;
 
         if (!seen.has(key)) {
@@ -687,7 +685,6 @@ export default function Header(): React.ReactElement | null {
     }
   }, [isAdminUser]);
 
-  // Add these handler functions for notifications
   const handleClearOne = useCallback((notification: UINotification) => {
     if (notification.source === 'legacy') {
       clearSellerNotification(notification.id);
@@ -721,7 +718,6 @@ export default function Header(): React.ReactElement | null {
         ctxClearNotification(notification.id);
       }
     });
-    // Also call the context clear all
     ctxClearAll();
     setTimeout(() => setClearingNotifications(false), 500);
   }, [processedNotifications.active, clearSellerNotification, ctxClearNotification, ctxClearAll]);
@@ -735,7 +731,6 @@ export default function Header(): React.ReactElement | null {
         ctxDeleteNotification(notification.id);
       }
     });
-    // Also call the context delete all cleared
     ctxDeleteAllCleared();
     setTimeout(() => setDeletingNotifications(false), 500);
   }, [processedNotifications.cleared, permanentlyDeleteSellerNotification, ctxDeleteNotification, ctxDeleteAllCleared]);
@@ -777,13 +772,12 @@ export default function Header(): React.ReactElement | null {
       window.removeEventListener('auctionEnded', handleAuctionEnd);
       window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
     };
-  }, []); // once
+  }, []);
 
   useEffect(() => {
     if (showNotifDropdown) setActiveNotifTab('active');
   }, [showNotifDropdown]);
 
-  // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (mobileMenuOpen) {
       document.body.style.overflow = 'hidden';
@@ -912,7 +906,6 @@ export default function Header(): React.ReactElement | null {
 
   const MobileMenu = () => (
     <>
-      {/* Backdrop */}
       <div 
         className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${
           mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -920,7 +913,6 @@ export default function Header(): React.ReactElement | null {
         onClick={() => setMobileMenuOpen(false)}
       />
       
-      {/* Menu Panel */}
       <div
         ref={mobileMenuRef}
         className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-50 lg:hidden transform transition-transform duration-300 ease-in-out ${
@@ -932,7 +924,6 @@ export default function Header(): React.ReactElement | null {
           <MobileNotificationsPanel />
         ) : (
           <>
-            {/* Header with Centered Logo */}
             <div className="relative p-6 border-b border-[#ff950e]/30">
               <button
                 onClick={() => setMobileMenuOpen(false)}
@@ -946,7 +937,6 @@ export default function Header(): React.ReactElement | null {
               </div>
             </div>
 
-            {/* User Info Section */}
             {user && (
               <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
                 <div className="flex items-center gap-3">
@@ -974,8 +964,14 @@ export default function Header(): React.ReactElement | null {
                       type="text"
                       inputMode="text"
                       value={searchQuery}
-                      onChange={(event) => handleSearchInputChange(event.target.value)}
-                      onFocus={handleSearchFocus}
+                      onChange={(event) => {
+                        event.stopPropagation();
+                        handleSearchInputChange(event.target.value);
+                      }}
+                      onFocus={(event) => {
+                        event.stopPropagation();
+                        handleSearchFocus();
+                      }}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search buyers and sellers..."
                       className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
@@ -1006,7 +1002,6 @@ export default function Header(): React.ReactElement | null {
               </div>
             )}
 
-            {/* Navigation Links */}
             <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
               {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
 
@@ -1039,7 +1034,6 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
                   {renderMobileLink('/wallet/seller', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
                   
-                  {/* Notifications for Sellers */}
                   <button
                     onClick={() => setShowMobileNotifications(true)}
                     className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1 w-full"
@@ -1282,8 +1276,6 @@ export default function Header(): React.ReactElement | null {
 
           {role === 'seller' && !isAdminUser && (
             <>
-              {/* Correct order: Browse, My Listings, Profile, Get Verified, Messages, Analytics, Wallet, Orders to Fulfil, Bell, Username, Logout */}
-              
               <Link href="/sellers/my-listings" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Listings</span>
