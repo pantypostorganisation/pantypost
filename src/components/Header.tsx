@@ -133,11 +133,13 @@ export default function Header(): React.ReactElement | null {
   const searchDesktopRef = useRef<HTMLDivElement | null>(null);
   const searchMobileRef = useRef<HTMLDivElement | null>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const desktopSearchInputRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
   const hasRefreshedAdminData = useRef(false);
   const latestSearchId = useRef(0);
+  const isTypingRef = useRef(false);
 
   const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
@@ -182,10 +184,11 @@ export default function Header(): React.ReactElement | null {
     }
 
     if (sanitizedQuery.length < 3) {
-      setIsSearchingUsers(false);
-      setSearchResults([]);
-      setSearchError('Type at least 3 characters to search');
-      // KEY FIX: Don't show dropdown for error message
+      if (!isTypingRef.current) {
+        setIsSearchingUsers(false);
+        setSearchResults([]);
+        setSearchError(null);
+      }
       setShowSearchDropdown(false);
       return;
     }
@@ -247,7 +250,7 @@ export default function Header(): React.ReactElement | null {
           setIsSearchingUsers(false);
         }
       }
-    }, 250);
+    }, 300);
 
     return () => {
       cancelled = true;
@@ -264,32 +267,27 @@ export default function Header(): React.ReactElement | null {
   const handleSearchInputChange = useCallback((value: string) => {
     if (!canUseSearch) return;
 
+    isTypingRef.current = true;
     const sanitizedValue = sanitizeSearchQuery(value);
     setSearchQuery(sanitizedValue);
 
     const trimmed = sanitizedValue.trim();
 
-    if (!trimmed) {
-      setSearchResults([]);
-      setSearchError(null);
-      setIsSearchingUsers(false);
-      setShowSearchDropdown(false);
-      return;
-    }
-
-    // KEY FIX: Only show dropdown when we have 3+ characters
     if (trimmed.length >= 3) {
       setShowSearchDropdown(true);
-    } else {
+    } else if (trimmed.length === 0) {
       setShowSearchDropdown(false);
     }
+
+    setTimeout(() => {
+      isTypingRef.current = false;
+    }, 100);
   }, [canUseSearch]);
 
   const handleSearchFocus = useCallback(() => {
     if (!canUseSearch) return;
 
     const trimmed = searchQuery.trim();
-    // KEY FIX: Only show dropdown if we have 3+ characters
     if (trimmed && trimmed.length >= 3) {
       setShowSearchDropdown(true);
     }
@@ -359,7 +357,6 @@ export default function Header(): React.ReactElement | null {
     }
   }, [resetSearchState, isMobile]);
 
-  // KEY FIX: Only show dropdown when we have meaningful content AND 3+ characters
   const shouldShowSearchDropdown =
     canUseSearch && 
     showSearchDropdown && 
@@ -396,7 +393,11 @@ export default function Header(): React.ReactElement | null {
                   <button
                     type="button"
                     role="option"
-                    onClick={() => navigateToResult(result, { closeMenu: variant === 'mobile' })}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      navigateToResult(result, { closeMenu: variant === 'mobile' });
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10 text-left"
                   >
                     <div className="w-10 h-10 rounded-full border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/10 to-[#ff6b00]/10 flex items-center justify-center overflow-hidden shadow-inner">
@@ -415,7 +416,11 @@ export default function Header(): React.ReactElement | null {
                       <div className="flex items-center gap-1">
                         <span className="text-sm font-semibold text-white">{result.username}</span>
                         {result.role === 'seller' && result.isVerified && (
-                          <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
+                          <img
+                            src="/verification_badge.png"
+                            alt="Verified"
+                            className="w-4 h-4"
+                          />
                         )}
                       </div>
                       <span className="text-xs uppercase tracking-wide text-gray-400">{roleLabel}</span>
@@ -441,7 +446,6 @@ export default function Header(): React.ReactElement | null {
     );
   };
 
-  // Calculate pending orders count for sellers
   const pendingOrdersCount = useMemo(() => {
     if (!user?.username || user.role !== 'seller') return 0;
     
@@ -974,7 +978,8 @@ export default function Header(): React.ReactElement | null {
                       }}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search buyers and sellers..."
-                      className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
+                      style={{ fontSize: '16px' }}
+                      className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
                       aria-label="Search users"
                       aria-expanded={shouldShowSearchDropdown}
                       aria-autocomplete="list"
@@ -1136,6 +1141,7 @@ export default function Header(): React.ReactElement | null {
               <div className="relative">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
                 <input
+                  ref={desktopSearchInputRef}
                   type="text"
                   inputMode="text"
                   value={searchQuery}
