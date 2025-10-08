@@ -94,7 +94,7 @@ export const HeaderSearch = memo(function HeaderSearch({
     
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const response = await usersService.getUsers({ query: sanitizedQuery, limit: 8 });
+        const response = await usersService.getUsers({ query: sanitizedQuery, limit: 30 });
         if (cancelled || latestSearchId.current !== searchId) return;
 
         if (response.success && response.data) {
@@ -119,8 +119,32 @@ export const HeaderSearch = memo(function HeaderSearch({
             })
             .filter((result): result is SearchUserResult => Boolean(result));
 
-          setSearchResults(mappedResults.slice(0, 8));
-          setSearchError(mappedResults.length === 0 ? 'No matching users found' : null);
+          // Sort results to prioritize:
+          // 1. Exact username matches (case-insensitive)
+          // 2. Verified users
+          // 3. Partial matches
+          const sortedResults = mappedResults.sort((a, b) => {
+            const queryLower = sanitizedQuery.toLowerCase();
+            const aUsernameLower = a.username.toLowerCase();
+            const bUsernameLower = b.username.toLowerCase();
+            
+            // Check for exact matches first
+            const aExactMatch = aUsernameLower === queryLower;
+            const bExactMatch = bUsernameLower === queryLower;
+            
+            if (aExactMatch && !bExactMatch) return -1;
+            if (!aExactMatch && bExactMatch) return 1;
+            
+            // Then prioritize verified users
+            if (a.isVerified && !b.isVerified) return -1;
+            if (!a.isVerified && b.isVerified) return 1;
+            
+            // Finally, sort alphabetically for consistency
+            return aUsernameLower.localeCompare(bUsernameLower);
+          });
+
+          setSearchResults(sortedResults.slice(0, 30));
+          setSearchError(sortedResults.length === 0 ? 'No matching users found' : null);
           setShowDropdown(true);
         } else {
           setSearchResults([]);
@@ -259,7 +283,7 @@ export const HeaderSearch = memo(function HeaderSearch({
       {/* Search Results Dropdown - Increased z-index */}
       {shouldShowDropdown && (
         <div className={`absolute top-full left-0 right-0 mt-2 z-[100] overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
-          variant === 'desktop' ? 'max-h-80' : 'max-h-72'
+          variant === 'desktop' ? 'max-h-[500px]' : 'max-h-[400px]'
         }`}>
           {isSearchingUsers && (
             <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300">
@@ -269,10 +293,11 @@ export const HeaderSearch = memo(function HeaderSearch({
           )}
 
           {!isSearchingUsers && searchResults.length > 0 && (
-            <ul className="max-h-72 overflow-y-auto divide-y divide-[#ff950e]/10" role="listbox">
+            <ul className="max-h-[450px] overflow-y-auto divide-y divide-[#ff950e]/10" role="listbox">
               {searchResults.map((result) => {
                 const initial = result.username.charAt(0).toUpperCase();
                 const roleLabel = result.role === 'seller' ? 'Seller profile' : 'Buyer profile';
+                const isExactMatch = result.username.toLowerCase() === trimmedQuery.toLowerCase();
 
                 return (
                   <li key={`${result.role}-${result.username}`}>
@@ -299,6 +324,11 @@ export const HeaderSearch = memo(function HeaderSearch({
                           <span className="text-sm font-semibold text-white">{result.username}</span>
                           {result.role === 'seller' && result.isVerified && (
                             <img src="/verification_badge.png" alt="Verified" className="w-4 h-4" />
+                          )}
+                          {isExactMatch && (
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded-full border border-green-400/30">
+                              Match
+                            </span>
                           )}
                         </div>
                         <span className="text-xs uppercase tracking-wide text-gray-400">{roleLabel}</span>
