@@ -124,6 +124,7 @@ export default function Header(): React.ReactElement | null {
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [mobileSearchFocused, setMobileSearchFocused] = useState(false); // Track mobile search focus
 
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
@@ -225,7 +226,7 @@ export default function Header(): React.ReactElement | null {
     }
 
     if (sanitizedQuery.length < 3) {
-      setShowSearchDropdown(false);
+      // Don't hide dropdown immediately to prevent focus loss
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
@@ -243,7 +244,7 @@ export default function Header(): React.ReactElement | null {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    const debounceTime = isMobile ? 500 : 300;
+    const debounceTime = isMobile ? 700 : 300; // Longer debounce for mobile
     
     searchTimeoutRef.current = setTimeout(async () => {
       try {
@@ -282,13 +283,14 @@ export default function Header(): React.ReactElement | null {
             setSearchError(null);
           }
           
-          // FIX: Show dropdown after results are ready
-          if (mappedResults.length > 0) {
+          // Show dropdown after results are ready
+          if (mappedResults.length > 0 || searchError) {
             setShowSearchDropdown(true);
           }
         } else {
           setSearchResults([]);
           setSearchError('No matching users found');
+          setShowSearchDropdown(true);
         }
       } catch (error) {
         console.error('User search error:', error);
@@ -312,6 +314,17 @@ export default function Header(): React.ReactElement | null {
     };
   }, [searchQuery, canUseSearch, isMobile]);
 
+  // FIX: Maintain mobile search input focus
+  useEffect(() => {
+    if (mobileSearchFocused && mobileSearchInputRef.current) {
+      // Re-focus the input if it lost focus during render
+      const activeElement = document.activeElement;
+      if (activeElement !== mobileSearchInputRef.current) {
+        mobileSearchInputRef.current.focus();
+      }
+    }
+  }, [mobileSearchFocused, searchResults]); // Re-run when search results change
+
   // Close search dropdown when mobile menu closes
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -326,12 +339,8 @@ export default function Header(): React.ReactElement | null {
     const sanitizedValue = sanitizeSearchQuery(value);
     setSearchQuery(sanitizedValue);
     
-    // Show dropdown when we have enough characters
-    if (sanitizedValue.trim().length >= 3) {
-      // Results will show dropdown when ready
-    } else {
-      setShowSearchDropdown(false);
-    }
+    // Don't change dropdown state while typing to prevent re-renders
+    // Let the search effect handle showing dropdown
   }, [canUseSearch]);
 
   // FIX: Better focus handling
@@ -350,6 +359,7 @@ export default function Header(): React.ReactElement | null {
     setSearchError(null);
     setIsSearchingUsers(false);
     setShowSearchDropdown(false);
+    setMobileSearchFocused(false); // Reset focus state
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
       searchTimeoutRef.current = null;
@@ -361,7 +371,7 @@ export default function Header(): React.ReactElement | null {
     return result.role === 'seller' ? `/sellers/${encodedUsername}` : `/buyers/${encodedUsername}`;
   }, []);
 
-  // FIX: Improved navigation
+  // FIX: Improved navigation - use window.location for mobile reliability
   const navigateToResult = useCallback(
     (result: SearchUserResult, closeMenu?: boolean) => {
       const path = getProfilePath(result);
@@ -375,10 +385,15 @@ export default function Header(): React.ReactElement | null {
         setShowMobileNotifications(false);
       }
       
-      // Navigate immediately
-      router.push(path);
+      // Use window.location.href for better mobile compatibility
+      // Safari on iOS sometimes has issues with router.push
+      if (isMobile) {
+        window.location.href = path;
+      } else {
+        router.push(path);
+      }
     },
-    [getProfilePath, resetSearchState, router],
+    [getProfilePath, resetSearchState, router, isMobile],
   );
 
   const handleSearchKeyDown = useCallback(
@@ -451,7 +466,18 @@ export default function Header(): React.ReactElement | null {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      navigateToResult(result, variant === 'mobile' && mobileMenuOpen);
+                      // Small delay to ensure state updates properly on mobile
+                      setTimeout(() => {
+                        navigateToResult(result, variant === 'mobile' && mobileMenuOpen);
+                      }, 0);
+                    }}
+                    onTouchEnd={(e) => {
+                      // Better mobile touch handling
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setTimeout(() => {
+                        navigateToResult(result, variant === 'mobile' && mobileMenuOpen);
+                      }, 0);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10 text-left"
                   >
@@ -1021,20 +1047,35 @@ export default function Header(): React.ReactElement | null {
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
                     <input
                       ref={mobileSearchInputRef}
-                      type="text"
-                      inputMode="text"
+                      type="search" // Changed from "text" to "search" for better mobile support
+                      inputMode="search" // Changed to "search" for better keyboard
                       value={searchQuery}
                       onChange={(event) => {
-                        event.stopPropagation();
                         handleSearchInputChange(event.target.value);
                       }}
                       onFocus={(event) => {
-                        event.stopPropagation();
+                        event.preventDefault(); // Prevent default focus behavior
+                        setMobileSearchFocused(true); // Track focus state
                         handleSearchFocus();
+                      }}
+                      onBlur={(event) => {
+                        // Don't hide dropdown when clicking on results
+                        if (!event.relatedTarget?.closest('[role="option"]')) {
+                          setTimeout(() => {
+                            if (!document.activeElement?.closest('[role="listbox"]')) {
+                              setShowSearchDropdown(false);
+                              setMobileSearchFocused(false); // Clear focus state
+                            }
+                          }, 200);
+                        }
                       }}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search buyers and sellers..."
-                      style={{ fontSize: '16px' }} // FIX: Prevent iOS zoom
+                      style={{ 
+                        fontSize: '16px', // Prevent iOS zoom
+                        WebkitAppearance: 'none', // Remove iOS styling
+                        appearance: 'none'
+                      }}
                       className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
                       aria-label="Search users"
                       aria-expanded={shouldShowSearchDropdown}
