@@ -421,7 +421,7 @@ export default function BuyerProfilePage() {
                 <>
                   <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
                     <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
-                      <div className="flex h-32 w-32 items-center justify-center rounded-2xl border border-white/10 bg-neutral-900/70 p-3 sm:h-36 sm:w-36">
+                      <div className="flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
                         <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-[#a855f7] bg-neutral-950 shadow-[0_0_32px_-18px_rgba(168,85,247,0.8)]">
                           <SafeAvatar
                             src={profileData?.profile?.profilePic || null}
