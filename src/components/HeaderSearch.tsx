@@ -38,14 +38,63 @@ export const HeaderSearch = memo(function HeaderSearch({
 
   // Handle clicks outside to close dropdown
   useEffect(() => {
+    let isScrolling = false;
+    let scrollTimeout: NodeJS.Timeout;
+    let isTouchScrolling = false;
+
+    const handleScroll = () => {
+      isScrolling = true;
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        isScrolling = false;
+      }, 150);
+    };
+
+    const handleTouchStart = () => {
+      isTouchScrolling = false;
+    };
+
+    const handleTouchMove = () => {
+      isTouchScrolling = true;
+    };
+
     const handleClickOutside = (event: MouseEvent) => {
+      // Don't close if user is scrolling
+      if (isScrolling || isTouchScrolling) return;
+      
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
       }
     };
 
+    const handleTouchEnd = (event: TouchEvent) => {
+      // Don't close if user was scrolling
+      if (isTouchScrolling) {
+        setTimeout(() => {
+          isTouchScrolling = false;
+        }, 100);
+        return;
+      }
+      
+      if (containerRef.current && event.target && !containerRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('scroll', handleScroll, true);
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('scroll', handleScroll, true);
+      clearTimeout(scrollTimeout);
+    };
   }, []);
 
   // Search logic
@@ -282,9 +331,9 @@ export const HeaderSearch = memo(function HeaderSearch({
 
       {/* Search Results Dropdown - Increased z-index */}
       {shouldShowDropdown && (
-        <div className={`absolute top-full left-0 right-0 mt-2 z-[100] overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
+        <div className={`absolute top-full left-0 right-0 mt-2 z-[100] rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
           variant === 'desktop' ? 'max-h-[500px]' : 'max-h-[400px]'
-        }`}>
+        } overflow-y-auto`}>
           {isSearchingUsers && (
             <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300">
               <Loader2 className="w-4 h-4 animate-spin text-[#ff950e]" />
@@ -293,7 +342,7 @@ export const HeaderSearch = memo(function HeaderSearch({
           )}
 
           {!isSearchingUsers && searchResults.length > 0 && (
-            <ul className="max-h-[450px] overflow-y-auto divide-y divide-[#ff950e]/10" role="listbox">
+            <ul className="divide-y divide-[#ff950e]/10 pb-2" role="listbox">
               {searchResults.map((result) => {
                 const initial = result.username.charAt(0).toUpperCase();
                 const roleLabel = result.role === 'seller' ? 'Seller profile' : 'Buyer profile';
