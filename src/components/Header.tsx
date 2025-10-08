@@ -124,7 +124,6 @@ export default function Header(): React.ReactElement | null {
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [isMobileSearchFocused, setIsMobileSearchFocused] = useState(false);
 
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
@@ -258,7 +257,6 @@ export default function Header(): React.ReactElement | null {
   useEffect(() => {
     if (!mobileMenuOpen) {
       setShowSearchDropdown(false);
-      setIsMobileSearchFocused(false);
     }
   }, [mobileMenuOpen]);
 
@@ -297,15 +295,6 @@ export default function Header(): React.ReactElement | null {
       setShowSearchDropdown(true);
     }
   }, [searchQuery, canUseSearch]);
-
-  const handleMobileSearchFocus = useCallback(() => {
-    setIsMobileSearchFocused(true);
-    handleSearchFocus();
-  }, [handleSearchFocus]);
-
-  const handleMobileSearchBlur = useCallback(() => {
-    setIsMobileSearchFocused(false);
-  }, []);
 
   const resetSearchState = useCallback(() => {
     setSearchQuery('');
@@ -796,7 +785,7 @@ export default function Header(): React.ReactElement | null {
 
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
-    if (mobileMenuOpen && !isMobileSearchFocused) {
+    if (mobileMenuOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -805,7 +794,7 @@ export default function Header(): React.ReactElement | null {
     return () => {
       document.body.style.overflow = '';
     };
-  }, [mobileMenuOpen, isMobileSearchFocused]);
+  }, [mobileMenuOpen]);
 
   const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
     <Link
@@ -937,10 +926,7 @@ export default function Header(): React.ReactElement | null {
         className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-50 lg:hidden transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
-        style={{
-          touchAction: 'pan-y',
-          transform: mobileMenuOpen && isMobileSearchFocused ? 'none' : undefined,
-        }}
+        style={{ touchAction: 'pan-y' }}
       >
         {showMobileNotifications && role === 'seller' ? (
           <MobileNotificationsPanel />
@@ -989,8 +975,7 @@ export default function Header(): React.ReactElement | null {
                       inputMode="text"
                       value={searchQuery}
                       onChange={(event) => handleSearchInputChange(event.target.value)}
-                      onFocus={handleMobileSearchFocus}
-                      onBlur={handleMobileSearchBlur}
+                      onFocus={handleSearchFocus}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search buyers and sellers..."
                       className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
