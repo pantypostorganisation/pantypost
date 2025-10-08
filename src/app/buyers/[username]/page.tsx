@@ -194,6 +194,43 @@ function flagFromCountryName(name?: string | null): string {
   return flagFromIso2(code);
 }
 
+function isRegionalIndicator(cp?: number | null): boolean {
+  if (typeof cp !== 'number') return false;
+  return cp >= 0x1f1e6 && cp <= 0x1f1ff;
+}
+
+function deriveCountryDisplay(raw?: string | null): { flag: string; name: string } {
+  if (!raw) {
+    return { flag: '🌐', name: '' };
+  }
+
+  const sanitized = sanitizeStrict(raw).trim();
+  if (!sanitized) {
+    return { flag: '🌐', name: '' };
+  }
+
+  const characters = Array.from(sanitized);
+  if (characters.length >= 2) {
+    const first = characters[0]?.codePointAt(0);
+    const second = characters[1]?.codePointAt(0);
+
+    if (isRegionalIndicator(first) && isRegionalIndicator(second)) {
+      const flag = `${characters[0]}${characters[1]}`;
+      const remaining = characters.slice(2).join('').trim();
+
+      return {
+        flag,
+        name: remaining || '',
+      };
+    }
+  }
+
+  return {
+    flag: flagFromCountryName(sanitized),
+    name: sanitized,
+  };
+}
+
 /* ==== Safe avatar ==== */
 function SafeAvatar({
   src,
@@ -350,11 +387,9 @@ export default function BuyerProfilePage() {
     return sanitizeStrict(rawBio);
   }, [profileData?.profile?.bio]);
 
-  const sanitizedCountry = useMemo(() => {
-    const rawCountry = profileData?.profile?.country;
-    if (!rawCountry) return '';
-    return sanitizeStrict(rawCountry);
-  }, [profileData?.profile?.country]);
+  const countryDisplay = useMemo(() => deriveCountryDisplay(profileData?.profile?.country), [
+    profileData?.profile?.country,
+  ]);
 
   const messageHref = useMemo(() => {
     if (me?.role === 'seller') {
@@ -495,8 +530,8 @@ export default function BuyerProfilePage() {
                           <p className="mt-2 text-lg font-semibold text-white">
                             {profileData?.profile?.country ? (
                               <span>
-                                {flagFromCountryName(profileData?.profile?.country)}{' '}
-                                {sanitizedCountry}
+                                {countryDisplay.flag}
+                                {countryDisplay.name ? ` ${countryDisplay.name}` : ''}
                               </span>
                             ) : (
                               'Not shared yet'
