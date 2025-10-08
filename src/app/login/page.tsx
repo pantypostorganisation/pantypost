@@ -40,6 +40,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'buyer' | 'seller' | 'admin' | null>(null);
   const [error, setError] = useState('');
+  const [errorData, setErrorData] = useState<any>(null); // NEW: Store structured error data
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
@@ -108,10 +109,9 @@ export default function LoginPage() {
     if (authError) {
       if (isDev) console.log('[Login] Auth error:', authError);
       setError(authError);
-      setIsLoading(false); // IMPORTANT: Clear loading state when error occurs
+      setIsLoading(false);
     }
     
-    // Also sync loading state from auth context
     if (!authLoading && isLoading) {
       setIsLoading(false);
     }
@@ -202,6 +202,7 @@ export default function LoginPage() {
     }
 
     setError('');
+    setErrorData(null);
     clearError?.();
     setStep(2);
   }, [username, clearError]);
@@ -227,24 +228,29 @@ export default function LoginPage() {
 
       if (!username.trim()) {
         setError('Please enter your username');
+        setErrorData(null);
         return;
       }
       if (!password.trim()) {
         setError('Please enter your password');
+        setErrorData(null);
         return;
       }
       if (!role) {
         setError('Please select a role');
+        setErrorData(null);
         return;
       }
       if (!login || typeof login !== 'function') {
         if (isDev) console.error('[Login] login() unavailable');
         setError('Authentication system not ready. Please refresh the page.');
+        setErrorData(null);
         return;
       }
 
       setIsLoading(true);
       setError('');
+      setErrorData(null);
       clearError?.();
       
       try {
@@ -253,23 +259,31 @@ export default function LoginPage() {
         if (isDev) console.log('[Login] Login result:', success);
         
         if (!success) {
-          // Login failed - auth context has set the error
-          // Make sure we're not stuck in loading state
           setIsLoading(false);
           
-          // If auth context didn't provide an error, set a generic one
+          // NEW: Try to get structured error data from auth context
+          // The auth context might have more detailed error information
+          if ((authData as any).errorDetails) {
+            setErrorData((authData as any).errorDetails);
+          }
+          
           if (!authError) {
             setError('Invalid username or password');
           }
         }
-        // If success is true, user will be redirected by the useEffect
-      } catch (err) {
+      } catch (err: any) {
         if (isDev) console.error('[Login] login() error:', err);
-        setError('An unexpected error occurred. Please try again.');
+        
+        // NEW: Check if error has structured data
+        if (err?.requiresVerification) {
+          setErrorData(err);
+        }
+        
+        setError(err?.message || 'An unexpected error occurred. Please try again.');
         setIsLoading(false);
       }
     },
-    [username, password, role, rememberMe, login, isRateLimited, authError, clearError]
+    [username, password, role, rememberMe, login, isRateLimited, authError, authData, clearError]
   );
 
   const handleKeyPress = useCallback(
@@ -289,7 +303,8 @@ export default function LoginPage() {
     setPassword('');
     setRole(null);
     setError('');
-    setIsLoading(false); // Clear loading state when going back
+    setErrorData(null);
+    setIsLoading(false);
     clearError?.();
   }, [clearError]);
 
@@ -305,11 +320,13 @@ export default function LoginPage() {
       if (updates.username !== undefined) {
         setUsername(updates.username);
         setError('');
+        setErrorData(null);
         clearError?.();
       }
       if (updates.password !== undefined) {
         setPassword(updates.password);
         setError('');
+        setErrorData(null);
         clearError?.();
       }
       if (updates.role !== undefined) {
@@ -319,7 +336,6 @@ export default function LoginPage() {
     [clearError]
   );
 
-  // Early wait UI
   if (!mounted || !isAuthReady) {
     if (isDev) console.log('[Login] waiting...', { mounted, isAuthReady });
     return (
@@ -333,30 +349,24 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
-      {/* Enhanced Floating Particles Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {Array.from({ length: 35 }).map((_, i) => (
           <FloatingParticle key={i} delay={0} index={i} />
         ))}
       </div>
 
-      {/* Subtle gradient overlay for depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
 
-      {/* Secret Admin Crown - Bottom Right */}
       <AdminCrownButton showAdminMode={showAdminMode} onToggle={handleCrownClick} />
 
-      {/* Main Content */}
       <div
         className={`relative z-10 flex items-center justify-center p-4 ${
           step === 1 ? 'min-h-[90vh] pt-4' : 'min-h-screen py-4'
         }`}
       >
         <div className="w-full max-w-md">
-          {/* Header */}
           <LoginHeader step={step} showAdminMode={showAdminMode} onLogoClick={() => router.push('/')} />
 
-          {/* Form Card */}
           <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500">
             <div className="transition-all duration-300">
               {step === 1 && (
@@ -375,6 +385,7 @@ export default function LoginPage() {
                   username={username}
                   password={password}
                   error={error}
+                  errorData={errorData}
                   onPasswordChange={(value) => updateState({ password: value })}
                   onBack={goBack}
                   onSubmit={handleLogin}
@@ -392,10 +403,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Footer */}
           <LoginFooter step={step} />
-
-          {/* Trust Indicators */}
           <TrustIndicators />
         </div>
       </div>

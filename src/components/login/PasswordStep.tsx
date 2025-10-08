@@ -9,6 +9,7 @@ interface PasswordStepProps {
   username: string;
   password: string;
   error: string | null;
+  errorData?: any; // NEW: Add errorData to access structured error information
   onPasswordChange: (password: string) => void;
   onBack: () => void;
   onSubmit: (e?: React.FormEvent) => void;

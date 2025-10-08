@@ -24,8 +24,8 @@ export interface User {
   email?: string;
   profilePicture?: string;
   isVerified: boolean;
-  emailVerified?: boolean; // NEW - Add this field
-  emailVerifiedAt?: string; // NEW - Add this field
+  emailVerified?: boolean;
+  emailVerifiedAt?: string;
   tier?: 'Tease' | 'Flirt' | 'Obsession' | 'Desire' | 'Goddess';
   subscriberCount?: number;
   totalSales?: number;
@@ -46,7 +46,7 @@ export interface User {
 interface AuthTokens {
   token: string;
   refreshToken: string;
-  expiresAt: number; // Unix timestamp (ms)
+  expiresAt: number;
 }
 
 interface AuthContextType {
@@ -67,7 +67,7 @@ interface AuthContextType {
   refreshSession: () => Promise<void>;
   getAuthToken: () => string | null;
   apiClient: ApiClient;
-  token: string | null; // compatibility
+  token: string | null;
 }
 
 // ==================== SCHEMAS ====================
@@ -90,9 +90,6 @@ function safeNow(): number {
   }
 }
 
-/**
- * Safely parse JSON; return null if empty/invalid.
- */
 async function safeParseJson<T>(resp: Response): Promise<T | null> {
   try {
     const text = await resp.text();
@@ -103,15 +100,9 @@ async function safeParseJson<T>(resp: Response): Promise<T | null> {
   }
 }
 
-/**
- * Derive absolute expiry from `expiresIn` (seconds or ms).
- * Fallback to defaultMs when not provided.
- */
 function deriveExpiry(expiresIn: unknown, defaultMs: number): number {
   const now = safeNow();
   if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
-    // Heuristic: values <= 24*60*60*100 (i.e., less than 1 day if treated as ms)
-    // are likely seconds; multiply by 1000. Otherwise assume ms.
     const asMs = expiresIn < 86_400 ? expiresIn * 1000 : expiresIn;
     return now + asMs;
   }
@@ -137,33 +128,25 @@ class ApiClient {
       onTokenRefresh?: () => Promise<void>;
     }
   ) {
-    this.baseURL = baseURL.replace(/\/+$/, ''); // strip trailing slashes
+    this.baseURL = baseURL.replace(/\/+$/, '');
     this.authContext = authContext;
   }
 
-  /**
-   * Build full API URL - handles both relative and absolute endpoints
-   */
   private buildUrl(endpoint: string): string {
-    // If endpoint already starts with http/https, return as is
     if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
       return endpoint;
     }
 
-    // Ensure endpoint starts with /
     const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
 
-    // If baseURL already ends with /api, don't add it again
     if (this.baseURL.endsWith('/api')) {
       return `${this.baseURL}${path}`;
     }
 
-    // Otherwise, add /api prefix to the path
     return `${this.baseURL}/api${path}`;
   }
 
   private async refreshTokens(): Promise<AuthTokens | null> {
-    // Prevent multiple simultaneous refresh attempts
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
@@ -181,14 +164,12 @@ class ApiClient {
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
         });
 
-        // Gracefully parse JSON (may be empty on some implementations)
         const data = await safeParseJson<any>(response);
 
         if (response.ok && data?.success && data?.data) {
           const expiresAt = deriveExpiry(
-            // try both common fields
             data.data.expiresIn ?? data.data.tokenExpiresIn,
-            30 * 60 * 1000 // fallback 30 minutes
+            30 * 60 * 1000
           );
 
           const newTokens: AuthTokens = {
@@ -199,7 +180,6 @@ class ApiClient {
 
           this.authContext.setTokens(newTokens);
 
-          // Fire token update event for WebSocket
           if (typeof window !== 'undefined') {
             window.dispatchEvent(
               new CustomEvent('auth-token-updated', {
@@ -208,7 +188,6 @@ class ApiClient {
             );
           }
 
-          // Call the refresh callback if provided
           if (this.authContext.onTokenRefresh) {
             await this.authContext.onTokenRefresh();
           }
@@ -216,7 +195,6 @@ class ApiClient {
           return newTokens;
         }
 
-        // If refresh failed, clear tokens
         throw new Error('Invalid refresh response');
       } catch (error) {
         console.error('Token refresh failed:', error);
@@ -242,7 +220,6 @@ class ApiClient {
       return null;
     }
 
-    // Check if token is expired or about to expire (5 minutes buffer)
     const isExpiringSoon = tokens.expiresAt <= safeNow() + 5 * 60 * 1000;
 
     if (isExpiringSoon) {
@@ -259,12 +236,10 @@ class ApiClient {
   ): Promise<{ success: boolean; data?: T; error?: any }> {
     const token = await this.getValidToken();
 
-    // Create headers as a plain object first
     const headerObj: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    // Add existing headers from options
     if (options.headers) {
       const existingHeaders =
         options.headers instanceof Headers
@@ -276,7 +251,6 @@ class ApiClient {
       Object.assign(headerObj, existingHeaders);
     }
 
-    // Add auth token if available
     if (token) {
       headerObj['Authorization'] = `Bearer ${token}`;
     }
@@ -287,12 +261,10 @@ class ApiClient {
       const resp = await fetch(url, { ...options, headers: headerObj });
       const json = await safeParseJson<any>(resp);
 
-      // If server returns our standard shape, just return it as-is
       if (json && typeof json.success === 'boolean') {
         return json;
       }
 
-      // Otherwise normalize a minimal shape
       if (resp.ok) {
         return { success: true, data: json as T };
       }
@@ -308,7 +280,6 @@ class ApiClient {
     try {
       const result = await doFetch();
 
-      // Handle 401 Unauthorized - try to refresh token once
       if (!result.success && (result as any)?.error?.code === 401 && token) {
         const newTokens = await this.refreshTokens();
         if (newTokens) {
@@ -331,7 +302,6 @@ class ApiClient {
     }
   }
 
-  // Convenience methods
   get<T = any>(endpoint: string, options?: RequestInit) {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
@@ -361,13 +331,11 @@ class ApiClient {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Get API base URL from environment config
 const API_BASE_URL =
   apiConfig?.baseUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 const AUTH_TOKENS_STORAGE_KEY = 'auth_tokens';
 
-// Enhanced Token storage with WebSocket event support
 class TokenStorage {
   private memoryTokens: AuthTokens | null = null;
   private persistence: 'session' | 'local' = 'session';
@@ -386,7 +354,6 @@ class TokenStorage {
           this.memoryTokens = JSON.parse(stored);
           this.persistence = sessionValue ? 'session' : 'local';
 
-          // Ensure sessionStorage is populated for cross-tab compatibility
           if (!sessionValue && localValue) {
             window.sessionStorage.setItem(AUTH_TOKENS_STORAGE_KEY, localValue);
           }
@@ -469,13 +436,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
 
-  // Token storage instance
   const tokenStorageRef = useRef(new TokenStorage());
-
-  // API client instance with auth context
   const apiClientRef = useRef<ApiClient | null>(null);
 
-  // Refresh session - fetch current user
   const refreshSession = useCallback(async () => {
     const tokens = tokenStorageRef.current.getTokens();
     if (!tokens?.token) {
@@ -487,13 +450,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiClientRef.current!.get<User>('/auth/me');
 
       if (response.success && response.data) {
-        // Check if user is banned
         const banCheckResponse = await apiClientRef.current!.get(
           `/users/${response.data.username}/ban-status`
         );
         
         if (banCheckResponse.success && banCheckResponse.data?.isBanned) {
-          // User is banned - clear session
           console.log('[Auth] User is banned, clearing session');
           tokenStorageRef.current.clear();
           setUser(null);
@@ -512,30 +473,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Initialize API client
   if (!apiClientRef.current) {
     apiClientRef.current = new ApiClient(API_BASE_URL, {
       getTokens: () => tokenStorageRef.current.getTokens(),
       setTokens: (tokens) => tokenStorageRef.current.setTokens(tokens),
       onTokenRefresh: async () => {
-        // Refresh user data after token refresh
         await refreshSession();
       },
     });
   }
 
-  // Clear error
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
-  // Get auth token
   const getAuthToken = useCallback(() => {
     const tokens = tokenStorageRef.current.getTokens();
     return tokens?.token || null;
   }, []);
 
-  // Initialize auth state on mount
   useEffect(() => {
     const initAuth = async () => {
       console.log('[Auth] Initializing...');
@@ -552,8 +508,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // refreshSession is stable here; intentional single-run
+  }, [refreshSession]);
 
   const login = useCallback(
     async (
@@ -568,7 +523,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setError(null);
 
       try {
-        // Validate & sanitize inputs
         const parsed = LoginPayloadSchema.safeParse({ username, password, role });
         if (!parsed.success) {
           setError('Please enter a valid username and password.');
@@ -583,25 +537,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const payload: LoginPayload = {
           username: cleanUsername,
           password: parsed.data.password,
-          role: parsed.data.role, // optional on backend; we pass it if present
+          role: parsed.data.role,
         };
 
-        // Use the API client which handles URL construction properly
         const response = await apiClientRef.current!.post('/auth/login', payload);
 
         console.log('[Auth] Login response:', {
           success: response.success,
           hasUser: !!response.data?.user,
+          error: response.error,
         });
 
         if (response.success && response.data) {
-          // Check if the user is banned before completing login
           const banCheckResponse = await apiClientRef.current!.get(
             `/users/${response.data.user.username}/ban-status`
           );
           
           if (banCheckResponse.success && banCheckResponse.data?.isBanned) {
-            // User is banned - don't complete login
             const banInfo = banCheckResponse.data;
             let errorMessage = 'Your account has been suspended.';
             
@@ -621,13 +573,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return false;
           }
 
-          // Calculate token expiration (prefer backend hints)
-          const expiresAt =
-            deriveExpiry(
-              // try common fields the backend might send
-              response.data.expiresIn ?? response.data.tokenExpiresIn,
-              31 * 24 * 60 * 60 * 1000 // fallback 31 days
-            );
+          const expiresAt = deriveExpiry(
+            response.data.expiresIn ?? response.data.tokenExpiresIn,
+            31 * 24 * 60 * 60 * 1000
+          );
 
           const tokens: AuthTokens = {
             token: response.data.token,
@@ -635,26 +584,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             expiresAt,
           };
 
-          // Respect persistence preference before storing tokens
           tokenStorageRef.current.setPersistence(rememberMe);
-
-          // Store tokens securely (fires auth-token-updated)
           tokenStorageRef.current.setTokens(tokens);
-
-          // Set user state
           setUser(response.data.user);
 
           console.log('[Auth] Login successful');
           setLoading(false);
           return true;
         } else {
-          const errorMessage = (response as any)?.error?.message || 'Login failed';
+          // CRITICAL FIX: Check for email verification error in response
+          const errorObj = response.error || (response as any);
+          
+          if (errorObj.code === 'EMAIL_VERIFICATION_REQUIRED' || errorObj.requiresVerification) {
+            // Throw structured error for email verification
+            const verificationError: any = new Error(
+              errorObj.message || 'Please verify your email before logging in.'
+            );
+            verificationError.requiresVerification = true;
+            verificationError.email = errorObj.email;
+            verificationError.username = errorObj.username;
+            
+            console.log('[Auth] Email verification required:', verificationError);
+            
+            setError(verificationError.message);
+            setLoading(false);
+            
+            // Throw the error so the login page can catch it with structured data
+            throw verificationError;
+          }
+          
+          const errorMessage = errorObj.message || 'Login failed';
           setError(errorMessage);
           setLoading(false);
           return false;
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('[Auth] Login error:', error);
+        
+        // If this is already a structured error (like email verification), re-throw it
+        if (error.requiresVerification) {
+          throw error;
+        }
+        
         setError('Network error. Please check your connection and try again.');
         setLoading(false);
         return false;
@@ -669,25 +640,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const token = getAuthToken();
       if (token) {
-        // Even if the server returns 204, our client handles it safely
         await apiClientRef.current!.post('/auth/logout');
       }
     } catch (error) {
       console.error('[Auth] Logout API error:', error);
     }
 
-    // Clear local state regardless of API response (fires auth-token-cleared)
     tokenStorageRef.current.clear();
     setUser(null);
     setError(null);
-
-    // Redirect to login page
     router.push('/login');
 
     console.log('[Auth] Logout complete');
   }, [getAuthToken, router]);
 
-  // Update user function
   const updateUser = useCallback(
     async (updates: Partial<User>) => {
       if (!user) {
@@ -727,7 +693,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshSession,
     getAuthToken,
     apiClient: apiClientRef.current!,
-    token: getAuthToken(), // compatibility; use getAuthToken() for up-to-date value
+    token: getAuthToken(),
   };
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
@@ -741,7 +707,6 @@ export function useAuth() {
   return context;
 }
 
-// Export getAuthToken globally for WebSocket access
 export const getGlobalAuthToken = (): string | null => {
   if (typeof window === 'undefined') return null;
 
