@@ -9,7 +9,7 @@ interface PasswordStepProps {
   username: string;
   password: string;
   error: string | null;
-  errorData?: any; // NEW: Add errorData to access structured error information
+  errorData?: any; // Structured error data with requiresVerification, email, username
   onPasswordChange: (password: string) => void;
   onBack: () => void;
   onSubmit: (e?: React.FormEvent) => void;
@@ -33,6 +33,7 @@ export default function PasswordStep({
   username,
   password,
   error,
+  errorData, // NEW: Use this structured data
   onPasswordChange,
   onBack,
   onSubmit,
@@ -49,24 +50,11 @@ export default function PasswordStep({
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
-  const [emailForVerification, setEmailForVerification] = useState<string | null>(null);
   
   // Reset attempt flag when error changes
   useEffect(() => {
     if (!error) {
       setHasAttemptedSubmit(false);
-    }
-  }, [error]);
-
-  // Check if error is related to email verification
-  useEffect(() => {
-    if (error && error.includes('verify your email')) {
-      // Extract email from error if available (backend should include it)
-      // This is a simple extraction - backend should ideally provide structured data
-      const emailMatch = error.match(/[\w.-]+@[\w.-]+\.\w+/);
-      if (emailMatch) {
-        setEmailForVerification(emailMatch[0]);
-      }
     }
   }, [error]);
   
@@ -119,18 +107,32 @@ export default function PasswordStep({
     }
   };
 
-  // Handle redirect to verification page
+  // FIXED: Handle redirect to verification page using errorData
   const handleGoToVerification = () => {
+    console.log('[PasswordStep] Redirecting to verification with errorData:', errorData);
+    
     const params = new URLSearchParams();
-    if (emailForVerification) {
-      params.set('email', emailForVerification);
+    
+    // Use errorData if available (structured error from backend)
+    if (errorData?.email) {
+      params.set('email', errorData.email);
     }
-    params.set('username', username);
-    router.push(`/verify-email-pending?${params.toString()}`);
+    
+    if (errorData?.username) {
+      params.set('username', errorData.username);
+    } else {
+      // Fallback to the username from the form
+      params.set('username', username);
+    }
+    
+    const redirectUrl = `/verify-email-pending?${params.toString()}`;
+    console.log('[PasswordStep] Redirecting to:', redirectUrl);
+    
+    router.push(redirectUrl);
   };
 
   // Check if this is an email verification error
-  const isEmailVerificationError = error && error.includes('verify your email');
+  const isEmailVerificationError = errorData?.requiresVerification || (error && error.includes('verify your email'));
   
   return (
     <div className="transition-all duration-300">
