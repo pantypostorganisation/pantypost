@@ -1,6 +1,7 @@
 // src/components/Header.tsx
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -92,6 +93,74 @@ const useInterval = (callback: () => void, delay: number | null) => {
   };
 };
 
+// Memoized mobile search component to prevent re-renders
+const MobileSearchInput = React.memo(({ 
+  value, 
+  onChange, 
+  onFocus, 
+  onKeyDown,
+  onClear,
+  isSearching,
+  hasMinimumTerm,
+  showClearButton 
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onFocus: () => void;
+  onKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
+  onClear: () => void;
+  isSearching: boolean;
+  hasMinimumTerm: boolean;
+  showClearButton: boolean;
+}) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  return (
+    <div className="relative">
+      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
+      <input
+        ref={inputRef}
+        type="text"
+        inputMode="text"
+        value={value}
+        onChange={(e) => {
+          e.preventDefault();
+          onChange(e.target.value);
+        }}
+        onFocus={onFocus}
+        onKeyDown={onKeyDown}
+        placeholder="Search buyers and sellers..."
+        className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
+        aria-label="Search users"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck="false"
+      />
+      {showClearButton && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClear();
+            inputRef.current?.focus();
+          }}
+          className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+          aria-label="Clear search"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {isSearching && hasMinimumTerm && (
+        <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
+      )}
+    </div>
+  );
+});
+
+MobileSearchInput.displayName = 'MobileSearchInput';
+
 export default function Header(): React.ReactElement | null {
   const pathname = usePathname();
   const router = useRouter();
@@ -133,7 +202,6 @@ export default function Header(): React.ReactElement | null {
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const searchDesktopRef = useRef<HTMLDivElement | null>(null);
   const searchMobileRef = useRef<HTMLDivElement | null>(null);
-  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
@@ -260,6 +328,8 @@ export default function Header(): React.ReactElement | null {
   useEffect(() => {
     if (!mobileMenuOpen) {
       setShowSearchDropdown(false);
+      // Clear mobile search when menu closes
+      setMobileSearchInput('');
     }
   }, [mobileMenuOpen]);
 
@@ -295,27 +365,31 @@ export default function Header(): React.ReactElement | null {
     if (!canUseSearch) return;
 
     const sanitizedValue = sanitizeSearchQuery(value);
-    setMobileSearchInput(sanitizedValue);
+    
+    // Use startTransition to make this a low-priority update
+    React.startTransition(() => {
+      setMobileSearchInput(sanitizedValue);
 
-    const trimmed = sanitizedValue.trim();
+      const trimmed = sanitizedValue.trim();
 
-    if (!trimmed) {
-      setSearchResults([]);
-      setSearchError(null);
-      setIsSearchingUsers(false);
-      setShowSearchDropdown(false);
-      return;
-    }
+      if (!trimmed) {
+        setSearchResults([]);
+        setSearchError(null);
+        setIsSearchingUsers(false);
+        setShowSearchDropdown(false);
+        return;
+      }
 
-    setShowSearchDropdown(true);
+      setShowSearchDropdown(true);
 
-    if (trimmed.length < 3) {
-      setSearchResults([]);
-      setIsSearchingUsers(false);
-      setSearchError('Type at least 3 characters to search');
-    } else {
-      setSearchError(null);
-    }
+      if (trimmed.length < 3) {
+        setSearchResults([]);
+        setIsSearchingUsers(false);
+        setSearchError('Type at least 3 characters to search');
+      } else {
+        setSearchError(null);
+      }
+    });
   }, [canUseSearch]);
 
   const handleSearchFocus = useCallback(() => {
@@ -385,13 +459,7 @@ export default function Header(): React.ReactElement | null {
 
   const handleClearSearch = useCallback(() => {
     resetSearchState();
-    // Keep focus on mobile input
-    if (mobileSearchInputRef.current && isMobile) {
-      setTimeout(() => {
-        mobileSearchInputRef.current?.focus();
-      }, 50);
-    }
-  }, [resetSearchState, isMobile]);
+  }, [resetSearchState]);
 
   const shouldShowSearchDropdown =
     canUseSearch && showSearchDropdown && (isSearchingUsers || !!searchError || searchResults.length > 0);
@@ -816,16 +884,30 @@ export default function Header(): React.ReactElement | null {
     if (showNotifDropdown) setActiveNotifTab('active');
   }, [showNotifDropdown]);
 
-  // Prevent body scroll when mobile menu is open
+  // Prevent body scroll when mobile menu is open and maintain scroll position
   useEffect(() => {
     if (mobileMenuOpen) {
+      const scrollY = window.scrollY;
       document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
     } else {
+      const scrollY = document.body.style.top;
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
     }
 
     return () => {
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
     };
   }, [mobileMenuOpen]);
 
@@ -1000,40 +1082,16 @@ export default function Header(): React.ReactElement | null {
               <div className="p-4 border-b border-[#ff950e]/20">
                 <div ref={searchMobileRef} className="relative group">
                   <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/15 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
-                  <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
-                    <input
-                      ref={mobileSearchInputRef}
-                      type="text"
-                      inputMode="text"
-                      value={mobileSearchInput}
-                      onChange={(event) => handleMobileSearchInputChange(event.target.value)}
-                      onFocus={handleSearchFocus}
-                      onKeyDown={handleSearchKeyDown}
-                      placeholder="Search buyers and sellers..."
-                      className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
-                      aria-label="Search users"
-                      aria-expanded={shouldShowSearchDropdown}
-                      aria-autocomplete="list"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      autoCapitalize="off"
-                      spellCheck="false"
-                    />
-                    {mobileSearchInput.trim() && (
-                      <button
-                        type="button"
-                        onClick={handleClearSearch}
-                        className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                        aria-label="Clear search"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {isSearchingUsers && hasMinimumSearchTerm && (
-                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
-                    )}
-                  </div>
+                  <MobileSearchInput
+                    value={mobileSearchInput}
+                    onChange={handleMobileSearchInputChange}
+                    onFocus={handleSearchFocus}
+                    onKeyDown={handleSearchKeyDown}
+                    onClear={handleClearSearch}
+                    isSearching={isSearchingUsers}
+                    hasMinimumTerm={hasMinimumSearchTerm}
+                    showClearButton={mobileSearchInput.trim().length > 0}
+                  />
                   {renderSearchDropdown('mobile')}
                 </div>
               </div>
