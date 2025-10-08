@@ -109,19 +109,33 @@ export default function VerifyEmailPendingPage() {
   const [verifyError, setVerifyError] = useState('');
   const [mounted, setMounted] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const hasCheckedParamsRef = useRef(false);
 
+  // FIXED: Wait for searchParams to be ready before checking
   useEffect(() => {
     setMounted(true);
-    const emailParam = searchParams.get('email');
-    const usernameParam = searchParams.get('username');
     
-    if (emailParam) setEmail(decodeURIComponent(emailParam));
-    if (usernameParam) setUsername(decodeURIComponent(usernameParam));
+    // Give Next.js time to populate searchParams
+    const timer = setTimeout(() => {
+      if (hasCheckedParamsRef.current) return;
+      hasCheckedParamsRef.current = true;
+      
+      const emailParam = searchParams.get('email');
+      const usernameParam = searchParams.get('username');
+      
+      console.log('[VerifyEmailPending] URL params:', { emailParam, usernameParam });
+      
+      if (emailParam) setEmail(decodeURIComponent(emailParam));
+      if (usernameParam) setUsername(decodeURIComponent(usernameParam));
+      
+      // Only redirect if we're sure there's no email after waiting
+      if (!emailParam) {
+        console.log('[VerifyEmailPending] No email param, redirecting to signup');
+        router.push('/signup');
+      }
+    }, 100); // Small delay to ensure searchParams are populated
     
-    if (!emailParam) {
-      router.push('/signup');
-    }
-    return undefined;
+    return () => clearTimeout(timer);
   }, [searchParams, router]);
 
   useEffect(() => {
