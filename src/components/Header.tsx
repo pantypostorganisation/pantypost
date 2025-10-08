@@ -132,6 +132,7 @@ export default function Header(): React.ReactElement | null {
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
   const searchDesktopRef = useRef<HTMLDivElement | null>(null);
   const searchMobileRef = useRef<HTMLDivElement | null>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
@@ -180,10 +181,11 @@ export default function Header(): React.ReactElement | null {
       return;
     }
 
-    if (sanitizedQuery.length < 2) {
+    // CHANGED: Minimum 3 characters instead of 2
+    if (sanitizedQuery.length < 3) {
       setIsSearchingUsers(false);
       setSearchResults([]);
-      setSearchError('Type at least 2 characters to search');
+      setSearchError('Type at least 3 characters to search');
       return;
     }
 
@@ -276,10 +278,11 @@ export default function Header(): React.ReactElement | null {
 
     setShowSearchDropdown(true);
 
-    if (trimmed.length < 2) {
+    // CHANGED: Minimum 3 characters instead of 2
+    if (trimmed.length < 3) {
       setSearchResults([]);
       setIsSearchingUsers(false);
-      setSearchError('Type at least 2 characters to search');
+      setSearchError('Type at least 3 characters to search');
     } else {
       setSearchError(null);
     }
@@ -350,12 +353,19 @@ export default function Header(): React.ReactElement | null {
 
   const handleClearSearch = useCallback(() => {
     resetSearchState();
-  }, [resetSearchState]);
+    // Keep focus on mobile input
+    if (mobileSearchInputRef.current && isMobile) {
+      setTimeout(() => {
+        mobileSearchInputRef.current?.focus();
+      }, 50);
+    }
+  }, [resetSearchState, isMobile]);
 
   const shouldShowSearchDropdown =
     canUseSearch && showSearchDropdown && (isSearchingUsers || !!searchError || searchResults.length > 0);
   const trimmedSearchQuery = searchQuery.trim();
-  const hasMinimumSearchTerm = trimmedSearchQuery.length >= 2;
+  // CHANGED: Minimum 3 characters instead of 2
+  const hasMinimumSearchTerm = trimmedSearchQuery.length >= 3;
 
   const renderSearchDropdown = (variant: 'desktop' | 'mobile') => {
     if (!canUseSearch || !shouldShowSearchDropdown) return null;
@@ -958,33 +968,39 @@ export default function Header(): React.ReactElement | null {
                 <div ref={searchMobileRef} className="relative group">
                   <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/15 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
                   <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
                     <input
-                      type="search"
-                    value={searchQuery}
-                    onChange={(event) => handleSearchInputChange(event.target.value)}
-                    onFocus={handleSearchFocus}
-                    onKeyDown={handleSearchKeyDown}
-                    placeholder="Search buyers and sellers..."
-                    className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
-                    aria-label="Search users"
-                    aria-expanded={shouldShowSearchDropdown}
-                    aria-autocomplete="list"
-                  />
-                  {trimmedSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                      aria-label="Clear search"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  {isSearchingUsers && hasMinimumSearchTerm && (
-                    <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
-                  )}
-                </div>
+                      ref={mobileSearchInputRef}
+                      type="text"
+                      inputMode="text"
+                      value={searchQuery}
+                      onChange={(event) => handleSearchInputChange(event.target.value)}
+                      onFocus={handleSearchFocus}
+                      onKeyDown={handleSearchKeyDown}
+                      placeholder="Search buyers and sellers..."
+                      className="w-full bg-[#121212] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200"
+                      aria-label="Search users"
+                      aria-expanded={shouldShowSearchDropdown}
+                      aria-autocomplete="list"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                    />
+                    {trimmedSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                        aria-label="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {isSearchingUsers && hasMinimumSearchTerm && (
+                      <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
+                    )}
+                  </div>
                   {renderSearchDropdown('mobile')}
                 </div>
               </div>
@@ -1120,38 +1136,43 @@ export default function Header(): React.ReactElement | null {
         </Link>
 
         {canUseSearch && (
-          <div className="hidden md:flex flex-1 px-4 max-w-xl">
+          <div className="hidden md:flex flex-1 px-4 max-w-md">
             <div ref={searchDesktopRef} className="relative w-full group">
               <div className="pointer-events-none absolute inset-0 rounded-xl border border-[#ff950e]/10 opacity-0 transition-opacity duration-300 group-focus-within:opacity-100"></div>
               <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4" aria-hidden="true" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#ff950e] w-4 h-4 pointer-events-none" aria-hidden="true" />
                 <input
-                  type="search"
-                value={searchQuery}
-                onChange={(event) => handleSearchInputChange(event.target.value)}
-                onFocus={handleSearchFocus}
-                onKeyDown={handleSearchKeyDown}
-                placeholder="Search buyers and sellers..."
-                className="w-full bg-[#111111] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200 shadow-inner"
-                aria-label="Search users"
-                aria-expanded={shouldShowSearchDropdown}
-                aria-autocomplete="list"
-              />
-              {trimmedSearchQuery && (
-                <button
-                  type="button"
-                  onClick={handleClearSearch}
-                  className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                  aria-label="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-              {isSearchingUsers && hasMinimumSearchTerm && (
-                <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e]" />
-              )}
-            </div>
-                {renderSearchDropdown('desktop')}
+                  type="text"
+                  inputMode="text"
+                  value={searchQuery}
+                  onChange={(event) => handleSearchInputChange(event.target.value)}
+                  onFocus={handleSearchFocus}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search buyers and sellers..."
+                  className="w-full bg-[#111111] border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-sm text-white placeholder-gray-500 rounded-xl py-2.5 pl-11 pr-14 transition-all duration-200 shadow-inner"
+                  aria-label="Search users"
+                  aria-expanded={shouldShowSearchDropdown}
+                  aria-autocomplete="list"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                />
+                {trimmedSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {isSearchingUsers && hasMinimumSearchTerm && (
+                  <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
+                )}
+              </div>
+              {renderSearchDropdown('desktop')}
             </div>
           </div>
         )}
