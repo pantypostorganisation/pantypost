@@ -6,7 +6,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Mail, RefreshCw, CheckCircle, AlertCircle, Clock, ArrowRight } from 'lucide-react';
 import { buildApiUrl } from '@/services/api.config';
-import { useAuth } from '@/context/AuthContext';
 
 // Floating particle component - matching login/signup style
 function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: number }) {
@@ -99,7 +98,6 @@ function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: nu
 export default function VerifyEmailPendingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refreshSession } = useAuth(); // CRITICAL: Get refreshSession from AuthContext
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [isResending, setIsResending] = useState(false);
@@ -200,7 +198,7 @@ export default function VerifyEmailPendingPage() {
       console.log('[Verify] Response:', data);
       
       if (data.success) {
-        // CRITICAL FIX: Store token in sessionStorage immediately
+        // Store token in sessionStorage immediately
         if (data.data?.token) {
           const tokens = {
             token: data.data.token,
@@ -216,15 +214,11 @@ export default function VerifyEmailPendingPage() {
         // Show success state
         setShowSuccess(true);
 
-        // CRITICAL FIX: Refresh AuthContext to pick up the new token
-        console.log('[Verify] Refreshing AuthContext session...');
-        await refreshSession();
-        console.log('[Verify] AuthContext refreshed - user is now logged in!');
-
-        // Redirect after showing success message
+        // Wait 2 seconds to show the beautiful success animation
+        // Then do a hard reload to ensure AuthContext picks up the new token
         setTimeout(() => {
-          console.log('[Verify] Redirecting to homepage...');
-          router.push('/');
+          console.log('[Verify] Redirecting to homepage with hard reload...');
+          window.location.href = '/';
         }, 2000);
       } else {
         setVerifyError(data.error?.message || 'Invalid verification code');
@@ -453,7 +447,7 @@ export default function VerifyEmailPendingPage() {
                 </div>
               </>
             ) : (
-              // Success State
+              // Success State - Beautiful celebration animation before reload
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -478,7 +472,7 @@ export default function VerifyEmailPendingPage() {
                 </p>
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                   <p className="text-green-400 text-sm">
-                    Redirecting you to your account...
+                    Taking you to your account...
                   </p>
                 </div>
               </motion.div>
