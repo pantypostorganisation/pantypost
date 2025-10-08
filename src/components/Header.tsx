@@ -120,7 +120,6 @@ export default function Header(): React.ReactElement | null {
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  const [mobileSearchInput, setMobileSearchInput] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -172,9 +171,7 @@ export default function Header(): React.ReactElement | null {
       return;
     }
 
-    // Use mobileSearchInput for mobile, searchQuery for desktop
-    const queryToUse = isMobile ? mobileSearchInput : searchQuery;
-    const sanitizedQuery = sanitizeSearchQuery(queryToUse).trim();
+    const sanitizedQuery = sanitizeSearchQuery(searchQuery).trim();
 
     if (!sanitizedQuery) {
       setIsSearchingUsers(false);
@@ -255,7 +252,7 @@ export default function Header(): React.ReactElement | null {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searchQuery, mobileSearchInput, canUseSearch, isMobile]);
+  }, [searchQuery, canUseSearch]);
 
   useEffect(() => {
     if (!mobileMenuOpen) {
@@ -291,45 +288,16 @@ export default function Header(): React.ReactElement | null {
     }
   }, [canUseSearch]);
 
-  const handleMobileSearchInputChange = useCallback((value: string) => {
-    if (!canUseSearch) return;
-
-    const sanitizedValue = sanitizeSearchQuery(value);
-    setMobileSearchInput(sanitizedValue);
-
-    const trimmed = sanitizedValue.trim();
-
-    if (!trimmed) {
-      setSearchResults([]);
-      setSearchError(null);
-      setIsSearchingUsers(false);
-      setShowSearchDropdown(false);
-      return;
-    }
-
-    setShowSearchDropdown(true);
-
-    if (trimmed.length < 3) {
-      setSearchResults([]);
-      setIsSearchingUsers(false);
-      setSearchError('Type at least 3 characters to search');
-    } else {
-      setSearchError(null);
-    }
-  }, [canUseSearch]);
-
   const handleSearchFocus = useCallback(() => {
     if (!canUseSearch) return;
 
-    const query = isMobile ? mobileSearchInput : searchQuery;
-    if (query.trim()) {
+    if (searchQuery.trim()) {
       setShowSearchDropdown(true);
     }
-  }, [searchQuery, mobileSearchInput, canUseSearch, isMobile]);
+  }, [searchQuery, canUseSearch]);
 
   const resetSearchState = useCallback(() => {
     setSearchQuery('');
-    setMobileSearchInput('');
     setSearchResults([]);
     setSearchError(null);
     setIsSearchingUsers(false);
@@ -395,8 +363,7 @@ export default function Header(): React.ReactElement | null {
 
   const shouldShowSearchDropdown =
     canUseSearch && showSearchDropdown && (isSearchingUsers || !!searchError || searchResults.length > 0);
-  const currentSearchQuery = isMobile ? mobileSearchInput : searchQuery;
-  const trimmedSearchQuery = currentSearchQuery.trim();
+  const trimmedSearchQuery = searchQuery.trim();
   // CHANGED: Minimum 3 characters instead of 2
   const hasMinimumSearchTerm = trimmedSearchQuery.length >= 3;
 
@@ -1006,8 +973,8 @@ export default function Header(): React.ReactElement | null {
                       ref={mobileSearchInputRef}
                       type="text"
                       inputMode="text"
-                      value={mobileSearchInput}
-                      onChange={(event) => handleMobileSearchInputChange(event.target.value)}
+                      value={searchQuery}
+                      onChange={(event) => handleSearchInputChange(event.target.value)}
                       onFocus={handleSearchFocus}
                       onKeyDown={handleSearchKeyDown}
                       placeholder="Search buyers and sellers..."
@@ -1020,7 +987,7 @@ export default function Header(): React.ReactElement | null {
                       autoCapitalize="off"
                       spellCheck="false"
                     />
-                    {mobileSearchInput.trim() && (
+                    {trimmedSearchQuery && (
                       <button
                         type="button"
                         onClick={handleClearSearch}
@@ -1191,7 +1158,7 @@ export default function Header(): React.ReactElement | null {
                   autoCapitalize="off"
                   spellCheck="false"
                 />
-                {searchQuery.trim() && (
+                {trimmedSearchQuery && (
                   <button
                     type="button"
                     onClick={handleClearSearch}
