@@ -532,7 +532,7 @@ export default function Header(): React.ReactElement | null {
   );
 
   const MobileNotificationsPanel = () => (
-    <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a] to-[#111] z-10 flex flex-col">
+    <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a] to-[#111] z-[110] flex flex-col">
       <div className="flex items-center gap-2 p-4 border-b border-[#ff950e]/30">
         <button
           onClick={() => setShowMobileNotifications(false)}
@@ -628,8 +628,9 @@ export default function Header(): React.ReactElement | null {
 
   const MobileMenu = () => (
     <>
+      {/* Increased z-index for overlay */}
       <div 
-        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[90] lg:hidden transition-opacity duration-300 ${
           mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
         onClick={() => {
@@ -638,9 +639,10 @@ export default function Header(): React.ReactElement | null {
         }}
       />
       
+      {/* Increased z-index for menu content */}
       <div
         ref={mobileMenuRef}
-        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-50 lg:hidden transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-[100] lg:hidden transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{ touchAction: 'pan-y' }}
@@ -998,6 +1000,7 @@ export default function Header(): React.ReactElement | null {
                 )}
               </Link>
 
+              {/* Increased z-index for notification dropdown */}
               <div className="relative flex items-center" ref={notifRef}>
                 <button
                   onClick={() => setShowNotifDropdown((prev) => !prev)}
@@ -1014,7 +1017,7 @@ export default function Header(): React.ReactElement | null {
                 </button>
 
                 {showNotifDropdown && (
-                  <div className="absolute right-0 top-12 w-80 bg-gradient-to-b from-[#1a1a1a] to-[#111] text-white rounded-2xl shadow-2xl z-50 border border-[#ff950e]/30 overflow-hidden backdrop-blur-md">
+                  <div className="absolute right-0 top-12 w-80 bg-gradient-to-b from-[#1a1a1a] to-[#111] text-white rounded-2xl shadow-2xl z-[100] border border-[#ff950e]/30 overflow-hidden backdrop-blur-md">
                     <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 px-4 py-2 border-b border-[#ff950e]/30">
                       <div className="flex justify-between items-center">
                         <h3 className="text-sm font-bold text-[#ff950e]">Notifications</h3>
