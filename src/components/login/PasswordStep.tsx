@@ -1,8 +1,9 @@
 // src/components/login/PasswordStep.tsx
 'use client';
 
-import { Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { Lock, AlertCircle, Eye, EyeOff, Mail } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface PasswordStepProps {
   username: string;
@@ -44,13 +45,27 @@ export default function PasswordStep({
   rememberMe,
   onRememberMeChange
 }: PasswordStepProps) {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
+  const [emailForVerification, setEmailForVerification] = useState<string | null>(null);
   
   // Reset attempt flag when error changes
   useEffect(() => {
     if (!error) {
       setHasAttemptedSubmit(false);
+    }
+  }, [error]);
+
+  // Check if error is related to email verification
+  useEffect(() => {
+    if (error && error.includes('verify your email')) {
+      // Extract email from error if available (backend should include it)
+      // This is a simple extraction - backend should ideally provide structured data
+      const emailMatch = error.match(/[\w.-]+@[\w.-]+\.\w+/);
+      if (emailMatch) {
+        setEmailForVerification(emailMatch[0]);
+      }
     }
   }, [error]);
   
@@ -102,6 +117,19 @@ export default function PasswordStep({
       onSubmit(e);
     }
   };
+
+  // Handle redirect to verification page
+  const handleGoToVerification = () => {
+    const params = new URLSearchParams();
+    if (emailForVerification) {
+      params.set('email', emailForVerification);
+    }
+    params.set('username', username);
+    router.push(`/verify-email-pending?${params.toString()}`);
+  };
+
+  // Check if this is an email verification error
+  const isEmailVerificationError = error && error.includes('verify your email');
   
   return (
     <div className="transition-all duration-300">
@@ -122,8 +150,28 @@ export default function PasswordStep({
         </div>
       </div>
 
-      {/* Error display - Show authentication errors prominently */}
-      {error && !error.includes('Too many') && (
+      {/* Email Verification Error - Special Handling */}
+      {isEmailVerificationError && (
+        <div className="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg animate-in fade-in duration-200">
+          <div className="flex items-start gap-3 mb-3">
+            <Mail className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-yellow-400 mb-1">Email Verification Required</p>
+              <p className="text-xs text-gray-300">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={handleGoToVerification}
+            className="w-full py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            <Mail className="w-4 h-4" />
+            Go to Email Verification
+          </button>
+        </div>
+      )}
+
+      {/* Regular Error display - Show authentication errors prominently */}
+      {error && !error.includes('Too many') && !isEmailVerificationError && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-sm text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -155,7 +203,7 @@ export default function PasswordStep({
               onKeyPress={handleKeyPress}
               placeholder="Enter your password"
               className={`w-full px-4 py-3 pr-10 bg-black/50 backdrop-blur-sm border ${
-                error && !error.includes('Too many') ? 'border-red-500/50' : 'border-gray-700'
+                error && !error.includes('Too many') && !isEmailVerificationError ? 'border-red-500/50' : 'border-gray-700'
               } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors`}
               autoFocus
               disabled={isLoading || isRateLimited}

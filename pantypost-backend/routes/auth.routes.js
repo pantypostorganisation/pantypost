@@ -374,7 +374,7 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// POST /api/auth/login - UPDATED TO CHECK EMAIL VERIFICATION
+// POST /api/auth/login - UPDATED TO CHECK EMAIL VERIFICATION AND AUTO-RESEND
 router.post('/login', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -427,13 +427,47 @@ router.post('/login', async (req, res) => {
 
     // Check email verification status (except for admins)
     if (user.role !== 'admin' && !user.emailVerified) {
+      // AUTO-RESEND verification email when user tries to login
+      try {
+        // Delete old verification records
+        await EmailVerification.deleteMany({ userId: user._id });
+        
+        // Create new verification
+        const verificationToken = EmailVerification.generateToken();
+        const verificationCode = EmailVerification.generateVerificationCode();
+        
+        const emailVerification = new EmailVerification({
+          userId: user._id,
+          email: user.email,
+          username: user.username,
+          token: EmailVerification.hashToken(verificationToken),
+          verificationCode,
+          verificationType: 'login_attempt',
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        });
+        await emailVerification.save();
+        
+        // Send verification email
+        const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+        
+        await sendEmail({
+          to: user.email,
+          ...emailTemplates.emailVerification(user.username, verificationLink, verificationCode)
+        });
+        
+        console.log(`✅ Auto-sent verification email to ${user.email} on login attempt`);
+      } catch (emailError) {
+        console.error('Failed to auto-send verification email:', emailError);
+      }
+      
       return res.status(403).json({
         success: false,
         error: {
-          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-          message: 'Please verify your email before logging in. Check your inbox for the verification link.',
+          code: 'EMAIL_VERIFICATION_REQUIRED',
+          message: 'Please verify your email before logging in. We just sent you a new verification link - check your inbox!',
           requiresVerification: true,
-          email: user.email
+          email: user.email,
+          username: user.username
         }
       });
     }
@@ -611,6 +645,7 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
+// [REST OF THE FILE REMAINS THE SAME - includes refresh, verify-username, admin/bootstrap, password reset routes]
 // POST /api/auth/refresh
 router.post('/refresh', async (req, res) => {
   try {
