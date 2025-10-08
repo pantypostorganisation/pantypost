@@ -229,7 +229,7 @@ export const HeaderSearch = memo(function HeaderSearch({
             variant === 'desktop' 
               ? 'bg-[#111111] text-sm py-2.5' 
               : 'bg-[#121212] py-2.5'
-          } border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-white placeholder-gray-500 rounded-xl pl-11 pr-14 transition-all duration-200`}
+          } border border-[#2a2a2a] focus:border-[#ff950e] focus:ring-2 focus:ring-[#ff950e]/40 text-white placeholder-gray-500 rounded-xl pl-11 pr-14 transition-all duration-200 search-no-native-clear`}
           aria-label="Search users"
           aria-expanded={shouldShowDropdown}
           aria-autocomplete="list"
@@ -239,11 +239,12 @@ export const HeaderSearch = memo(function HeaderSearch({
           spellCheck="false"
         />
         
+        {/* Grey Clear Button - Keep this one */}
         {trimmedQuery && (
           <button
             type="button"
             onClick={handleClearSearch}
-            className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
             aria-label="Clear search"
           >
             <X className="w-3.5 h-3.5" />
@@ -251,13 +252,13 @@ export const HeaderSearch = memo(function HeaderSearch({
         )}
         
         {isSearchingUsers && hasMinimumLength && (
-          <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
+          <Loader2 className="absolute right-11 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-[#ff950e] pointer-events-none" />
         )}
       </div>
 
-      {/* Search Results Dropdown */}
+      {/* Search Results Dropdown - Increased z-index */}
       {shouldShowDropdown && (
-        <div className={`absolute top-full left-0 right-0 mt-2 z-50 overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
+        <div className={`absolute top-full left-0 right-0 mt-2 z-[100] overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
           variant === 'desktop' ? 'max-h-80' : 'max-h-72'
         }`}>
           {isSearchingUsers && (
@@ -321,6 +322,20 @@ export const HeaderSearch = memo(function HeaderSearch({
           )}
         </div>
       )}
+
+      {/* CSS to hide native browser clear button */}
+      <style jsx>{`
+        .search-no-native-clear::-webkit-search-cancel-button,
+        .search-no-native-clear::-webkit-search-decoration {
+          -webkit-appearance: none;
+          appearance: none;
+          display: none;
+        }
+        
+        .search-no-native-clear::-ms-clear {
+          display: none;
+        }
+      `}</style>
     </div>
   );
 });
