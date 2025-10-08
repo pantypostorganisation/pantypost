@@ -140,6 +140,7 @@ export default function Header(): React.ReactElement | null {
   const hasRefreshedAdminData = useRef(false);
   const latestSearchId = useRef(0);
   const isTypingRef = useRef(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
@@ -151,19 +152,57 @@ export default function Header(): React.ReactElement | null {
     setMobileMenuOpen(false);
     setShowMobileNotifications(false);
   });
+  
   const handleCloseSearch = useCallback(() => {
     setShowSearchDropdown(false);
   }, []);
+  
   useClickOutside(searchDesktopRef, handleCloseSearch);
   useClickOutside(searchMobileRef, handleCloseSearch);
 
+  // FIX 1: Better mobile detection and overflow management
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+    };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // FIX 2: Improved body scroll lock - only when mobile menu OR mobile notifications are shown
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    if (isMobile && (mobileMenuOpen || showMobileNotifications)) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Restore scroll position
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
+    }
+
+    return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+    };
+  }, [isMobile, mobileMenuOpen, showMobileNotifications]);
+
+  // FIX 3: Debounced search with better mobile handling
   useEffect(() => {
     if (!canUseSearch) {
       setIsSearchingUsers(false);
@@ -180,16 +219,19 @@ export default function Header(): React.ReactElement | null {
       setSearchResults([]);
       setSearchError(null);
       setShowSearchDropdown(false);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
       return;
     }
 
     if (sanitizedQuery.length < 3) {
-      if (!isTypingRef.current) {
-        setIsSearchingUsers(false);
-        setSearchResults([]);
-        setSearchError(null);
-      }
       setShowSearchDropdown(false);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
       return;
     }
 
@@ -199,7 +241,15 @@ export default function Header(): React.ReactElement | null {
     setIsSearchingUsers(true);
     setSearchError(null);
 
-    const timer = setTimeout(async () => {
+    // Clear existing timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // FIX: Longer debounce for mobile (500ms vs 300ms)
+    const debounceTime = isMobile ? 500 : 300;
+    
+    searchTimeoutRef.current = setTimeout(async () => {
       try {
         const response = await usersService.getUsers({ query: sanitizedQuery, limit: 8 });
         if (cancelled || latestSearchId.current !== searchId) return;
@@ -250,20 +300,25 @@ export default function Header(): React.ReactElement | null {
           setIsSearchingUsers(false);
         }
       }
-    }, 300);
+    }, debounceTime);
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = null;
+      }
     };
-  }, [searchQuery, canUseSearch]);
+  }, [searchQuery, canUseSearch, isMobile]);
 
+  // Close search dropdown when mobile menu closes
   useEffect(() => {
     if (!mobileMenuOpen) {
       setShowSearchDropdown(false);
     }
   }, [mobileMenuOpen]);
 
+  // FIX 4: Improved search input handling for mobile
   const handleSearchInputChange = useCallback((value: string) => {
     if (!canUseSearch) return;
 
@@ -273,25 +328,36 @@ export default function Header(): React.ReactElement | null {
 
     const trimmed = sanitizedValue.trim();
 
-    if (trimmed.length >= 3) {
+    // FIX: Don't auto-show dropdown while typing on mobile
+    if (trimmed.length >= 3 && !isMobile) {
       setShowSearchDropdown(true);
     } else if (trimmed.length === 0) {
       setShowSearchDropdown(false);
     }
 
+    // FIX: Longer timeout for mobile typing indicator
+    const timeout = isMobile ? 200 : 100;
     setTimeout(() => {
       isTypingRef.current = false;
-    }, 100);
-  }, [canUseSearch]);
+    }, timeout);
+  }, [canUseSearch, isMobile]);
 
+  // FIX 5: Better focus handling for mobile
   const handleSearchFocus = useCallback(() => {
     if (!canUseSearch) return;
 
     const trimmed = searchQuery.trim();
     if (trimmed && trimmed.length >= 3) {
-      setShowSearchDropdown(true);
+      // FIX: Small delay before showing dropdown on mobile to prevent bounce
+      if (isMobile) {
+        setTimeout(() => {
+          setShowSearchDropdown(true);
+        }, 100);
+      } else {
+        setShowSearchDropdown(true);
+      }
     }
-  }, [searchQuery, canUseSearch]);
+  }, [searchQuery, canUseSearch, isMobile]);
 
   const resetSearchState = useCallback(() => {
     setSearchQuery('');
@@ -299,11 +365,19 @@ export default function Header(): React.ReactElement | null {
     setSearchError(null);
     setIsSearchingUsers(false);
     setShowSearchDropdown(false);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+      searchTimeoutRef.current = null;
+    }
   }, []);
 
+  // FIX 6: Improved navigation handler
   const prepareForNavigation = useCallback(
     (closeMenu?: boolean) => {
+      // Clear search state
       resetSearchState();
+      
+      // Close menus if requested
       if (closeMenu) {
         setMobileMenuOpen(false);
         setShowMobileNotifications(false);
@@ -317,13 +391,26 @@ export default function Header(): React.ReactElement | null {
     return result.role === 'seller' ? `/sellers/${encodedUsername}` : `/buyers/${encodedUsername}`;
   }, []);
 
+  // FIX 7: Better navigation with proper async handling
   const navigateToResult = useCallback(
     (result: SearchUserResult, options?: { closeMenu?: boolean }) => {
       const path = getProfilePath(result);
-      prepareForNavigation(options?.closeMenu);
-      router.push(path);
+      
+      // Close everything first
+      if (options?.closeMenu) {
+        setMobileMenuOpen(false);
+        setShowMobileNotifications(false);
+      }
+      
+      // Reset search
+      resetSearchState();
+      
+      // Small delay to ensure state updates before navigation
+      setTimeout(() => {
+        router.push(path);
+      }, 50);
     },
-    [getProfilePath, prepareForNavigation, router],
+    [getProfilePath, resetSearchState, router],
   );
 
   const handleSearchKeyDown = useCallback(
@@ -350,10 +437,11 @@ export default function Header(): React.ReactElement | null {
 
   const handleClearSearch = useCallback(() => {
     resetSearchState();
-    if (mobileSearchInputRef.current && isMobile) {
+    // FIX: Better focus handling on mobile
+    if (isMobile && mobileSearchInputRef.current) {
       setTimeout(() => {
         mobileSearchInputRef.current?.focus();
-      }, 50);
+      }, 100);
     }
   }, [resetSearchState, isMobile]);
 
@@ -374,6 +462,10 @@ export default function Header(): React.ReactElement | null {
         className={`absolute top-full left-0 right-0 mt-2 z-50 overflow-hidden rounded-2xl border border-[#ff950e]/20 bg-gradient-to-b from-[#181818] via-[#101010] to-[#0b0b0b] shadow-2xl ${
           variant === 'desktop' ? 'max-h-80' : 'max-h-72'
         }`}
+        style={{ 
+          // FIX: Prevent dropdown from causing scroll on mobile
+          ...(variant === 'mobile' && { position: 'absolute', top: '100%', left: 0, right: 0 })
+        }}
       >
         {isSearchingUsers && (
           <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-300">
@@ -445,6 +537,8 @@ export default function Header(): React.ReactElement | null {
       </div>
     );
   };
+
+  // ... rest of the component remains the same, but I'll include key sections for completeness
 
   const pendingOrdersCount = useMemo(() => {
     if (!user?.username || user.role !== 'seller') return 0;
@@ -782,23 +876,14 @@ export default function Header(): React.ReactElement | null {
     if (showNotifDropdown) setActiveNotifTab('active');
   }, [showNotifDropdown]);
 
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [mobileMenuOpen]);
-
   const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
     <Link
       href={href}
       className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1"
-      onClick={() => setMobileMenuOpen(false)}
+      onClick={() => {
+        setMobileMenuOpen(false);
+        setShowMobileNotifications(false);
+      }}
       style={{ touchAction: 'manipulation' }}
     >
       <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg">
@@ -914,7 +999,10 @@ export default function Header(): React.ReactElement | null {
         className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${
           mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setMobileMenuOpen(false)}
+        onClick={() => {
+          setMobileMenuOpen(false);
+          setShowMobileNotifications(false);
+        }}
       />
       
       <div
@@ -930,7 +1018,10 @@ export default function Header(): React.ReactElement | null {
           <>
             <div className="relative p-6 border-b border-[#ff950e]/30">
               <button
-                onClick={() => setMobileMenuOpen(false)}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setShowMobileNotifications(false);
+                }}
                 className="absolute top-4 right-4 text-[#ff950e] hover:text-white transition-colors p-2 z-10"
                 aria-label="Close menu"
               >
@@ -1082,14 +1173,20 @@ export default function Header(): React.ReactElement | null {
                     <Link
                       href="/login"
                       className="block text-center bg-gradient-to-r from-[#2a2a2a] to-[#333] hover:from-[#333] hover:to-[#444] text-white font-bold px-4 py-3 rounded-lg transition-all duration-300 border border-[#444] hover:border-[#555]"
-                      onClick={() => setMobileMenuOpen(false)}
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        setShowMobileNotifications(false);
+                      }}
                     >
                       Log In
                     </Link>
                     <Link
                       href="/signup"
                       className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30"
-                      onClick={() => setMobileMenuOpen(false)}
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        setShowMobileNotifications(false);
+                      }}
                       style={{ color: '#2a2a2a' }}
                     >
                       Sign Up
@@ -1103,6 +1200,7 @@ export default function Header(): React.ReactElement | null {
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false);
+                      setShowMobileNotifications(false);
                       logout();
                     }}
                     className="flex items-center gap-3 text-red-400 hover:bg-red-900/20 p-3 rounded-lg transition-all duration-200 w-full"
