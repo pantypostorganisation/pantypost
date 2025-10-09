@@ -855,9 +855,7 @@ export default function Header(): React.ReactElement | null {
             href="/browse"
             className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-[#ff950e] px-3 py-1.5 rounded-lg transition-colors duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20 text-xs"
           >
-            <span className="flex h-5 w-5 items-center justify-center">
-              <ShoppingBag className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110" />
-            </span>
+            <ShoppingBag className="w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-110" />
             <span className="font-medium">Browse</span>
           </Link>
 
@@ -1163,9 +1161,7 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <span className="flex h-5 w-5 items-center justify-center">
-                  <WalletIcon className="h-3.5 w-3.5 text-purple-400" />
-                </span>
+                <WalletIcon className="w-3.5 h-3.5 text-purple-400" />
                 <span className="font-bold text-purple-400">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>
 
