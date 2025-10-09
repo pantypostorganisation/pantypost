@@ -853,7 +853,7 @@ export default function Header(): React.ReactElement | null {
           <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
           <Link
             href="/browse"
-            className="group inline-flex items-center gap-1.5 bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-[#ff950e] px-3 py-1.5 rounded-lg transition-colors duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20 text-xs"
+            className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-[#ff950e] px-3 py-1.5 rounded-lg transition-colors duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20 text-xs"
           >
             <span className="flex h-5 w-5 items-center justify-center">
               <ShoppingBag className="h-3.5 w-3.5 transition-transform duration-300 group-hover:scale-110" />
@@ -1155,7 +1155,7 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/wallet/buyer"
-                className="group inline-flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-colors duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs"
+                className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-colors duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
