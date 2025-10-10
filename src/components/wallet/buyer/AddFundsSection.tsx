@@ -64,40 +64,40 @@ export default function AddFundsSection({
 
   const messageClasses =
     messageType === 'success'
-      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
       : messageType === 'error'
-      ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-      : 'bg-gray-700/20 text-gray-300 border border-gray-600/30';
+      ? 'border-red-500/40 bg-red-500/10 text-red-200'
+      : 'border-white/10 bg-black/40 text-gray-300';
 
   return (
-    <section className="bg-[#141414] rounded-2xl border border-gray-800/80 hover:border-gray-700 transition-colors relative overflow-hidden mb-8">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 to-transparent" />
+    <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_30px_90px_-70px_rgba(66,153,255,0.6)] transition-colors hover:border-white/20 sm:p-8">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.18),transparent_55%)]" />
 
-      <div className="relative z-10 px-5 py-5 md:px-6 md:py-6">
+      <div className="relative z-10 flex flex-col gap-6">
         {/* Header row */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <h2 className="text-xl font-semibold flex items-center text-white">
-            <div className="bg-gradient-to-r from-[#ff950e] to-orange-600 p-2 rounded-lg mr-2 shadow-md shadow-orange-500/15">
-              <PlusCircle className="w-5 h-5 text-white" />
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/15">
+              <PlusCircle className="h-5 w-5 text-white" />
             </div>
-            Add Funds
-          </h2>
+            <div>
+              <h2 className="text-xl font-semibold text-white sm:text-2xl">Add Funds</h2>
+              <p className="text-sm text-gray-400">Choose an amount, confirm, and spend immediately.</p>
+            </div>
+          </div>
 
-          <span className="inline-flex items-center gap-1.5 self-start md:self-center rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1 text-xs text-blue-300">
-            <Zap className="w-3.5 h-3.5" />
-            Instant Processing
+          <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-200 md:self-center">
+            <Zap className="h-3.5 w-3.5" />
+            Instant processing
           </span>
         </div>
-
-        {/* Divider */}
-        <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-gray-800 to-transparent" />
 
         {/* Form */}
         <SecureForm
           onSubmit={handleSubmit}
           rateLimitKey="deposit"
           rateLimitConfig={RATE_LIMITS.DEPOSIT}
-          className="mt-6 space-y-6"
+          className="space-y-6"
         >
           <SecureInput
             id="amount"
@@ -118,13 +118,13 @@ export default function AddFundsSection({
           />
 
           {/* Quick amount buttons */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[25, 50, 100, 200].map((quickAmount) => (
               <button
                 key={quickAmount}
                 type="button"
                 onClick={() => onQuickAmountSelect(quickAmount.toString())}
-                className="py-2.5 px-3 rounded-lg bg-black/40 hover:bg-black/60 border border-gray-700 hover:border-[#ff950e]/50 text-gray-300 hover:text-white transition-all duration-200 text-sm font-medium disabled:opacity-50"
+                className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-sm font-semibold text-gray-200 transition-all duration-200 hover:border-[#ff950e]/40 hover:bg-black/60 hover:text-white disabled:opacity-50"
                 disabled={isLoading}
               >
                 ${quickAmount}
@@ -171,7 +171,7 @@ export default function AddFundsSection({
 
         {/* Message */}
         {message && (
-          <div className={`mt-6 p-4 rounded-lg flex items-start text-sm ${messageClasses}`}>
+          <div className={`mt-2 flex items-start gap-2 rounded-2xl border p-4 text-sm ${messageClasses}`}>
             {messageType === 'success' ? (
               <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
             ) : messageType === 'error' ? (
