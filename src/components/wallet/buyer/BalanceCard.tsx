@@ -16,19 +16,7 @@ export default function BalanceCard({ balance }: BalanceCardProps) {
       className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8"
     >
       <div className="flex flex-col gap-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.35em] text-[#ff950e]">
-              Balance
-            </span>
-            <div className="flex items-end gap-3">
-              <p className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
-                ${safeBalance.toFixed(2)}
-              </p>
-              <span className="pb-1 text-xs font-medium uppercase tracking-wider text-gray-400">USD</span>
-            </div>
-          </div>
-
+        <div className="flex flex-wrap items-center justify-end gap-4">
           <div className="inline-flex items-center gap-3 rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10 px-4 py-2 text-sm font-semibold text-[#ff950e]">
             <DollarSign className="h-4 w-4" />
             Available to spend
