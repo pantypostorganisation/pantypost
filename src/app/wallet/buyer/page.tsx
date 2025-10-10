@@ -10,7 +10,6 @@ import BalanceCard from '@/components/wallet/buyer/BalanceCard';
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import EmptyState from '@/components/wallet/buyer/EmptyState';
-import BackgroundPattern from '@/components/wallet/buyer/BackgroundPattern';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -42,12 +41,9 @@ function BuyerWalletContent() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
-      <BackgroundPattern />
-
       <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-10">
-          <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 lg:p-12 shadow-[0_40px_120px_-60px_rgba(59,130,246,0.35)]">
-            <div className="pointer-events-none absolute inset-x-6 inset-y-4 rounded-[2.25rem] border border-white/5 bg-gradient-to-r from-white/[0.04] via-transparent to-white/[0.04] opacity-40 blur-3xl" />
+          <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 lg:p-12">
             <div className="relative">
               <WalletHeader />
             </div>
