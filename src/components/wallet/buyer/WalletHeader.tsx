@@ -7,7 +7,7 @@ export default function WalletHeader() {
     <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
       <div className="flex flex-1 flex-col gap-8">
         <div className="flex items-center gap-5">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-[#ff950e]/50 bg-[#ff950e]/15 backdrop-blur-sm">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-blue-400/40 bg-blue-500/15 backdrop-blur-sm">
             <Wallet className="h-7 w-7 text-white" />
           </div>
           <div>
@@ -36,8 +36,8 @@ export default function WalletHeader() {
             </div>
           </div>
           <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/40 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#ff950e]/20">
-              <Zap className="h-5 w-5 text-[#ffb347]" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-sky-500/20">
+              <Zap className="h-5 w-5 text-sky-200" />
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-gray-500">Instant reloads</p>
@@ -58,8 +58,8 @@ export default function WalletHeader() {
 
       <div className="flex w-full max-w-sm flex-col gap-4 rounded-3xl border border-white/10 bg-black/40 p-6 text-sm text-gray-300">
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/15">
-            <CreditCard className="h-6 w-6 text-[#ffb347]" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-400/40 bg-blue-500/15">
+            <CreditCard className="h-6 w-6 text-blue-200" />
           </div>
           <div>
             <p className="text-sm font-semibold text-white">Sync with your dashboard</p>
@@ -69,7 +69,7 @@ export default function WalletHeader() {
 
         <div className="rounded-2xl border border-white/5 bg-black/30 p-4 text-xs text-gray-400">
           <p className="flex items-center gap-2">
-            <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
+            <ArrowUpRight className="h-4 w-4 text-sky-300" />
             Keep purchases flowing—add funds before you check out to skip processing delays.
           </p>
         </div>

@@ -13,10 +13,10 @@ export default function BalanceCard({ balance }: BalanceCardProps) {
   return (
     <section
       aria-label="Current balance"
-      className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_30px_90px_-60px_rgba(255,149,14,0.6)] transition-colors hover:border-white/20 sm:p-8"
+      className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-6 shadow-[0_30px_90px_-60px_rgba(59,130,246,0.35)] transition-colors hover:border-white/20 sm:p-8"
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,149,14,0.18),transparent_55%)]" />
-      <div className="pointer-events-none absolute -left-20 top-1/2 h-60 w-60 -translate-y-1/2 rounded-full bg-[#ff950e]/20 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.18),transparent_55%)]" />
+      <div className="pointer-events-none absolute -left-20 top-1/2 h-60 w-60 -translate-y-1/2 rounded-full bg-blue-500/20 blur-3xl" />
 
       <div className="relative z-10 flex flex-col gap-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -32,39 +32,24 @@ export default function BalanceCard({ balance }: BalanceCardProps) {
             </div>
           </div>
 
-          <div className="inline-flex items-center gap-3 rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/15 px-4 py-2 text-sm font-semibold text-white">
+          <div className="inline-flex items-center gap-3 rounded-2xl border border-blue-400/40 bg-blue-500/15 px-4 py-2 text-sm font-semibold text-white">
             <DollarSign className="h-4 w-4" />
             Available to spend
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15">
-              <ShieldCheck className="h-5 w-5 text-emerald-300" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">Escrow</p>
-              <p className="text-sm font-semibold text-white">Funds protected</p>
-            </div>
+        <div className="flex flex-col gap-3 text-sm text-gray-400">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-emerald-300" />
+            <span>Escrow protection keeps every transaction secure.</span>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff950e]/20">
-              <Zap className="h-5 w-5 text-[#ffb347]" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">Processing</p>
-              <p className="text-sm font-semibold text-white">Instant reloads</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-sky-300" />
+            <span>Instant reloads mean funds are ready to spend immediately.</span>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/20">
-              <Clock className="h-5 w-5 text-purple-200" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">Activity</p>
-              <p className="text-sm font-semibold text-white">Real-time sync</p>
-            </div>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-indigo-300" />
+            <span>Real-time activity sync keeps your balance up to date.</span>
           </div>
         </div>
 
@@ -72,7 +57,7 @@ export default function BalanceCard({ balance }: BalanceCardProps) {
           <p>
             Each transaction includes a <span className="font-semibold text-gray-100">10% platform fee</span> for secure processing and buyer protection.
           </p>
-          <span className="inline-flex items-center gap-2 text-[#ffb347]">
+          <span className="inline-flex items-center gap-2 text-sky-200">
             <ArrowUpRight className="h-4 w-4" />
             Boost your balance to stay checkout-ready.
           </span>
