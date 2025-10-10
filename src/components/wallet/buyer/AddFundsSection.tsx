@@ -67,18 +67,16 @@ export default function AddFundsSection({
       ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
       : messageType === 'error'
       ? 'border-red-500/40 bg-red-500/10 text-red-200'
-      : 'border-white/10 bg-black/40 text-gray-300';
+      : 'border-gray-800 bg-[#0c0c0c] text-gray-300';
 
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 shadow-[0_30px_90px_-70px_rgba(66,153,255,0.6)] transition-colors hover:border-white/20 sm:p-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.18),transparent_55%)]" />
-
-      <div className="relative z-10 flex flex-col gap-6">
+    <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
+      <div className="flex flex-col gap-6">
         {/* Header row */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-blue-400/40 bg-blue-500/15">
-              <PlusCircle className="h-5 w-5 text-white" />
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+              <PlusCircle className="h-5 w-5 text-[#ff950e]" />
             </div>
             <div>
               <h2 className="text-xl font-semibold text-white sm:text-2xl">Add Funds</h2>
@@ -86,7 +84,7 @@ export default function AddFundsSection({
             </div>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-blue-500/30 bg-blue-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-blue-200 md:self-center">
+          <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#ff950e] md:self-center">
             <Zap className="h-3.5 w-3.5" />
             Instant processing
           </span>
@@ -124,7 +122,7 @@ export default function AddFundsSection({
                 key={quickAmount}
                 type="button"
                 onClick={() => onQuickAmountSelect(quickAmount.toString())}
-                className="rounded-xl border border-white/10 bg-black/40 py-2.5 text-sm font-semibold text-gray-200 transition-all duration-200 hover:border-blue-400/40 hover:bg-black/60 hover:text-white disabled:opacity-50"
+                className="rounded-xl border border-gray-800 bg-[#0c0c0c] py-2.5 text-sm font-semibold text-gray-200 transition-colors duration-200 hover:border-[#ff950e] hover:text-white disabled:opacity-50"
                 disabled={isLoading}
               >
                 ${quickAmount}
@@ -136,12 +134,7 @@ export default function AddFundsSection({
           <div className="flex justify-center">
             <button
               type="submit"
-              className="relative overflow-hidden px-10 py-3.5 rounded-full font-semibold flex items-center justify-center
-                         bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500
-                         text-white shadow-md shadow-blue-500/30
-                         transition-all duration-300
-                         hover:scale-105 hover:shadow-blue-500/50
-                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="flex items-center justify-center rounded-full bg-[#ff950e] px-10 py-3.5 font-semibold text-black transition-colors duration-200 hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-50"
               disabled={
                 isLoading ||
                 !amountToAdd ||
@@ -150,10 +143,6 @@ export default function AddFundsSection({
                 !!amountError
               }
             >
-              {/* Shimmer overlay */}
-              <span className="absolute inset-0 rounded-full bg-gradient-to-r from-white/0 via-white/20 to-white/0 
-                               translate-x-[-100%] animate-[shimmer_2s_infinite] pointer-events-none" />
-
               {isLoading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>

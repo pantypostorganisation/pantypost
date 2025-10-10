@@ -43,10 +43,8 @@ function BuyerWalletContent() {
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-10">
-          <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 lg:p-12">
-            <div className="relative">
-              <WalletHeader />
-            </div>
+          <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 sm:p-8 lg:p-10">
+            <WalletHeader />
           </section>
 
           <section className="grid gap-6 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)]">
@@ -99,13 +97,13 @@ function BuyerWalletWrapper() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
+          <div className="w-4 h-4 rounded-full bg-[#ff950e] animate-pulse"></div>
           <div
-            className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"
+            className="w-4 h-4 rounded-full bg-[#ff950e] animate-pulse"
             style={{ animationDelay: '0.2s' }}
           ></div>
           <div
-            className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"
+            className="w-4 h-4 rounded-full bg-[#ff950e] animate-pulse"
             style={{ animationDelay: '0.4s' }}
           ></div>
         </div>
