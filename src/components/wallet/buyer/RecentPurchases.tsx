@@ -40,7 +40,7 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
 
           <a
             href="/buyers/my-orders"
-            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2 text-sm font-medium text-[#ffb347] transition-colors hover:border-[#ff950e]/50 hover:bg-black/60 hover:text-white"
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-2 text-sm font-medium text-sky-200 transition-colors hover:border-blue-400/40 hover:bg-black/60 hover:text-white"
           >
             View all orders
             <ArrowRight className="h-4 w-4" />
@@ -64,7 +64,7 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
                   </div>
                   <div className="space-y-2">
                     <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-                      <h3 className="text-base font-semibold text-white transition-colors group-hover/item:text-[#ffb347]">
+                      <h3 className="text-base font-semibold text-white transition-colors group-hover/item:text-sky-200">
                         {purchase.title}
                       </h3>
                       <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-widest text-gray-400">
@@ -83,7 +83,7 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
                 </div>
 
                 <div className="flex flex-col items-end">
-                  <p className="text-xl font-semibold text-[#ffb347]">
+                  <p className="text-xl font-semibold text-sky-200">
                     ${(purchase.markedUpPrice ?? purchase.price).toFixed(2)}
                   </p>
                   <span className="text-xs uppercase tracking-widest text-gray-500">Paid in wallet</span>

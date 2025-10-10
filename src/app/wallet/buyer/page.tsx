@@ -46,7 +46,7 @@ function BuyerWalletContent() {
 
       <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-10">
-          <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 lg:p-12 shadow-[0_40px_120px_-60px_rgba(255,149,14,0.45)]">
+          <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02] p-6 sm:p-8 lg:p-12 shadow-[0_40px_120px_-60px_rgba(59,130,246,0.35)]">
             <div className="pointer-events-none absolute inset-x-6 inset-y-4 rounded-[2.25rem] border border-white/5 bg-gradient-to-r from-white/[0.04] via-transparent to-white/[0.04] opacity-40 blur-3xl" />
             <div className="relative">
               <WalletHeader />
@@ -103,13 +103,13 @@ function BuyerWalletWrapper() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"></div>
+          <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
           <div
-            className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"
+            className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"
             style={{ animationDelay: '0.2s' }}
           ></div>
           <div
-            className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"
+            className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"
             style={{ animationDelay: '0.4s' }}
           ></div>
         </div>
