@@ -62,28 +62,24 @@ export default function AnimatedUserCounter({
     }
   }, [springValue]);
 
-  // Initial fetch and periodic refresh
+  // Initial fetch
   useEffect(() => {
     mountedRef.current = true;
     fetchStats();
 
-    // Refresh stats every 5 minutes
-    const interval = setInterval(fetchStats, 5 * 60 * 1000);
-
     return () => {
       mountedRef.current = false;
-      clearInterval(interval);
     };
   }, [fetchStats]);
 
-  // WebSocket real-time updates
+  // WebSocket real-time updates (for authenticated users)
   useEffect(() => {
     if (!webSocket) {
-      console.log('[AnimatedUserCounter] WebSocket not available yet');
+      console.log('[AnimatedUserCounter] WebSocket not available - user is likely a guest');
       return;
     }
 
-    console.log('[AnimatedUserCounter] Setting up WebSocket subscriptions');
+    console.log('[AnimatedUserCounter] Setting up WebSocket subscriptions for authenticated user');
 
     // Listen for new user registration events
     const unsubscribeNewUser = webSocket.subscribe('user:registered', (data: any) => {
@@ -137,6 +133,49 @@ export default function AnimatedUserCounter({
       unsubscribeStatsUpdate();
     };
   }, [webSocket, springValue]);
+
+  // Polling for guests (when WebSocket not available)
+  useEffect(() => {
+    // Only poll if:
+    // 1. Not loading initial data
+    // 2. No WebSocket (guest user)
+    if (isLoading || webSocket) {
+      return;
+    }
+
+    console.log('[AnimatedUserCounter] Starting polling for guest user (every 10s)');
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await userStatsService.getUserStats();
+        if (response.success && response.data && mountedRef.current) {
+          const newTotal = response.data.totalUsers;
+          
+          // Check if count increased
+          if (newTotal > targetCount) {
+            console.log('[AnimatedUserCounter] Polling detected new users:', newTotal, '(was', targetCount + ')');
+            
+            setTargetCount(newTotal);
+            setNewUsersToday(response.data.newUsersToday);
+            springValue.set(newTotal);
+            
+            // Show celebration animation
+            setShowUpdateAnimation(true);
+            setTimeout(() => {
+              if (mountedRef.current) setShowUpdateAnimation(false);
+            }, 3000);
+          }
+        }
+      } catch (error) {
+        console.error('[AnimatedUserCounter] Polling error:', error);
+      }
+    }, 10000); // Poll every 10 seconds
+    
+    return () => {
+      console.log('[AnimatedUserCounter] Stopping polling');
+      clearInterval(pollInterval);
+    };
+  }, [webSocket, isLoading, targetCount, springValue]);
 
   if (compact) {
     return (
