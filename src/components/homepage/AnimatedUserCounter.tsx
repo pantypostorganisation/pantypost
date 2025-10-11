@@ -18,7 +18,7 @@ export default function AnimatedUserCounter({
   showNewUsersToday = false,
   compact = false 
 }: AnimatedUserCounterProps) {
-  const [targetCount, setTargetCount] = useState(10000);
+  const [targetCount, setTargetCount] = useState(0);
   const [newUsersToday, setNewUsersToday] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
@@ -26,7 +26,7 @@ export default function AnimatedUserCounter({
   const mountedRef = useRef(true);
 
   // Spring animation for smooth counting
-  const springValue = useSpring(10000, { 
+  const springValue = useSpring(0, { 
     stiffness: 30, 
     damping: 30,
     mass: 1 
@@ -34,7 +34,7 @@ export default function AnimatedUserCounter({
 
   // Transform the spring value to an integer
   const displayCount = useTransform(springValue, (value) => Math.round(value));
-  const [formattedCount, setFormattedCount] = useState('10,000');
+  const [formattedCount, setFormattedCount] = useState('0');
 
   // Update formatted count when display count changes
   useEffect(() => {
@@ -144,7 +144,7 @@ export default function AnimatedUserCounter({
             animate={showUpdateAnimation ? { scale: [1, 1.1, 1] } : {}}
             transition={{ duration: 0.3 }}
           >
-            {formattedCount}+
+            {formattedCount}
           </motion.span>{' '}
           users
         </span>
