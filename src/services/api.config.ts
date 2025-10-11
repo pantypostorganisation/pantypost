@@ -52,7 +52,6 @@ export const API_ENDPOINTS = {
     VERIFICATION: '/users/:username/verification',
     SETTINGS: '/users/:username/settings',
     LIST: '/users',
-    STATS: '/users/stats',
   },
   
   // Listing endpoints

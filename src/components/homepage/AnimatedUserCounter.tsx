@@ -6,7 +6,6 @@ import { motion, useSpring, useTransform } from 'framer-motion';
 import { CheckCircle, Users, TrendingUp } from 'lucide-react';
 import { userStatsService } from '@/services/userStats.service';
 import { useWebSocket } from '@/context/WebSocketContext';
-import { WebSocketState } from '@/types/websocket';
 
 interface AnimatedUserCounterProps {
   className?: string;
@@ -24,9 +23,6 @@ export default function AnimatedUserCounter({
   const [isLoading, setIsLoading] = useState(true);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
   const webSocket = useWebSocket();
-  const isWebSocketReady =
-    webSocket?.connectionState === WebSocketState.CONNECTED &&
-    webSocket?.isConnected;
   const mountedRef = useRef(true);
 
   // Spring animation for smooth counting
@@ -78,8 +74,8 @@ export default function AnimatedUserCounter({
 
   // WebSocket real-time updates (for authenticated users)
   useEffect(() => {
-    if (!webSocket || !isWebSocketReady) {
-      console.log('[AnimatedUserCounter] WebSocket not ready - falling back to polling');
+    if (!webSocket) {
+      console.log('[AnimatedUserCounter] WebSocket not available - user is likely a guest');
       return;
     }
 
@@ -136,14 +132,14 @@ export default function AnimatedUserCounter({
       unsubscribeNewUser();
       unsubscribeStatsUpdate();
     };
-  }, [webSocket, isWebSocketReady, springValue]);
+  }, [webSocket, springValue]);
 
   // Polling for guests (when WebSocket not available)
   useEffect(() => {
     // Only poll if:
     // 1. Not loading initial data
     // 2. No WebSocket (guest user)
-    if (isLoading || isWebSocketReady) {
+    if (isLoading || webSocket) {
       return;
     }
 
@@ -179,7 +175,7 @@ export default function AnimatedUserCounter({
       console.log('[AnimatedUserCounter] Stopping polling');
       clearInterval(pollInterval);
     };
-  }, [isWebSocketReady, isLoading, targetCount, springValue]);
+  }, [webSocket, isLoading, targetCount, springValue]);
 
   if (compact) {
     return (
