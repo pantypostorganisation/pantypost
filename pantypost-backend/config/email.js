@@ -2,7 +2,7 @@
 const nodemailer = require('nodemailer');
 
 // Create email transporter
-const createTransporter = () => {
+const createTransport = () => {
   // Check if we have email credentials
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.warn('⚠️  Email credentials not set. Emails will be logged to console only.');
@@ -11,7 +11,7 @@ const createTransporter = () => {
   
   try {
     // Create reusable transporter object using SMTP transport
-    const transporter = nodemailer.createTransporter({
+    const transporter = nodemailer.createTransport({
       service: 'gmail',
       host: 'smtp.gmail.com',
       port: 587,
