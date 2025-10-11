@@ -38,41 +38,30 @@ class UserStatsService {
         return { success: true, data: this.cache };
       }
 
-      // Fetch fresh data
+      // Fetch fresh data using the standard apiCall helper
       console.log('[UserStatsService] Fetching user stats from API');
       
-      const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
-      const url = `${baseUrl}/users/stats`; // FIXED: Don't add /api/ again
+      // Use apiCall - the generic type should be the data type, not the response wrapper
+      const response = await apiCall<UserStats>('/users/stats');
       
-      console.log('[UserStatsService] API URL:', url);
+      console.log('[UserStatsService] Response:', response);
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log('[UserStatsService] Response status:', response.status);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('[UserStatsService] Response data:', data);
-
-      if (data.success && data.data) {
-        // Cache the result
-        this.cache = data.data;
+      if (response.success && response.data) {
+        // Cache the result - response.data is UserStats
+        this.cache = response.data;
         this.cacheTimestamp = now;
         
-        return { success: true, data: data.data };
+        return { success: true, data: this.cache };
       }
 
       return {
         success: false,
-        error: data.error || { code: 'UNKNOWN', message: 'Failed to fetch stats' }
+        error: response.error 
+          ? { 
+              code: response.error.code || 'UNKNOWN', 
+              message: response.error.message || 'Failed to fetch stats' 
+            }
+          : { code: 'UNKNOWN', message: 'Failed to fetch stats' }
       };
     } catch (error) {
       console.error('[UserStatsService] Error fetching user stats:', error);
