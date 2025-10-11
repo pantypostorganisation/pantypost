@@ -47,7 +47,7 @@ function signToken(user) {
 
 // ============= AUTH ROUTES =============
 
-// POST /api/auth/signup - UPDATED WITH EMAIL VERIFICATION
+// POST /api/auth/signup - UPDATED WITH EMAIL VERIFICATION AND WEBSOCKET EVENTS
 router.post('/signup', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -147,6 +147,50 @@ router.post('/signup', async (req, res) => {
       // Continue even if email fails in development
     }
 
+    // ========== NEW: WEBSOCKET INTEGRATION FOR USER STATS ==========
+    // Emit new user registration event
+    if (webSocketService && webSocketService.io) {
+      // Emit to all connected clients about new user
+      webSocketService.io.emit('user:registered', {
+        userId: newUser._id.toString(),
+        username: newUser.username,
+        role: newUser.role,
+        timestamp: new Date().toISOString()
+      });
+
+      // Calculate and broadcast updated user statistics
+      try {
+        const [totalUsers, newUsersToday] = await Promise.all([
+          User.countDocuments(),
+          User.countDocuments({ 
+            createdAt: { 
+              $gte: new Date(new Date().setHours(0, 0, 0, 0)) 
+            } 
+          })
+        ]);
+
+        const [totalBuyers, totalSellers, verifiedSellers] = await Promise.all([
+          User.countDocuments({ role: 'buyer' }),
+          User.countDocuments({ role: 'seller' }),
+          User.countDocuments({ role: 'seller', isVerified: true })
+        ]);
+
+        webSocketService.io.emit('stats:users', {
+          totalUsers,
+          totalBuyers,
+          totalSellers,
+          verifiedSellers,
+          newUsersToday,
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log(`📊 Broadcasted user stats - Total: ${totalUsers}, New today: ${newUsersToday}`);
+      } catch (statsError) {
+        console.error('Failed to broadcast user stats:', statsError);
+      }
+    }
+    // ========== END WEBSOCKET INTEGRATION ==========
+
     // Don't create a session token yet - user needs to verify email first
     res.json({
       success: true,
@@ -169,7 +213,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// POST /api/auth/verify-email - NEW ENDPOINT
+// POST /api/auth/verify-email - UPDATED WITH STATS BROADCAST
 router.post('/verify-email', async (req, res) => {
   try {
     const { token, code } = req.body;
@@ -255,6 +299,20 @@ router.post('/verify-email', async (req, res) => {
     } catch (emailError) {
       console.error('Failed to send verification success email:', emailError);
     }
+    
+    // ========== OPTIONAL: Broadcast updated verified user count ==========
+    if (webSocketService && webSocketService.io) {
+      try {
+        const verifiedSellers = await User.countDocuments({ role: 'seller', isVerified: true });
+        webSocketService.io.emit('stats:verified_sellers', {
+          verifiedSellers,
+          timestamp: new Date().toISOString()
+        });
+      } catch (statsError) {
+        console.error('Failed to broadcast verified seller stats:', statsError);
+      }
+    }
+    // ========== END OPTIONAL BROADCAST ==========
     
     // Now create a session token since email is verified
     const authToken = signToken(user);

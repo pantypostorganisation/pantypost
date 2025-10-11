@@ -3,12 +3,13 @@
 
 import Link from 'next/link';
 import { useRef, useState, useEffect } from 'react';
-import { ShoppingBag, TrendingUp, CheckCircle } from 'lucide-react';
+import { ShoppingBag, TrendingUp } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { itemVariants, containerVariants, fadeInVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { HERO_CONTENT } from '@/utils/homepage-constants';
 import TrustBadges from './TrustBadges';
 import FloatingParticles from './FloatingParticles';
+import AnimatedUserCounter from './AnimatedUserCounter';
 
 // Suppress Framer Motion's false positive positioning warning in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -65,12 +66,11 @@ export default function HeroSection() {
             viewport={VIEWPORT_CONFIG}
             variants={containerVariants}
           >
-            <motion.div className="flex items-center mb-3 gap-2" variants={itemVariants}>
-              <CheckCircle className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
-              <span className="text-[#ff950e] font-semibold text-xs tracking-wider uppercase">
-                {HERO_CONTENT.badge}
-              </span>
-            </motion.div>
+            {/* UPDATED: Dynamic user counter instead of static badge */}
+            <AnimatedUserCounter 
+              className="mb-3" 
+              compact={true}
+            />
 
             <motion.h1
               className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-tight text-white mb-5 tracking-tighter"

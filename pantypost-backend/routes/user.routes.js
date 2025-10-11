@@ -9,6 +9,54 @@ const jwt = require('jsonwebtoken');
 
 // ============= USER ROUTES =============
 
+// GET /api/users/stats - Get user statistics (PUBLIC)
+router.get('/stats', async (req, res) => {
+  try {
+    const [totalUsers, totalBuyers, totalSellers, verifiedSellers] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: 'buyer' }),
+      User.countDocuments({ role: 'seller' }),
+      User.countDocuments({ role: 'seller', isVerified: true })
+    ]);
+
+    // Get users joined in last 24 hours
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const newUsersToday = await User.countDocuments({ 
+      createdAt: { $gte: yesterday } 
+    });
+
+    // Get users joined today (from midnight)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const newUsersTodayActual = await User.countDocuments({ 
+      createdAt: { $gte: todayStart } 
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        totalBuyers,
+        totalSellers,
+        verifiedSellers,
+        newUsersToday: newUsersTodayActual,
+        newUsers24Hours: newUsersToday,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: error.message
+      }
+    });
+  }
+});
+
 // GET /api/users - List all users with filters
 router.get('/', async (req, res) => {
   try {
@@ -376,7 +424,8 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
       'phoneNumber',
       'subscriptionPrice',
       'galleryImages',
-      'settings'
+      'settings',
+      'country'
     ];
     
     if (user.role !== 'seller') {
