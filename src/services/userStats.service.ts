@@ -1,5 +1,6 @@
 // src/services/userStats.service.ts
-import { apiCall, ApiResponse } from './api.config';
+
+import { apiCall, API_BASE_URL } from './api.config';
 
 export interface UserStats {
   totalUsers: number;
@@ -7,102 +8,120 @@ export interface UserStats {
   totalSellers: number;
   verifiedSellers: number;
   newUsersToday: number;
+  newUsers24Hours?: number;
   timestamp: string;
 }
 
-class UserStatsService {
-  private cache: { data: UserStats | null; expiresAt: number } = {
-    data: null,
-    expiresAt: 0,
+export interface UserStatsResponse {
+  success: boolean;
+  data?: UserStats;
+  error?: {
+    code: string;
+    message: string;
   };
+}
+
+class UserStatsService {
+  private cache: UserStats | null = null;
+  private cacheTimestamp: number = 0;
+  private readonly CACHE_DURATION = 30000; // 30 seconds
 
   /**
    * Get user statistics with caching
    */
-  async getUserStats(): Promise<ApiResponse<UserStats>> {
+  async getUserStats(): Promise<UserStatsResponse> {
     try {
-      // Check cache first
-      if (this.cache.data && this.cache.expiresAt > Date.now()) {
-        return { success: true, data: this.cache.data };
+      // Return cached data if still valid
+      const now = Date.now();
+      if (this.cache && (now - this.cacheTimestamp) < this.CACHE_DURATION) {
+        console.log('[UserStatsService] Returning cached stats:', this.cache);
+        return { success: true, data: this.cache };
       }
 
-      // Fetch from API
-      const response = await apiCall<UserStats>('/api/users/stats');
+      // Fetch fresh data
+      console.log('[UserStatsService] Fetching user stats from API');
+      
+      const baseUrl = API_BASE_URL.replace(/\/$/, ''); // Remove trailing slash
+      const url = `${baseUrl}/users/stats`; // FIXED: Don't add /api/ again
+      
+      console.log('[UserStatsService] API URL:', url);
 
-      if (response.success && response.data) {
-        // Cache for 1 minute
-        this.cache = {
-          data: response.data,
-          expiresAt: Date.now() + 60 * 1000,
-        };
-        return response;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('[UserStatsService] Response status:', response.status);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Fallback to default stats if API fails
-      if (!response.success) {
-        const fallbackStats: UserStats = {
-          totalUsers: 10000, // Default fallback
-          totalBuyers: 8000,
-          totalSellers: 2000,
-          verifiedSellers: 500,
-          newUsersToday: 0,
-          timestamp: new Date().toISOString(),
-        };
+      const data = await response.json();
+      console.log('[UserStatsService] Response data:', data);
+
+      if (data.success && data.data) {
+        // Cache the result
+        this.cache = data.data;
+        this.cacheTimestamp = now;
         
-        return { success: true, data: fallbackStats };
+        return { success: true, data: data.data };
       }
 
-      return response;
+      return {
+        success: false,
+        error: data.error || { code: 'UNKNOWN', message: 'Failed to fetch stats' }
+      };
     } catch (error) {
-      console.error('Failed to fetch user stats:', error);
+      console.error('[UserStatsService] Error fetching user stats:', error);
       
-      // Return fallback data on error
-      const fallbackStats: UserStats = {
-        totalUsers: 10000,
-        totalBuyers: 8000,
-        totalSellers: 2000,
-        verifiedSellers: 500,
-        newUsersToday: 0,
-        timestamp: new Date().toISOString(),
+      // Return cached data if available, even if expired
+      if (this.cache) {
+        console.log('[UserStatsService] Error occurred, returning stale cache');
+        return { success: true, data: this.cache };
+      }
+
+      return {
+        success: false,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: error instanceof Error ? error.message : 'Network error'
+        }
       };
-      
-      return { success: true, data: fallbackStats };
     }
   }
 
   /**
-   * Update cached stats (for real-time updates)
-   */
-  updateCachedStats(update: Partial<UserStats>) {
-    if (this.cache.data) {
-      this.cache.data = {
-        ...this.cache.data,
-        ...update,
-        timestamp: new Date().toISOString(),
-      };
-      // Extend cache expiry when updated
-      this.cache.expiresAt = Date.now() + 60 * 1000;
-    }
-  }
-
-  /**
-   * Increment user count (for real-time updates)
+   * Increment user count in cache (for real-time updates)
    */
   incrementUserCount(amount: number = 1) {
-    if (this.cache.data) {
-      this.cache.data.totalUsers += amount;
-      this.cache.data.newUsersToday += amount;
-      this.cache.data.timestamp = new Date().toISOString();
-      // Extend cache expiry when updated
-      this.cache.expiresAt = Date.now() + 60 * 1000;
+    if (this.cache) {
+      this.cache.totalUsers += amount;
+      this.cache.newUsersToday += amount;
+      console.log('[UserStatsService] Incremented cache:', this.cache);
     }
   }
 
   /**
-   * Clear cache
+   * Update cached stats (from WebSocket events)
+   */
+  updateCachedStats(newStats: Partial<UserStats>) {
+    if (this.cache) {
+      this.cache = { ...this.cache, ...newStats };
+      this.cacheTimestamp = Date.now();
+      console.log('[UserStatsService] Updated cache:', this.cache);
+    }
+  }
+
+  /**
+   * Clear cache (force refresh on next request)
    */
   clearCache() {
-    this.cache = { data: null, expiresAt: 0 };
+    this.cache = null;
+    this.cacheTimestamp = 0;
+    console.log('[UserStatsService] Cache cleared');
   }
 }
 
