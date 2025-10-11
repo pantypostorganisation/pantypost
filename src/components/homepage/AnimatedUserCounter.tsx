@@ -27,8 +27,8 @@ export default function AnimatedUserCounter({
 
   // Spring animation for smooth counting
   const springValue = useSpring(0, { 
-    stiffness: 30, 
-    damping: 30,
+    stiffness: 65,
+    damping: 14,
     mass: 1 
   });
 
