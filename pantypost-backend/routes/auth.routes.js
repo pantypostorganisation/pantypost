@@ -374,7 +374,7 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// POST /api/auth/login - SILENT REDIRECT FOR EMAIL VERIFICATION
+// POST /api/auth/login - UPDATED WITH PASSWORD RESET CHECK
 router.post('/login', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -409,6 +409,60 @@ router.post('/login', async (req, res) => {
         error: { 
           code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, 
           message: `We couldn't find an account with the username "${username}". Double-check the spelling or sign up for a new account.` 
+        }
+      });
+    }
+
+    // NEW: Check for pending password reset
+    const pendingReset = await PasswordReset.findOne({
+      email: user.email,
+      used: false,
+      expiresAt: { $gt: Date.now() }
+    }).sort({ createdAt: -1 });
+    
+    if (pendingReset) {
+      console.log(`[Auth] Pending password reset detected for ${username}`);
+      
+      // Auto-resend the password reset email
+      try {
+        // Delete old reset request
+        await PasswordReset.deleteMany({ email: user.email });
+        
+        // Generate new reset token and code
+        const resetToken = PasswordReset.generateToken();
+        const hashedToken = PasswordReset.hashToken(resetToken);
+        const verificationCode = PasswordReset.generateVerificationCode();
+        
+        // Save new reset request
+        const passwordReset = new PasswordReset({ 
+          email: user.email, 
+          username: user.username, 
+          token: hashedToken, 
+          verificationCode,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+        });
+        await passwordReset.save();
+        
+        // Send email
+        await sendEmail({ 
+          to: user.email, 
+          ...emailTemplates.passwordResetCode(user.username, verificationCode) 
+        });
+        
+        console.log(`✅ Auto-sent new password reset code to ${user.email} on login attempt`);
+      } catch (resetError) {
+        console.error('Failed to auto-send password reset email:', resetError);
+      }
+      
+      // Return special error to trigger redirect to password reset flow
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: 'PASSWORD_RESET_PENDING',
+          message: 'A password reset is pending for this account. We\'ve sent a new verification code to your email.',
+          pendingPasswordReset: true,
+          email: user.email,
+          username: user.username
         }
       });
     }
@@ -647,7 +701,6 @@ router.get('/me', authMiddleware, async (req, res) => {
   }
 });
 
-// [REST OF THE FILE REMAINS THE SAME - includes refresh, verify-username, admin/bootstrap, password reset routes]
 // POST /api/auth/refresh
 router.post('/refresh', async (req, res) => {
   try {

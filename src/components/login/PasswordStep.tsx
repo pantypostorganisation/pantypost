@@ -57,6 +57,7 @@ export default function PasswordStep({
     }
   }, [error]);
   
+  // Handle email verification required - silent redirect
   useEffect(() => {
     if (errorData?.requiresVerification) {
       console.log('[PasswordStep] Email verification required - redirecting silently...');
@@ -79,6 +80,31 @@ export default function PasswordStep({
       router.push(redirectUrl);
     }
   }, [errorData, username, router]);
+  
+  // NEW: Handle pending password reset - check error message for reset-related errors
+  useEffect(() => {
+    if (error && (
+      error.includes('reset') || 
+      error.includes('expired') || 
+      error.includes('verification code') ||
+      errorData?.pendingPasswordReset
+    )) {
+      console.log('[PasswordStep] Pending password reset detected - redirecting...');
+      
+      // Store username/email for the reset flow
+      if (errorData?.email) {
+        sessionStorage.setItem('resetEmail', errorData.email);
+      } else if (username) {
+        // If we only have username, store it as prefill
+        sessionStorage.setItem('prefillEmail', username);
+      }
+      
+      // Redirect to forgot password page after a short delay
+      setTimeout(() => {
+        router.push('/forgot-password');
+      }, 2000);
+    }
+  }, [error, errorData, username, router]);
   
   const formatWaitTime = (totalSeconds: number): string => {
     if (totalSeconds < 60) {
@@ -123,6 +149,13 @@ export default function PasswordStep({
     }
   };
 
+  // Check for password reset pending message - ensure it's a boolean
+  const isPasswordResetPending = !!(error && (
+    error.includes('reset') || 
+    error.includes('verification code') || 
+    error.includes('password reset is pending')
+  ));
+
   return (
     <div className="transition-all duration-300">
       <button
@@ -140,7 +173,18 @@ export default function PasswordStep({
         </div>
       </div>
 
-      {error && !error.includes('Too many') && !errorData?.requiresVerification && (
+      {/* Show password reset pending message separately */}
+      {isPasswordResetPending && (
+        <div className="mb-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 text-sm text-orange-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>A password reset is pending for this account. Redirecting to password reset...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Regular error display */}
+      {error && !error.includes('Too many') && !errorData?.requiresVerification && !isPasswordResetPending && (
         <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-sm text-red-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -149,6 +193,7 @@ export default function PasswordStep({
         </div>
       )}
 
+      {/* Rate limit warning */}
       {((isRateLimited && rateLimitWaitTime > 0) || (error && error.includes('Too many'))) && (
         <div className="mb-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-orange-400">
@@ -174,7 +219,7 @@ export default function PasswordStep({
                 error && !error.includes('Too many') && !errorData?.requiresVerification ? 'border-red-500/50' : 'border-gray-700'
               } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors`}
               autoFocus
-              disabled={isLoading || isRateLimited}
+              disabled={isLoading || isRateLimited || isPasswordResetPending}
             />
             <button
               type="button"
@@ -208,9 +253,9 @@ export default function PasswordStep({
                   key={option.key}
                   type="button"
                   onClick={() => onRoleSelect(option.key)}
-                  disabled={isLoading || isRateLimited}
+                  disabled={isLoading || isRateLimited || isPasswordResetPending}
                   className={`w-full p-3 rounded-lg border transition-all duration-200 text-left relative overflow-hidden group hover:scale-[1.02] active:scale-[0.98] ${
-                    isLoading || isRateLimited ? 'opacity-50 cursor-not-allowed' : ''
+                    isLoading || isRateLimited || isPasswordResetPending ? 'opacity-50 cursor-not-allowed' : ''
                   } ${
                     isSelected 
                       ? isAdminOption
@@ -252,7 +297,7 @@ export default function PasswordStep({
               type="checkbox"
               checked={rememberMe}
               onChange={(event) => onRememberMeChange(event.target.checked)}
-              disabled={isLoading || isRateLimited}
+              disabled={isLoading || isRateLimited || isPasswordResetPending}
               className="h-4 w-4 rounded border-gray-600 bg-black text-[#ff950e] focus:ring-[#ff950e]"
             />
             <span>Keep me signed in</span>
@@ -262,11 +307,16 @@ export default function PasswordStep({
 
         <button
           type="submit"
-          disabled={!role || !password || isLoading || hasUser || isRateLimited}
+          disabled={!role || !password || isLoading || hasUser || isRateLimited || isPasswordResetPending}
           className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-          style={{ color: (!role || !password || isLoading || hasUser || isRateLimited) ? undefined : '#000' }}
+          style={{ color: (!role || !password || isLoading || hasUser || isRateLimited || isPasswordResetPending) ? undefined : '#000' }}
         >
-          {isRateLimited ? (
+          {isPasswordResetPending ? (
+            <>
+              <AlertCircle className="w-4 h-4" />
+              Redirecting to Password Reset...
+            </>
+          ) : isRateLimited ? (
             <>
               <AlertCircle className="w-4 h-4" />
               Too Many Attempts
@@ -290,7 +340,7 @@ export default function PasswordStep({
         </button>
       </form>
 
-      {error && error.includes('Invalid') && !isLoading && (
+      {error && error.includes('Invalid') && !isLoading && !isPasswordResetPending && (
         <div className="mt-4 text-center">
           <p className="text-xs text-gray-500">
             Having trouble? <button 

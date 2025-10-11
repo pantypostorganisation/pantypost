@@ -592,9 +592,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           return true;
         } else {
-          // MODIFIED: Check for email verification error - throw silently without message
           const errorObj = response.error || (response as any);
           
+          // MODIFIED: Check for both email verification and password reset errors
           if (errorObj.code === 'EMAIL_VERIFICATION_REQUIRED' || errorObj.requiresVerification) {
             // Throw structured error for email verification WITHOUT setting error message
             const verificationError: any = new Error('EMAIL_VERIFICATION_REQUIRED');
@@ -608,6 +608,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             // Throw the error so the login page can catch it and redirect
             throw verificationError;
+          } else if (errorObj.code === 'PASSWORD_RESET_PENDING' || errorObj.pendingPasswordReset) {
+            // NEW: Handle password reset pending error
+            const resetError: any = new Error(errorObj.message || 'Password reset pending');
+            resetError.pendingPasswordReset = true;
+            resetError.email = errorObj.email;
+            resetError.username = errorObj.username;
+            
+            console.log('[Auth] Password reset pending - redirect to reset flow:', resetError);
+            
+            // Set the error message so it shows briefly before redirect
+            setError(errorObj.message || 'Password reset pending');
+            setLoading(false);
+            
+            // Throw the error so the login page can catch it
+            throw resetError;
           }
           
           const errorMessage = errorObj.message || 'Login failed';
@@ -620,6 +635,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // If this is an email verification error, re-throw it for silent redirect
         if (error.requiresVerification) {
+          throw error;
+        }
+        
+        // If this is a password reset error, re-throw it
+        if (error.pendingPasswordReset) {
           throw error;
         }
         

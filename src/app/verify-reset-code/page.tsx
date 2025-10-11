@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { KeyRound, ArrowLeft, AlertCircle } from 'lucide-react';
+import { KeyRound, ArrowLeft, AlertCircle, Mail, Lock } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
 import PublicRouteWrapper from '@/components/PublicRouteWrapper';
 import { authService } from '@/services/auth.service';
@@ -24,28 +24,44 @@ function VerifyResetCodeContent() {
   const [emailInput, setEmailInput] = useState('');
   const [needsEmail, setNeedsEmail] = useState(false);
   const [isReady, setIsReady] = useState(false);
-  const [resetCode, setResetCode] = useState('');
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    // Check for email in URL params
+    // Check for email in URL params or session storage
     const checkSession = () => {
       console.log('[Verify Reset Code] Initializing page...');
       
-      // Get email from URL params
+      // First try URL params
       const emailParam = searchParams.get('email');
       console.log('[Verify Reset Code] Email from URL:', emailParam);
       
-      if (!emailParam) {
-        // If no email in URL, ask for it
-        console.log('[Verify Reset Code] No email found, showing email input');
-        setNeedsEmail(true);
-      } else {
-        console.log('[Verify Reset Code] Email found:', emailParam);
+      if (emailParam) {
         setEmail(decodeURIComponent(emailParam));
+        setIsReady(true);
+        return;
       }
       
-      // Mark as ready
+      // Then try session storage
+      try {
+        const storedEmail = sessionStorage.getItem('resetEmail');
+        console.log('[Verify Reset Code] Email from session:', storedEmail);
+        
+        if (storedEmail) {
+          setEmail(storedEmail);
+          // Also update URL for consistency
+          const params = new URLSearchParams();
+          params.set('email', storedEmail);
+          router.replace(`/verify-reset-code?${params.toString()}`);
+        } else {
+          console.log('[Verify Reset Code] No email found, showing email input');
+          setNeedsEmail(true);
+        }
+      } catch (err) {
+        console.error('[Verify Reset Code] Session storage error:', err);
+        setNeedsEmail(true);
+      }
+      
       setIsReady(true);
     };
 
@@ -53,7 +69,7 @@ function VerifyResetCodeContent() {
     requestAnimationFrame(() => {
       checkSession();
     });
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   const handleCodeChange = (index: number, value: string) => {
     // Only allow digits
@@ -66,6 +82,11 @@ function VerifyResetCodeContent() {
     // Auto-focus next input
     if (value && index < 5) {
       inputRefs.current[index + 1]?.focus();
+    }
+    
+    // Clear error when user starts typing
+    if (error) {
+      setError('');
     }
   };
 
@@ -98,14 +119,24 @@ function VerifyResetCodeContent() {
     setError('');
 
     try {
-      // Use the auth service instead of direct fetch
+      // Use the auth service to verify the code
       const response = await authService.verifyResetCode(email, fullCode);
 
       if (response.success && response.data?.valid) {
-        // Store verification data in state for the next step
-        setResetCode(fullCode);
-        // Navigate to password reset page with email and code in URL
-        router.push(`/reset-password-final?email=${encodeURIComponent(email)}&code=${fullCode}`);
+        // Store both email and code for the final step
+        sessionStorage.setItem('resetEmail', email);
+        sessionStorage.setItem('resetCode', fullCode);
+        
+        // Show success briefly then redirect
+        setVerificationSuccess(true);
+        
+        setTimeout(() => {
+          // Navigate to password reset page with both email and code in URL as backup
+          const params = new URLSearchParams();
+          params.set('email', email);
+          params.set('code', fullCode);
+          router.push(`/reset-password-final?${params.toString()}`);
+        }, 500);
       } else {
         setError(response.error?.message || 'Invalid verification code');
         // Clear code on error
@@ -121,6 +152,14 @@ function VerifyResetCodeContent() {
   };
 
   const handleResend = async () => {
+    // Clear any existing code
+    setCode(['', '', '', '', '', '']);
+    setError('');
+    
+    // Navigate back to forgot password page with email prefilled if available
+    if (email) {
+      sessionStorage.setItem('prefillEmail', email);
+    }
     router.push('/forgot-password');
   };
 
@@ -129,6 +168,12 @@ function VerifyResetCodeContent() {
     if (emailInput) {
       setEmail(emailInput);
       setNeedsEmail(false);
+      
+      // Store in session and update URL
+      sessionStorage.setItem('resetEmail', emailInput);
+      const params = new URLSearchParams();
+      params.set('email', emailInput);
+      router.replace(`/verify-reset-code?${params.toString()}`);
     }
   };
 
@@ -167,9 +212,13 @@ function VerifyResetCodeContent() {
                 onClick={() => router.push('/')}
               />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-1">Enter Verification Code</h1>
+            <h1 className="text-2xl font-bold text-white mb-1">
+              {verificationSuccess ? 'Code Verified!' : 'Enter Verification Code'}
+            </h1>
             <p className="text-gray-400 text-sm">
-              {email ? (
+              {verificationSuccess ? (
+                'Redirecting to password reset...'
+              ) : email ? (
                 <>We sent a 6-digit code to <span className="text-[#ff950e]">{email}</span></>
               ) : (
                 'Enter your email and verification code'
@@ -186,15 +235,18 @@ function VerifyResetCodeContent() {
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Email Address
                   </label>
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="Enter your email address"
-                    className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors"
-                    required
-                    autoFocus
-                  />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="Enter your email address"
+                      className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors pl-10"
+                      required
+                      autoFocus
+                    />
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  </div>
                   <p className="text-xs text-gray-500 mt-2">
                     Enter the email address where you received the verification code
                   </p>
@@ -216,6 +268,16 @@ function VerifyResetCodeContent() {
                     <div className="flex items-center gap-2 text-sm text-red-400">
                       <AlertCircle className="w-4 h-4 flex-shrink-0" />
                       <span>{error}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Success message */}
+                {verificationSuccess && (
+                  <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-green-400">
+                      <KeyRound className="w-4 h-4 flex-shrink-0" />
+                      <span>Code verified successfully!</span>
                     </div>
                   </div>
                 )}
@@ -242,7 +304,7 @@ function VerifyResetCodeContent() {
                         onPaste={index === 0 ? handlePaste : undefined}
                         className="w-12 h-12 text-center text-xl font-semibold bg-black/50 backdrop-blur-sm border-2 border-gray-700 rounded-lg text-white focus:border-[#ff950e] focus:outline-none focus:ring-1 focus:ring-[#ff950e] transition-all"
                         autoFocus={index === 0}
-                        disabled={isLoading}
+                        disabled={isLoading || verificationSuccess}
                       />
                     ))}
                   </div>
@@ -251,39 +313,73 @@ function VerifyResetCodeContent() {
                   </p>
                 </div>
 
-                {/* Submit Button */}
+                {/* Submit Button - Updated text as requested */}
                 <button
                   type="submit"
-                  disabled={isLoading || code.some(d => !d)}
+                  disabled={isLoading || code.some(d => !d) || verificationSuccess}
                   className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-                  style={{ color: isLoading || code.some(d => !d) ? undefined : '#000' }}
+                  style={{ color: (isLoading || code.some(d => !d) || verificationSuccess) ? undefined : '#000' }}
                 >
                   {isLoading ? (
                     <>
                       <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
                       Verifying...
                     </>
-                  ) : (
+                  ) : verificationSuccess ? (
                     <>
                       <KeyRound className="w-4 h-4" />
-                      Verify Code
+                      Redirecting...
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-4 h-4" />
+                      Reset Password
                     </>
                   )}
                 </button>
 
+                {/* Alternative: Direct link to reset if they have the code */}
+                {!verificationSuccess && (
+                  <div className="text-center mt-4">
+                    <p className="text-xs text-gray-500">
+                      Already verified your code?{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (email) {
+                            sessionStorage.setItem('resetEmail', email);
+                            const fullCode = code.join('');
+                            if (fullCode.length === 6) {
+                              sessionStorage.setItem('resetCode', fullCode);
+                            }
+                            const params = new URLSearchParams();
+                            params.set('email', email);
+                            router.push(`/reset-password-final?${params.toString()}`);
+                          }
+                        }}
+                        className="text-[#ff950e] hover:underline"
+                      >
+                        Go to password reset
+                      </button>
+                    </p>
+                  </div>
+                )}
+
                 {/* Resend Code */}
-                <div className="text-center space-y-3 mt-6">
-                  <p className="text-sm text-gray-400">
-                    Didn't receive the code?
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium transition-colors"
-                  >
-                    Send new code
-                  </button>
-                </div>
+                {!verificationSuccess && (
+                  <div className="text-center space-y-3 mt-6">
+                    <p className="text-sm text-gray-400">
+                      Didn't receive the code?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium transition-colors"
+                    >
+                      Send new code
+                    </button>
+                  </div>
+                )}
 
                 {/* Back to Login Link */}
                 <div className="text-center mt-4">

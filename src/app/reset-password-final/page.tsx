@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Lock, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
@@ -11,6 +11,7 @@ import { authService } from '@/services/auth.service';
 
 export default function ResetPasswordFinalPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,19 +23,31 @@ export default function ResetPasswordFinalPage() {
   const [code, setCode] = useState('');
 
   useEffect(() => {
-    // Get email and code from session storage
-    const storedEmail = sessionStorage.getItem('resetEmail');
-    const storedCode = sessionStorage.getItem('resetCode');
+    // Get email and code from URL params first, then fallback to session storage
+    const emailParam = searchParams.get('email');
+    const codeParam = searchParams.get('code');
+    
+    let storedEmail = emailParam || sessionStorage.getItem('resetEmail');
+    let storedCode = codeParam || sessionStorage.getItem('resetCode');
     
     if (!storedEmail || !storedCode) {
-      // Redirect back to forgot password if missing data
+      // If missing data, redirect back to forgot password
+      console.log('[Reset Password Final] Missing email or code, redirecting...');
       router.push('/forgot-password');
       return;
     }
     
     setEmail(storedEmail);
     setCode(storedCode);
-  }, [router]);
+    
+    // Ensure session storage is updated
+    if (storedEmail && storedEmail !== sessionStorage.getItem('resetEmail')) {
+      sessionStorage.setItem('resetEmail', storedEmail);
+    }
+    if (storedCode && storedCode !== sessionStorage.getItem('resetCode')) {
+      sessionStorage.setItem('resetCode', storedCode);
+    }
+  }, [router, searchParams]);
 
   const validatePassword = (password: string): string | null => {
     if (password.length < 6) {
@@ -65,7 +78,7 @@ export default function ResetPasswordFinalPage() {
     setIsLoading(true);
 
     try {
-      // Use the auth service instead of direct fetch
+      // Use the auth service to reset the password
       const response = await authService.resetPassword(email, code, newPassword);
 
       if (response.success) {
@@ -74,13 +87,14 @@ export default function ResetPasswordFinalPage() {
         // Clear session storage
         sessionStorage.removeItem('resetEmail');
         sessionStorage.removeItem('resetCode');
+        sessionStorage.removeItem('prefillEmail');
         
         // Redirect to login after 3 seconds
         setTimeout(() => {
           router.push('/login');
         }, 3000);
       } else {
-        setError(response.error?.message || 'Failed to reset password');
+        setError(response.error?.message || 'Failed to reset password. Please try again.');
       }
     } catch (err) {
       console.error('Error resetting password:', err);
@@ -117,6 +131,15 @@ export default function ResetPasswordFinalPage() {
             Redirecting to login page...
           </p>
         </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking for email/code
+  if (!email || !code) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -165,6 +188,14 @@ export default function ResetPasswordFinalPage() {
                   </div>
                 </div>
               )}
+
+              {/* Show which email we're resetting for */}
+              <div className="mb-4 p-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-400">Resetting password for:</span>
+                  <span className="text-[#ff950e] font-medium">{email}</span>
+                </div>
+              </div>
 
               {/* New Password Field */}
               <div className="mb-4">

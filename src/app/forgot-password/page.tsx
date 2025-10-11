@@ -19,6 +19,21 @@ export default function ForgotPasswordPage() {
   const redirectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Check for prefilled email/username from login flow
+    try {
+      const prefillEmail = sessionStorage.getItem('prefillEmail');
+      const resetEmail = sessionStorage.getItem('resetEmail');
+      
+      if (prefillEmail) {
+        setEmailOrUsername(prefillEmail);
+        sessionStorage.removeItem('prefillEmail');
+      } else if (resetEmail) {
+        setEmailOrUsername(resetEmail);
+      }
+    } catch (err) {
+      console.error('Error checking prefill:', err);
+    }
+    
     // Cleanup any pending timer on unmount so we don't push after unmounting
     return () => {
       if (redirectTimerRef.current) {
@@ -83,9 +98,13 @@ export default function ForgotPasswordPage() {
           }
         }
         
-        // Navigate to code verification page after 2 seconds
+        // FIXED: Navigate to code verification page with email in URL after 2 seconds
         redirectTimerRef.current = window.setTimeout(() => {
-          router.push('/verify-reset-code');
+          const params = new URLSearchParams();
+          if (email) {
+            params.set('email', email);
+          }
+          router.push(`/verify-reset-code?${params.toString()}`);
         }, 2000);
       } else {
         setError(response.error?.message || 'Failed to send reset code. Please try again.');

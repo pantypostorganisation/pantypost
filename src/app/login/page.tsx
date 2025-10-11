@@ -261,7 +261,20 @@ export default function LoginPage() {
         if (!success) {
           setIsLoading(false);
           
-          if (!authError) {
+          // Check if auth error contains password reset pending info
+          if (authError) {
+            // Parse the auth error to check for password reset pending
+            if (authError.includes('password reset is pending') || 
+                authError.includes('verification code')) {
+              console.log('[Login] Password reset pending detected in authError');
+              setErrorData({
+                pendingPasswordReset: true,
+                email: username.includes('@') ? username : undefined,
+                username: username
+              });
+            }
+            setError(authError);
+          } else {
             setError('Invalid username or password');
           }
         }
@@ -284,8 +297,26 @@ export default function LoginPage() {
             username: err.username
           });
           
+          // Set the error message (empty for silent redirect)
+          setError(err.message || '');
+        } else if (err?.pendingPasswordReset) {
+          // NEW: Handle password reset pending error
+          console.log('[Login] Password reset pending error caught:', {
+            pendingPasswordReset: err.pendingPasswordReset,
+            email: err.email,
+            username: err.username,
+            message: err.message
+          });
+          
+          // Set the structured error data
+          setErrorData({
+            pendingPasswordReset: true,
+            email: err.email,
+            username: err.username
+          });
+          
           // Set the error message
-          setError(err.message);
+          setError(err.message || 'Password reset pending');
         } else {
           // Regular error
           setError(err?.message || 'An unexpected error occurred. Please try again.');
@@ -294,7 +325,7 @@ export default function LoginPage() {
         setIsLoading(false);
       }
     },
-    [username, password, role, rememberMe, login, isRateLimited, authError, authData, clearError]
+    [username, password, role, rememberMe, login, isRateLimited, authError, clearError]
   );
 
   const handleKeyPress = useCallback(
