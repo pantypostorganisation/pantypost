@@ -46,7 +46,7 @@ const createTransport = () => {
 
 // Send an email
 const sendEmail = async (options) => {
-  const transporter = createTransporter();
+  const transporter = createTransport();
   
   // If no transporter (no credentials), just log the email
   if (!transporter) {
