@@ -413,7 +413,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // NEW: Check for pending password reset
+    // NEW: Check for pending password reset - UPDATED
     const pendingReset = await PasswordReset.findOne({
       email: user.email,
       used: false,
@@ -443,10 +443,10 @@ router.post('/login', async (req, res) => {
         });
         await passwordReset.save();
         
-        // Send email
+        // Send email - UPDATED to pass email as third parameter
         await sendEmail({ 
           to: user.email, 
-          ...emailTemplates.passwordResetCode(user.username, verificationCode) 
+          ...emailTemplates.passwordResetCode(user.username, verificationCode, user.email) 
         });
         
         console.log(`✅ Auto-sent new password reset code to ${user.email} on login attempt`);
@@ -860,7 +860,7 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
 
 // ===== Password reset routes - FIXED =====
 
-// POST /api/auth/forgot-password - Now accepts username OR email
+// POST /api/auth/forgot-password - Now accepts username OR email - UPDATED
 router.post('/forgot-password', async (req, res) => {
   try {
     const { emailOrUsername } = req.body || {};
@@ -916,11 +916,11 @@ router.post('/forgot-password', async (req, res) => {
     });
     await passwordReset.save();
     
-    // Send email
+    // Send email - UPDATED to pass email as third parameter
     try {
       await sendEmail({ 
         to: user.email, 
-        ...emailTemplates.passwordResetCode(user.username, verificationCode) 
+        ...emailTemplates.passwordResetCode(user.username, verificationCode, user.email) 
       });
     } catch (emailError) {
       console.error('Failed to send password reset email:', emailError);

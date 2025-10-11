@@ -11,7 +11,7 @@ const createTransporter = () => {
   
   try {
     // Create reusable transporter object using SMTP transport
-    const transporter = nodemailer.createTransport({
+    const transporter = nodemailer.createTransporter({
       service: 'gmail',
       host: 'smtp.gmail.com',
       port: 587,
@@ -485,8 +485,8 @@ The PantyPost Team
     `
   }),
 
-  // Responsive light/dark mode template with dual logos
-  passwordResetCode: (username, code) => ({
+  // Responsive light/dark mode template with dual logos and direct reset link - UPDATED
+  passwordResetCode: (username, verificationCode, email) => ({  // ADDED email parameter
     subject: 'Your PantyPost Password Reset Code',
     html: `
       <!DOCTYPE html>
@@ -683,7 +683,7 @@ The PantyPost Team
                         </h2>
                         
                         <p class="text-secondary" style="font-size: 15px; line-height: 1.6; margin: 0 0 25px 0;">
-                          We received a request to reset your PantyPost account password. Use the verification code below to proceed with resetting your password.
+                          We received a request to reset your PantyPost account password. Use the verification code below or click the button to reset your password directly.
                         </p>
                         
                         <!-- Code Box -->
@@ -695,7 +695,7 @@ The PantyPost Team
                                   Your Verification Code
                                 </div>
                                 <div class="text-orange code-text" style="font-size: 28px; font-weight: bold; letter-spacing: 5px; font-family: 'Courier New', monospace;">
-                                  ${code}
+                                  ${verificationCode}
                                 </div>
                               </div>
                             </td>
@@ -709,26 +709,24 @@ The PantyPost Team
                           </p>
                         </div>
                         
-                        <p class="text-secondary" style="font-size: 15px; line-height: 1.6; margin: 20px 0 25px 0;">
-                          Enter this code on the password reset page to create your new password.
-                        </p>
-                        
-                        <!-- CTA Button -->
+                        <!-- UPDATED: Direct Reset Button with email and code -->
                         <table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin: 30px auto;">
                           <tr>
                             <td style="background-color: #ff950e; border-radius: 25px;">
-                              <a href="${process.env.FRONTEND_URL}/verify-reset-code" style="display: inline-block; padding: 12px 30px; color: #000000; font-size: 15px; font-weight: bold; text-decoration: none;">
-                                Enter Reset Code →
+                              <a href="${process.env.FRONTEND_URL}/reset-password-final?email=${encodeURIComponent(email)}&code=${verificationCode}" 
+                                 style="display: inline-block; padding: 12px 30px; color: #000000; font-size: 15px; font-weight: bold; text-decoration: none;">
+                                Reset Password →
                               </a>
                             </td>
                           </tr>
                         </table>
                         
-                        <!-- Alternative Link -->
+                        <p class="text-secondary" style="font-size: 14px; text-align: center; margin: 20px 0;">
+                          Or enter the code manually at:
+                        </p>
+                        
+                        <!-- Manual Entry Link -->
                         <div class="alt-link-box" style="padding: 18px; text-align: center; border-radius: 8px; margin: 20px 0;">
-                          <p class="text-secondary" style="font-size: 13px; margin: 0 0 6px 0;">
-                            Or copy and paste this link into your browser:
-                          </p>
                           <a href="${process.env.FRONTEND_URL}/verify-reset-code" class="text-orange" style="font-size: 13px; text-decoration: underline;">
                             ${process.env.FRONTEND_URL}/verify-reset-code
                           </a>
@@ -785,11 +783,14 @@ Hello ${username}!
 
 We received a request to reset your PantyPost account password.
 
-Your verification code is: ${code}
+Your verification code is: ${verificationCode}
 
 This code expires in 15 minutes.
 
-Enter this code on the password reset page to create your new password:
+Click here to reset your password directly:
+${process.env.FRONTEND_URL}/reset-password-final?email=${encodeURIComponent(email)}&code=${verificationCode}
+
+Or enter the code manually at:
 ${process.env.FRONTEND_URL}/verify-reset-code
 
 Didn't request this?
