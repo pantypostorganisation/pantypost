@@ -1,6 +1,6 @@
 // src/services/userStats.service.ts
 
-import { apiCall, API_BASE_URL } from './api.config';
+import { apiCall, API_ENDPOINTS } from './api.config';
 
 export interface UserStats {
   totalUsers: number;
@@ -42,7 +42,7 @@ class UserStatsService {
       console.log('[UserStatsService] Fetching user stats from API');
       
       // Use apiCall - the generic type should be the data type, not the response wrapper
-      const response = await apiCall<UserStats>('/users/stats');
+      const response = await apiCall<UserStats>(API_ENDPOINTS.USERS.STATS);
       
       console.log('[UserStatsService] Response:', response);
 
