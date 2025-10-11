@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { Shield, CreditCard, Users } from 'lucide-react';
 import { itemVariants, containerVariants, shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { sanitizeStrict } from '@/utils/security/sanitization';
-import AnimatedUserCounter from './AnimatedUserCounter';
 
 // Define trust signals directly here with the verification badge
 const TRUST_SIGNALS = [
@@ -58,13 +57,9 @@ export default function TrustSignalsSection() {
         viewport={VIEWPORT_CONFIG} 
         variants={containerVariants}
       >
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 text-center">
-          <motion.div className="sm:col-span-2 lg:col-span-2" variants={itemVariants}>
-            <AnimatedUserCounter className="h-full" showNewUsersToday />
-          </motion.div>
-
-          {TRUST_SIGNALS.map((item) => (
-            <motion.div key={item.title} className="flex flex-col items-center" variants={itemVariants}>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+          {TRUST_SIGNALS.map((item, index) => (
+            <motion.div key={index} className="flex flex-col items-center" variants={itemVariants}>
               {item.iconType === 'image' ? (
                 <div className="h-7 w-7 mb-3 transition-transform duration-300 hover:scale-110 relative">
                   <Image

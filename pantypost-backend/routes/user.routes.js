@@ -6,18 +6,44 @@ const Ban = require('../models/Ban');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const jwt = require('jsonwebtoken');
-const { getUserStats } = require('../services/userStatsService');
 
 // ============= USER ROUTES =============
 
 // GET /api/users/stats - Get user statistics (PUBLIC)
 router.get('/stats', async (req, res) => {
   try {
-    const stats = await getUserStats();
+    const [totalUsers, totalBuyers, totalSellers, verifiedSellers] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: 'buyer' }),
+      User.countDocuments({ role: 'seller' }),
+      User.countDocuments({ role: 'seller', isVerified: true })
+    ]);
+
+    // Get users joined in last 24 hours
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const newUsersToday = await User.countDocuments({ 
+      createdAt: { $gte: yesterday } 
+    });
+
+    // Get users joined today (from midnight)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const newUsersTodayActual = await User.countDocuments({ 
+      createdAt: { $gte: todayStart } 
+    });
 
     res.json({
       success: true,
-      data: stats
+      data: {
+        totalUsers,
+        totalBuyers,
+        totalSellers,
+        verifiedSellers,
+        newUsersToday: newUsersTodayActual,
+        newUsers24Hours: newUsersToday,
+        timestamp: new Date().toISOString()
+      }
     });
   } catch (error) {
     console.error('Error fetching user stats:', error);

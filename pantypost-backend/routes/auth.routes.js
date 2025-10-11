@@ -9,7 +9,6 @@ const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const { sendEmail, emailTemplates } = require('../config/email');
 const webSocketService = require('../config/websocket');
-const { getUserStats } = require('../services/userStatsService');
 
 // Get JWT secret from environment
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -151,21 +150,41 @@ router.post('/signup', async (req, res) => {
     // ========== NEW: WEBSOCKET INTEGRATION FOR USER STATS ==========
     // Emit new user registration event
     if (webSocketService && webSocketService.io) {
-      const payload = {
+      // Emit to all connected clients about new user
+      webSocketService.io.emit('user:registered', {
         userId: newUser._id.toString(),
         username: newUser.username,
         role: newUser.role,
         timestamp: new Date().toISOString()
-      };
-
-      // Emit to all connected clients about new user
-      webSocketService.broadcast('user:registered', payload);
+      });
 
       // Calculate and broadcast updated user statistics
       try {
-        const stats = await getUserStats();
-        webSocketService.broadcast('stats:users', stats);
-        console.log(`📊 Broadcasted user stats - Total: ${stats.totalUsers}, New today: ${stats.newUsersToday}`);
+        const [totalUsers, newUsersToday] = await Promise.all([
+          User.countDocuments(),
+          User.countDocuments({ 
+            createdAt: { 
+              $gte: new Date(new Date().setHours(0, 0, 0, 0)) 
+            } 
+          })
+        ]);
+
+        const [totalBuyers, totalSellers, verifiedSellers] = await Promise.all([
+          User.countDocuments({ role: 'buyer' }),
+          User.countDocuments({ role: 'seller' }),
+          User.countDocuments({ role: 'seller', isVerified: true })
+        ]);
+
+        webSocketService.io.emit('stats:users', {
+          totalUsers,
+          totalBuyers,
+          totalSellers,
+          verifiedSellers,
+          newUsersToday,
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log(`📊 Broadcasted user stats - Total: ${totalUsers}, New today: ${newUsersToday}`);
       } catch (statsError) {
         console.error('Failed to broadcast user stats:', statsError);
       }
