@@ -47,15 +47,17 @@ export default function AnimatedUserCounter({
   // Fetch initial stats
   const fetchStats = useCallback(async () => {
     try {
+      console.log('[AnimatedUserCounter] Fetching initial stats...');
       const response = await userStatsService.getUserStats();
       if (response.success && response.data && mountedRef.current) {
+        console.log('[AnimatedUserCounter] Got initial stats:', response.data);
         setTargetCount(response.data.totalUsers);
         setNewUsersToday(response.data.newUsersToday);
         springValue.set(response.data.totalUsers);
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('Failed to fetch user stats:', error);
+      console.error('[AnimatedUserCounter] Failed to fetch user stats:', error);
       setIsLoading(false);
     }
   }, [springValue]);
@@ -76,17 +78,23 @@ export default function AnimatedUserCounter({
 
   // WebSocket real-time updates
   useEffect(() => {
-    if (!webSocket) return;
+    if (!webSocket) {
+      console.log('[AnimatedUserCounter] WebSocket not available yet');
+      return;
+    }
+
+    console.log('[AnimatedUserCounter] Setting up WebSocket subscriptions');
 
     // Listen for new user registration events
     const unsubscribeNewUser = webSocket.subscribe('user:registered', (data: any) => {
       if (!mountedRef.current) return;
       
-      console.log('[AnimatedUserCounter] New user registered:', data);
+      console.log('[AnimatedUserCounter] New user registered event received:', data);
       
       // Increment the count with animation
       setTargetCount((prev) => {
         const newCount = prev + 1;
+        console.log('[AnimatedUserCounter] Incrementing count from', prev, 'to', newCount);
         springValue.set(newCount);
         return newCount;
       });
@@ -103,13 +111,14 @@ export default function AnimatedUserCounter({
       }, 3000);
     });
 
-    // Listen for stats update events (if backend sends periodic updates)
+    // Listen for stats update events (full stats broadcast)
     const unsubscribeStatsUpdate = webSocket.subscribe('stats:users', (data: any) => {
       if (!mountedRef.current) return;
       
-      console.log('[AnimatedUserCounter] Stats update:', data);
+      console.log('[AnimatedUserCounter] Stats update event received:', data);
       
-      if (data.totalUsers) {
+      if (data.totalUsers !== undefined) {
+        console.log('[AnimatedUserCounter] Updating to new total:', data.totalUsers);
         setTargetCount(data.totalUsers);
         springValue.set(data.totalUsers);
       }
@@ -123,6 +132,7 @@ export default function AnimatedUserCounter({
     });
 
     return () => {
+      console.log('[AnimatedUserCounter] Cleaning up WebSocket subscriptions');
       unsubscribeNewUser();
       unsubscribeStatsUpdate();
     };
@@ -131,7 +141,7 @@ export default function AnimatedUserCounter({
   if (compact) {
     return (
       <motion.div 
-        className={`flex items-center gap-2 ${className}`}
+        className={`flex items-center gap-2 relative ${className}`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
@@ -144,7 +154,7 @@ export default function AnimatedUserCounter({
             animate={showUpdateAnimation ? { scale: [1, 1.1, 1] } : {}}
             transition={{ duration: 0.3 }}
           >
-            {formattedCount}
+            {isLoading ? '...' : formattedCount}
           </motion.span>{' '}
           users
         </span>
@@ -167,7 +177,7 @@ export default function AnimatedUserCounter({
 
   return (
     <motion.div 
-      className={`bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 ${className}`}
+      className={`bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 relative ${className}`}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
