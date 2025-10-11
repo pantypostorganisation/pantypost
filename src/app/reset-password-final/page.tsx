@@ -30,42 +30,8 @@ export default function ResetPasswordFinalPage() {
     let storedEmail = emailParam || sessionStorage.getItem('resetEmail');
     let storedCode = codeParam || sessionStorage.getItem('resetCode');
     
-    // If we have both from URL (user clicked direct link from email), validate the code
-    if (emailParam && codeParam) {
-      console.log('[Reset Password Final] Direct link detected, validating code...');
-      
-      // Validate the code first
-      authService.verifyResetCode(emailParam, codeParam).then(response => {
-        if (response.success && response.data?.valid) {
-          console.log('[Reset Password Final] Code validated successfully');
-          setEmail(emailParam);
-          setCode(codeParam);
-          
-          // Store in session for consistency
-          sessionStorage.setItem('resetEmail', emailParam);
-          sessionStorage.setItem('resetCode', codeParam);
-        } else {
-          console.log('[Reset Password Final] Code validation failed:', response.error?.message);
-          setError('Invalid or expired reset link. Please request a new password reset.');
-          
-          // Redirect to forgot password after showing error
-          setTimeout(() => {
-            router.push('/forgot-password');
-          }, 3000);
-        }
-      }).catch(err => {
-        console.error('[Reset Password Final] Code validation error:', err);
-        setError('Unable to validate reset link. Please try again.');
-        setTimeout(() => {
-          router.push('/forgot-password');
-        }, 3000);
-      });
-      
-      return;
-    }
-    
-    // Regular flow - code already validated via verify-reset-code page
     if (!storedEmail || !storedCode) {
+      // If missing data, redirect back to forgot password
       console.log('[Reset Password Final] Missing email or code, redirecting...');
       router.push('/forgot-password');
       return;
