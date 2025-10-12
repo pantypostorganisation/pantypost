@@ -1,7 +1,7 @@
 // src/components/wallet/buyer/AddFundsSection.tsx
 'use client';
 
-import { PlusCircle, CreditCard, CheckCircle, AlertCircle, Zap } from 'lucide-react';
+import { PlusCircle, CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
@@ -83,11 +83,6 @@ export default function AddFundsSection({
               <p className="text-sm text-gray-400">Choose an amount, confirm, and spend immediately.</p>
             </div>
           </div>
-
-          <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-[#ff950e] md:self-center">
-            <Zap className="h-3.5 w-3.5" />
-            Instant processing
-          </span>
         </div>
 
         {/* Form */}
