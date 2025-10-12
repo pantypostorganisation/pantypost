@@ -99,7 +99,7 @@ export default function WithdrawSection({
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#ff950e]">
+            <span className="inline-flex items-center gap-2 self-start rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#ff950e]">
               Withdraw
             </span>
             <h2 className="text-2xl font-semibold text-white">Move earnings to your account</h2>
