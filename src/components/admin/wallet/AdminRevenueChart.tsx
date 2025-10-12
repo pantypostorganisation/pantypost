@@ -1,7 +1,7 @@
 // src/components/admin/wallet/AdminRevenueChart.tsx
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { getRevenueByDay } from '@/utils/admin/walletHelpers';
 
@@ -12,6 +12,8 @@ interface AdminRevenueChartProps {
 }
 
 export default function AdminRevenueChart({ timeFilter, orderHistory, adminActions }: AdminRevenueChartProps) {
+  const [touchedBarIndex, setTouchedBarIndex] = useState<number | null>(null);
+
   // Get raw data from helper (may be empty / contain NaN)
   const rawData = getRevenueByDay(timeFilter, orderHistory, adminActions) || [];
 
@@ -54,6 +56,21 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
     }
   };
 
+  const handleTouchStart = (index: number) => {
+    setTouchedBarIndex(index);
+  };
+
+  const handleTouchEnd = () => {
+    // Keep the tooltip visible for a moment after release
+    setTimeout(() => {
+      setTouchedBarIndex(null);
+    }, 2000);
+  };
+
+  const handleTouchCancel = () => {
+    setTouchedBarIndex(null);
+  };
+
   return (
     <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 mb-8 overflow-hidden">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-2">
@@ -71,9 +88,17 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
           <div className="overflow-x-auto">
             <div className="min-w-[600px] h-64 flex items-end justify-between gap-1 mb-4">
               {chartData.map((period, index) => {
-                const heightPx = Math.max((period.revenue / maxRevenue) * 200, 4); // min bar height for visibility
+                const heightPx = Math.max((period.revenue / maxRevenue) * 200, 4);
+                const isActive = touchedBarIndex === index;
+                
                 return (
-                  <div key={index} className="flex-1 flex flex-col items-center group">
+                  <div 
+                    key={index} 
+                    className="flex-1 flex flex-col items-center group"
+                    onTouchStart={() => handleTouchStart(index)}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchCancel={handleTouchCancel}
+                  >
                     <div className="relative w-full flex justify-center mb-2">
                       <div
                         className="w-8 bg-gradient-to-t from-[#ff950e] to-[#ff6b00] rounded-t-lg transition-all duration-300 group-hover:from-[#ff6b00] group-hover:to-[#ff950e] min-h-[4px]"
@@ -81,7 +106,11 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
                         aria-label={`${period.date}: ${formatCurrency(period.revenue)}`}
                         role="img"
                       />
-                      <div className="absolute -top-8 bg-black/80 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                      <div 
+                        className={`absolute -top-8 bg-black/90 text-white text-xs px-2 py-1 rounded transition-opacity whitespace-nowrap z-10 ${
+                          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                      >
                         {formatCurrency(period.revenue)}
                       </div>
                     </div>
