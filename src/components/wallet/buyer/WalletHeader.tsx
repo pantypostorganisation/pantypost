@@ -1,6 +1,6 @@
 'use client';
 
-import { Wallet, ShieldCheck, Zap, CreditCard, Sparkles, ArrowUpRight } from 'lucide-react';
+import { Wallet, CreditCard, ArrowUpRight } from 'lucide-react';
 
 export default function WalletHeader() {
   return (
@@ -23,35 +23,6 @@ export default function WalletHeader() {
           </div>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <div className="flex items-center gap-3 rounded-2xl border border-gray-800 bg-[#111] p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-              <ShieldCheck className="h-5 w-5 text-[#ff950e]" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-gray-500">Secure transaction</p>
-              <p className="text-sm font-semibold text-white">Secure transfers</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-gray-800 bg-[#111] p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-              <Zap className="h-5 w-5 text-[#ff950e]" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-gray-500">Instant reloads</p>
-              <p className="text-sm font-semibold text-white">No waiting period</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-gray-800 bg-[#111] p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-              <Sparkles className="h-5 w-5 text-[#ff950e]" />
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-wider text-gray-500">Curated perks</p>
-              <p className="text-sm font-semibold text-white">Buyer exclusives</p>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="flex w-full max-w-sm flex-col gap-4 rounded-2xl border border-gray-800 bg-[#111] p-6 text-sm text-gray-300">
