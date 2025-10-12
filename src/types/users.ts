@@ -11,6 +11,7 @@ export type SellerTier = 'Tease' | 'Flirt' | 'Obsession' | 'Desire' | 'Goddess';
 export interface UserProfile {
   bio: string;
   profilePic: string | null;
+  profilePicUpdatedAt?: string | null;
   subscriptionPrice: string;
   lastUpdated?: string;
   galleryImages?: string[];
