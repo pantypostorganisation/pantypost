@@ -6,8 +6,6 @@ import { useAuth } from '@/context/AuthContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/seller/WalletHeader';
-import BalanceCard from '@/components/wallet/seller/BalanceCard';
-import EarningsCard from '@/components/wallet/seller/EarningsCard';
 import WithdrawSection from '@/components/wallet/seller/WithdrawSection';
 import RecentWithdrawals from '@/components/wallet/seller/RecentWithdrawals';
 import EmptyState from '@/components/wallet/seller/EmptyState';
@@ -53,7 +51,6 @@ function SellerWalletContent() {
   const recentArray = Array.isArray(recentWithdrawals) ? recentWithdrawals : [];
   const totalSalesCount = salesArray.length;
   const hasWithdrawals = sortedArray.length > 0;
-  const averageOrderValue = totalSalesCount > 0 ? totalEarnings / totalSalesCount : 0;
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
@@ -69,22 +66,6 @@ function SellerWalletContent() {
               salesCount={totalSalesCount}
               recentWithdrawalsCount={recentArray.length}
               remainingDailyLimit={remainingDailyLimit}
-            />
-          </section>
-
-          <section className="grid gap-6 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)]">
-            <BalanceCard
-              balance={balance}
-              remainingDailyLimit={remainingDailyLimit}
-              todaysWithdrawals={todaysWithdrawals}
-            />
-
-            <EarningsCard
-              totalEarnings={totalEarnings}
-              totalWithdrawn={totalWithdrawn}
-              salesCount={totalSalesCount}
-              averageOrderValue={averageOrderValue}
-              recentWithdrawalsCount={recentArray.length}
             />
           </section>
 
