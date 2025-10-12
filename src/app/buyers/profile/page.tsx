@@ -213,20 +213,46 @@ export default function BuyerSelfProfilePage() {
       if (!resp.ok || json?.success === false) {
         setError(json?.error?.message || 'Failed to update your profile.');
       } else {
-        const d = (json.data || json) as MeProfile;
-        setForm({
-          username: d.username,
-          role: d.role,
-          bio: d.bio || '',
-          profilePic: sanitizeProfilePicValue(d.profilePic),
-          country: d.country || '',
-        });
+        const candidateData = (() => {
+          const rawData = json?.data;
+          if (rawData && typeof rawData === 'object') {
+            return rawData as Partial<MeProfile>;
+          }
+          if (json && typeof json === 'object') {
+            const possible = json as Partial<MeProfile>;
+            const relevantKeys: (keyof MeProfile)[] = ['username', 'role', 'bio', 'profilePic', 'country'];
+            if (relevantKeys.some((key) => typeof possible[key] !== 'undefined')) {
+              return possible;
+            }
+          }
+          return null;
+        })();
+
+        if (candidateData) {
+          setForm((prev) => ({
+            username: typeof candidateData.username === 'string' && candidateData.username
+              ? candidateData.username
+              : prev.username,
+            role:
+              candidateData.role === 'buyer' || candidateData.role === 'seller' || candidateData.role === 'admin'
+                ? candidateData.role
+                : prev.role,
+            bio: typeof candidateData.bio === 'string' ? candidateData.bio : prev.bio,
+            profilePic:
+              'profilePic' in candidateData
+                ? sanitizeProfilePicValue(candidateData.profilePic)
+                : prev.profilePic,
+            country: typeof candidateData.country === 'string' ? candidateData.country : prev.country,
+          }));
+        }
+
         setSuccess('Profile saved.');
+        const broadcastSource = candidateData || form;
         broadcastProfileUpdate({
-          username: d.username,
-          bio: d.bio || '',
-          country: d.country || '',
-          profilePic: sanitizeProfilePicValue(d.profilePic),
+          username: broadcastSource.username || form.username,
+          bio: broadcastSource.bio || form.bio || '',
+          country: broadcastSource.country || form.country || '',
+          profilePic: sanitizeProfilePicValue(broadcastSource.profilePic ?? form.profilePic),
         });
       }
     } catch {
