@@ -12,6 +12,7 @@ import {
   Upload
 } from 'lucide-react';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { apiCall } from '@/services/api.config';
 
 interface User {
   role: string;
@@ -70,25 +71,29 @@ export default function AdminHealthSection({
   useEffect(() => {
     const fetchUserStats = async () => {
       try {
-        const response = await fetch('/api/users/stats');
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.data) {
-            setUserStats({
-              totalUsers: data.data.totalUsers || 0,
-              totalBuyers: data.data.totalBuyers || 0,
-              totalSellers: data.data.totalSellers || 0,
-              verifiedSellers: data.data.verifiedSellers || 0,
-            });
-          }
+        // Use the configured apiCall utility which handles URL building and auth
+        const response = await apiCall<{
+          totalUsers: number;
+          totalBuyers: number;
+          totalSellers: number;
+          verifiedSellers: number;
+        }>('/users/stats');
+        
+        console.log('User stats response:', response);
+        
+        if (response.success && response.data) {
+          setUserStats({
+            totalUsers: response.data.totalUsers || 0,
+            totalBuyers: response.data.totalBuyers || 0,
+            totalSellers: response.data.totalSellers || 0,
+            verifiedSellers: response.data.verifiedSellers || 0,
+          });
         } else {
-          // Fallback to calculating from users object
-          console.warn('Failed to fetch user stats from API, using fallback calculation');
+          console.warn('Failed to fetch user stats:', response.error);
           setUserStats(null);
         }
       } catch (error) {
         console.error('Error fetching user stats:', error);
-        // Fallback to calculating from users object
         setUserStats(null);
       } finally {
         setIsLoadingStats(false);
