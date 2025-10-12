@@ -815,9 +815,15 @@ export class EnhancedUsersService {
       const currentData = profilesData[sanitizedUsername] || {
         bio: '',
         profilePic: null,
+        profilePicUpdatedAt: null,
         subscriptionPrice: '0',
         galleryImages: [],
       };
+
+      const newProfilePicUpdatedAt =
+        sanitizedUpdates.profilePic !== undefined
+          ? new Date().toISOString()
+          : currentData.profilePicUpdatedAt ?? null;
 
       const updatedProfile: UserProfile = {
         ...currentData,
@@ -825,6 +831,7 @@ export class EnhancedUsersService {
         subscriptionPrice: toPriceString(
           sanitizedUpdates.subscriptionPrice ?? currentData.subscriptionPrice ?? '0',
         ),
+        profilePicUpdatedAt: newProfilePicUpdatedAt,
         lastUpdated: new Date().toISOString(),
       };
 
@@ -859,14 +866,38 @@ export class EnhancedUsersService {
           );
         }
 
-        // Update user bio in all_users_v2 if needed
-        if (sanitizedUpdates.bio !== undefined) {
+        // Update aggregated user data when profile fields change
+        if (sanitizedUpdates.bio !== undefined || sanitizedUpdates.profilePic !== undefined) {
           const allUsers = await storageService.getItem<Record<string, any>>('all_users_v2', {});
-          if (allUsers[sanitizedUsername]) {
-            allUsers[sanitizedUsername].bio = sanitizedUpdates.bio;
+          const aggregatedUser = allUsers[sanitizedUsername];
+
+          if (aggregatedUser) {
+            if (sanitizedUpdates.bio !== undefined) {
+              aggregatedUser.bio = sanitizedUpdates.bio;
+            }
+
+            if (sanitizedUpdates.profilePic !== undefined) {
+              const normalizedPic = sanitizedUpdates.profilePic ?? null;
+
+              aggregatedUser.profilePic = normalizedPic;
+              aggregatedUser.profilePicture = normalizedPic;
+              aggregatedUser.pic = normalizedPic;
+              aggregatedUser.avatar = normalizedPic;
+
+              if (newProfilePicUpdatedAt) {
+                aggregatedUser.profilePicUpdatedAt = newProfilePicUpdatedAt;
+                aggregatedUser.profilePictureUpdatedAt = newProfilePicUpdatedAt;
+              } else {
+                delete aggregatedUser.profilePicUpdatedAt;
+                delete aggregatedUser.profilePictureUpdatedAt;
+              }
+            }
+
             await storageService.setItem('all_users_v2', allUsers);
-            // Clear user cache
+
+            // Clear caches so search results reflect the latest profile data
             this.userCache.delete(sanitizedUsername);
+            this.listCache.clear();
           }
         }
 
@@ -1537,6 +1568,11 @@ export class EnhancedUsersService {
     const rawPic = p.profilePic ?? p.profilePicture ?? null;
     const profilePic = sanitizeUrlOrNull(rawPic);
 
+    const profilePicUpdatedRaw =
+      p.profilePicUpdatedAt ?? p.profilePictureUpdatedAt ?? p.lastUpdated ?? null;
+    const profilePicUpdatedAt =
+      typeof profilePicUpdatedRaw === 'string' ? sanitizeStrict(profilePicUpdatedRaw) : null;
+
     const priceStr = toPriceString(p.subscriptionPrice ?? '0');
 
     const galleryImages: string[] = Array.isArray(p.galleryImages)
@@ -1557,6 +1593,7 @@ export class EnhancedUsersService {
     return {
       bio: sanitizeStrict(p.bio || ''),
       profilePic,
+      profilePicUpdatedAt,
       subscriptionPrice: priceStr, // <- always string
       galleryImages,
       socialLinks,
