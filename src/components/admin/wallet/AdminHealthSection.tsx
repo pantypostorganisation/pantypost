@@ -1,6 +1,7 @@
+// src/components/admin/wallet/AdminHealthSection.tsx
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import {
   Activity,
   Users,
@@ -47,6 +48,13 @@ interface AdminHealthSectionProps {
   sellerWithdrawals: Record<string, Withdrawal[]>;
 }
 
+interface UserStats {
+  totalUsers: number;
+  totalBuyers: number;
+  totalSellers: number;
+  verifiedSellers: number;
+}
+
 export default function AdminHealthSection({
   users = {},
   listings = [],
@@ -55,6 +63,41 @@ export default function AdminHealthSection({
   filteredDeposits = [],
   sellerWithdrawals = {}
 }: AdminHealthSectionProps) {
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  // Fetch accurate user stats from backend
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        const response = await fetch('/api/users/stats');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data) {
+            setUserStats({
+              totalUsers: data.data.totalUsers || 0,
+              totalBuyers: data.data.totalBuyers || 0,
+              totalSellers: data.data.totalSellers || 0,
+              verifiedSellers: data.data.verifiedSellers || 0,
+            });
+          }
+        } else {
+          // Fallback to calculating from users object
+          console.warn('Failed to fetch user stats from API, using fallback calculation');
+          setUserStats(null);
+        }
+      } catch (error) {
+        console.error('Error fetching user stats:', error);
+        // Fallback to calculating from users object
+        setUserStats(null);
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchUserStats();
+  }, []); // Run once on mount
+
   const clean = (u?: string) => (typeof u === 'string' ? u.trim() : '');
   const isAdminUser = (u?: string) => {
     const uname = clean(u);
@@ -190,9 +233,11 @@ export default function AdminHealthSection({
     };
   }, [users, listings, wallet, filteredDeposits, sellerWithdrawals]);
 
-  const buyersCount = buyersSet.size;
-  const sellersCount = sellersSet.size;
-  const totalUsersCount = new Set<string>([...Array.from(buyersSet), ...Array.from(sellersSet)]).size;
+  // Use API stats if available, otherwise fallback to calculated stats
+  const buyersCount = userStats?.totalBuyers ?? buyersSet.size;
+  const sellersCount = userStats?.totalSellers ?? sellersSet.size;
+  const totalUsersCount = userStats?.totalUsers ?? new Set<string>([...Array.from(buyersSet), ...Array.from(sellersSet)]).size;
+  const verifiedSellersCount = userStats?.verifiedSellers ?? verifiedSellers.length;
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', {
@@ -217,7 +262,9 @@ export default function AdminHealthSection({
               <span className="text-white">Total Users</span>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-bold text-white">{totalUsersCount}</span>
+              <span className="text-2xl font-bold text-white">
+                {isLoadingStats ? '...' : totalUsersCount}
+              </span>
               <p className="text-xs text-gray-400">
                 {buyersCount} buyers, {sellersCount} sellers
               </p>
@@ -230,9 +277,11 @@ export default function AdminHealthSection({
               <span className="text-white">Verified Sellers</span>
             </div>
             <div className="text-right">
-              <span className="text-2xl font-bold text-white">{verifiedSellers.length}</span>
+              <span className="text-2xl font-bold text-white">
+                {isLoadingStats ? '...' : verifiedSellersCount}
+              </span>
               <p className="text-xs text-gray-400">
-                {sellersCount > 0 ? Math.round((verifiedSellers.length / sellersCount) * 100) : 0}% verified
+                {sellersCount > 0 ? Math.round((verifiedSellersCount / sellersCount) * 100) : 0}% verified
               </p>
             </div>
           </div>
