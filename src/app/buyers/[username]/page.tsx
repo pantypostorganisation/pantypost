@@ -11,6 +11,7 @@ import { CalendarDays, MapPin, MessageCircle } from 'lucide-react';
 import { getGlobalAuthToken } from '@/context/AuthContext';
 import { API_BASE_URL } from '@/services/api.config';
 import { flagFromCountryName } from '@/constants/countries';
+import { resolveApiUrl } from '@/utils/url';
 
 /* ==== Types ==== */
 type NormalizedBuyerProfile = {
@@ -139,31 +140,32 @@ const API_ORIGIN = (() => {
 
 function resolveAvatarUrl(raw?: string | null): string | null {
   if (!raw) return null;
+
   const src = String(raw).trim();
   if (!src) return null;
-  if (src.toLowerCase().includes('placeholder') || src === '-' || src === 'none') return null;
+
+  const lower = src.toLowerCase();
+  if (lower.includes('placeholder') || lower === '-' || lower === 'none') return null;
+  if (lower.startsWith('data:image/')) return src;
+
   if (src.startsWith('http://') || src.startsWith('https://')) {
-    return src;
+    return lower.includes('api.pantypost.com') ? src.replace('http://', 'https://') : src;
   }
-  if (src.startsWith('/uploads/')) {
-    if (API_ORIGIN) return `${API_ORIGIN}${src}`;
-    if (typeof window !== 'undefined') return `${window.location.origin}${src}`;
-    return src;
+
+  const ensureLeadingSlash = src.startsWith('/') ? src : `/${src}`;
+  const resolved = resolveApiUrl(ensureLeadingSlash);
+  if (resolved) {
+    return resolved;
   }
-  if (src.startsWith('uploads/')) {
-    const withSlash = `/${src}`;
-    if (API_ORIGIN) return `${API_ORIGIN}${withSlash}`;
-    if (typeof window !== 'undefined') return `${window.location.origin}${withSlash}`;
-    return withSlash;
+
+  if (API_ORIGIN) {
+    return `${API_ORIGIN}${ensureLeadingSlash}`;
   }
-  if (src.startsWith('/')) {
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}${src}`;
-    }
-    if (API_ORIGIN) {
-      return `${API_ORIGIN}${src}`;
-    }
+
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}${ensureLeadingSlash}`;
   }
+
   return null;
 }
 
