@@ -978,7 +978,7 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/wallet/seller"
-                className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs"
+                className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-purple-900/30 to-purple-700/30 hover:from-purple-800/40 hover:to-purple-600/40 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -986,8 +986,8 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletIcon className="w-3.5 h-3.5 text-[#ff950e]" />
-                <span className="font-bold text-[#ff950e]">${Math.max(sellerBalance, 0).toFixed(2)}</span>
+                <WalletIcon className="w-3.5 h-3.5 text-purple-200 transition-colors duration-300 group-hover:text-purple-100" />
+                <span className="font-bold text-purple-100">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
 
               <Link href="/sellers/orders-to-fulfil" className="relative group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
