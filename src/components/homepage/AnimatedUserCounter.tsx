@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { motion, useSpring, useTransform } from 'framer-motion';
+import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
 import { CheckCircle, Users, TrendingUp } from 'lucide-react';
 import { userStatsService } from '@/services/userStats.service';
 import { useWebSocket } from '@/context/WebSocketContext';
@@ -230,28 +230,52 @@ export default function AnimatedUserCounter({
         <CheckCircle className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
         <span className="text-[#ff950e] font-semibold text-xs tracking-wider uppercase">
           Trusted by{' '}
-          <motion.span 
-            className="font-bold"
-            animate={showUpdateAnimation ? { scale: [1, 1.1, 1] } : {}}
-            transition={{ duration: 0.3 }}
-          >
-            {displayValue}
-          </motion.span>{' '}
+          <span className="relative inline-block">
+            <motion.span 
+              className="font-bold"
+              animate={showUpdateAnimation ? { 
+                scale: [1, 1.15, 1],
+                color: ['#ff950e', '#22c55e', '#ff950e']
+              } : {}}
+              transition={{ duration: 0.5 }}
+            >
+              {displayValue}
+            </motion.span>
+            
+            {/* Improved +1 animation that floats up from the number */}
+            <AnimatePresence>
+              {showUpdateAnimation && (
+                <motion.div
+                  className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
+                  initial={{ 
+                    opacity: 0, 
+                    y: 0,
+                    scale: 0
+                  }}
+                  animate={{ 
+                    opacity: [0, 1, 1, 0],
+                    y: -20,
+                    scale: [0, 1.2, 1, 1]
+                  }}
+                  exit={{ 
+                    opacity: 0,
+                    y: -30
+                  }}
+                  transition={{ 
+                    duration: 2,
+                    ease: "easeOut",
+                    times: [0, 0.2, 0.7, 1]
+                  }}
+                >
+                  <span className="text-green-400 text-sm font-bold whitespace-nowrap drop-shadow-lg">
+                    +1
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </span>{' '}
           users
         </span>
-        
-        {/* Celebration animation for new users */}
-        {showUpdateAnimation && (
-          <motion.div
-            className="absolute -top-2 -right-2"
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <span className="text-green-400 text-xs font-bold">+1</span>
-          </motion.div>
-        )}
       </motion.div>
     );
   }
@@ -288,7 +312,7 @@ export default function AnimatedUserCounter({
         )}
       </div>
 
-      <div className="text-4xl font-bold text-white mb-2">
+      <div className="text-4xl font-bold text-white mb-2 relative">
         <motion.span
           animate={showUpdateAnimation ? { 
             scale: [1, 1.05, 1],
@@ -298,6 +322,38 @@ export default function AnimatedUserCounter({
         >
           {displayValue}
         </motion.span>
+        
+        {/* Improved +1 animation for non-compact mode */}
+        <AnimatePresence>
+          {showUpdateAnimation && (
+            <motion.div
+              className="absolute left-1/2 -translate-x-1/2 -top-2 pointer-events-none"
+              initial={{ 
+                opacity: 0, 
+                y: 10,
+                scale: 0
+              }}
+              animate={{ 
+                opacity: [0, 1, 1, 0],
+                y: [-5, -25, -30, -40],
+                scale: [0, 1.5, 1.2, 1]
+              }}
+              exit={{ 
+                opacity: 0,
+                y: -50
+              }}
+              transition={{ 
+                duration: 2.5,
+                ease: "easeOut",
+                times: [0, 0.2, 0.7, 1]
+              }}
+            >
+              <span className="text-green-400 text-xl font-bold whitespace-nowrap drop-shadow-lg">
+                +1
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {showNewUsersToday && newUsersToday > 0 && (
