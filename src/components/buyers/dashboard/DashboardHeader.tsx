@@ -34,7 +34,7 @@ export default function DashboardHeader({ username }: DashboardHeaderProps) {
             href="/browse"
             className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
           >
-            Explore marketplace
+            <span className="text-black">Explore marketplace</span>
             <ArrowUpRight className="h-4 w-4" />
           </Link>
           <p className="text-xs text-gray-500">New drops land daily. Keep your wallet ready.</p>
