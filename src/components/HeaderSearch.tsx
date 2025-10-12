@@ -11,6 +11,7 @@ type SearchUserResult = {
   role: 'buyer' | 'seller';
   profilePicture: string | null;
   isVerified: boolean;
+  profilePictureUpdatedAt: string | null;
 };
 
 interface HeaderSearchProps {
@@ -19,11 +20,22 @@ interface HeaderSearchProps {
   onResultClick?: () => void;
 }
 
+const getCacheBustedUrl = (url: string, updatedAt: string | null): string => {
+  if (!updatedAt) {
+    return url;
+  }
+
+  const parsed = Date.parse(updatedAt);
+  const cacheKey = Number.isNaN(parsed) ? encodeURIComponent(updatedAt) : parsed;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}v=${cacheKey}`;
+};
+
 // Memoized search component to prevent re-renders
-export const HeaderSearch = memo(function HeaderSearch({ 
-  variant, 
+export const HeaderSearch = memo(function HeaderSearch({
+  variant,
   canUseSearch,
-  onResultClick 
+  onResultClick
 }: HeaderSearchProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUserResult[]>([]);
@@ -155,14 +167,24 @@ export const HeaderSearch = memo(function HeaderSearch({
                 return null;
               }
 
-              const picture = rawUser.profilePicture || 
+              const picture = rawUser.profilePicture ||
                 (rawUser as any)?.profilePic || null;
+              const pictureUpdatedRaw =
+                (rawUser as any)?.profilePictureUpdatedAt ??
+                (rawUser as any)?.profilePicUpdatedAt ??
+                (rawUser as any)?.profilePicLastUpdated ??
+                (rawUser as any)?.lastUpdated ??
+                (rawUser as any)?.updatedAt ??
+                null;
+              const pictureUpdatedAt =
+                typeof pictureUpdatedRaw === 'string' ? sanitizeStrict(pictureUpdatedRaw) : null;
               const verified = Boolean(rawUser.isVerified || rawUser.verificationStatus === 'verified');
 
               return {
                 username: safeUsername,
                 role: rawUser.role,
                 profilePicture: picture,
+                profilePictureUpdatedAt: pictureUpdatedAt,
                 isVerified: verified,
               } as SearchUserResult;
             })
@@ -347,6 +369,10 @@ export const HeaderSearch = memo(function HeaderSearch({
                 const initial = result.username.charAt(0).toUpperCase();
                 const roleLabel = result.role === 'seller' ? 'Seller profile' : 'Buyer profile';
                 const isExactMatch = result.username.toLowerCase() === trimmedQuery.toLowerCase();
+                const displayProfilePicture =
+                  result.profilePicture
+                    ? getCacheBustedUrl(result.profilePicture, result.profilePictureUpdatedAt)
+                    : null;
 
                 return (
                   <li key={`${result.role}-${result.username}`}>
@@ -357,9 +383,9 @@ export const HeaderSearch = memo(function HeaderSearch({
                       className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-[#ff950e]/10 text-left"
                     >
                       <div className="w-10 h-10 rounded-full border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/10 to-[#ff6b00]/10 flex items-center justify-center overflow-hidden shadow-inner">
-                        {result.profilePicture ? (
+                        {displayProfilePicture ? (
                           <img
-                            src={result.profilePicture}
+                            src={displayProfilePicture}
                             alt={`${result.username}'s avatar`}
                             className="h-full w-full object-cover"
                           />
