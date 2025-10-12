@@ -1,7 +1,7 @@
 // src/hooks/usePublicWebSocket.ts
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { apiConfig } from '@/config/environment';
+import { websocketConfig } from '@/config/environment';
 
 interface PublicWebSocketOptions {
   autoConnect?: boolean;
@@ -20,9 +20,11 @@ export function usePublicWebSocket(options: PublicWebSocketOptions = {}) {
     if (socketRef.current?.connected) return;
 
     try {
-      const wsUrl = apiConfig.baseUrl
-        .replace('/api', '')
-        .replace(/^http/, 'ws');
+      // Use the websocketConfig.url directly from environment.ts
+      // It's already set to 'wss://api.pantypost.com'
+      const wsUrl = websocketConfig.url || 'wss://api.pantypost.com';
+      
+      console.log('[PublicWS] Connecting to:', wsUrl);
 
       socketRef.current = io(wsUrl, {
         path: '/public-ws',
@@ -49,6 +51,24 @@ export function usePublicWebSocket(options: PublicWebSocketOptions = {}) {
         setLastError(error as Error);
       });
 
+      // Listen for stats updates
+      socketRef.current.on('stats:users', (data: any) => {
+        console.log('[PublicWS] Received stats update:', data);
+        const handlers = handlersRef.current.get('stats:users');
+        if (handlers) {
+          handlers.forEach(handler => handler(data));
+        }
+      });
+
+      // Listen for new user registrations
+      socketRef.current.on('user:registered', (data: any) => {
+        console.log('[PublicWS] New user registered:', data);
+        const handlers = handlersRef.current.get('user:registered');
+        if (handlers) {
+          handlers.forEach(handler => handler(data));
+        }
+      });
+
       // Forward all events to registered handlers
       socketRef.current.onAny((event: string, ...args: any[]) => {
         const handlers = handlersRef.current.get(event);
@@ -70,6 +90,8 @@ export function usePublicWebSocket(options: PublicWebSocketOptions = {}) {
   }, []);
 
   const subscribe = useCallback((event: string, handler: Function) => {
+    console.log('[PublicWS] Subscribing to event:', event);
+    
     if (!handlersRef.current.has(event)) {
       handlersRef.current.set(event, new Set());
     }
