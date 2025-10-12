@@ -24,12 +24,14 @@ export default function AnimatedUserCounter({
   const [newUsersToday, setNewUsersToday] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
+  const [incrementAmount, setIncrementAmount] = useState(1); // Track how many were added
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
   
   const { user } = useAuth();
   const authenticatedWebSocket = useWebSocket();
   const publicWebSocket = usePublicWebSocket({ autoConnect: !user });
   const mountedRef = useRef(true);
+  const previousCountRef = useRef(0); // Track previous count
 
   // Spring animation for smooth counting
   const springValue = useSpring(0, { 
@@ -59,6 +61,7 @@ export default function AnimatedUserCounter({
         console.log('[AnimatedUserCounter] Got initial stats:', response.data);
         setTargetCount(response.data.totalUsers);
         setNewUsersToday(response.data.newUsersToday);
+        previousCountRef.current = response.data.totalUsers;
         
         // Only animate if we haven't loaded before
         if (!hasInitialLoad) {
@@ -97,18 +100,25 @@ export default function AnimatedUserCounter({
       
       console.log('[AnimatedUserCounter] Stats update received:', data);
       
-      if (data.totalUsers !== undefined && data.totalUsers !== targetCount) {
+      if (data.totalUsers !== undefined && data.totalUsers !== previousCountRef.current) {
         console.log('[AnimatedUserCounter] Updating to new total:', data.totalUsers);
+        
+        // Calculate the increment
+        const increment = data.totalUsers - previousCountRef.current;
+        
         setTargetCount(data.totalUsers);
         springValue.set(data.totalUsers);
         
         // Show celebration animation if count increased
-        if (data.totalUsers > targetCount) {
+        if (increment > 0) {
+          setIncrementAmount(increment);
           setShowUpdateAnimation(true);
           setTimeout(() => {
             if (mountedRef.current) setShowUpdateAnimation(false);
           }, 3000);
         }
+        
+        previousCountRef.current = data.totalUsers;
       }
       
       if (data.newUsersToday !== undefined) {
@@ -124,11 +134,12 @@ export default function AnimatedUserCounter({
       
       console.log('[AnimatedUserCounter] New user registered:', data);
       
-      // Increment the count immediately
+      // Increment the count immediately by 1 for individual user registration events
       setTargetCount((prev) => {
         const newCount = prev + 1;
         console.log('[AnimatedUserCounter] Incrementing count from', prev, 'to', newCount);
         springValue.set(newCount);
+        previousCountRef.current = newCount;
         return newCount;
       });
       
@@ -137,7 +148,8 @@ export default function AnimatedUserCounter({
       // Update cached stats
       userStatsService.incrementUserCount(1);
       
-      // Show celebration animation
+      // Show celebration animation with increment of 1
+      setIncrementAmount(1);
       setShowUpdateAnimation(true);
       setTimeout(() => {
         if (mountedRef.current) setShowUpdateAnimation(false);
@@ -163,7 +175,7 @@ export default function AnimatedUserCounter({
       unsubscribeStats?.();
       unsubscribeNewUser?.();
     };
-  }, [user, authenticatedWebSocket, publicWebSocket.isConnected, targetCount, springValue]);
+  }, [user, authenticatedWebSocket, publicWebSocket.isConnected, springValue]);
 
   // Fallback polling for when WebSocket is not available
   useEffect(() => {
@@ -183,20 +195,26 @@ export default function AnimatedUserCounter({
           const newTotal = response.data.totalUsers;
           
           // Check if count changed
-          if (newTotal !== targetCount) {
+          if (newTotal !== previousCountRef.current) {
             console.log('[AnimatedUserCounter] Polling detected change:', newTotal);
+            
+            // Calculate the increment
+            const increment = newTotal - previousCountRef.current;
             
             setTargetCount(newTotal);
             setNewUsersToday(response.data.newUsersToday);
             springValue.set(newTotal);
             
             // Show animation if count increased
-            if (newTotal > targetCount) {
+            if (increment > 0) {
+              setIncrementAmount(increment);
               setShowUpdateAnimation(true);
               setTimeout(() => {
                 if (mountedRef.current) setShowUpdateAnimation(false);
               }, 3000);
             }
+            
+            previousCountRef.current = newTotal;
           }
         }
       } catch (error) {
@@ -212,7 +230,6 @@ export default function AnimatedUserCounter({
     authenticatedWebSocket?.isConnected, 
     publicWebSocket.isConnected, 
     isLoading, 
-    targetCount, 
     springValue
   ]);
 
@@ -242,10 +259,11 @@ export default function AnimatedUserCounter({
               {displayValue}
             </motion.span>
             
-            {/* Improved +1 animation that floats up from the number */}
+            {/* Dynamic increment animation */}
             <AnimatePresence>
               {showUpdateAnimation && (
                 <motion.div
+                  key={`increment-${Date.now()}`} // Force re-render for each animation
                   className="absolute left-1/2 -translate-x-1/2 pointer-events-none"
                   initial={{ 
                     opacity: 0, 
@@ -268,7 +286,7 @@ export default function AnimatedUserCounter({
                   }}
                 >
                   <span className="text-green-400 text-sm font-bold whitespace-nowrap drop-shadow-lg">
-                    +1
+                    +{incrementAmount}
                   </span>
                 </motion.div>
               )}
@@ -307,7 +325,7 @@ export default function AnimatedUserCounter({
             className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-semibold"
           >
             <TrendingUp className="w-4 h-4 inline mr-1" />
-            New User!
+            {incrementAmount > 1 ? `${incrementAmount} New Users!` : 'New User!'}
           </motion.div>
         )}
       </div>
@@ -323,10 +341,11 @@ export default function AnimatedUserCounter({
           {displayValue}
         </motion.span>
         
-        {/* Improved +1 animation for non-compact mode */}
+        {/* Dynamic increment animation for non-compact mode */}
         <AnimatePresence>
           {showUpdateAnimation && (
             <motion.div
+              key={`increment-${Date.now()}`} // Force re-render for each animation
               className="absolute left-1/2 -translate-x-1/2 -top-2 pointer-events-none"
               initial={{ 
                 opacity: 0, 
@@ -336,7 +355,7 @@ export default function AnimatedUserCounter({
               animate={{ 
                 opacity: [0, 1, 1, 0],
                 y: [-5, -25, -30, -40],
-                scale: [0, 1.5, 1.2, 1]
+                scale: incrementAmount > 1 ? [0, 1.8, 1.4, 1.2] : [0, 1.5, 1.2, 1]
               }}
               exit={{ 
                 opacity: 0,
@@ -348,8 +367,8 @@ export default function AnimatedUserCounter({
                 times: [0, 0.2, 0.7, 1]
               }}
             >
-              <span className="text-green-400 text-xl font-bold whitespace-nowrap drop-shadow-lg">
-                +1
+              <span className={`text-green-400 ${incrementAmount > 1 ? 'text-2xl' : 'text-xl'} font-bold whitespace-nowrap drop-shadow-lg`}>
+                +{incrementAmount}
               </span>
             </motion.div>
           )}
