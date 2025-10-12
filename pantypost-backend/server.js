@@ -14,6 +14,9 @@ const connectDB = require('./config/database');
 // Import WebSocket service
 const webSocketService = require('./config/websocket');
 
+// Import public WebSocket service for guest users
+const publicWebSocketService = require('./config/publicWebsocket');
+
 // Import models
 const User = require('./models/User');
 const Notification = require('./models/Notification');
@@ -62,8 +65,12 @@ const server = http.createServer(app);
 // Initialize WebSocket service
 webSocketService.initialize(server);
 
-// Make webSocketService globally available for routes
+// Initialize public WebSocket service for guests
+publicWebSocketService.initialize(server, webSocketService);
+
+// Make both services globally available for routes
 global.webSocketService = webSocketService;
+global.publicWebSocketService = publicWebSocketService;
 
 // Connect to MongoDB
 connectDB();
@@ -109,7 +116,7 @@ const corsOptions = {
   optionsSuccessStatus: 200 // For legacy browser support
 };
 
-app.use(cors(corsOptions)); // (duplicate removed)
+app.use(cors(corsOptions));
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -126,6 +133,7 @@ app.get('/api/health', (req, res) => {
     features: {
       tiers: true,
       websocket: true,
+      publicWebsocket: true, // Added public WebSocket feature flag
       favorites: true,
       notifications: true,
       verification: true,
@@ -133,7 +141,7 @@ app.get('/api/health', (req, res) => {
       bans: true,
       analytics: true,
       auctions: true,
-      storage: true  // Added storage feature flag
+      storage: true
     },
   });
 });
@@ -421,6 +429,23 @@ app.get('/api/ws/status', authMiddleware, (req, res) => {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
   res.json({ success: true, data: webSocketService.getConnectionStats() });
+});
+
+// Public WebSocket status endpoint (admin only)
+app.get('/api/public-ws/status', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  
+  // Get public WebSocket stats if available
+  const publicStats = {
+    connected: publicWebSocketService.io ? publicWebSocketService.io.engine.clientsCount : 0,
+    roomMembers: publicWebSocketService.io 
+      ? publicWebSocketService.io.sockets.adapter.rooms.get('public:stats')?.size || 0 
+      : 0
+  };
+  
+  res.json({ success: true, data: publicStats });
 });
 
 // Add WebSocket methods for admin notifications
@@ -1129,6 +1154,17 @@ async function initializeStorageSystem() {
   }
 }
 
+// Initialize public WebSocket system on startup
+async function initializePublicWebSocketSystem() {
+  try {
+    console.log(`✅ Public WebSocket system initialized`);
+    console.log(`   - Guest users can receive real-time stats`);
+    console.log(`   - Path: /public-ws`);
+  } catch (error) {
+    console.error('⚠️ Error initializing public WebSocket system:', error);
+  }
+}
+
 // Start server - UPDATED TO LISTEN ON ALL INTERFACES
 const HOST = '0.0.0.0'; // Listen on all network interfaces
 const os = require('os');
@@ -1154,6 +1190,7 @@ server.listen(PORT, HOST, async () => {
   console.log(`   - Local: http://localhost:${PORT}`);
   console.log(`   - Network: http://${networkIP}:${PORT}`);
   console.log(`🔌 WebSocket server ready for connections`);
+  console.log(`📡 Public WebSocket ready for guest connections`);
 
   await initializeTierSystem();
   console.log(`🏆 Tier system ready`);
@@ -1172,6 +1209,9 @@ server.listen(PORT, HOST, async () => {
   
   await initializeStorageSystem();
   console.log(`💾 Storage system ready - backend storage enabled`);
+  
+  await initializePublicWebSocketSystem();
+  console.log(`🌐 Public WebSocket ready - guest real-time updates enabled`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -1195,5 +1235,6 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Auctions:      /api/auctions/*');
   console.log('  - Storage:       /api/storage/*');
   console.log('  - ProfileBuyer:  /api/profilebuyer');
+  console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
 });

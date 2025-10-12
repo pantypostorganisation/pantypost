@@ -6,6 +6,8 @@ import { motion, useSpring, useTransform } from 'framer-motion';
 import { CheckCircle, Users, TrendingUp } from 'lucide-react';
 import { userStatsService } from '@/services/userStats.service';
 import { useWebSocket } from '@/context/WebSocketContext';
+import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
+import { useAuth } from '@/context/AuthContext';
 
 interface AnimatedUserCounterProps {
   className?: string;
@@ -22,7 +24,11 @@ export default function AnimatedUserCounter({
   const [newUsersToday, setNewUsersToday] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
-  const webSocket = useWebSocket();
+  const [hasInitialLoad, setHasInitialLoad] = useState(false);
+  
+  const { user } = useAuth();
+  const authenticatedWebSocket = useWebSocket();
+  const publicWebSocket = usePublicWebSocket({ autoConnect: !user });
   const mountedRef = useRef(true);
 
   // Spring animation for smooth counting
@@ -53,14 +59,26 @@ export default function AnimatedUserCounter({
         console.log('[AnimatedUserCounter] Got initial stats:', response.data);
         setTargetCount(response.data.totalUsers);
         setNewUsersToday(response.data.newUsersToday);
-        springValue.set(response.data.totalUsers);
+        
+        // Only animate if we haven't loaded before
+        if (!hasInitialLoad) {
+          springValue.set(response.data.totalUsers);
+          setHasInitialLoad(true);
+        } else {
+          // Animate changes after initial load
+          springValue.set(response.data.totalUsers);
+        }
+        
         setIsLoading(false);
       }
     } catch (error) {
       console.error('[AnimatedUserCounter] Failed to fetch user stats:', error);
+      // Set a fallback value to avoid showing "..."
+      setTargetCount(0);
+      setFormattedCount('0');
       setIsLoading(false);
     }
-  }, [springValue]);
+  }, [springValue, hasInitialLoad]);
 
   // Initial fetch
   useEffect(() => {
@@ -72,22 +90,41 @@ export default function AnimatedUserCounter({
     };
   }, [fetchStats]);
 
-  // WebSocket real-time updates (for authenticated users)
+  // Handle real-time updates based on authentication status
   useEffect(() => {
-    if (!webSocket) {
-      console.log('[AnimatedUserCounter] WebSocket not available - user is likely a guest');
-      return;
-    }
-
-    console.log('[AnimatedUserCounter] Setting up WebSocket subscriptions for authenticated user');
-
-    // Listen for new user registration events
-    const unsubscribeNewUser = webSocket.subscribe('user:registered', (data: any) => {
+    const handleStatsUpdate = (data: any) => {
       if (!mountedRef.current) return;
       
-      console.log('[AnimatedUserCounter] New user registered event received:', data);
+      console.log('[AnimatedUserCounter] Stats update received:', data);
       
-      // Increment the count with animation
+      if (data.totalUsers !== undefined && data.totalUsers !== targetCount) {
+        console.log('[AnimatedUserCounter] Updating to new total:', data.totalUsers);
+        setTargetCount(data.totalUsers);
+        springValue.set(data.totalUsers);
+        
+        // Show celebration animation if count increased
+        if (data.totalUsers > targetCount) {
+          setShowUpdateAnimation(true);
+          setTimeout(() => {
+            if (mountedRef.current) setShowUpdateAnimation(false);
+          }, 3000);
+        }
+      }
+      
+      if (data.newUsersToday !== undefined) {
+        setNewUsersToday(data.newUsersToday);
+      }
+      
+      // Update cached stats
+      userStatsService.updateCachedStats(data);
+    };
+
+    const handleNewUser = (data: any) => {
+      if (!mountedRef.current) return;
+      
+      console.log('[AnimatedUserCounter] New user registered:', data);
+      
+      // Increment the count immediately
       setTargetCount((prev) => {
         const newCount = prev + 1;
         console.log('[AnimatedUserCounter] Incrementing count from', prev, 'to', newCount);
@@ -97,53 +134,47 @@ export default function AnimatedUserCounter({
       
       setNewUsersToday((prev) => prev + 1);
       
-      // Update cached stats in service
+      // Update cached stats
       userStatsService.incrementUserCount(1);
       
-      // Show update animation
+      // Show celebration animation
       setShowUpdateAnimation(true);
       setTimeout(() => {
         if (mountedRef.current) setShowUpdateAnimation(false);
       }, 3000);
-    });
+    };
 
-    // Listen for stats update events (full stats broadcast)
-    const unsubscribeStatsUpdate = webSocket.subscribe('stats:users', (data: any) => {
-      if (!mountedRef.current) return;
-      
-      console.log('[AnimatedUserCounter] Stats update event received:', data);
-      
-      if (data.totalUsers !== undefined) {
-        console.log('[AnimatedUserCounter] Updating to new total:', data.totalUsers);
-        setTargetCount(data.totalUsers);
-        springValue.set(data.totalUsers);
-      }
-      
-      if (data.newUsersToday !== undefined) {
-        setNewUsersToday(data.newUsersToday);
-      }
-      
-      // Update cached stats
-      userStatsService.updateCachedStats(data);
-    });
+    let unsubscribeStats: (() => void) | undefined;
+    let unsubscribeNewUser: (() => void) | undefined;
+
+    if (user && authenticatedWebSocket) {
+      // Authenticated user: use authenticated WebSocket
+      console.log('[AnimatedUserCounter] Using authenticated WebSocket');
+      unsubscribeStats = authenticatedWebSocket.subscribe('stats:users', handleStatsUpdate);
+      unsubscribeNewUser = authenticatedWebSocket.subscribe('user:registered', handleNewUser);
+    } else if (publicWebSocket.isConnected) {
+      // Guest user: use public WebSocket
+      console.log('[AnimatedUserCounter] Using public WebSocket for guest');
+      unsubscribeStats = publicWebSocket.subscribe('stats:users', handleStatsUpdate);
+      unsubscribeNewUser = publicWebSocket.subscribe('user:registered', handleNewUser);
+    }
 
     return () => {
-      console.log('[AnimatedUserCounter] Cleaning up WebSocket subscriptions');
-      unsubscribeNewUser();
-      unsubscribeStatsUpdate();
+      unsubscribeStats?.();
+      unsubscribeNewUser?.();
     };
-  }, [webSocket, springValue]);
+  }, [user, authenticatedWebSocket, publicWebSocket.isConnected, targetCount, springValue]);
 
-  // Polling for guests (when WebSocket not available)
+  // Fallback polling for when WebSocket is not available
   useEffect(() => {
-    // Only poll if:
-    // 1. Not loading initial data
-    // 2. No WebSocket (guest user)
-    if (isLoading || webSocket) {
+    // Only poll if no WebSocket connection is available
+    const shouldPoll = !authenticatedWebSocket?.isConnected && !publicWebSocket.isConnected;
+    
+    if (!shouldPoll || isLoading) {
       return;
     }
 
-    console.log('[AnimatedUserCounter] Starting polling for guest user (every 10s)');
+    console.log('[AnimatedUserCounter] Starting fallback polling (every 15s)');
     
     const pollInterval = setInterval(async () => {
       try {
@@ -151,31 +182,42 @@ export default function AnimatedUserCounter({
         if (response.success && response.data && mountedRef.current) {
           const newTotal = response.data.totalUsers;
           
-          // Check if count increased
-          if (newTotal > targetCount) {
-            console.log('[AnimatedUserCounter] Polling detected new users:', newTotal, '(was', targetCount + ')');
+          // Check if count changed
+          if (newTotal !== targetCount) {
+            console.log('[AnimatedUserCounter] Polling detected change:', newTotal);
             
             setTargetCount(newTotal);
             setNewUsersToday(response.data.newUsersToday);
             springValue.set(newTotal);
             
-            // Show celebration animation
-            setShowUpdateAnimation(true);
-            setTimeout(() => {
-              if (mountedRef.current) setShowUpdateAnimation(false);
-            }, 3000);
+            // Show animation if count increased
+            if (newTotal > targetCount) {
+              setShowUpdateAnimation(true);
+              setTimeout(() => {
+                if (mountedRef.current) setShowUpdateAnimation(false);
+              }, 3000);
+            }
           }
         }
       } catch (error) {
         console.error('[AnimatedUserCounter] Polling error:', error);
       }
-    }, 10000); // Poll every 10 seconds
+    }, 15000); // Poll every 15 seconds as fallback
     
     return () => {
-      console.log('[AnimatedUserCounter] Stopping polling');
+      console.log('[AnimatedUserCounter] Stopping fallback polling');
       clearInterval(pollInterval);
     };
-  }, [webSocket, isLoading, targetCount, springValue]);
+  }, [
+    authenticatedWebSocket?.isConnected, 
+    publicWebSocket.isConnected, 
+    isLoading, 
+    targetCount, 
+    springValue
+  ]);
+
+  // FIXED: Never show "..." - always show a number or loading state
+  const displayValue = isLoading && !hasInitialLoad ? 'Loading' : formattedCount || '0';
 
   if (compact) {
     return (
@@ -193,7 +235,7 @@ export default function AnimatedUserCounter({
             animate={showUpdateAnimation ? { scale: [1, 1.1, 1] } : {}}
             transition={{ duration: 0.3 }}
           >
-            {isLoading ? '...' : formattedCount}
+            {displayValue}
           </motion.span>{' '}
           users
         </span>
@@ -254,11 +296,7 @@ export default function AnimatedUserCounter({
           } : {}}
           transition={{ duration: 0.5 }}
         >
-          {isLoading ? (
-            <span className="animate-pulse">...</span>
-          ) : (
-            formattedCount
-          )}
+          {displayValue}
         </motion.span>
       </div>
 
@@ -271,6 +309,21 @@ export default function AnimatedUserCounter({
         >
           <span className="text-green-400">+{newUsersToday}</span> joined today
         </motion.div>
+      )}
+
+      {/* Connection status indicator (dev only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="absolute top-2 right-2 text-xs">
+          {user ? (
+            <span className={`px-2 py-1 rounded ${authenticatedWebSocket?.isConnected ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+              {authenticatedWebSocket?.isConnected ? 'WS Connected' : 'Polling'}
+            </span>
+          ) : (
+            <span className={`px-2 py-1 rounded ${publicWebSocket.isConnected ? 'bg-blue-500/20 text-blue-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
+              {publicWebSocket.isConnected ? 'Public WS' : 'Polling'}
+            </span>
+          )}
+        </div>
       )}
 
       {/* Animated background particles */}

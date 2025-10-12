@@ -9,6 +9,7 @@ const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const { sendEmail, emailTemplates } = require('../config/email');
 const webSocketService = require('../config/websocket');
+const publicWebSocketService = require('../config/publicWebsocket');
 
 // Get JWT secret from environment
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -147,10 +148,10 @@ router.post('/signup', async (req, res) => {
       // Continue even if email fails in development
     }
 
-    // ========== NEW: WEBSOCKET INTEGRATION FOR USER STATS ==========
-    // Emit new user registration event
+    // ========== WEBSOCKET INTEGRATION FOR USER STATS ==========
+    // Emit new user registration event to authenticated users
     if (webSocketService && webSocketService.io) {
-      // Emit to all connected clients about new user
+      // Emit to all connected authenticated clients about new user
       webSocketService.io.emit('user:registered', {
         userId: newUser._id.toString(),
         username: newUser.username,
@@ -175,7 +176,52 @@ router.post('/signup', async (req, res) => {
           User.countDocuments({ role: 'seller', isVerified: true })
         ]);
 
-        webSocketService.io.emit('stats:users', {
+        const statsData = {
+          totalUsers,
+          totalBuyers,
+          totalSellers,
+          verifiedSellers,
+          newUsersToday,
+          timestamp: new Date().toISOString()
+        };
+
+        webSocketService.io.emit('stats:users', statsData);
+        
+        console.log(`📊 Broadcasted user stats to authenticated users - Total: ${totalUsers}, New today: ${newUsersToday}`);
+      } catch (statsError) {
+        console.error('Failed to broadcast user stats:', statsError);
+      }
+    }
+
+    // ========== PUBLIC WEBSOCKET INTEGRATION FOR GUESTS ==========
+    // Also broadcast to public WebSocket for guest users
+    if (publicWebSocketService) {
+      // Emit to all guest users
+      publicWebSocketService.broadcastUserRegistered({
+        userId: newUser._id.toString(),
+        username: newUser.username,
+        role: newUser.role,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Send updated stats to guests
+      try {
+        const [totalUsers, newUsersToday] = await Promise.all([
+          User.countDocuments(),
+          User.countDocuments({ 
+            createdAt: { 
+              $gte: new Date(new Date().setHours(0, 0, 0, 0)) 
+            } 
+          })
+        ]);
+
+        const [totalBuyers, totalSellers, verifiedSellers] = await Promise.all([
+          User.countDocuments({ role: 'buyer' }),
+          User.countDocuments({ role: 'seller' }),
+          User.countDocuments({ role: 'seller', isVerified: true })
+        ]);
+
+        publicWebSocketService.broadcastStats({
           totalUsers,
           totalBuyers,
           totalSellers,
@@ -184,9 +230,9 @@ router.post('/signup', async (req, res) => {
           timestamp: new Date().toISOString()
         });
         
-        console.log(`📊 Broadcasted user stats - Total: ${totalUsers}, New today: ${newUsersToday}`);
+        console.log(`📡 Broadcasted user stats to guest users - Total: ${totalUsers}, New today: ${newUsersToday}`);
       } catch (statsError) {
-        console.error('Failed to broadcast user stats:', statsError);
+        console.error('Failed to broadcast stats to public:', statsError);
       }
     }
     // ========== END WEBSOCKET INTEGRATION ==========
@@ -310,6 +356,19 @@ router.post('/verify-email', async (req, res) => {
         });
       } catch (statsError) {
         console.error('Failed to broadcast verified seller stats:', statsError);
+      }
+    }
+    
+    // Also broadcast to public WebSocket
+    if (publicWebSocketService) {
+      try {
+        const verifiedSellers = await User.countDocuments({ role: 'seller', isVerified: true });
+        publicWebSocketService.broadcastStats({
+          verifiedSellers,
+          timestamp: new Date().toISOString()
+        });
+      } catch (statsError) {
+        console.error('Failed to broadcast verified seller stats to public:', statsError);
       }
     }
     // ========== END OPTIONAL BROADCAST ==========
