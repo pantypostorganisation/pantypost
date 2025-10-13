@@ -4,6 +4,8 @@ import { useAuth } from '@/context/AuthContext';
 import { TierLevel } from '@/utils/sellerTiers';
 import { sanitizeUsername } from '@/utils/security/sanitization';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
+
 const TIER_LEVELS: Record<TierLevel, { minSales: number; minAmount: number }> = {
   None: { minSales: 0, minAmount: 0 },
   Tease: { minSales: 0, minAmount: 0 },
@@ -61,7 +63,7 @@ export function useTierCalculation() {
       }
 
       try {
-        const response = await fetch(`http://localhost:5000/api/tiers/progress`, {
+        const response = await fetch(`${API_BASE_URL}/api/tiers/progress`, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -81,7 +83,7 @@ export function useTierCalculation() {
           if (mountedRef.current) setError('Failed to load tier information');
         }
 
-        const statsResponse = await fetch(`http://localhost:5000/api/tiers/stats/${sanitizedUsername}`, {
+        const statsResponse = await fetch(`${API_BASE_URL}/api/tiers/stats/${sanitizedUsername}`, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' },
           signal: controller.signal
@@ -190,7 +192,7 @@ export function useTierCalculation() {
     if (!sanitizedUsername || !token) return;
     const controller = new AbortController();
     try {
-      const response = await fetch(`http://localhost:5000/api/tiers/progress`, {
+      const response = await fetch(`${API_BASE_URL}/api/tiers/progress`, {
         method: 'GET',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         signal: controller.signal
@@ -200,7 +202,7 @@ export function useTierCalculation() {
         if (data.success && data.data && mountedRef.current) setBackendTierData(data.data);
       }
 
-      const statsResponse = await fetch(`http://localhost:5000/api/tiers/stats/${sanitizedUsername}`, {
+      const statsResponse = await fetch(`${API_BASE_URL}/api/tiers/stats/${sanitizedUsername}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal
