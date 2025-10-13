@@ -20,14 +20,33 @@ server {
 
     client_max_body_size 50m;
 
-    # Serve uploaded files directly
+    # Serve uploaded files directly - FIXED WITH FULL CORS
     location /uploads/ {
         alias /var/www/pantypost/uploads/;
         autoindex off;
-        expires 1y;
-        add_header Cache-Control "public, max-age=31536000, immutable";
+        
+        # Handle OPTIONS preflight for images
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+            add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Range" always;
+            add_header Access-Control-Allow-Credentials "true" always;
+            add_header Access-Control-Max-Age "86400" always;
+            add_header Content-Length "0" always;
+            add_header Content-Type "text/plain" always;
+            return 204;
+        }
+        
+        # CORS headers for actual image requests
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+        add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
         add_header Access-Control-Allow-Credentials "true" always;
+        add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
+        
+        # Cache headers
+        expires 1y;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        
         try_files $uri =404;
     }
 
@@ -37,7 +56,7 @@ server {
         if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin "https://pantypost.com" always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
-            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, X-Request-ID" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Request-ID" always;
             add_header Access-Control-Allow-Credentials "true" always;
             add_header Access-Control-Max-Age "86400" always;
             add_header Content-Length "0" always;
@@ -56,7 +75,7 @@ server {
         # Add CORS headers to actual responses
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
         add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, X-Request-ID" always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Request-ID" always;
         add_header Access-Control-Allow-Credentials "true" always;
     }
 
@@ -90,7 +109,7 @@ server {
         if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin "https://pantypost.com" always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
-            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, X-Request-ID" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Request-ID" always;
             add_header Access-Control-Allow-Credentials "true" always;
             add_header Access-Control-Max-Age "86400" always;
             return 204;
