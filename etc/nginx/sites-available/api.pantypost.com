@@ -44,19 +44,20 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
     
-    # Serve uploaded files
-    location /uploads {
-        proxy_pass http://localhost:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+    # Serve uploaded files directly from filesystem
+    location /uploads/ {
+        alias /var/www/pantypost/uploads/;
+        try_files $uri $uri/ =404;
         
         # Cache static files
-        proxy_cache_valid 200 1d;
-        expires 1d;
+        expires 30d;
         add_header Cache-Control "public, immutable";
+        
+        # Security headers for images
+        add_header X-Content-Type-Options "nosniff";
+        
+        # CORS for images
+        add_header Access-Control-Allow-Origin "*" always;
     }
     
     # WebSocket support
