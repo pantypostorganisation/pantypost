@@ -46,7 +46,6 @@ const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
 const banRoutes = require('./routes/ban.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
-// NEW
 const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 
 // Import tier service for initialization
@@ -75,48 +74,9 @@ global.publicWebSocketService = publicWebSocketService;
 // Connect to MongoDB
 connectDB();
 
-// CORS Configuration - FIXED for development network access
-const corsOptions = {
-  origin: function(origin, callback) {
-    // In development, allow ALL origins (this fixes network IP access)
-    if (process.env.NODE_ENV !== 'production') {
-      return callback(null, true);
-    }
-    
-    // In production, use a whitelist
-    const allowedOrigins = [
-      'https://pantypost.com',
-      'https://www.pantypost.com',
-      // Add any other production domains here
-    ];
-    
-    // Allow requests with no origin (like mobile apps or Postman)
-    if (!origin) return callback(null, true);
-    
-    // Check if the origin is in the allowed list
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-CSRF-Token',
-    'X-Client-Version',
-    'X-App-Name',
-    'X-Content-Type-Options',
-    'X-Frame-Options',
-    'X-XSS-Protection',
-    'X-Request-ID',
-  ],
-  optionsSuccessStatus: 200 // For legacy browser support
-};
-
-app.use(cors(corsOptions));
+// CORS Configuration - DISABLED IN EXPRESS (Nginx handles it)
+// This prevents duplicate CORS headers
+// app.use(cors(corsOptions)); // COMMENTED OUT
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -133,7 +93,7 @@ app.get('/api/health', (req, res) => {
     features: {
       tiers: true,
       websocket: true,
-      publicWebsocket: true, // Added public WebSocket feature flag
+      publicWebsocket: true,
       favorites: true,
       notifications: true,
       verification: true,
@@ -165,8 +125,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
-
-// NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
 app.use('/api/profilebuyer', profileBuyerRoutes);
 
 // ---------------------- Storage API Routes ----------------------
@@ -175,13 +133,11 @@ app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
     const { key } = req.params;
     const userId = req.user.id;
     
-    // Find the user and get their storage object
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
-    // Initialize storage if it doesn't exist
     if (!user.storage) {
       user.storage = {};
     }
@@ -203,18 +159,15 @@ app.post('/api/storage/set', authMiddleware, async (req, res) => {
     const { key, value } = req.body;
     const userId = req.user.id;
     
-    // Validate input
     if (!key || typeof key !== 'string') {
       return res.status(400).json({ success: false, error: 'Invalid key' });
     }
     
-    // Size limit check (1MB)
     const valueSize = JSON.stringify(value).length;
     if (valueSize > 1024 * 1024) {
       return res.status(413).json({ success: false, error: 'Value too large (max 1MB)' });
     }
     
-    // Update user's storage
     const result = await User.findByIdAndUpdate(
       userId,
       { 
@@ -240,7 +193,6 @@ app.delete('/api/storage/delete/:key', authMiddleware, async (req, res) => {
     const { key } = req.params;
     const userId = req.user.id;
     
-    // Remove the key from storage
     const result = await User.findByIdAndUpdate(
       userId,
       { 
@@ -266,13 +218,11 @@ app.post('/api/storage/keys', authMiddleware, async (req, res) => {
     const { pattern } = req.body;
     const userId = req.user.id;
     
-    // Get user's storage
     const user = await User.findById(userId);
     if (!user || !user.storage) {
       return res.json({ success: true, data: { keys: [] } });
     }
     
-    // Get all keys, optionally filtered by pattern
     let keys = Object.keys(user.storage);
     
     if (pattern) {
@@ -313,7 +263,6 @@ app.post('/api/storage/clear', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     
     if (preserveKeys && preserveKeys.length > 0) {
-      // Get current storage and preserve specified keys
       const user = await User.findById(userId);
       const preserved = {};
       
@@ -325,13 +274,11 @@ app.post('/api/storage/clear', authMiddleware, async (req, res) => {
         });
       }
       
-      // Clear and restore preserved keys
       await User.findByIdAndUpdate(userId, { 
         storage: preserved,
         'storageUpdatedAt': new Date()
       });
     } else {
-      // Clear all storage
       await User.findByIdAndUpdate(userId, { 
         storage: {},
         'storageUpdatedAt': new Date()
@@ -352,9 +299,8 @@ app.get('/api/storage/info', authMiddleware, async (req, res) => {
     const user = await User.findById(userId);
     const storage = user?.storage || {};
     
-    // Calculate storage size
     const used = JSON.stringify(storage).length;
-    const quota = 5 * 1024 * 1024; // 5MB quota per user
+    const quota = 5 * 1024 * 1024;
     
     res.json({ 
       success: true, 
@@ -371,15 +317,12 @@ app.get('/api/storage/info', authMiddleware, async (req, res) => {
   }
 });
 
-// UI preferences endpoint (can work without auth for initial load)
 app.post('/api/storage/ui-preference', async (req, res) => {
   try {
     const { key, value } = req.body;
     
-    // If user is authenticated, save to their profile
     if (req.headers.authorization) {
       try {
-        // Verify token
         const token = req.headers.authorization.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
         
@@ -392,7 +335,6 @@ app.post('/api/storage/ui-preference', async (req, res) => {
       }
     }
     
-    // Always return success for UI preferences
     res.json({ success: true });
   } catch (error) {
     console.error('UI preference error:', error);
@@ -417,11 +359,10 @@ app.get('/api/storage/ui-preferences', authMiddleware, async (req, res) => {
   }
 });
 
-// --- Compatibility mounts (support old clients that forget '/api') ---
+// --- Compatibility mounts ---
 app.use('/subscriptions', subscriptionRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/subscription', subscriptionRoutes);
-// --------------------------------------------------------
 
 // WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
@@ -437,7 +378,6 @@ app.get('/api/public-ws/status', authMiddleware, (req, res) => {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
   
-  // Get public WebSocket stats if available
   const publicStats = {
     connected: publicWebSocketService.io ? publicWebSocketService.io.engine.clientsCount : 0,
     roomMembers: publicWebSocketService.io 
@@ -598,7 +538,6 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
       'auction.status': 'error'
     });
 
-    // Get auctions ending soon (within next hour)
     const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
     const endingSoon = await Listing.find({
       'auction.isAuction': true,
@@ -627,7 +566,7 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
   }
 });
 
-// Ban system scheduled task - check and expire bans
+// Ban system scheduled task
 setInterval(async () => {
   try {
     const expiredCount = await Ban.checkAndExpireBans();
@@ -637,14 +576,13 @@ setInterval(async () => {
   } catch (error) {
     console.error('[Ban System] Error checking expired bans:', error);
   }
-}, 5 * 60 * 1000); // Check every 5 minutes
+}, 5 * 60 * 1000);
 
-// PERMANENT FIX: Cleanup stuck auctions every 5 minutes
+// Cleanup stuck auctions every 5 minutes
 setInterval(async () => {
   try {
-    const oneHourAgo = new Date(Date.now() - 3600000); // 1 hour ago
+    const oneHourAgo = new Date(Date.now() - 3600000);
     
-    // Reset auctions that have been stuck in processing for over an hour
     const resetResult = await Listing.updateMany(
       {
         'auction.isAuction': true,
@@ -659,7 +597,6 @@ setInterval(async () => {
     if (resetResult.modifiedCount > 0) {
       console.log(`[Auction] Reset ${resetResult.modifiedCount} stuck auctions`);
       
-      // Notify admins about stuck auctions being reset
       if (global.webSocketService) {
         global.webSocketService.emitToAdmins('auction:stuck_reset', {
           count: resetResult.modifiedCount,
@@ -668,7 +605,6 @@ setInterval(async () => {
       }
     }
     
-    // Also reset error status auctions older than 30 minutes
     const thirtyMinutesAgo = new Date(Date.now() - 1800000);
     const errorResetResult = await Listing.updateMany(
       {
@@ -687,15 +623,14 @@ setInterval(async () => {
   } catch (error) {
     console.error('[Auction] Error resetting stuck auctions:', error);
   }
-}, 5 * 60 * 1000); // Every 5 minutes
+}, 5 * 60 * 1000);
 
-// INSTANT AUCTION PROCESSOR - Checks every second for just-expired auctions
+// INSTANT AUCTION PROCESSOR
 setInterval(async () => {
   try {
     const now = new Date();
     const fiveSecondsAgo = new Date(now - 5000);
     
-    // Find auctions that JUST expired (within last 5 seconds)
     const justExpired = await Listing.findOne({
       'auction.isAuction': true,
       'auction.status': 'active',
@@ -708,7 +643,6 @@ setInterval(async () => {
     if (justExpired) {
       console.log(`[Auction] Instant processing auction ${justExpired._id} that just expired`);
       
-      // Process immediately without waiting
       AuctionSettlementService.processEndedAuction(justExpired._id)
         .then(result => {
           if (!result.alreadyProcessed) {
@@ -716,15 +650,15 @@ setInterval(async () => {
           }
         })
         .catch(err => {
-          // Don't log - let the main processor handle errors
+          // Silent catch
         });
     }
   } catch (error) {
-    // Silent catch - main processor will handle any we miss
+    // Silent catch
   }
-}, 1000); // Check every second for instant processing
+}, 1000);
 
-// Main auction processor - catches anything the instant processor misses
+// Main auction processor
 setInterval(async () => {
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
@@ -751,7 +685,7 @@ setInterval(async () => {
       });
     }
   }
-}, 3000); // Check every 3 seconds as backup
+}, 3000);
 
 // Manual auction processing endpoint (admin only)
 app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
@@ -773,7 +707,7 @@ app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
   }
 });
 
-// Instant auction check endpoint - can be called by frontend
+// Instant auction check endpoint
 app.get('/api/auctions/check/:id', async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -993,7 +927,7 @@ app.post('/api/admin/cleanup-verification-docs', authMiddleware, async (req, res
   }
 });
 
-// Error handling middleware (should be last)
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
   res.status(err.status || 500).json({
@@ -1007,7 +941,7 @@ app.use((req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
 });
 
-// Initialize tier system on startup
+// Initialize tier system
 async function initializeTierSystem() {
   try {
     const TIER_CONFIG = require('./config/tierConfig');
@@ -1020,7 +954,7 @@ async function initializeTierSystem() {
   }
 }
 
-// Initialize notification system on startup
+// Initialize notification system
 async function initializeNotificationSystem() {
   try {
     const cutoffDate = new Date();
@@ -1032,7 +966,7 @@ async function initializeNotificationSystem() {
   }
 }
 
-// Initialize verification system on startup
+// Initialize verification system
 async function initializeVerificationSystem() {
   try {
     const fs = require('fs').promises;
@@ -1078,7 +1012,7 @@ async function initializeVerificationSystem() {
   }
 }
 
-// Initialize report & ban system on startup
+// Initialize report system
 async function initializeReportSystem() {
   try {
     const Report = require('./models/Report');
@@ -1091,7 +1025,6 @@ async function initializeReportSystem() {
     console.log(`   - ${pendingReports} pending reports`);
     console.log(`   - ${activeBans} active bans`);
     
-    // Check and expire old bans
     const expiredCount = await Ban.checkAndExpireBans();
     if (expiredCount > 0) {
       console.log(`   - Expired ${expiredCount} bans`);
@@ -1101,16 +1034,14 @@ async function initializeReportSystem() {
   }
 }
 
-// Initialize auction system on startup
+// Initialize auction system
 async function initializeAuctionSystem() {
   try {
-    // Count active auctions
     const activeAuctions = await Listing.countDocuments({ 
       'auction.isAuction': true,
       'auction.status': 'active'
     });
     
-    // Check for any expired auctions that need processing
     const now = new Date();
     const expiredAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
@@ -1122,7 +1053,6 @@ async function initializeAuctionSystem() {
     console.log(`   - ${activeAuctions} active auctions`);
     console.log(`   - ${expiredAuctions} expired auctions to process`);
     
-    // Process any expired auctions on startup
     if (expiredAuctions > 0) {
       console.log(`   - Processing ${expiredAuctions} expired auctions...`);
       const results = await AuctionSettlementService.processExpiredAuctions();
@@ -1133,10 +1063,9 @@ async function initializeAuctionSystem() {
   }
 }
 
-// Initialize storage system on startup
+// Initialize storage system
 async function initializeStorageSystem() {
   try {
-    // Add storage field to User schema if it doesn't exist
     const usersWithoutStorage = await User.countDocuments({ storage: { $exists: false } });
     if (usersWithoutStorage > 0) {
       console.log(`   - Adding storage field to ${usersWithoutStorage} users...`);
@@ -1154,7 +1083,7 @@ async function initializeStorageSystem() {
   }
 }
 
-// Initialize public WebSocket system on startup
+// Initialize public WebSocket system
 async function initializePublicWebSocketSystem() {
   try {
     console.log(`✅ Public WebSocket system initialized`);
@@ -1165,16 +1094,14 @@ async function initializePublicWebSocketSystem() {
   }
 }
 
-// Start server - UPDATED TO LISTEN ON ALL INTERFACES
-const HOST = '0.0.0.0'; // Listen on all network interfaces
+// Start server
+const HOST = '0.0.0.0';
 const os = require('os');
 
-// Function to get network IP
 function getNetworkIP() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
-      // Skip internal and non-IPv4 addresses
       if (!iface.internal && iface.family === 'IPv4') {
         return iface.address;
       }
