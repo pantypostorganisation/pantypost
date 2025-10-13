@@ -9,7 +9,7 @@ import {
   ImagePlus as ImageIcon,
   Upload,
   X,
-  MoveVertical,
+  GripVertical,
   Edit,
   AlertCircle,
   Crown,
@@ -18,8 +18,7 @@ import {
 import Link from 'next/link';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
-import { SecureImage } from '@/components/ui/SecureMessageDisplay';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import { sanitizeStrict, sanitizeNumber, sanitizeCurrency } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 import { listingSchemas } from '@/utils/validation/schemas';
@@ -63,6 +62,8 @@ export default function ListingForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
 
   // Real-time validation
   const validation = useMemo((): ValidationState => {
@@ -113,8 +114,8 @@ export default function ListingForm({
           : 'Valid reserve price'
       },
       images: {
-        isValid: totalImages > 0,
-        message: totalImages === 0 ? 'At least one image is required' : `${totalImages} image${totalImages === 1 ? '' : 's'} selected`
+        isValid: formState.imageUrls.length > 0,
+        message: formState.imageUrls.length === 0 ? 'At least one image is required' : `${formState.imageUrls.length} image${formState.imageUrls.length === 1 ? '' : 's'} added`
       },
       tags: {
         count: tagsLength,
@@ -170,6 +171,23 @@ export default function ListingForm({
       });
     }
   }, [onFileSelect]);
+
+  // Drag and drop handlers for image reordering
+  const handleDragStart = (index: number) => {
+    dragItem.current = index;
+  };
+
+  const handleDragEnter = (index: number) => {
+    dragOverItem.current = index;
+  };
+
+  const handleDragEnd = () => {
+    if (dragItem.current !== null && dragOverItem.current !== null && dragItem.current !== dragOverItem.current) {
+      onImageReorder(dragItem.current, dragOverItem.current);
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+  };
 
   // Comprehensive form validation before submission
   const validateForm = useCallback((): { isValid: boolean; errors: Record<string, string> } => {
@@ -239,30 +257,6 @@ export default function ListingForm({
         return;
       }
 
-      // Additional schema validation for extra safety
-      if (!formState.isAuction) {
-        const listingData = {
-          title: formState.title,
-          description: formState.description,
-          price: parseFloat(formState.price),
-          images: [...formState.imageUrls], // Convert to array for validation
-          category: 'panties' as const, // Default category
-          condition: 'worn_once' as const, // Default condition
-          size: 'm' as const, // Default size
-          tags: formState.tags.split(',').map(tag => tag.trim()).filter(tag => tag),
-          wearDuration: formState.hoursWorn ? parseInt(formState.hoursWorn.toString()) : undefined,
-          listingType: 'regular' as const
-        };
-
-        const schemaValidation = validateSchema(listingSchemas.createListingSchema, listingData);
-        
-        if (!schemaValidation.success && schemaValidation.errors) {
-          console.error('Schema validation failed:', schemaValidation.errors);
-          setErrors(schemaValidation.errors);
-          return;
-        }
-      }
-
       // If all validations pass, submit the form
       await onSave();
       
@@ -297,13 +291,13 @@ export default function ListingForm({
             <h3 className="font-semibold text-red-300">Please fix the following issues:</h3>
           </div>
           <ul className="text-sm text-red-200 space-y-1">
-            {!validation.title.isValid && <li>• {validation.title.message}</li>}
-            {!validation.description.isValid && <li>• {validation.description.message}</li>}
-            {!validation.price.isValid && <li>• {validation.price.message}</li>}
-            {!validation.startingPrice.isValid && <li>• {validation.startingPrice.message}</li>}
-            {!validation.reservePrice.isValid && <li>• {validation.reservePrice.message}</li>}
+            {!validation.title.isValid && touched.title && <li>• {validation.title.message}</li>}
+            {!validation.description.isValid && touched.description && <li>• {validation.description.message}</li>}
+            {!validation.price.isValid && touched.price && <li>• {validation.price.message}</li>}
+            {!validation.startingPrice.isValid && touched.startingPrice && <li>• {validation.startingPrice.message}</li>}
+            {!validation.reservePrice.isValid && touched.reservePrice && <li>• {validation.reservePrice.message}</li>}
             {!validation.images.isValid && <li>• {validation.images.message}</li>}
-            {!validation.tags.isValid && <li>• {validation.tags.message}</li>}
+            {!validation.tags.isValid && touched.tags && <li>• {validation.tags.message}</li>}
           </ul>
         </div>
       )}
@@ -339,7 +333,7 @@ export default function ListingForm({
                 validation.title.isValid ? 'border-green-600 focus:ring-green-500' : 'border-red-600 focus:ring-red-500'
               }`}
             />
-            {validation.title.isValid && (
+            {validation.title.isValid && formState.title.length > 0 && (
               <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
             )}
           </div>
@@ -374,7 +368,7 @@ export default function ListingForm({
                 validation.description.isValid ? 'border-green-600 focus:ring-green-500' : 'border-red-600 focus:ring-red-500'
               }`}
             />
-            {validation.description.isValid && (
+            {validation.description.isValid && formState.description.length > 0 && (
               <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
             )}
           </div>
@@ -472,7 +466,7 @@ export default function ListingForm({
                     validation.startingPrice.isValid ? 'border-green-600 focus:ring-green-500' : 'border-red-600 focus:ring-red-500'
                   }`}
                 />
-                {validation.startingPrice.isValid && (
+                {validation.startingPrice.isValid && formState.startingPrice && (
                   <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
                 )}
               </div>
@@ -550,76 +544,61 @@ export default function ListingForm({
                     validation.price.isValid ? 'border-green-600 focus:ring-green-500' : 'border-red-600 focus:ring-red-500'
                   }`}
                 />
-                {validation.price.isValid && (
+                {validation.price.isValid && formState.price && (
                   <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
                 )}
               </div>
             </div>
-            {/* Image Upload Section */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                Add Images *
-                <span className={`text-xs ml-2 ${
-                  validation.images.isValid ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {validation.images.message}
-                </span>
-              </label>
-              <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black hover:border-[#ff950e] transition cursor-pointer ${
-                validation.images.isValid ? 'border-green-600' : 'border-gray-700'
-              }`}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleSecureFileSelect}
-                  className="hidden"
-                />
-                <ImageIcon className={`w-5 h-5 ${validation.images.isValid ? 'text-green-400' : 'text-[#ff950e]'}`} />
-                <span className="text-gray-300">Select images from your computer</span>
-              </label>
-              {errors.files && (
-                <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  {errors.files}
-                </p>
-              )}
+              <label className="block text-sm font-medium text-gray-300 mb-1">Hours Worn (optional)</label>
+              <SecureInput
+                type="number"
+                placeholder="e.g. 24"
+                value={formState.hoursWorn?.toString() || ''}
+                onChange={(value) => {
+                  const num = value === '' ? '' : sanitizeNumber(value, 0, 999);
+                  onFormChange({ hoursWorn: num });
+                }}
+                min="0"
+                max="999"
+                className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+              />
             </div>
           </div>
         )}
         
-        {/* Image upload section for auction type */}
-        {formState.isAuction && (
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Add Images *
-              <span className={`text-xs ml-2 ${
-                validation.images.isValid ? 'text-green-400' : 'text-red-400'
-              }`}>
-                {validation.images.message}
-              </span>
-            </label>
-            <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black hover:border-purple-600 transition cursor-pointer ${
-              validation.images.isValid ? 'border-green-600' : 'border-gray-700'
+        {/* Image Upload Section */}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1">
+            Add Images *
+            <span className={`text-xs ml-2 ${
+              validation.images.isValid ? 'text-green-400' : 'text-red-400'
             }`}>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleSecureFileSelect}
-                className="hidden"
-              />
-              <ImageIcon className={`w-5 h-5 ${validation.images.isValid ? 'text-green-400' : 'text-purple-500'}`} />
-              <span className="text-gray-300">Select images from your computer</span>
-            </label>
-            {errors.files && (
-              <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
-                <AlertCircle className="w-3 h-3" />
-                {errors.files}
-              </p>
-            )}
-          </div>
-        )}
+              {validation.images.message}
+            </span>
+          </label>
+          <label className={`flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg bg-black transition cursor-pointer ${
+            formState.isAuction ? 'hover:border-purple-600' : 'hover:border-[#ff950e]'
+          } ${
+            validation.images.isValid ? 'border-green-600' : 'border-gray-700'
+          }`}>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleSecureFileSelect}
+              className="hidden"
+            />
+            <ImageIcon className={`w-5 h-5 ${validation.images.isValid ? 'text-green-400' : formState.isAuction ? 'text-purple-500' : 'text-[#ff950e]'}`} />
+            <span className="text-gray-300">Select images from your computer</span>
+          </label>
+          {errors.files && (
+            <p className="mt-1 text-xs text-red-400 flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" />
+              {errors.files}
+            </p>
+          )}
+        </div>
         
         {/* Selected Files Preview */}
         {selectedFiles.length > 0 && (
@@ -630,7 +609,9 @@ export default function ListingForm({
                 type="button"
                 onClick={onUploadFiles}
                 disabled={isUploading}
-                className={`text-black px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${formState.isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'}`}
+                className={`text-black px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
+                  formState.isAuction ? 'bg-purple-500 hover:bg-purple-600' : 'bg-[#ff950e] hover:bg-[#e0850d]'
+                }`}
               >
                 {isUploading ? (
                   <>Uploading...</>
@@ -663,8 +644,8 @@ export default function ListingForm({
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {selectedFiles.map((file, index) => (
-                <div key={index} className="relative border border-gray-700 rounded-lg overflow-hidden group">
-                  <SecureImage
+                <div key={`selected-${index}`} className="relative border border-gray-700 rounded-lg overflow-hidden group">
+                  <img
                     src={URL.createObjectURL(file)}
                     alt={`Selected ${index + 1}`}
                     className="w-full h-24 object-cover"
@@ -688,22 +669,31 @@ export default function ListingForm({
         {/* Image Preview and Reordering */}
         {formState.imageUrls.length > 0 && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-300 mb-2">Images (Drag to reorder)</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Images (Drag to reorder)
+              <span className="text-xs text-gray-500 ml-2">First image will be the main image</span>
+            </label>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
               {formState.imageUrls.map((url, index) => (
                 <div
-                  key={index}
+                  key={`img-${index}`}
                   draggable
-                  onDragStart={() => onImageReorder(index, index)}
-                  onDragEnter={() => onImageReorder(index, index)}
-                  onDragEnd={() => onImageReorder(index, index)}
+                  onDragStart={() => handleDragStart(index)}
+                  onDragEnter={() => handleDragEnter(index)}
+                  onDragEnd={handleDragEnd}
                   onDragOver={(e) => e.preventDefault()}
-                  className={`relative border rounded-lg overflow-hidden cursor-grab active:cursor-grabbing group ${index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'}`}
+                  className={`relative border rounded-lg overflow-hidden cursor-move group ${
+                    index === 0 ? 'border-2 border-[#ff950e] shadow-md' : 'border-gray-700'
+                  }`}
                 >
-                  <SecureImage
+                  <img
                     src={url}
                     alt={`Listing Image ${index + 1}`}
                     className={`w-full object-cover ${index === 0 ? 'h-32 sm:h-40' : 'h-24 sm:h-32'}`}
+                    onError={(e) => {
+                      console.error('Image failed to load:', url);
+                      (e.target as HTMLImageElement).src = '/placeholder-image.png';
+                    }}
                   />
                   {index === 0 && (
                     <span className="absolute top-2 left-2 bg-[#ff950e] text-black text-xs px-2 py-0.5 rounded-full font-bold">
@@ -718,8 +708,10 @@ export default function ListingForm({
                   >
                     <X className="w-4 h-4" />
                   </button>
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black bg-opacity-20">
-                    <MoveVertical className="w-6 h-6 text-white" />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition pointer-events-none">
+                    <div className="bg-black bg-opacity-50 rounded-lg p-2">
+                      <GripVertical className="w-6 h-6 text-white" />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -749,36 +741,27 @@ export default function ListingForm({
           />
           <p className="text-xs text-gray-500 mt-1">Help buyers find your items with relevant tags</p>
         </div>
-
-        <div>
-          <SecureInput
-            label="Hours Worn (optional)"
-            type="number"
-            placeholder="e.g. 24"
-            value={formState.hoursWorn?.toString() || ''}
-            onChange={(value) => {
-              const num = value === '' ? '' : sanitizeNumber(value, 0, 999);
-              onFormChange({ hoursWorn: num });
-            }}
-            min="0"
-            max="999"
-          />
-        </div>
         
         {/* Only show premium option for standard listings */}
         {!formState.isAuction && (
           <div className="mt-4">
-            <label className={`flex items-center gap-3 py-4 px-5 border-2 rounded-lg cursor-pointer transition ${formState.isPremium ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'}`}>
+            <label className={`flex items-center gap-3 py-4 px-5 border-2 rounded-lg cursor-pointer transition ${
+              formState.isPremium ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10' : 'border-gray-700 bg-black'
+            }`}>
               <input
                 type="checkbox"
                 checked={formState.isPremium}
                 onChange={() => onFormChange({ isPremium: !formState.isPremium })}
-                className="h-5 w-5 text-[#ff950e] focus:ring-[#ff950e] rounded border-gray-600 bg-black checked:bg-[#ff950e]"
+                className="h-5 w-5 text-[#ff950e] focus:ring-[#ff950e] rounded border-gray-600 bg-black"
               />
               <Crown className={`w-6 h-6 ${formState.isPremium ? 'text-[#ff950e]' : 'text-gray-500'}`} />
               <div>
-                <span className={`font-semibold text-lg ${formState.isPremium ? 'text-white' : 'text-gray-300'}`}>Make Premium Listing</span>
-                <p className={`text-sm mt-0.5 ${formState.isPremium ? 'text-gray-200' : 'text-gray-400'}`}>Only available to your subscribers</p>
+                <span className={`font-semibold text-lg ${formState.isPremium ? 'text-white' : 'text-gray-300'}`}>
+                  Make Premium Listing
+                </span>
+                <p className={`text-sm mt-0.5 ${formState.isPremium ? 'text-gray-200' : 'text-gray-400'}`}>
+                  Only available to your subscribers
+                </p>
               </div>
             </label>
           </div>

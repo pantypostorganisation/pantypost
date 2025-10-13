@@ -4,7 +4,6 @@
 import { Eye, Edit, Trash2, Gavel, Crown, Clock, Calendar, X } from 'lucide-react';
 import { ListingCardProps } from '@/types/myListings';
 import { timeSinceListed, formatTimeRemaining } from '@/utils/myListingsUtils';
-import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { useConfirmation } from '@/components/ui/ConfirmationModal';
 
 export default function ListingCard({
@@ -82,9 +81,19 @@ export default function ListingCard({
 
         <div className="relative w-full h-48 sm:h-56 overflow-hidden">
           {cover ? (
-            <SecureImage src={cover} alt={listing.title} className="w-full h-full object-cover" />
+            <img 
+              src={cover} 
+              alt={listing.title} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                console.error('Image failed to load:', cover);
+                (e.target as HTMLImageElement).src = '/placeholder-image.png';
+              }}
+            />
           ) : (
-            <div className="w-full h-full bg-gray-800" />
+            <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+              <span className="text-gray-600">No image</span>
+            </div>
           )}
         </div>
 
