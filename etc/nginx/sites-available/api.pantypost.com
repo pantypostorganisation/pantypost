@@ -20,7 +20,7 @@ server {
 
     client_max_body_size 50m;
 
-    # Serve uploaded files directly from disk
+    # Serve uploaded files directly
     location /uploads/ {
         alias /var/www/pantypost/uploads/;
         autoindex off;
@@ -31,16 +31,21 @@ server {
         try_files $uri =404;
     }
 
-    # API proxy
+    # Handle preflight OPTIONS requests for /api
     location /api {
+        # Handle OPTIONS (preflight) separately
         if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin "https://pantypost.com" always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
-            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, X-Request-ID" always;
             add_header Access-Control-Allow-Credentials "true" always;
+            add_header Access-Control-Max-Age "86400" always;
+            add_header Content-Length "0" always;
+            add_header Content-Type "text/plain" always;
             return 204;
         }
 
+        # Proxy to Express
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -48,9 +53,10 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
+        # Add CORS headers to actual responses
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
         add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token" always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, X-Request-ID" always;
         add_header Access-Control-Allow-Credentials "true" always;
     }
 
@@ -79,15 +85,17 @@ server {
         proxy_read_timeout 86400;
     }
 
-    # Root
-    location / {
-        if ($request_method = 'OPTIONS') {
+    # Root endpoint
+    location = / {
+        if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin "https://pantypost.com" always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
-            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, X-Request-ID" always;
             add_header Access-Control-Allow-Credentials "true" always;
+            add_header Access-Control-Max-Age "86400" always;
             return 204;
         }
+        
         default_type application/json;
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
         add_header Access-Control-Allow-Credentials "true" always;
