@@ -166,7 +166,7 @@ export default function ListingCard({
              src={listing.imageUrls[currentImageIndex]}
              alt={listing.title}
              className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
-               isLockedPremium ? 'blur-md' : (isGuest ? 'blur-xl' : '')
+               isLockedPremium ? 'blur-md' : (isGuest ? 'blur-md' : '')
              }`}
              onError={(e) => {
                const target = e.currentTarget;
@@ -227,12 +227,10 @@ export default function ListingCard({
        {/* Guest blur overlay - removed the overlay div, keeping just the blur on the image */}
        {isGuest && !isLockedPremium && (
          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-           <div className="bg-black/80 px-4 py-3 rounded-lg text-center">
-             <Lock className="w-6 h-6 sm:w-8 sm:h-8 text-[#ff950e] mb-2 mx-auto" />
-             <p className="text-xs sm:text-sm font-bold text-white">
-               Sign up to view
-             </p>
-           </div>
+           <Lock className="w-8 h-8 sm:w-10 sm:h-10 text-[#ff950e] mb-2 drop-shadow-lg" />
+           <p className="text-xs sm:text-sm font-bold text-white drop-shadow-lg">
+             Sign up to view
+           </p>
          </div>
        )}
 
