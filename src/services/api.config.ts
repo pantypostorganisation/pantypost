@@ -165,15 +165,12 @@ export const REQUEST_CONFIG = {
   MAX_HEADER_SIZE: 8192, // Maximum header size
 };
 
-// Headers configuration with version from environment
+// Headers configuration with version from environment - FIXED
 export const getDefaultHeaders = (): HeadersInit => {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     'X-Client-Version': sanitizeStrict(process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0'),
     'X-App-Name': sanitizeStrict(process.env.NEXT_PUBLIC_APP_NAME || 'PantyPost'),
-    'X-Content-Type-Options': 'nosniff',
-    'X-Frame-Options': 'DENY',
-    'X-XSS-Protection': '1; mode=block',
     'X-Request-ID': generateRequestId(),
   };
 
