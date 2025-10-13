@@ -444,11 +444,11 @@ export default function ListingCard({
            </div>
          )}
          
-         {/* Show "Log in to view price" for guests */}
+         {/* Show "Log in to view details" for guests */}
          {!hasAuction && isGuest && (
            <div className="text-right">
              <p className="text-xs sm:text-sm text-gray-500 font-semibold">
-               Log in to view price
+               Log in to view details
              </p>
            </div>
          )}
