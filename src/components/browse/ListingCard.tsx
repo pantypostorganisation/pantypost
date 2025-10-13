@@ -224,9 +224,9 @@ export default function ListingCard({
        {/* Enhanced bottom gradient */}
        <div className="absolute inset-x-0 bottom-0 h-24 sm:h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
 
-       {/* Guest blur overlay */}
+       {/* Guest blur overlay - removed the overlay div, keeping just the blur on the image */}
        {isGuest && !isLockedPremium && (
-         <div className="absolute inset-0 bg-black/30 flex flex-col items-center justify-center backdrop-blur-[2px]">
+         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
            <div className="bg-black/80 px-4 py-3 rounded-lg text-center">
              <Lock className="w-6 h-6 sm:w-8 sm:h-8 text-[#ff950e] mb-2 mx-auto" />
              <p className="text-xs sm:text-sm font-bold text-white">
@@ -271,14 +271,21 @@ export default function ListingCard({
 
      {/* Content - Optimized for mobile */}
      <div className="p-3 sm:p-4 md:p-5 flex flex-col flex-grow">
-       <div>
-         <h2 className="text-sm sm:text-base md:text-xl font-bold text-white mb-1 sm:mb-2 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
-           {listing.title}
-         </h2>
-         <p className="text-xs sm:text-sm text-gray-400 mb-2 sm:mb-3 line-clamp-1 sm:line-clamp-2 leading-relaxed">
-           {listing.description}
-         </p>
-       </div>
+       {!isGuest ? (
+         <div>
+           <h2 className="text-sm sm:text-base md:text-xl font-bold text-white mb-1 sm:mb-2 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
+             {listing.title}
+           </h2>
+           <p className="text-xs sm:text-sm text-gray-400 mb-2 sm:mb-3 line-clamp-1 sm:line-clamp-2 leading-relaxed">
+             {listing.description}
+           </p>
+         </div>
+       ) : (
+         <div>
+           <div className="h-5 sm:h-6 md:h-7 bg-gray-800/50 rounded mb-1 sm:mb-2" />
+           <div className="h-8 sm:h-10 bg-gray-800/30 rounded mb-2 sm:mb-3" />
+         </div>
+       )}
 
        {/* Tags - Hidden on mobile to save space */}
        {listing.tags && listing.tags.length > 0 && (
