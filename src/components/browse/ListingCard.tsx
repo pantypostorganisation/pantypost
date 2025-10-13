@@ -166,7 +166,7 @@ export default function ListingCard({
              src={listing.imageUrls[currentImageIndex]}
              alt={listing.title}
              className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
-               isGuest ? 'blur-[2px]' : (isLockedPremium ? 'blur-md' : '')
+               isGuest ? 'blur-[3px]' : (isLockedPremium ? 'blur-md' : '')
              }`}
              onError={(e) => {
                const target = e.currentTarget;
