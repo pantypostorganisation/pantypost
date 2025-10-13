@@ -17,6 +17,7 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers off;
     ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256;
+<<<<<<< HEAD
 
     client_max_body_size 50m;
 
@@ -29,6 +30,43 @@ server {
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
         add_header Access-Control-Allow-Credentials "true" always;
         try_files $uri =404;
+=======
+    
+    # CORS headers for API
+    add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+    add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+    add_header Access-Control-Allow-Headers "Authorization, Content-Type" always;
+    add_header Access-Control-Allow-Credentials "true" always;
+    
+    # Handle OPTIONS requests
+    if ($request_method = 'OPTIONS') {
+        return 204;
+    }
+    
+    # Proxy all /api requests to backend
+    location /api {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+    # Serve uploaded files
+    location /uploads {
+        proxy_pass http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Cache static files
+        proxy_cache_valid 200 1d;
+        expires 1d;
+        add_header Cache-Control "public, immutable";
+>>>>>>> parent of ef4e9fe7 (PLEASE)
     }
 
     # API proxy
