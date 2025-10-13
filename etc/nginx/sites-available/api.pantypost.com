@@ -66,6 +66,9 @@ server {
         proxy_cache_valid 200 1d;
         expires 1d;
         add_header Cache-Control "public, immutable";
+<<<<<<< HEAD
+>>>>>>> parent of ef4e9fe7 (PLEASE)
+=======
 >>>>>>> parent of ef4e9fe7 (PLEASE)
     }
 
