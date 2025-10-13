@@ -67,6 +67,9 @@ server {
         expires 1d;
         add_header Cache-Control "public, immutable";
 <<<<<<< HEAD
+<<<<<<< HEAD
+>>>>>>> parent of ef4e9fe7 (PLEASE)
+=======
 >>>>>>> parent of ef4e9fe7 (PLEASE)
 =======
 >>>>>>> parent of ef4e9fe7 (PLEASE)
