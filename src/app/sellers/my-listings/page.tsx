@@ -84,7 +84,7 @@ function MyListingsContent() {
       <div className="pointer-events-none absolute -left-20 bottom-10 h-72 w-72 rounded-full bg-purple-600/20 blur-3xl" />
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <section className="mb-12 overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 sm:p-10 shadow-[0_20px_60px_-25px_rgba(255,149,14,0.35)] backdrop-blur-xl">
+        <section className="mb-12 overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-10 backdrop-blur-xl">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl space-y-5">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-white/70">
@@ -108,9 +108,9 @@ function MyListingsContent() {
                     <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
                   </div>
                 </div>
-                <div className="rounded-2xl border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/15 via-[#ff6a00]/10 to-transparent p-4">
+                <div className="rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-400/15 via-emerald-500/10 to-transparent p-4">
                   <p className="text-xs uppercase tracking-wider text-white/70">Available Slots</p>
-                  <div className="mt-2 text-3xl font-semibold text-[#ffb347]">{remainingSlots}</div>
+                  <div className="mt-2 text-3xl font-semibold text-emerald-200">{remainingSlots}</div>
                 </div>
                 <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/20 via-purple-700/10 to-transparent p-4">
                   <p className="text-xs uppercase tracking-wider text-white/70">Auctions Running</p>
@@ -123,7 +123,7 @@ function MyListingsContent() {
             </div>
 
             {!showForm && !editingState.isEditing && (
-              <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-black/50 p-6 text-center shadow-[0_10px_40px_-20px_rgba(0,0,0,0.6)]">
+              <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-black/50 p-6 text-center">
                 <p className="text-sm text-white/60">Launch something new</p>
                 <button
                   onClick={() => setShowForm(true)}
@@ -188,7 +188,7 @@ function MyListingsContent() {
 
             {/* Limit notice */}
             {atLimit && !editingState.isEditing && (
-              <div className="my-4 rounded-2xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/15 via-yellow-500/5 to-transparent p-5 text-center font-semibold text-yellow-100 shadow-[0_20px_60px_-35px_rgba(250,204,21,0.45)]">
+              <div className="my-4 rounded-2xl border border-yellow-500/30 bg-black/50 p-5 text-center font-semibold text-yellow-100">
                 {isVerified ? (
                   <>You have reached the maximum of <span className="text-[#ff950e] font-bold">25</span> listings for verified sellers.</>
                 ) : (
@@ -210,7 +210,7 @@ function MyListingsContent() {
 
             {/* Create Listing CTA */}
             {(showForm || editingState.isEditing) && (
-              <div className="rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8 shadow-[0_20px_60px_-40px_rgba(0,0,0,0.9)] backdrop-blur">
+              <div className="rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8 backdrop-blur">
                 <ListingForm
                   formState={formState}
                   isEditing={editingState.isEditing}
@@ -231,7 +231,7 @@ function MyListingsContent() {
             )}
 
             {/* Active Listings */}
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8 shadow-[0_25px_60px_-35px_rgba(255,149,14,0.4)] backdrop-blur">
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8 backdrop-blur">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-white">Your Active Listings</h2>
@@ -268,40 +268,40 @@ function MyListingsContent() {
           {/* Right: verification banner + tips */}
           <div className="space-y-8">
             {!isVerified && (
-              <div className="overflow-hidden rounded-3xl border border-yellow-500/30 bg-gradient-to-br from-yellow-500/15 via-yellow-500/10 to-transparent p-6 sm:p-8 shadow-[0_25px_60px_-35px_rgba(250,204,21,0.45)] backdrop-blur">
-                <div className="flex items-start gap-3">
+              <div className="overflow-hidden rounded-3xl border border-yellow-500/30 bg-black/60 p-6 sm:p-8 text-center backdrop-blur">
+                <div className="flex flex-col items-center gap-4">
                   <div className="rounded-2xl bg-yellow-500/20 p-3">
                     <ShieldCheck className="h-6 w-6 text-yellow-200" />
                   </div>
-                  <div>
+                  <div className="space-y-4">
                     <h2 className="text-2xl font-bold text-white">Get Verified</h2>
-                    <p className="mt-2 text-sm text-yellow-50/80">
+                    <p className="text-sm text-yellow-50/80">
                       Unlock higher limits, auctions, and a premium trust badge that reassures buyers instantly.
                     </p>
-                    <ul className="mt-5 space-y-3 text-sm text-yellow-50/80">
-                      <li className="flex items-start gap-2">
-                        <span className="mt-1 inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span>
+                    <ul className="space-y-3 text-sm text-yellow-50/80">
+                      <li className="flex flex-col items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
+                        <span className="text-center">
                           Post up to <span className="font-semibold text-yellow-200">25 listings</span> instead of 2
                         </span>
                       </li>
-                      <li className="flex items-start gap-2">
-                        <span className="mt-1 inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span>
+                      <li className="flex flex-col items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
+                        <span className="text-center">
                           Launch <span className="font-semibold text-purple-100">auction listings</span> for bidding wars
                         </span>
                       </li>
-                      <li className="flex items-start gap-2">
-                        <span className="mt-1 inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span className="flex items-center gap-1">
+                      <li className="flex flex-col items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
+                        <span className="flex flex-wrap items-center justify-center gap-1 text-center">
                           Display the verification badge
                           <img src="/verification_badge.png" alt="Verification Badge" className="h-4 w-4" />
                           everywhere
                         </span>
                       </li>
-                      <li className="flex items-start gap-2">
-                        <span className="mt-1 inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span>Build trust that converts browsers into buyers.</span>
+                      <li className="flex flex-col items-center gap-2">
+                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
+                        <span className="text-center">Build trust that converts browsers into buyers.</span>
                       </li>
                     </ul>
                   </div>
@@ -309,7 +309,7 @@ function MyListingsContent() {
                 <Link
                   href="/sellers/verify"
                   aria-label="Verify My Account"
-                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black shadow-[0_12px_30px_-20px_rgba(0,0,0,0.7)] transition hover:-translate-y-[2px] hover:shadow-yellow-300/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition hover:-translate-y-[2px] focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
                   <ShieldCheck className="h-5 w-5" />
                   Verify my account
@@ -318,7 +318,7 @@ function MyListingsContent() {
             )}
 
             {/* Auction Tips */}
-            <div className="overflow-hidden rounded-3xl border border-purple-500/40 bg-gradient-to-br from-purple-600/20 via-purple-700/10 to-transparent p-6 sm:p-8 shadow-[0_25px_60px_-35px_rgba(139,92,246,0.5)] backdrop-blur">
+            <div className="overflow-hidden rounded-3xl border border-purple-500/40 bg-black/60 p-6 sm:p-8 backdrop-blur">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
                 <Gavel className="h-6 w-6 text-purple-200" />
                 Auction Tips
@@ -350,7 +350,7 @@ function MyListingsContent() {
             </div>
 
             {/* Premium Tips */}
-            <div className="overflow-hidden rounded-3xl border border-[#ff950e]/40 bg-gradient-to-br from-[#ff950e]/20 via-[#ff6a00]/10 to-transparent p-6 sm:p-8 shadow-[0_25px_60px_-35px_rgba(255,149,14,0.5)] backdrop-blur">
+            <div className="overflow-hidden rounded-3xl border border-[#ff950e]/40 bg-black/60 p-6 sm:p-8 backdrop-blur">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
                 <Crown className="h-6 w-6 text-[#ffb347]" />
                 Premium Seller Tips
