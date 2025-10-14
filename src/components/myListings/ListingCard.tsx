@@ -59,13 +59,13 @@ export default function ListingCard({
     <>
       {ConfirmationModal}
       <div
-        className={`border rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition relative flex flex-col h-full ${
+        className={`border rounded-xl overflow-hidden transition relative flex flex-col h-full ${
           isAuctionListing ? 'border-purple-700 bg-black' : listing.isPremium ? 'border-[#ff950e] bg-black' : 'border-gray-700 bg-black'
         }`}
       >
         {isAuctionListing && (
           <div className="absolute top-4 right-4 z-10">
-            <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+            <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
               <Gavel className="w-4 h-4 mr-1" /> Auction
             </span>
           </div>
@@ -73,7 +73,7 @@ export default function ListingCard({
 
         {!isAuctionListing && listing.isPremium && (
           <div className="absolute top-4 right-4 z-10">
-            <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+            <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
               <Crown className="w-4 h-4 mr-1" /> Premium
             </span>
           </div>
