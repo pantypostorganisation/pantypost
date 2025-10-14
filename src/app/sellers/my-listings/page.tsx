@@ -278,32 +278,20 @@ function MyListingsContent() {
                     <p className="text-sm text-yellow-50/80">
                       Unlock higher limits, auctions, and a premium trust badge that reassures buyers instantly.
                     </p>
-                    <ul className="space-y-3 text-sm text-yellow-50/80">
-                      <li className="flex flex-col items-center gap-2">
-                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span className="text-center">
-                          Post up to <span className="font-semibold text-yellow-200">25 listings</span> instead of 2
-                        </span>
-                      </li>
-                      <li className="flex flex-col items-center gap-2">
-                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span className="text-center">
-                          Launch <span className="font-semibold text-purple-100">auction listings</span> for bidding wars
-                        </span>
-                      </li>
-                      <li className="flex flex-col items-center gap-2">
-                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span className="flex flex-wrap items-center justify-center gap-1 text-center">
-                          Display the verification badge
-                          <img src="/verification_badge.png" alt="Verification Badge" className="h-4 w-4" />
-                          everywhere
-                        </span>
-                      </li>
-                      <li className="flex flex-col items-center gap-2">
-                        <span className="inline-block h-2 w-2 rounded-full bg-yellow-300" />
-                        <span className="text-center">Build trust that converts browsers into buyers.</span>
-                      </li>
-                    </ul>
+                    <div className="space-y-3 text-sm text-yellow-50/80">
+                      <div className="text-center">
+                        Post up to <span className="font-semibold text-yellow-200">25 listings</span> instead of 2
+                      </div>
+                      <div className="text-center">
+                        Launch <span className="font-semibold text-purple-100">auction listings</span> for bidding wars
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-1 text-center">
+                        Display the verification badge
+                        <img src="/verification_badge.png" alt="Verification Badge" className="h-4 w-4" />
+                        everywhere
+                      </div>
+                      <div className="text-center">Build trust that converts browsers into buyers.</div>
+                    </div>
                   </div>
                 </div>
                 <Link
