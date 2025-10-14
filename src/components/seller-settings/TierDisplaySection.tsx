@@ -87,13 +87,13 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
   const credit = typeof sellerTierInfo.credit === 'number' && Number.isFinite(sellerTierInfo.credit) ? sellerTierInfo.credit : 0;
 
   return (
-    <div className="mt-8 bg-gradient-to-r from-[#1a1a1a] to-[#272727] rounded-xl border border-gray-800 p-6 shadow-xl">
-      <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-        <div className="flex items-center">
-          <div className="pr-6 flex-shrink-0">
+    <div className="bg-gradient-to-r from-[#1a1a1a] to-[#272727] rounded-xl border border-gray-800 p-6 shadow-xl h-full flex flex-col gap-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
             {currentTier && currentTier !== 'None' ? <TierBadge tier={currentTier} size="2xl" showTooltip={true} /> : null}
           </div>
-          <div>
+          <div className="space-y-2">
             <h2 className="text-xl font-bold text-white mb-1 flex items-center">
               <Award className="w-5 h-5 mr-2 text-[#ff950e]" />
               Your Seller Tier:{' '}
@@ -113,7 +113,7 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
         </div>
 
         {currentTier !== 'Goddess' && nextTier && (
-          <div className="bg-[#111] border border-gray-800 rounded-lg p-3 shadow-inner">
+          <div className="bg-[#111] border border-gray-800 rounded-lg p-3 shadow-inner self-stretch lg:max-w-xs">
             <div className="text-sm text-gray-400">
               Next tier: <span className="font-medium text-purple-400">{nextTier}</span>
             </div>
@@ -129,14 +129,14 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
       </div>
 
       {/* Simple Interactive Tier Table */}
-      <div className="bg-[#111] rounded-lg p-4 border border-gray-700">
+      <div className="bg-[#111] rounded-lg p-4 border border-gray-700 flex-1">
         <h3 className="text-lg font-medium text-gray-300 mb-4 flex items-center gap-2">
           <Star className="w-5 h-5 text-[#ff950e]" />
           All Seller Tiers <span className="text-sm text-gray-500 font-normal">(Click to view details)</span>
         </h3>
 
         {/* Tier Badges Row */}
-        <div className="grid grid-cols-5 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2 gap-3 mb-4">
           {(['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'] as TierLevel[]).map((tier) => {
             const isCurrentTier = currentTier === tier;
             const isSelected = selectedTierDetails === tier;
@@ -145,7 +145,7 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
               <button
                 key={tier}
                 onClick={() => onTierSelect(isSelected ? null : tier)}
-                className={`relative p-3 rounded-lg border-2 transition-all duration-300 ${
+                className={`relative p-3 rounded-lg border-2 transition-all duration-300 text-left ${
                   isCurrentTier
                     ? 'border-[#ff950e] bg-[#ff950e]/10'
                     : isSelected
@@ -156,12 +156,12 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
                 aria-pressed={isSelected}
                 aria-label={`View ${tier} details`}
               >
-                <div className="flex flex-col items-center space-y-2">
-                  <TierBadge tier={tier} size="xl" showTooltip={false} />
-                  <div className="text-center">
+                <div className="flex items-center gap-3">
+                  <TierBadge tier={tier} size="lg" showTooltip={false} />
+                  <div className="space-y-1">
                     <div className="font-medium text-white text-sm">{tier}</div>
                     <div className="text-xs text-gray-400">+{(TIER_LEVELS[tier].credit * 100).toFixed(0)}%</div>
-                    {isCurrentTier && <div className="text-xs text-[#ff950e] font-medium mt-1">Current</div>}
+                    {isCurrentTier && <div className="text-xs text-[#ff950e] font-medium">Current</div>}
                   </div>
                 </div>
               </button>

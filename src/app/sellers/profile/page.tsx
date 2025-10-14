@@ -197,18 +197,6 @@ export default function SellerProfileSettingsPage() {
                     />
                   </div>
                 </div>
-
-                {sellerTierInfo && (
-                  <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
-                    <TierProgressCard
-                      sellerTierInfo={sellerTierInfo}
-                      userStats={userStats}
-                      tierProgress={tierProgress}
-                      nextTier={nextTier}
-                      onTierClick={setSelectedTierDetails}
-                    />
-                  </div>
-                )}
               </div>
 
               {/* Right column - Gallery */}
@@ -238,15 +226,27 @@ export default function SellerProfileSettingsPage() {
               </div>
             </div>
 
-            {/* Tier Display Section */}
+            {/* Tier Progress & Display Section */}
             {sellerTierInfo && (
-              <TierDisplaySection
-                sellerTierInfo={sellerTierInfo}
-                userStats={userStats}
-                nextTier={nextTier}
-                selectedTierDetails={selectedTierDetails}
-                onTierSelect={setSelectedTierDetails}
-              />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
+                  <TierProgressCard
+                    sellerTierInfo={sellerTierInfo}
+                    userStats={userStats}
+                    tierProgress={tierProgress}
+                    nextTier={nextTier}
+                    onTierClick={setSelectedTierDetails}
+                  />
+                </div>
+
+                <TierDisplaySection
+                  sellerTierInfo={sellerTierInfo}
+                  userStats={userStats}
+                  nextTier={nextTier}
+                  selectedTierDetails={selectedTierDetails}
+                  onTierSelect={setSelectedTierDetails}
+                />
+              </div>
             )}
           </div>
 
