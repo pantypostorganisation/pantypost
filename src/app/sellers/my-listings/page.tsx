@@ -108,9 +108,9 @@ function MyListingsContent() {
                     <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
                   </div>
                 </div>
-                <div className="rounded-2xl border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/15 via-[#ff6a00]/10 to-transparent p-4">
+                <div className="rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-400/15 via-emerald-500/10 to-transparent p-4">
                   <p className="text-xs uppercase tracking-wider text-white/70">Available Slots</p>
-                  <div className="mt-2 text-3xl font-semibold text-[#ffb347]">{remainingSlots}</div>
+                  <div className="mt-2 text-3xl font-semibold text-emerald-200">{remainingSlots}</div>
                 </div>
                 <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/20 via-purple-700/10 to-transparent p-4">
                   <p className="text-xs uppercase tracking-wider text-white/70">Auctions Running</p>
