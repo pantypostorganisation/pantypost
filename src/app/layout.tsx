@@ -17,7 +17,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
-    default: 'PantyPost - Buy & Sell Used Panties Safely | Anonymous Marketplace',
+    default: 'Panty Post - Buy & Sell Used Panties Safely | Anonymous Marketplace',
     template: '%s | PantyPost'
   },
   description: 'The premier discreet marketplace to buy and sell used panties. Connect with verified sellers, secure payments, and complete anonymity. 21+ adult platform.',
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: BASE_URL,
     siteName: 'PantyPost',
-    title: 'PantyPost - Buy & Sell Used Panties | Discreet Anonymous Marketplace',
+    title: 'Panty Post - Buy & Sell Used Panties | Discreet Anonymous Marketplace',
     description: 'Safe, anonymous platform to buy and sell used panties. Verified sellers, secure transactions, complete privacy. 21+ only.',
     images: [
       {
@@ -76,7 +76,7 @@ export const metadata: Metadata = {
   // Twitter Card
   twitter: {
     card: 'summary_large_image',
-    title: 'PantyPost - Buy & Sell Used Panties Anonymously',
+    title: 'Panty Post - Buy & Sell Used Panties Anonymously',
     description: 'Discreet marketplace for used panties. Verified sellers, secure payments, complete privacy.',
     images: [`${BASE_URL}/og-image.png`],
     creator: '@pantypost',

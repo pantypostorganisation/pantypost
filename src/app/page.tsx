@@ -105,7 +105,7 @@ export default function Home() {
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'WebPage',
-              name: 'PantyPost - Buy & Sell Used Panties Marketplace',
+              name: 'Panty Post - Buy & Sell Used Panties Marketplace',
               description: 'Discreet marketplace to buy and sell used panties with verified sellers and secure payments',
               url: BASE_URL,
               mainEntity: {
