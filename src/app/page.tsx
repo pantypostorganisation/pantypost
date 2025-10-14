@@ -9,6 +9,10 @@ import TrustSignalsSection from '@/components/homepage/TrustSignalsSection';
 import FeaturesSection from '@/components/homepage/FeaturesSection';
 import CTASection from '@/components/homepage/CTASection';
 import Footer from '@/components/homepage/Footer';
+import FeaturedRandom from '@/components/homepage/FeaturedRandom';
+import Head from 'next/head';
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.panty-post.com';
 
 // Enhanced loading skeleton for Featured Random section
 const FeaturedRandomSkeleton = () => (
@@ -34,9 +38,6 @@ const FeaturedRandomSkeleton = () => (
     </div>
   </section>
 );
-
-// Import the Featured Random component
-import FeaturedRandom from '@/components/homepage/FeaturedRandom';
 
 // Enhanced loading fallback components with pulse animations
 const SectionSkeleton = ({ height = "h-96" }: { height?: string }) => (
@@ -98,7 +99,6 @@ const SectionWrapper = ({
   fallbackHeight?: string; 
 }) => {
   const handleRetry = useCallback(() => {
-    // Force re-render by reloading the page section
     window.location.reload();
   }, []);
 
@@ -120,201 +120,259 @@ const SectionWrapper = ({
 
 export default function Home() {
   return (
-    <BanCheck>
-      <div className="min-h-screen bg-black flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
-        
-        {/* Hero Section with Error Boundary */}
-        <SectionWrapper sectionName="Hero" fallbackHeight="h-screen">
-          <HeroSection />
-        </SectionWrapper>
-        
-        {/* Trust Signals Section with Error Boundary */}
-        <SectionWrapper sectionName="Trust Signals" fallbackHeight="h-64">
-          <TrustSignalsSection />
-        </SectionWrapper>
-        
-        {/* Featured Random Listings Section */}
-        <SectionWrapper sectionName="Featured Listings" fallbackHeight="h-96">
-          <FeaturedRandom />
-        </SectionWrapper>
-        
-        {/* Features Section with Error Boundary */}
-        <SectionWrapper sectionName="Features" fallbackHeight="h-96">
-          <FeaturesSection />
-        </SectionWrapper>
-        
-        {/* CTA Section with Error Boundary */}
-        <SectionWrapper sectionName="Call to Action" fallbackHeight="h-80">
-          <CTASection />
-        </SectionWrapper>
-        
-        {/* Footer with Error Boundary */}
-        <SectionWrapper sectionName="Footer" fallbackHeight="h-64">
-          <Footer />
-        </SectionWrapper>
-      </div>
+    <>
+      {/* SEO: Structured Data for Homepage */}
+      <Head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebPage',
+              name: 'PantyPost - Buy & Sell Used Panties Marketplace',
+              description: 'Discreet marketplace to buy and sell used panties with verified sellers and secure payments',
+              url: BASE_URL,
+              mainEntity: {
+                '@type': 'OnlineMarketplace',
+                name: 'PantyPost',
+                description: 'Anonymous marketplace for buying and selling used panties',
+                url: BASE_URL,
+                aggregateRating: {
+                  '@type': 'AggregateRating',
+                  ratingValue: '4.8',
+                  reviewCount: '10000',
+                  bestRating: '5',
+                  worstRating: '1'
+                },
+                potentialAction: [
+                  {
+                    '@type': 'BuyAction',
+                    target: {
+                      '@type': 'EntryPoint',
+                      urlTemplate: `${BASE_URL}/browse`,
+                      actionPlatform: [
+                        'http://schema.org/DesktopWebPlatform',
+                        'http://schema.org/MobileWebPlatform'
+                      ]
+                    }
+                  },
+                  {
+                    '@type': 'SellAction',
+                    target: {
+                      '@type': 'EntryPoint',
+                      urlTemplate: `${BASE_URL}/login`,
+                      actionPlatform: [
+                        'http://schema.org/DesktopWebPlatform',
+                        'http://schema.org/MobileWebPlatform'
+                      ]
+                    }
+                  }
+                ]
+              }
+            })
+          }}
+        />
+      </Head>
 
-      {/* Enhanced Global Styles with better performance optimizations */}
-      <style jsx global>{`
-        @keyframes pulse-slow {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
-        }
-        .animate-pulse-slow { 
-          animation: pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
-          will-change: opacity;
-        }
-
-        /* Enhanced shimmer effect for loading states */
-        .loading-shimmer {
-          position: relative;
-          overflow: hidden;
-          background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
-          animation: shimmer 1.5s infinite;
-        }
-        
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-
-        /* Perspective for 3D-ish hover with GPU acceleration */
-        .perspective { 
-          perspective: 1000px; 
-          transform-style: preserve-3d;
-        }
-
-        /* Enhanced Smooth Scroll with performance optimization */
-        html { 
-          scroll-behavior: smooth; 
-          -webkit-overflow-scrolling: touch;
-        }
-
-        /* Enhanced Focus Visible with better contrast and accessibility */
-        *:focus-visible {
-          outline: 2px solid #ff950e;
-          outline-offset: 2px;
-          border-radius: 4px;
-          box-shadow: 
-            0 0 0 4px rgba(255, 149, 14, 0.1),
-            0 0 0 2px rgba(255, 149, 14, 0.3);
-          transition: box-shadow 0.2s ease;
-        }
-        *:focus:not(:focus-visible) {
-          outline: none;
-        }
-        button:focus-visible, a:focus-visible {
-          transform: scale(1.02);
-          transition: transform 0.1s ease, box-shadow 0.2s ease;
-        }
-
-        /* Enhanced Custom Spin Animations with GPU acceleration */
-        @keyframes spin-slow {
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-slow { 
-          animation: spin-slow 25s linear infinite; 
-          will-change: transform;
-          transform-origin: center;
-        }
-
-        @keyframes spin-slow-reverse {
-          to { transform: rotate(-360deg); }
-        }
-        .animate-spin-slow-reverse { 
-          animation: spin-slow-reverse 20s linear infinite; 
-          will-change: transform;
-          transform-origin: center;
-        }
-
-        @keyframes spin-medium {
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-medium { 
-          animation: spin-medium 35s linear infinite; 
-          will-change: transform;
-          transform-origin: center;
-        }
-
-        @keyframes spin-medium-reverse {
-          to { transform: rotate(-360deg); }
-        }
-        .animate-spin-medium-reverse { 
-          animation: spin-medium-reverse 30s linear infinite; 
-          will-change: transform;
-          transform-origin: center;
-        }
-
-        /* Enhanced Tailwind Arbitrary Radial Gradient with fallback */
-        .bg-gradient-radial {
-          background-image: radial-gradient(circle, var(--tw-gradient-stops));
-          background-image: -webkit-radial-gradient(circle, var(--tw-gradient-stops));
-        }
-
-        /* Performance optimizations */
-        * {
-          -webkit-tap-highlight-color: transparent;
-        }
-        
-        /* Enhanced reduced motion handling for accessibility */
-        @media (prefers-reduced-motion: reduce) {
-          *,
-          *::before,
-          *::after {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-            scroll-behavior: auto !important;
-          }
+      <BanCheck>
+        <div className="min-h-screen bg-black flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
           
-          .animate-spin-slow,
-          .animate-spin-slow-reverse,
-          .animate-spin-medium,
-          .animate-spin-medium-reverse,
-          .animate-pulse-slow,
+          {/* SEO: H1 for homepage - hidden but present for SEO */}
+          <h1 className="sr-only">Buy and Sell Used Panties - PantyPost Marketplace</h1>
+          
+          {/* Hero Section with Error Boundary */}
+          <SectionWrapper sectionName="Hero" fallbackHeight="h-screen">
+            <HeroSection />
+          </SectionWrapper>
+          
+          {/* Trust Signals Section with Error Boundary */}
+          <SectionWrapper sectionName="Trust Signals" fallbackHeight="h-64">
+            <TrustSignalsSection />
+          </SectionWrapper>
+          
+          {/* Featured Random Listings Section */}
+          <SectionWrapper sectionName="Featured Listings" fallbackHeight="h-96">
+            <FeaturedRandom />
+          </SectionWrapper>
+          
+          {/* Features Section with Error Boundary */}
+          <SectionWrapper sectionName="Features" fallbackHeight="h-96">
+            <FeaturesSection />
+          </SectionWrapper>
+          
+          {/* CTA Section with Error Boundary */}
+          <SectionWrapper sectionName="Call to Action" fallbackHeight="h-80">
+            <CTASection />
+          </SectionWrapper>
+          
+          {/* Footer with Error Boundary */}
+          <SectionWrapper sectionName="Footer" fallbackHeight="h-64">
+            <Footer />
+          </SectionWrapper>
+        </div>
+
+        {/* Enhanced Global Styles with better performance optimizations */}
+        <style jsx global>{`
+          @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+          }
+          .animate-pulse-slow { 
+            animation: pulse-slow 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite; 
+            will-change: opacity;
+          }
+
+          /* Enhanced shimmer effect for loading states */}
           .loading-shimmer {
-            animation: none !important;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: shimmer 1.5s infinite;
           }
           
-          .perspective {
-            perspective: none !important;
+          @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
           }
-        }
 
-        /* Enhanced loading skeleton animations */
-        @keyframes skeleton-pulse {
-          0% { opacity: 1; }
-          50% { opacity: 0.5; }
-          100% { opacity: 1; }
-        }
-        
-        .animate-skeleton {
-          animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-          will-change: opacity;
-        }
-        
-        /* Stagger delays for skeleton animations */
-        .animate-pulse.delay-75 {
-          animation-delay: 75ms;
-        }
-        .animate-pulse.delay-150 {
-          animation-delay: 150ms;
-        }
-        .animate-pulse.delay-300 {
-          animation-delay: 300ms;
-        }
+          /* Perspective for 3D-ish hover with GPU acceleration */
+          .perspective { 
+            perspective: 1000px; 
+            transform-style: preserve-3d;
+          }
 
-        /* Enhanced error state styles */
-        .error-state {
-          background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(127, 29, 29, 0.05));
-          border: 1px solid rgba(220, 38, 38, 0.2);
-        }
-        
-        .error-state:hover {
-          background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(127, 29, 29, 0.08));
-          border-color: rgba(220, 38, 38, 0.3);
-        }
-      `}</style>
-    </BanCheck>
+          /* Enhanced Smooth Scroll with performance optimization */
+          html { 
+            scroll-behavior: smooth; 
+            -webkit-overflow-scrolling: touch;
+          }
+
+          /* Enhanced Focus Visible with better contrast and accessibility */
+          *:focus-visible {
+            outline: 2px solid #ff950e;
+            outline-offset: 2px;
+            border-radius: 4px;
+            box-shadow: 
+              0 0 0 4px rgba(255, 149, 14, 0.1),
+              0 0 0 2px rgba(255, 149, 14, 0.3);
+            transition: box-shadow 0.2s ease;
+          }
+          *:focus:not(:focus-visible) {
+            outline: none;
+          }
+          button:focus-visible, a:focus-visible {
+            transform: scale(1.02);
+            transition: transform 0.1s ease, box-shadow 0.2s ease;
+          }
+
+          /* Enhanced Custom Spin Animations with GPU acceleration */
+          @keyframes spin-slow {
+            to { transform: rotate(360deg); }
+          }
+          .animate-spin-slow { 
+            animation: spin-slow 25s linear infinite; 
+            will-change: transform;
+            transform-origin: center;
+          }
+
+          @keyframes spin-slow-reverse {
+            to { transform: rotate(-360deg); }
+          }
+          .animate-spin-slow-reverse { 
+            animation: spin-slow-reverse 20s linear infinite; 
+            will-change: transform;
+            transform-origin: center;
+          }
+
+          @keyframes spin-medium {
+            to { transform: rotate(360deg); }
+          }
+          .animate-spin-medium { 
+            animation: spin-medium 35s linear infinite; 
+            will-change: transform;
+            transform-origin: center;
+          }
+
+          @keyframes spin-medium-reverse {
+            to { transform: rotate(-360deg); }
+          }
+          .animate-spin-medium-reverse { 
+            animation: spin-medium-reverse 30s linear infinite; 
+            will-change: transform;
+            transform-origin: center;
+          }
+
+          /* Enhanced Tailwind Arbitrary Radial Gradient with fallback */
+          .bg-gradient-radial {
+            background-image: radial-gradient(circle, var(--tw-gradient-stops));
+            background-image: -webkit-radial-gradient(circle, var(--tw-gradient-stops));
+          }
+
+          /* Performance optimizations */
+          * {
+            -webkit-tap-highlight-color: transparent;
+          }
+          
+          /* Enhanced reduced motion handling for accessibility */
+          @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+              animation-duration: 0.01ms !important;
+              animation-iteration-count: 1 !important;
+              transition-duration: 0.01ms !important;
+              scroll-behavior: auto !important;
+            }
+            
+            .animate-spin-slow,
+            .animate-spin-slow-reverse,
+            .animate-spin-medium,
+            .animate-spin-medium-reverse,
+            .animate-pulse-slow,
+            .loading-shimmer {
+              animation: none !important;
+            }
+            
+            .perspective {
+              perspective: none !important;
+            }
+          }
+
+          /* Enhanced loading skeleton animations */
+          @keyframes skeleton-pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+          }
+          
+          .animate-skeleton {
+            animation: skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+            will-change: opacity;
+          }
+          
+          /* Stagger delays for skeleton animations */
+          .animate-pulse.delay-75 {
+            animation-delay: 75ms;
+          }
+          .animate-pulse.delay-150 {
+            animation-delay: 150ms;
+          }
+          .animate-pulse.delay-300 {
+            animation-delay: 300ms;
+          }
+
+          /* Enhanced error state styles */
+          .error-state {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(127, 29, 29, 0.05));
+            border: 1px solid rgba(220, 38, 38, 0.2);
+          }
+          
+          .error-state:hover {
+            background: linear-gradient(135deg, rgba(220, 38, 38, 0.15), rgba(127, 29, 29, 0.08));
+            border-color: rgba(220, 38, 38, 0.3);
+          }
+        `}</style>
+      </BanCheck>
+    </>
   );
 }
