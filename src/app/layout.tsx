@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     default: 'Panty Post - Buy & Sell Used Panties Safely | Anonymous Marketplace',
     template: '%s | PantyPost'
   },
-  description: 'The premier discreet marketplace to buy and sell used panties. Connect with verified sellers, secure payments, and complete anonymity. 21+ adult platform.',
+  description: 'Panty Post - The premier discreet marketplace to buy and sell used panties. Connect with verified sellers, secure payments, and complete anonymity. 21+ adult platform.',
   keywords: [
     'buy used panties',
     'sell used panties',

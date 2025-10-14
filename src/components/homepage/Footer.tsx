@@ -46,7 +46,7 @@ export default function Footer() {
       <div className="relative max-w-7xl mx-auto px-6 md:px-8 z-10">
         <div className="flex flex-col md:flex-row justify-between items-center">
           <div className="mb-6 md:mb-0 text-center md:text-left">
-            <h2 className="text-xl font-bold text-[#ff950e]">PantyPost</h2>
+            <h2 className="text-xl font-bold text-[#ff950e]">Panty Post</h2>
             <p className="text-gray-500 text-sm mt-1">
               The premium marketplace for authentic items
             </p>
@@ -67,9 +67,9 @@ export default function Footer() {
         
         <div className="border-t border-white/10 mt-8 pt-8 text-center">
           <p className="text-gray-500 text-sm">
-            © {currentYear} PantyPost. All rights reserved.
+            © {currentYear} Panty Post (PantyPost). All rights reserved.
             <span className="block mt-2 text-xs text-gray-600">
-              Disclaimer: PantyPost is committed to user safety and privacy. 
+              Disclaimer: Panty Post is committed to user safety and privacy. 
               All users must be 21+ and comply with our terms.
             </span>
           </p>

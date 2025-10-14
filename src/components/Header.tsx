@@ -663,7 +663,7 @@ export default function Header(): React.ReactElement | null {
                 <X className="w-6 h-6" />
               </button>
               <div className="flex items-center justify-center">
-                <img src="/logo.png" alt="PantyPost" className="w-20 h-auto drop-shadow-2xl" />
+                <img src="/logo.png" alt="Panty Post - Used Panties Marketplace" className="w-20 h-auto drop-shadow-2xl" />
               </div>
             </div>
 
@@ -826,7 +826,7 @@ export default function Header(): React.ReactElement | null {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            <img src="/logo.png" alt="PantyPost Logo" className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300" />
+            <img src="/logo.png" alt="Panty Post - Used Panties Marketplace" className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300" />
           </div>
         </Link>
 
