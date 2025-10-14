@@ -1,3 +1,5 @@
+// src/components/homepage/AnimatedUserCounter.tsx
+
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -25,7 +27,7 @@ export default function AnimatedUserCounter({
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
   const [incrementAmount, setIncrementAmount] = useState(1);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
-  const [animationKey, setAnimationKey] = useState(0); // Key to force new animation instance
+  const [animationKey, setAnimationKey] = useState(0);
   
   const { user } = useAuth();
   const authenticatedWebSocket = useWebSocket();
@@ -33,7 +35,7 @@ export default function AnimatedUserCounter({
   const mountedRef = useRef(true);
   const previousCountRef = useRef(0);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitialFetchRef = useRef(true); // Track if this is the initial fetch
+  const isInitialFetchRef = useRef(true);
 
   // Spring animation for smooth counting
   const springValue = useSpring(0, { 
@@ -42,11 +44,9 @@ export default function AnimatedUserCounter({
     mass: 1 
   });
 
-  // Transform the spring value to an integer
   const displayCount = useTransform(springValue, (value) => Math.round(value));
   const [formattedCount, setFormattedCount] = useState('0');
 
-  // Update formatted count when display count changes
   useEffect(() => {
     const unsubscribe = displayCount.on('change', (value) => {
       setFormattedCount(value.toLocaleString());
@@ -54,16 +54,14 @@ export default function AnimatedUserCounter({
     return () => unsubscribe();
   }, [displayCount]);
 
-  // Helper to trigger animation
   const triggerAnimation = useCallback((increment: number) => {
-    // Clear any existing animation timeout
     if (animationTimeoutRef.current) {
       clearTimeout(animationTimeoutRef.current);
     }
 
     setIncrementAmount(increment);
     setShowUpdateAnimation(true);
-    setAnimationKey(prev => prev + 1); // Force new animation instance
+    setAnimationKey(prev => prev + 1);
     
     animationTimeoutRef.current = setTimeout(() => {
       if (mountedRef.current) {
@@ -72,7 +70,6 @@ export default function AnimatedUserCounter({
     }, 3500);
   }, []);
 
-  // Fetch initial stats
   const fetchStats = useCallback(async () => {
     try {
       console.log('[AnimatedUserCounter] Fetching initial stats...');
@@ -83,13 +80,11 @@ export default function AnimatedUserCounter({
         setNewUsersToday(response.data.newUsersToday);
         
         if (!hasInitialLoad) {
-          // First load - just set the value without animation
           springValue.set(response.data.totalUsers);
           previousCountRef.current = response.data.totalUsers;
           setHasInitialLoad(true);
-          isInitialFetchRef.current = false; // Mark initial fetch as complete
+          isInitialFetchRef.current = false;
         } else {
-          // Subsequent fetches - check for changes
           const increment = response.data.totalUsers - previousCountRef.current;
           if (increment > 0) {
             springValue.set(response.data.totalUsers);
@@ -109,7 +104,6 @@ export default function AnimatedUserCounter({
     }
   }, [springValue, hasInitialLoad, triggerAnimation]);
 
-  // Initial fetch
   useEffect(() => {
     mountedRef.current = true;
     fetchStats();
@@ -122,13 +116,10 @@ export default function AnimatedUserCounter({
     };
   }, [fetchStats]);
 
-  // Handle real-time updates based on authentication status
+  // FIXED: Handle real-time updates - only use stats:users for authoritative count
   useEffect(() => {
     const handleStatsUpdate = (data: any) => {
-      if (!mountedRef.current) return;
-      
-      // Skip if we're still doing initial fetch
-      if (isInitialFetchRef.current) {
+      if (!mountedRef.current || isInitialFetchRef.current) {
         console.log('[AnimatedUserCounter] Skipping WebSocket update during initial fetch');
         return;
       }
@@ -136,13 +127,14 @@ export default function AnimatedUserCounter({
       console.log('[AnimatedUserCounter] Stats update received:', data);
       
       if (data.totalUsers !== undefined && data.totalUsers !== previousCountRef.current) {
-        console.log('[AnimatedUserCounter] Updating to new total:', data.totalUsers);
+        console.log('[AnimatedUserCounter] Updating from', previousCountRef.current, 'to', data.totalUsers);
         
         const increment = data.totalUsers - previousCountRef.current;
         
         setTargetCount(data.totalUsers);
         springValue.set(data.totalUsers);
         
+        // Only trigger animation if count increased
         if (increment > 0) {
           triggerAnimation(increment);
         }
@@ -154,59 +146,32 @@ export default function AnimatedUserCounter({
         setNewUsersToday(data.newUsersToday);
       }
       
+      // Update cached stats
       userStatsService.updateCachedStats(data);
     };
 
-    const handleNewUser = (data: any) => {
-      if (!mountedRef.current) return;
-      
-      // Skip if we're still doing initial fetch
-      if (isInitialFetchRef.current) {
-        console.log('[AnimatedUserCounter] Skipping new user event during initial fetch');
-        return;
-      }
-      
-      console.log('[AnimatedUserCounter] New user registered:', data);
-      
-      setTargetCount((prev) => {
-        const newCount = prev + 1;
-        console.log('[AnimatedUserCounter] Incrementing count from', prev, 'to', newCount);
-        springValue.set(newCount);
-        previousCountRef.current = newCount;
-        return newCount;
-      });
-      
-      setNewUsersToday((prev) => prev + 1);
-      
-      userStatsService.incrementUserCount(1);
-      
-      triggerAnimation(1);
-    };
+    // FIXED: Removed handleNewUser - we only respond to stats:users now
+    // This prevents double-counting
 
     let unsubscribeStats: (() => void) | undefined;
-    let unsubscribeNewUser: (() => void) | undefined;
 
-    // Wait a bit before subscribing to avoid race conditions with initial fetch
     const subscribeTimeout = setTimeout(() => {
       if (user && authenticatedWebSocket) {
         console.log('[AnimatedUserCounter] Using authenticated WebSocket');
         unsubscribeStats = authenticatedWebSocket.subscribe('stats:users', handleStatsUpdate);
-        unsubscribeNewUser = authenticatedWebSocket.subscribe('user:registered', handleNewUser);
       } else if (publicWebSocket.isConnected) {
         console.log('[AnimatedUserCounter] Using public WebSocket for guest');
         unsubscribeStats = publicWebSocket.subscribe('stats:users', handleStatsUpdate);
-        unsubscribeNewUser = publicWebSocket.subscribe('user:registered', handleNewUser);
       }
-    }, 500); // Small delay to ensure initial fetch completes first
+    }, 500);
 
     return () => {
       clearTimeout(subscribeTimeout);
       unsubscribeStats?.();
-      unsubscribeNewUser?.();
     };
   }, [user, authenticatedWebSocket, publicWebSocket.isConnected, springValue, triggerAnimation]);
 
-  // Fallback polling for when WebSocket is not available
+  // Fallback polling
   useEffect(() => {
     const shouldPoll = !authenticatedWebSocket?.isConnected && !publicWebSocket.isConnected;
     
@@ -217,7 +182,6 @@ export default function AnimatedUserCounter({
     console.log('[AnimatedUserCounter] Starting fallback polling (every 15s)');
     
     const pollInterval = setInterval(async () => {
-      // Skip if we're still doing initial fetch
       if (isInitialFetchRef.current) return;
       
       try {
@@ -283,7 +247,6 @@ export default function AnimatedUserCounter({
               {displayValue}
             </motion.span>
             
-            {/* Improved floating increment animation */}
             <AnimatePresence mode="wait">
               {showUpdateAnimation && (
                 <motion.span
