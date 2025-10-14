@@ -1,7 +1,7 @@
 // src/app/robots.ts
 import { MetadataRoute } from 'next';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.panty-post.com';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 
 export default function robots(): MetadataRoute.Robots {
   return {

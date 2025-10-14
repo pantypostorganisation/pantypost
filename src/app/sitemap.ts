@@ -1,7 +1,7 @@
 // src/app/sitemap.ts
 import { MetadataRoute } from 'next';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.panty-post.com';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 // Helper to get API base with /api suffix

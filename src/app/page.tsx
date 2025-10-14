@@ -12,7 +12,7 @@ import Footer from '@/components/homepage/Footer';
 import FeaturedRandom from '@/components/homepage/FeaturedRandom';
 import Head from 'next/head';
 
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.panty-post.com';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 
 // Enhanced loading skeleton for Featured Random section
 const FeaturedRandomSkeleton = () => (

@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 // Base URL for canonical URLs
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.panty-post.com';
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 
 // SEO-Optimized Global Metadata
 export const metadata: Metadata = {
