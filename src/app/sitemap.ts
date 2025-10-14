@@ -2,19 +2,12 @@
 import { MetadataRoute } from 'next';
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
-
-// Helper to get API base with /api suffix
-function getApiBase(): string {
-  const trimmed = API_BASE.replace(/\/+$/, '');
-  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
-}
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com/api';
 
 // Helper to fetch listings from API (server-side)
 async function getListingsForSitemap() {
   try {
-    const apiBase = getApiBase();
-    const response = await fetch(`${apiBase}/listings?status=active&limit=1000`, {
+    const response = await fetch(`${API_BASE}/listings?status=active&limit=1000`, {
       next: { revalidate: 3600 } // Cache for 1 hour
     });
     
@@ -34,8 +27,7 @@ async function getListingsForSitemap() {
 // Helper to fetch sellers from API
 async function getSellersForSitemap() {
   try {
-    const apiBase = getApiBase();
-    const response = await fetch(`${apiBase}/users?role=seller&limit=500`, {
+    const response = await fetch(`${API_BASE}/users?role=seller&limit=500`, {
       next: { revalidate: 3600 }
     });
     
@@ -57,7 +49,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const listings = await getListingsForSitemap();
   const sellers = await getSellersForSitemap();
 
-  // Static pages with priorities
+  // Static PUBLIC pages only
   const staticPages: MetadataRoute.Sitemap = [
     {
       url: BASE_URL,
@@ -83,9 +75,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.6,
     },
+    {
+      url: `${BASE_URL}/terms`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
   ];
 
-  // Dynamic listing pages
+  // Dynamic listing pages with REAL IDs
   const listingPages: MetadataRoute.Sitemap = listings
     .filter((listing: any) => listing._id || listing.id)
     .map((listing: any) => {
@@ -95,11 +93,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         url: `${BASE_URL}/browse/${id}`,
         lastModified: listing.updatedAt ? new Date(listing.updatedAt) : new Date(),
         changeFrequency: 'daily' as const,
-        priority: 0.7,
+        priority: 0.8,
       };
     });
 
-  // Dynamic seller pages
+  // Dynamic seller pages with REAL usernames
   const sellerPages: MetadataRoute.Sitemap = sellers
     .filter((seller: any) => seller.username)
     .map((seller: any) => ({

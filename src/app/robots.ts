@@ -21,15 +21,22 @@ export default function robots(): MetadataRoute.Robots {
           '/messages/',
           '/buyers/dashboard',
           '/buyers/messages',
+          '/buyers/profile',
+          '/buyers/my-orders',
           '/sellers/dashboard',
           '/sellers/subscribers',
-          '/sellers/mylistings',
-          '/sellers/create-listing',
+          '/sellers/my-listings',
           '/sellers/messages',
+          '/sellers/profile',
+          '/sellers/orders-to-fulfil',
+          '/sellers/verify',
+          '/test-auth',
+          '/maintenance',
+          '/offline',
+          '/purchase-success',
         ],
       },
       {
-        // Google bot specific rules
         userAgent: 'Googlebot',
         allow: '/',
         disallow: [
@@ -37,17 +44,6 @@ export default function robots(): MetadataRoute.Robots {
           '/admin/',
           '/wallet/',
           '/*?token=*',
-          '/messages/',
-        ],
-      },
-      {
-        // Bing bot specific rules
-        userAgent: 'Bingbot',
-        allow: '/',
-        disallow: [
-          '/api/',
-          '/admin/',
-          '/wallet/',
           '/messages/',
         ],
       },
