@@ -10,34 +10,10 @@ import FeaturesSection from '@/components/homepage/FeaturesSection';
 import CTASection from '@/components/homepage/CTASection';
 import Footer from '@/components/homepage/Footer';
 import FeaturedRandom from '@/components/homepage/FeaturedRandom';
+import FAQSection from '@/components/homepage/FAQSection';
 import Head from 'next/head';
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
-
-// Enhanced loading skeleton for Featured Random section
-const FeaturedRandomSkeleton = () => (
-  <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-    <div className="flex items-center justify-between mb-8">
-      <div>
-        <div className="h-8 bg-gray-800/50 rounded w-48 animate-pulse mb-2"></div>
-        <div className="h-4 bg-gray-800/30 rounded w-64 animate-pulse"></div>
-      </div>
-      <div className="h-4 bg-gray-800/30 rounded w-20 animate-pulse"></div>
-    </div>
-    <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="bg-[#131313] rounded-xl border border-white/10 overflow-hidden">
-          <div className="aspect-[4/3] bg-gray-800/50 animate-pulse"></div>
-          <div className="p-4 space-y-3">
-            <div className="h-5 bg-gray-800/50 rounded animate-pulse"></div>
-            <div className="h-3 bg-gray-800/30 rounded w-2/3 animate-pulse"></div>
-            <div className="h-6 bg-gray-800/50 rounded w-1/3 animate-pulse"></div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </section>
-);
 
 // Enhanced loading fallback components with pulse animations
 const SectionSkeleton = ({ height = "h-96" }: { height?: string }) => (
@@ -172,6 +148,44 @@ export default function Home() {
             })
           }}
         />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'FAQPage',
+              mainEntity: [
+                {
+                  '@type': 'Question',
+                  name: 'What is PantyPost and how does it work?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text:
+                      'PantyPost (also known as Panty Post) is a discreet marketplace that connects verified sellers with qualified buyers of used panties. Users can create an account, browse curated listings, and checkout securely with anonymous transactions.'
+                  }
+                },
+                {
+                  '@type': 'Question',
+                  name: 'Is PantyPost the same as Panty Post?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text:
+                      'Yes. PantyPost and Panty Post refer to the same privacy-first brand and marketplace for adult panty trading experiences.'
+                  }
+                },
+                {
+                  '@type': 'Question',
+                  name: 'How does PantyPost keep buyers and sellers safe?',
+                  acceptedAnswer: {
+                    '@type': 'Answer',
+                    text:
+                      'PantyPost protects its community with ID verification, automated moderation, and secure escrow-style payments that keep every transaction anonymous and compliant.'
+                  }
+                }
+              ]
+            })
+          }}
+        />
       </Head>
 
       <BanCheck>
@@ -199,7 +213,12 @@ export default function Home() {
           <SectionWrapper sectionName="Features" fallbackHeight="h-96">
             <FeaturesSection />
           </SectionWrapper>
-          
+
+          {/* FAQ Section with SEO-focused brand reinforcement */}
+          <SectionWrapper sectionName="FAQ" fallbackHeight="h-80">
+            <FAQSection />
+          </SectionWrapper>
+
           {/* CTA Section with Error Boundary */}
           <SectionWrapper sectionName="Call to Action" fallbackHeight="h-80">
             <CTASection />
