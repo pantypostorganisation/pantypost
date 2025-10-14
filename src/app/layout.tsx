@@ -34,6 +34,13 @@ export const metadata: Metadata = {
   authors: [{ name: 'PantyPost' }],
   creator: 'PantyPost',
   publisher: 'PantyPost',
+  alternates: {
+    canonical: '/',
+    languages: {
+      'en-US': '/',
+      'en-GB': '/',
+    },
+  },
   
   // CRITICAL: Enable indexing for production (CHANGED FROM noindex)
   robots: {
