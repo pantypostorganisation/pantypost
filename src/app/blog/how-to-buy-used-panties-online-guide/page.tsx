@@ -2,20 +2,54 @@
 'use client';
 
 import Link from 'next/link';
-import { Metadata } from 'next';
-
-export const metadata: Metadata = {
-  title: 'How to Buy Used Panties Online Safely - Complete 2025 Guide',
-  description: 'Learn how to buy used panties online safely in 2025. Complete guide covering verified sellers, pricing, safety tips, and what to look for. Your trusted resource from Panty Post.',
-  keywords: 'buy used panties, how to buy used panties, used panties online, buy worn panties, panty marketplace',
-  openGraph: {
-    title: 'How to Buy Used Panties Online - Complete Safety Guide',
-    description: 'Complete guide to buying used panties safely online in 2025. Tips, pricing, and what to look for.',
-    type: 'article',
-  },
-};
+import Head from 'next/head';
+import { useEffect } from 'react';
 
 export default function BuyingGuidePage() {
+  useEffect(() => {
+    // Set page title
+    document.title = 'How to Buy Used Panties Online Safely - Complete 2025 Guide';
+    
+    // Set meta description
+    const metaDescription = document.querySelector('meta[name="description"]');
+    if (metaDescription) {
+      metaDescription.setAttribute('content', 'Learn how to buy used panties online safely in 2025. Complete guide covering verified sellers, pricing, safety tips, and what to look for. Your trusted resource from Panty Post.');
+    } else {
+      const meta = document.createElement('meta');
+      meta.name = 'description';
+      meta.content = 'Learn how to buy used panties online safely in 2025. Complete guide covering verified sellers, pricing, safety tips, and what to look for. Your trusted resource from Panty Post.';
+      document.head.appendChild(meta);
+    }
+
+    // Set meta keywords
+    const metaKeywords = document.querySelector('meta[name="keywords"]');
+    if (metaKeywords) {
+      metaKeywords.setAttribute('content', 'buy used panties, how to buy used panties, used panties online, buy worn panties, panty marketplace');
+    } else {
+      const meta = document.createElement('meta');
+      meta.name = 'keywords';
+      meta.content = 'buy used panties, how to buy used panties, used panties online, buy worn panties, panty marketplace';
+      document.head.appendChild(meta);
+    }
+
+    // Set Open Graph tags
+    const updateOrCreateOgTag = (property: string, content: string) => {
+      let tag = document.querySelector(`meta[property="${property}"]`);
+      if (tag) {
+        tag.setAttribute('content', content);
+      } else {
+        const meta = document.createElement('meta');
+        meta.setAttribute('property', property);
+        meta.content = content;
+        document.head.appendChild(meta);
+      }
+    };
+
+    updateOrCreateOgTag('og:title', 'How to Buy Used Panties Online - Complete Safety Guide');
+    updateOrCreateOgTag('og:description', 'Complete guide to buying used panties safely online in 2025. Tips, pricing, and what to look for.');
+    updateOrCreateOgTag('og:type', 'article');
+  }, []);
+
   return (
     <article className="min-h-screen bg-black text-white">
       {/* Header */}
