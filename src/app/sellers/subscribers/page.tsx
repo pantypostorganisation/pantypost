@@ -418,15 +418,15 @@ export default function SellerAnalyticsPage() {
                     </h3>
                     <div className="space-y-4">
                       {[
-                        { status: 'pending', count: overview.orders.pending, color: 'yellow' },
-                        { status: 'processing', count: overview.orders.processing, color: 'blue' },
-                        { status: 'shipped', count: overview.orders.shipped, color: 'purple' },
-                        { status: 'delivered', count: overview.orders.delivered, color: 'green' }
+                        { status: 'pending', count: overview.orders.pending, color: 'bg-yellow-400' },
+                        { status: 'processing', count: overview.orders.processing, color: 'bg-blue-400' },
+                        { status: 'shipped', count: overview.orders.shipped, color: 'bg-purple-400' },
+                        { status: 'delivered', count: overview.orders.delivered, color: 'bg-green-400' }
                       ].map(({ status, count, color }) => (
                         <div key={status} className="p-4 bg-[#252525] rounded-lg">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-3">
-                              <div className={`w-2 h-2 rounded-full bg-${color}-400`} />
+                              <div className={`w-2 h-2 rounded-full ${color}`} />
                               <span className="text-gray-300 capitalize">{status}</span>
                             </div>
                             <div className="flex items-center gap-3">
