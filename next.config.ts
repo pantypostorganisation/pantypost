@@ -118,9 +118,8 @@ const nextConfig: NextConfig = {
       { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },
       { source: '/uploads/:path*', destination: `${backendUrl}/uploads/:path*` },
     ];
-    return process.env.NODE_ENV === 'development'
-      ? [...devRewrites, { source: '/sitemap.xml', destination: '/api/sitemap' }]
-      : [{ source: '/sitemap.xml', destination: '/api/sitemap' }];
+    // FIXED: Removed sitemap rewrite to use custom sitemap.ts
+    return process.env.NODE_ENV === 'development' ? devRewrites : [];
   },
 
   webpack: (config, { dev }) => {
@@ -172,3 +171,4 @@ export default process.env.NODE_ENV === 'production' &&
   process.env.NEXT_PUBLIC_ENABLE_ERROR_TRACKING === 'true'
   ? withSentryConfig(nextConfig, sentryOptions)
   : nextConfig;
+  

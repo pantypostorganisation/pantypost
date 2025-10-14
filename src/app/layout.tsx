@@ -77,7 +77,7 @@ export const metadata: Metadata = {
   
   // Verification tags (add your codes after GSC setup)
   verification: {
-    google: 'your-google-verification-code', // TODO: Replace after Google Search Console setup
+    google: 'Gsm1a2UpYcIATRHoie3WTPlp416gBAxw2f5vqEPWNwY', // Google HTML tag verification code
   },
   
   // Additional meta tags
