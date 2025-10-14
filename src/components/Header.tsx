@@ -123,6 +123,8 @@ export default function Header(): React.ReactElement | null {
 
   const isAdminUser = isAdmin(user);
   const role = user?.role ?? null;
+  const isSellerVerified =
+    user?.role === 'seller' && (user?.isVerified === true || user?.verificationStatus === 'verified');
   const canUseSearch = Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller'));
   const username = user?.username ? sanitizeStrict(user.username) : '';
 
@@ -722,7 +724,11 @@ export default function Header(): React.ReactElement | null {
                   </div>
                   {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
                   {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
-                  {renderMobileLink('/sellers/verify', <ShieldCheck className="w-5 h-5 text-green-400" />, 'Get Verified')}
+                  {renderMobileLink(
+                    '/sellers/verify',
+                    <ShieldCheck className="w-5 h-5 text-green-400" />,
+                    isSellerVerified ? 'Verified!' : 'Get Verified'
+                  )}
                   {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/sellers/subscribers', <Users className="w-5 h-5" />, 'Analytics')}
                   {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
@@ -954,9 +960,12 @@ export default function Header(): React.ReactElement | null {
                 <span>Profile</span>
               </Link>
 
-              <Link href="/sellers/verify" className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs">
+              <Link
+                href="/sellers/verify"
+                className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs"
+              >
                 <ShieldCheck className="w-3.5 h-3.5 text-green-400 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Get Verified</span>
+                <span className="font-medium">{isSellerVerified ? 'Verified!' : 'Get Verified'}</span>
               </Link>
 
               <Link href="/sellers/messages" className="relative group">
