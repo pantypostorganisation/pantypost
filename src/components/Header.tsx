@@ -726,7 +726,11 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
                   {renderMobileLink(
                     '/sellers/verify',
-                    <ShieldCheck className="w-5 h-5 text-green-400" />,
+                    <img
+                      src="/verification_badge.png"
+                      alt="Verification badge"
+                      className="w-5 h-5"
+                    />,
                     isSellerVerified ? 'Verified!' : 'Get Verified'
                   )}
                   {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
@@ -964,7 +968,11 @@ export default function Header(): React.ReactElement | null {
                 href="/sellers/verify"
                 className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-green-400 group-hover:scale-110 transition-transform" />
+                <img
+                  src="/verification_badge.png"
+                  alt="Verification badge"
+                  className="w-3.5 h-3.5 flex-shrink-0 group-hover:scale-110 transition-transform"
+                />
                 <span className="font-medium">{isSellerVerified ? 'Verified!' : 'Get Verified'}</span>
               </Link>
 
