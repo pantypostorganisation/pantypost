@@ -1,3 +1,4 @@
+// src/components/wallet/seller/EarningsCard.tsx
 'use client';
 
 import React from 'react';

@@ -1,3 +1,4 @@
+// src/components/wallet/buyer/TotalSpentCard.tsx
 'use client';
 
 import { ShoppingBag } from 'lucide-react';

@@ -1,3 +1,4 @@
+// src/components/seller/wallet/SellerWithdrawConfirmModal.tsx
 'use client';
 
 interface SellerWithdrawConfirmModalProps {

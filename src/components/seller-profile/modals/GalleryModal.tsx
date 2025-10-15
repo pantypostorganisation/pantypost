@@ -1,3 +1,4 @@
+// src/components/seller-profile/modals/GalleryModal.tsx
 'use client';
 
 import type { MouseEvent } from 'react';

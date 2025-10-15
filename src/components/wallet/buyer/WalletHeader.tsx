@@ -1,3 +1,4 @@
+// src/components/wallet/buyer/WalletHeader.tsx
 'use client';
 
 import { Wallet, CreditCard, ArrowUpRight } from 'lucide-react';

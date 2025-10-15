@@ -1,3 +1,4 @@
+// src/components/admin/messages/ChatContent.tsx
 'use client';
 
 import { useRef, useCallback, useState, useEffect, useMemo } from 'react';

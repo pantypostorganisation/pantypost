@@ -1,4 +1,5 @@
 // src/hooks/useTermsScroll.ts
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 

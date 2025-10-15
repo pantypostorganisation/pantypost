@@ -1,3 +1,5 @@
+// src/hooks/useAdminMessages.ts
+
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';

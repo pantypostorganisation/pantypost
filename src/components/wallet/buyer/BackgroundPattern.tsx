@@ -1,3 +1,4 @@
+// src/components/wallet/buyer/BackgroundPattern.tsx
 'use client';
 
 export default function BackgroundPattern() {

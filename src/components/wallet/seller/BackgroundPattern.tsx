@@ -1,3 +1,4 @@
+// src/components/wallet/seller/BackgroundPattern.tsx
 'use client';
 
 import React from 'react';

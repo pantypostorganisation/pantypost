@@ -1,3 +1,4 @@
+// src/components/admin/reports/ReportsStats.tsx
 'use client';
 
 import { ReportsStatsProps } from './types';

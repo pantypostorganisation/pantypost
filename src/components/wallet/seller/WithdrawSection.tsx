@@ -1,3 +1,4 @@
+// src/components/wallet/seller/WithdrawSection.tsx
 'use client';
 
 import React, { useState } from 'react';

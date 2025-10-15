@@ -1,3 +1,4 @@
+// src/components/wallet/buyer/RecentPurchases.tsx
 'use client';
 
 import { ShoppingBag, ArrowRight, Package, Calendar, Shield } from 'lucide-react';

@@ -1,3 +1,4 @@
+// src/components/ui/SecureInput.tsx
 'use client';
 
 import React, { useState, useEffect, forwardRef } from 'react';

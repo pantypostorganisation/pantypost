@@ -1,4 +1,4 @@
-// backend/routes/admin.routes.js
+// pantypost-backend/routes/admin.routes.js
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth.middleware');

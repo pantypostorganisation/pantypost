@@ -1,3 +1,4 @@
+// src/components/browse/BrowseHeader.tsx
 'use client';
 
 import { Sparkles, Package, ShoppingBag, Crown, Gavel } from 'lucide-react';

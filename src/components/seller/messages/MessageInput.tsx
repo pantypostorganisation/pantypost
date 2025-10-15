@@ -1,3 +1,4 @@
+// src/components/seller/messages/MessageInput.tsx
 'use client';
 
 import React, { forwardRef, useState, useCallback } from 'react';

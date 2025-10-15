@@ -1,4 +1,5 @@
 // src/hooks/useNetworkStatus.tsx
+
 'use client';
 
 import { useState, useEffect, useCallback, createContext, useContext, useRef } from 'react';

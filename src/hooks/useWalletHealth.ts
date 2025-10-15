@@ -1,4 +1,5 @@
 // src/hooks/useWalletHealth.ts
+
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';

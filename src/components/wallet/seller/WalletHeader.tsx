@@ -1,3 +1,4 @@
+// src/components/wallet/seller/WalletHeader.tsx
 'use client';
 
 import React from 'react';

@@ -1,3 +1,4 @@
+// src/components/seller/messages/EmptyState.tsx
 'use client';
 
 import React from 'react';

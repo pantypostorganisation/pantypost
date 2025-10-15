@@ -1,4 +1,5 @@
 // src/hooks/useUserActivityStatus.ts
+
 import { useState, useEffect, useCallback } from 'react';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { useAuth } from '@/context/AuthContext';

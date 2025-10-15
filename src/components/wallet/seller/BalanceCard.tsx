@@ -1,3 +1,4 @@
+// src/components/wallet/seller/BalanceCard.tsx
 'use client';
 
 import React from 'react';

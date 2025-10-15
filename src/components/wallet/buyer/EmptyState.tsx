@@ -1,3 +1,4 @@
+// src/components/wallet/buyer/EmptyState.tsx
 'use client';
 
 import { ShoppingBag, ArrowRight } from 'lucide-react';

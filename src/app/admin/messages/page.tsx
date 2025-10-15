@@ -1,3 +1,4 @@
+// src/app/admin/messages/page.tsx
 'use client';
 
 import RequireAuth from '@/components/RequireAuth';

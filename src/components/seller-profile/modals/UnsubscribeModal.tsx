@@ -1,3 +1,4 @@
+// src/components/seller-profile/modals/UnsubscribeModal.tsx
 'use client';
 
 import { sanitizeStrict } from '@/utils/security/sanitization';
