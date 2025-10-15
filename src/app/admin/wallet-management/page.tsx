@@ -1,7 +1,7 @@
 // src/app/admin/wallet-management/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -12,6 +12,7 @@ import WalletActionPanel from '@/components/admin/wallet/WalletActionPanel';
 import BulkActionModal from '@/components/admin/wallet/BulkActionModal';
 import ConfirmationModal from '@/components/admin/wallet/ConfirmationModal';
 import WalletToast from '@/components/admin/wallet/WalletToast';
+import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import { Loader2 } from 'lucide-react';
 import { WalletProvider, useWallet } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
@@ -224,6 +225,17 @@ function AdminWalletContent() {
     }
   }, [listingUsers, wallet, buyerBalances, sellerBalances, user]);
 
+  // Helper for formatting currency consistently across UI sections
+  const formatCurrency = useCallback((amount: number) => {
+    const safeAmount = Number.isFinite(amount) ? amount : 0;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(safeAmount);
+  }, []);
+
   // Get user balance - Fixed to handle all possible data formats
   const getUserBalance = (username: string) => {
     // Validate username
@@ -264,6 +276,57 @@ function AdminWalletContent() {
     // Ensure we always return a valid number
     return isNaN(balance) ? 0 : balance;
   };
+
+  const summaryStats = useMemo(() => {
+    const safeUsers = Array.isArray(allUsers) ? allUsers : [];
+    let buyerCount = 0;
+    let sellerCount = 0;
+    let totalBalance = 0;
+    let positiveBalance = 0;
+    let negativeBalance = 0;
+    let zeroBalance = 0;
+
+    safeUsers.forEach(user => {
+      if (user.role === 'seller') {
+        sellerCount += 1;
+      } else {
+        buyerCount += 1;
+      }
+
+      const balance = getUserBalance(user.username);
+      totalBalance += balance;
+
+      if (balance > 0) {
+        positiveBalance += 1;
+      } else if (balance < 0) {
+        negativeBalance += 1;
+      } else {
+        zeroBalance += 1;
+      }
+    });
+
+    const totalUsersCount = safeUsers.length;
+    const safeDivisor = totalUsersCount > 0 ? totalUsersCount : 1;
+
+    return {
+      buyerCount,
+      sellerCount,
+      totalBalance,
+      positiveBalance,
+      negativeBalance,
+      zeroBalance,
+      averageBalance: totalBalance / safeDivisor,
+      totalUsersCount,
+      positivePercentage: (positiveBalance / safeDivisor) * 100,
+      zeroPercentage: (zeroBalance / safeDivisor) * 100,
+      negativePercentage: (negativeBalance / safeDivisor) * 100
+    };
+  }, [allUsers, buyerBalances, sellerBalances, wallet]);
+
+  const selectedUserBalance = useMemo(() => {
+    if (!selectedUser) return 0;
+    return getUserBalance(selectedUser);
+  }, [selectedUser, buyerBalances, sellerBalances, wallet]);
 
   // Handle search term change with sanitization
   const handleSearchTermChange = (term: string) => {
@@ -571,69 +634,237 @@ function AdminWalletContent() {
   };
 
   return (
-    <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6">
-      <div className="max-w-7xl mx-auto">
-        <WalletHeader
-          totalUsers={allUsers.length}
-          onRefresh={handleRefresh}
-          onExport={exportUserData}
-          isRefreshing={isRefreshing}
-        />
+    <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-[#ff950e]/10 blur-3xl" aria-hidden="true" />
+        <div className="absolute top-1/3 -right-28 h-[28rem] w-[28rem] rounded-full bg-purple-500/10 blur-3xl" aria-hidden="true" />
+        <div className="absolute bottom-[-10%] left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-blue-500/5 blur-3xl" aria-hidden="true" />
+      </div>
 
-        <WalletFilters
-          searchTerm={searchTerm}
-          setSearchTerm={handleSearchTermChange}
-          roleFilter={roleFilter}
-          setRoleFilter={setRoleFilter}
-          balanceFilter={balanceFilter}
-          setBalanceFilter={setBalanceFilter}
-          showBalances={showBalances}
-          setShowBalances={setShowBalances}
-          selectedUsers={selectedUsers}
-          setSelectedUsers={setSelectedUsers}
-          displayedUsers={displayedUsers}
-          handleSelectAll={handleSelectAll}
-          setShowBulkModal={setShowBulkModal}
-        />
+      <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-10">
+          <section className="space-y-6">
+            <WalletHeader
+              totalUsers={summaryStats.totalUsersCount}
+              onRefresh={handleRefresh}
+              onExport={exportUserData}
+              isRefreshing={isRefreshing}
+            />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <WalletUserList
-            displayedUsers={displayedUsers}
-            selectedUsers={selectedUsers}
-            selectedUser={selectedUser}
-            showBalances={showBalances}
-            handleSelectUser={handleSelectUser}
-            handleBulkSelect={handleBulkSelect}
-            getUserBalance={getUserBalance}
-            getRoleBadgeColor={getRoleBadgeColor}
-            getBalanceColor={getBalanceColor}
-            formatRole={formatRole}
-          />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-[#ff950e]/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
+                <div className="relative flex flex-col gap-3">
+                  <span className="text-sm text-gray-400">Platform Balance</span>
+                  <span className="text-3xl font-semibold text-white">{formatCurrency(summaryStats.totalBalance)}</span>
+                  <span className="text-xs text-gray-500">Across {summaryStats.totalUsersCount} wallets</span>
+                </div>
+              </div>
 
-          <WalletActionPanel
-            selectedUser={selectedUser}
-            selectedUserRole={selectedUserRole}
-            actionType={actionType}
-            setActionType={setActionType}
-            amount={amount}
-            setAmount={setAmount}
-            reason={reason}
-            setReason={setReason}
-            isLoading={isLoading}
-            handleAction={handleAction}
-            clearSelection={clearSelection}
-            getUserBalance={getUserBalance}
-            getRoleBadgeColor={getRoleBadgeColor}
-            getBalanceColor={getBalanceColor}
-            formatRole={formatRole}
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-blue-500/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
+                <div className="relative flex flex-col gap-3">
+                  <span className="text-sm text-gray-400">Average Wallet</span>
+                  <span className="text-3xl font-semibold text-white">{formatCurrency(summaryStats.averageBalance)}</span>
+                  <span className="text-xs text-gray-500">Buyers • Sellers combined</span>
+                </div>
+              </div>
+
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-emerald-500/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
+                <div className="relative space-y-3">
+                  <span className="text-sm text-gray-400">Active Accounts</span>
+                  <div className="flex items-center justify-between text-white">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Buyers</p>
+                      <p className="text-2xl font-semibold">{summaryStats.buyerCount}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Sellers</p>
+                      <p className="text-2xl font-semibold">{summaryStats.sellerCount}</p>
+                    </div>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff6b00] to-purple-500"
+                      style={{ width: `${summaryStats.totalUsersCount > 0 ? (summaryStats.buyerCount / summaryStats.totalUsersCount) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-rose-500/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
+                <div className="relative space-y-3">
+                  <span className="text-sm text-gray-400">Balance Health</span>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between text-green-400">
+                      <span>Positive</span>
+                      <span>{summaryStats.positiveBalance}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gray-300">
+                      <span>Neutral</span>
+                      <span>{summaryStats.zeroBalance}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-red-400">
+                      <span>Negative</span>
+                      <span>{summaryStats.negativeBalance}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-green-500 via-green-400 to-emerald-500"
+                        style={{ width: `${Math.min(summaryStats.positivePercentage, 100)}%` }}
+                      />
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-gray-500 via-gray-400 to-gray-200"
+                        style={{ width: `${Math.min(summaryStats.zeroPercentage, 100)}%` }}
+                      />
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-red-500 via-red-400 to-rose-500"
+                        style={{ width: `${Math.min(summaryStats.negativePercentage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <AdminMoneyFlow />
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="space-y-6 xl:col-span-2">
+              <div className="rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Wallet Explorer</h2>
+                    <p className="text-sm text-gray-400">Slice and dice the user base to surface accounts worth reviewing.</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="rounded-full border border-white/10 px-3 py-1 text-gray-300">
+                      {displayedUsers.length} shown
+                    </span>
+                    <span className="rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-[#ffb347]">
+                      {selectedUsers.length} selected
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-6">
+                  <WalletFilters
+                    searchTerm={searchTerm}
+                    setSearchTerm={handleSearchTermChange}
+                    roleFilter={roleFilter}
+                    setRoleFilter={setRoleFilter}
+                    balanceFilter={balanceFilter}
+                    setBalanceFilter={setBalanceFilter}
+                    showBalances={showBalances}
+                    setShowBalances={setShowBalances}
+                    selectedUsers={selectedUsers}
+                    setSelectedUsers={setSelectedUsers}
+                    displayedUsers={displayedUsers}
+                    handleSelectAll={handleSelectAll}
+                    setShowBulkModal={setShowBulkModal}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/5 bg-black/40 p-1 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <WalletUserList
+                  displayedUsers={displayedUsers}
+                  selectedUsers={selectedUsers}
+                  selectedUser={selectedUser}
+                  showBalances={showBalances}
+                  handleSelectUser={handleSelectUser}
+                  handleBulkSelect={handleBulkSelect}
+                  getUserBalance={getUserBalance}
+                  getRoleBadgeColor={getRoleBadgeColor}
+                  getBalanceColor={getBalanceColor}
+                  formatRole={formatRole}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Selection Insights</h2>
+                    <p className="text-sm text-gray-400">Quick snapshot of the account you're about to adjust.</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-gray-300">
+                    {selectedUser ? 'Live' : 'Awaiting selection'}
+                  </span>
+                </div>
+                {selectedUser ? (
+                  <div className="mt-6 space-y-4">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm text-gray-400">Username</span>
+                      <span className="text-lg font-medium text-white">{selectedUser}</span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm text-gray-400">Role</span>
+                      <span className={`w-fit rounded-full border px-3 py-1 text-xs ${getRoleBadgeColor(selectedUserRole)}`}>
+                        {formatRole(selectedUserRole)}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm text-gray-400">Current Balance</span>
+                      <span className={`text-2xl font-semibold ${getBalanceColor(selectedUserBalance)}`}>
+                        {formatCurrency(selectedUserBalance)}
+                      </span>
+                    </div>
+                    <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Bulk Selection</p>
+                      <p className="mt-2 text-sm text-gray-300">{selectedUsers.length} accounts queued for batch actions.</p>
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff6b00] to-purple-500"
+                          style={{ width: `${Math.min((selectedUsers.length / Math.max(displayedUsers.length || 1, 1)) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-6 rounded-xl border border-dashed border-white/10 p-8 text-center text-gray-400">
+                    Choose a user from the table to preview their wallet metrics and begin an action.
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-white/5 bg-black/40 p-1 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <WalletActionPanel
+                  selectedUser={selectedUser}
+                  selectedUserRole={selectedUserRole}
+                  actionType={actionType}
+                  setActionType={setActionType}
+                  amount={amount}
+                  setAmount={setAmount}
+                  reason={reason}
+                  setReason={setReason}
+                  isLoading={isLoading}
+                  handleAction={handleAction}
+                  clearSelection={clearSelection}
+                  getUserBalance={getUserBalance}
+                  getRoleBadgeColor={getRoleBadgeColor}
+                  getBalanceColor={getBalanceColor}
+                  formatRole={formatRole}
+                />
+              </div>
+            </div>
+          </div>
+
+          <WalletToast
+            message={message}
+            type={messageType}
+            isVisible={showMessage}
           />
         </div>
-
-        <WalletToast
-          message={message}
-          type={messageType}
-          isVisible={showMessage}
-        />
       </div>
 
       <ConfirmationModal
