@@ -1,3 +1,4 @@
+// src/components/admin/bans/BanTabs.tsx
 'use client';
 
 import { Ban, Clock, MessageSquare, FileText, BarChart3 } from 'lucide-react';

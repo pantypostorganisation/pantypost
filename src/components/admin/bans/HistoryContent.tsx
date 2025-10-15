@@ -1,3 +1,4 @@
+// src/components/admin/bans/HistoryContent.tsx
 'use client';
 
 import { FileText } from 'lucide-react';

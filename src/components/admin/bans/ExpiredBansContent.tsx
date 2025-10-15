@@ -1,3 +1,4 @@
+// src/components/admin/bans/ExpiredBansContent.tsx
 'use client';
 
 import { Clock } from 'lucide-react';

@@ -1,3 +1,4 @@
+// src/components/admin/bans/BanStatsDashboard.tsx
 'use client';
 
 import { BanStats } from '@/types/ban';
