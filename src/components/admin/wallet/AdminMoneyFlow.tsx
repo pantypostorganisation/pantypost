@@ -5,7 +5,7 @@ import { Info, Download, ShoppingBag, Upload, TrendingUp } from 'lucide-react';
 
 export default function AdminMoneyFlow() {
   return (
-    <div className="bg-gradient-to-r from-[#1a1a1a] to-[#252525] rounded-xl p-6 border border-gray-800 mb-8">
+    <div className="rounded-2xl border border-white/5 bg-gradient-to-r from-[#1a1a1a]/90 to-[#252525]/70 p-6 shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
       <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
         <Info className="h-5 w-5 text-[#ff950e]" aria-hidden="true" />
         How Your Money Machine Works

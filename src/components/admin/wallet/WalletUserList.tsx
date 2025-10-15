@@ -36,16 +36,17 @@ export default function WalletUserList({
 }: WalletUserListProps) {
   if (!Array.isArray(displayedUsers) || displayedUsers.length === 0) {
     return (
-      <div className="lg:col-span-2 bg-[#1a1a1a] rounded-xl border border-gray-800 shadow-lg">
-        <div className="p-6 border-b border-gray-800">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+      <div className="rounded-2xl border border-white/5 bg-gradient-to-br from-[#111111]/80 via-[#0c0c0c]/70 to-[#050505]/70 shadow-[0_20px_45px_rgba(0,0,0,0.5)]">
+        <div className="border-b border-white/5 p-6">
+          <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
             <Users className="h-5 w-5 text-[#ff950e]" />
             User List
           </h2>
         </div>
-        <div className="p-8 text-center text-gray-400">
-          <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No users found matching your criteria</p>
+        <div className="flex flex-col items-center gap-3 px-8 py-12 text-center text-gray-400">
+          <Users className="h-12 w-12 opacity-40" />
+          <p className="text-sm">No users found matching your criteria</p>
+          <p className="text-xs text-gray-500">Try expanding your filters or clearing the search query.</p>
         </div>
       </div>
     );
@@ -57,16 +58,19 @@ export default function WalletUserList({
   };
 
   return (
-    <div className="lg:col-span-2 bg-[#1a1a1a] rounded-xl border border-gray-800 shadow-lg">
-      <div className="p-6 border-b border-gray-800">
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
+    <div className="rounded-2xl border border-white/5 bg-gradient-to-br from-[#111111]/80 via-[#0c0c0c]/70 to-[#050505]/70 shadow-[0_20px_45px_rgba(0,0,0,0.5)]">
+      <div className="flex items-center justify-between border-b border-white/5 px-6 py-5">
+        <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
           <Users className="h-5 w-5 text-[#ff950e]" />
           User List
         </h2>
+        <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-gray-300">
+          {displayedUsers.length} results
+        </span>
       </div>
 
       <div className="max-h-96 overflow-y-auto" role="list" aria-label="Wallet users">
-        <div className="space-y-1 p-2">
+        <div className="space-y-2 p-3">
           {displayedUsers.map((user) => {
             const uname = user?.username ?? '';
             const role = user?.role ?? 'buyer';
@@ -79,17 +83,17 @@ export default function WalletUserList({
                 key={uname}
                 role="listitem"
                 aria-selected={isSelected}
-                className={`p-3 rounded-lg transition-all cursor-pointer border ${
+                className={`group relative cursor-pointer overflow-hidden rounded-xl border px-4 py-3 transition-all ${
                   isSelected
-                    ? 'bg-[#ff950e]/10 border-[#ff950e]/50'
+                    ? 'border-[#ff950e]/60 bg-[#ff950e]/15 shadow-[0_10px_30px_rgba(255,149,14,0.15)]'
                     : isBulkSelected
-                    ? 'bg-blue-600/10 border-blue-600/50'
-                    : 'bg-black/30 border-transparent hover:bg-black/50 hover:border-gray-700'
+                    ? 'border-blue-500/40 bg-blue-500/10'
+                    : 'border-white/5 bg-white/5 hover:border-white/10 hover:bg-white/10'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div
-                    className="flex items-center gap-3 flex-1"
+                    className="flex flex-1 items-center gap-3"
                     onClick={() => handleSelectUser(uname, role)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
@@ -107,7 +111,7 @@ export default function WalletUserList({
                         checked={isBulkSelected}
                         onChange={() => handleBulkSelect(uname)}
                         onClick={(e) => e.stopPropagation()}
-                        className="rounded border-gray-600 text-[#ff950e] focus:ring-[#ff950e] focus:ring-offset-0 bg-transparent"
+                        className="rounded border-white/20 bg-transparent text-[#ff950e] focus:ring-[#ff950e] focus:ring-offset-0"
                         aria-label={`Bulk select ${uname}`}
                       />
                       {role === 'buyer' ? (
@@ -117,17 +121,17 @@ export default function WalletUserList({
                       )}
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-white truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="truncate font-medium text-white">
                           <SecureMessageDisplay content={uname} allowBasicFormatting={false} className="inline" />
                         </span>
-                        <span className={`px-2 py-1 rounded text-xs border ${getRoleBadgeColor(role)}`}>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs ${getRoleBadgeColor(role)}`}>
                           {formatRole(role)}
                         </span>
                       </div>
                       {showBalances && (
-                        <div className="text-sm text-gray-400 mt-1">
+                        <div className="mt-1 text-sm text-gray-400">
                           Balance:{' '}
                           <span className={getBalanceColor(balance)}>
                             ${balance.toFixed(2)}
@@ -138,7 +142,7 @@ export default function WalletUserList({
                   </div>
 
                   {isSelected && (
-                    <div className="text-[#ff950e]" aria-hidden="true">
+                    <div className="text-[#ffb347]" aria-hidden="true">
                       <CheckCircle className="h-5 w-5" />
                     </div>
                   )}
