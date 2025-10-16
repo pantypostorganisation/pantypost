@@ -30,7 +30,7 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-gradient-to-b from-black to-[#050505] pt-16 pb-12 relative z-50 overflow-hidden">
+    <footer className="bg-gradient-to-b from-black via-[#030303] to-[#050505] pt-16 pb-16 md:pt-20 md:pb-20 relative z-50 overflow-hidden">
       {/* Shape Divider 4 (Background Glow) */}
       <motion.div
         className="absolute -top-52 left-[-15%] md:left-[-5%] w-[130%] md:w-[80%] h-96 pointer-events-none z-0"
