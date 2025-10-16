@@ -192,7 +192,7 @@ export default function Home() {
         {/* FIXED GRADIENT BACKGROUND - Pure black top, then super smooth gradient to bottom */}
         <div className="fixed inset-0 z-0 pointer-events-none">
           <div 
-            className="absolute inset-0 w-full h-[5000px]"
+            className="absolute inset-0 w-full h-full"
             style={{
               background: 'linear-gradient(to bottom, #000000 0%, #000000 35%, #030303 45%, #050505 55%, #080808 65%, #0a0a0a 75%, #0d0d0d 85%, #101010 100%)'
             }}
