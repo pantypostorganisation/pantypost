@@ -189,24 +189,41 @@ export default function Home() {
       </Head>
 
       <BanCheck>
-        {/* FIXED GRADIENT BACKGROUND - Spans entire page */}
+        {/* FIXED GRADIENT BACKGROUND - Uniform 800px bands with smooth transitions using original colors */}
         <div className="fixed inset-0 z-0 pointer-events-none">
-          {/* Gradient band 1: 0-850px - from-black */}
+          {/* Band 1: 0-800px - Black to Gray (smooth) */}
           <div 
-            className="absolute inset-x-0 top-0 h-[850px] bg-gradient-to-b from-black via-black/95 to-transparent"
-            style={{ zIndex: 0 }}
+            className="absolute inset-x-0 top-0 h-[800px] bg-gradient-to-b from-black via-[#080808] to-[#101010]"
           />
           
-          {/* Gradient band 2: 850-1700px - via-[#0a0a0a] */}
+          {/* Band 2: 800-1600px - Gray to Black (smooth) */}
           <div 
-            className="absolute inset-x-0 h-[850px] bg-gradient-to-b from-transparent via-[#0a0a0a] to-transparent"
-            style={{ top: '850px', zIndex: 0 }}
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#101010] via-[#080808] to-black"
+            style={{ top: '800px' }}
           />
           
-          {/* Gradient band 3: 1700px+ - to-black */}
+          {/* Band 3: 1600-2400px - Black to Gray (smooth) */}
           <div 
-            className="absolute inset-x-0 h-[850px] bg-gradient-to-b from-transparent via-black/95 to-black"
-            style={{ top: '1700px', zIndex: 0 }}
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-black via-[#080808] to-[#101010]"
+            style={{ top: '1600px' }}
+          />
+          
+          {/* Band 4: 2400-3200px - Gray to Black (smooth) */}
+          <div 
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#101010] via-[#080808] to-black"
+            style={{ top: '2400px' }}
+          />
+          
+          {/* Band 5: 3200-4000px - Black to Gray (smooth) */}
+          <div 
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-black via-[#080808] to-[#101010]"
+            style={{ top: '3200px' }}
+          />
+          
+          {/* Band 6: 4000-4800px - Gray to Black (smooth) */}
+          <div 
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#101010] via-[#080808] to-black"
+            style={{ top: '4000px' }}
           />
         </div>
 
