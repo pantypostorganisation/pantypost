@@ -53,7 +53,7 @@ export default function WalletFilters({
             value={searchTerm}
             onChange={handleSearchChange}
             placeholder="Search by username, role, or balance"
-            className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-11 pr-4 text-sm text-white placeholder-gray-500 backdrop-blur focus:border-[#ff950e] focus:outline-none"
+            className="w-full rounded-xl border border-white/10 bg-[#161126] py-3 pl-11 pr-4 text-sm text-white placeholder-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/30"
             maxLength={100}
             sanitize={true}
             sanitizer={sanitizeSearchQuery}
@@ -65,7 +65,7 @@ export default function WalletFilters({
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value as any)}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white backdrop-blur transition focus:border-[#ff950e] focus:outline-none"
+          className="rounded-xl border border-white/10 bg-[#161126] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/30"
           aria-label="Role filter"
         >
           <option value="all">All Roles</option>
@@ -77,7 +77,7 @@ export default function WalletFilters({
         <select
           value={balanceFilter}
           onChange={(e) => setBalanceFilter(e.target.value as any)}
-          className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white backdrop-blur transition focus:border-[#ff950e] focus:outline-none"
+          className="rounded-xl border border-white/10 bg-[#161126] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/30"
           aria-label="Balance filter"
         >
           <option value="all">All Balances</option>
@@ -89,7 +89,7 @@ export default function WalletFilters({
         {/* Toggle Balance Visibility */}
         <button
           onClick={() => setShowBalances(!showBalances)}
-          className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white backdrop-blur transition hover:bg-white/10"
+          className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#161126] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:border-[#ff950e]/40 hover:text-white"
           aria-pressed={showBalances}
           aria-label="Toggle balance visibility"
         >
