@@ -15,7 +15,6 @@ export default function WalletHeader({ totalUsers, onRefresh, onExport, isRefres
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-[#111111]/90 via-[#0b0b0b]/70 to-[#050505]/70 p-6 shadow-[0_20px_45px_rgba(0,0,0,0.5)]">
-      <div className="absolute inset-y-0 right-0 w-64 bg-gradient-to-br from-[#ff950e]/20 via-transparent to-transparent blur-3xl" aria-hidden="true" />
       <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-3 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-2 text-sm font-medium text-[#ffb347]">
