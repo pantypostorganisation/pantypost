@@ -189,12 +189,17 @@ export default function Home() {
       </Head>
 
       <BanCheck>
-        {/* FIXED GRADIENT BACKGROUND - Smooth wavy gradient flowing through entire page */}
+        {/* FIXED GRADIENT BACKGROUND - Smooth wavy gradient repeating every 800px */}
         <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
           <div 
-            className="absolute inset-x-0 top-0 w-full h-[3600px]"
+            className="absolute inset-x-0 top-0 w-full h-[4800px]"
             style={{
-              background: 'linear-gradient(to bottom, #000000 0%, #080808 12.5%, #101010 25%, #080808 37.5%, #000000 50%, #080808 62.5%, #101010 75%, #080808 87.5%, #000000 100%)'
+              background: 'linear-gradient(to bottom, ' +
+                '#000000 0%, #080808 6.25%, #101010 12.5%, #080808 18.75%, ' +  // 0-800px: Black to Gray to Black
+                '#000000 25%, #080808 31.25%, #101010 37.5%, #080808 43.75%, ' +  // 800-1600px: Black to Gray to Black
+                '#000000 50%, #080808 56.25%, #101010 62.5%, #080808 68.75%, ' +  // 1600-2400px: Black to Gray to Black
+                '#000000 75%, #080808 81.25%, #101010 87.5%, #080808 93.75%, ' +  // 2400-3200px: Black to Gray to Black
+                '#000000 100%)'  // 3200-4000px: Black to Gray to Black
             }}
           />
         </div>
