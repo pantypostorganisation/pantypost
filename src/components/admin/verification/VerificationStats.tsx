@@ -19,32 +19,55 @@ export default function VerificationStats({ stats }: VerificationStatsProps) {
   }), [stats]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6 mb-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-          <FileCheck className="mx-auto mb-2 text-[#ff950e]" size={20} aria-hidden="true" />
-          <div className="text-2xl font-bold text-white">{totals.total}</div>
-          <div className="text-xs text-gray-400">Total Pending</div>
-        </div>
-        <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-          <Clock className="mx-auto mb-2 text-blue-400" size={20} aria-hidden="true" />
-          <div className="text-2xl font-bold text-blue-400">{totals.today}</div>
-          <div className="text-xs text-gray-400">Today</div>
-        </div>
-        <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-          <Calendar className="mx-auto mb-2 text-purple-400" size={20} aria-hidden="true" />
-          <div className="text-2xl font-bold text-purple-400">{totals.thisWeek}</div>
-          <div className="text-xs text-gray-400">This Week</div>
-        </div>
-        <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-          <Timer className="mx-auto mb-2 text-green-400" size={20} aria-hidden="true" />
-          <div className="text-2xl font-bold text-green-400">
-            {totals.avgHours}
-            <span className="text-sm ml-1">h</span>
+    <section className="max-w-7xl mx-auto px-4 md:px-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="group rounded-2xl border border-white/5 bg-black/40 p-5 transition hover:border-[#ff950e]/50">
+          <div className="flex items-center justify-between">
+            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/40">Total</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/15 text-[#ff950e]">
+              <FileCheck className="h-4 w-4" aria-hidden="true" />
+            </span>
           </div>
-          <div className="text-xs text-gray-400">Avg Processing</div>
+          <p className="mt-4 text-3xl font-semibold text-white">{totals.total}</p>
+          <p className="mt-2 text-sm text-white/50">Pending verifications</p>
+        </div>
+
+        <div className="group rounded-2xl border border-white/5 bg-black/40 p-5 transition hover:border-sky-400/60">
+          <div className="flex items-center justify-between">
+            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/40">Today</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/40 bg-sky-400/10 text-sky-400">
+              <Clock className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
+          <p className="mt-4 text-3xl font-semibold text-sky-300">{totals.today}</p>
+          <p className="mt-2 text-sm text-white/50">Requests received</p>
+        </div>
+
+        <div className="group rounded-2xl border border-white/5 bg-black/40 p-5 transition hover:border-purple-400/60">
+          <div className="flex items-center justify-between">
+            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/40">This week</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-purple-400/40 bg-purple-400/10 text-purple-300">
+              <Calendar className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
+          <p className="mt-4 text-3xl font-semibold text-purple-200">{totals.thisWeek}</p>
+          <p className="mt-2 text-sm text-white/50">Submitted in the last 7 days</p>
+        </div>
+
+        <div className="group rounded-2xl border border-white/5 bg-black/40 p-5 transition hover:border-emerald-400/60">
+          <div className="flex items-center justify-between">
+            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-white/40">Average time</span>
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-emerald-400/40 bg-emerald-400/10 text-emerald-300">
+              <Timer className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </div>
+          <p className="mt-4 text-3xl font-semibold text-emerald-200">
+            {totals.avgHours}
+            <span className="ml-1 text-base font-medium text-emerald-200/70">h</span>
+          </p>
+          <p className="mt-2 text-sm text-white/50">To approve or reject</p>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

@@ -16,7 +16,6 @@ import type { PendingVerification, VerificationStats as StatsType } from '@/serv
 import type { VerificationUser, SortOption, ImageViewData } from '@/types/verification';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { Shield, AlertCircle, Loader2 } from 'lucide-react';
-import { FEATURES } from '@/services/api.config';
 
 // Get backend URL from environment
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -295,7 +294,7 @@ export default function AdminVerificationRequestsPage() {
   // Loading state
   if (!isAuthReady || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#050505] text-gray-100 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#ff950e]" />
           <p className="text-gray-400">Loading verification requests...</p>
@@ -307,14 +306,14 @@ export default function AdminVerificationRequestsPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#050505] text-gray-100 flex items-center justify-center">
         <div className="text-center max-w-md">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold mb-2">Error Loading Verifications</h2>
           <p className="text-gray-400 mb-4">{error}</p>
           <button
             onClick={refreshData}
-            className="px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition"
+            className="px-4 py-2 rounded-xl bg-[#ff950e] text-black font-semibold hover:bg-[#e88800] transition"
           >
             Retry
           </button>
@@ -325,38 +324,42 @@ export default function AdminVerificationRequestsPage() {
 
   return (
     <RequireAuth role="admin">
-      <div className="min-h-screen bg-gradient-to-b from-black to-[#0a0a0a] text-white">
+      <div className="relative min-h-screen bg-[#050505] text-gray-100">
         <VerificationHeader onRefresh={refreshData} />
 
-        <VerificationSearch
-          searchTerm={searchTerm}
-          onSearchChange={handleSearchTermChange}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-          pendingCount={filteredUsers.length}
-        />
+        <main className="relative z-0 pb-16">
+          <section className="pt-10 space-y-10">
+            <VerificationSearch
+              searchTerm={searchTerm}
+              onSearchChange={handleSearchTermChange}
+              sortBy={sortBy}
+              onSortChange={setSortBy}
+              pendingCount={filteredUsers.length}
+            />
 
-        <VerificationStats stats={filteredStats} />
+            <VerificationStats stats={filteredStats} />
 
-        {filteredUsers.length === 0 ? (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="bg-[#121212] rounded-xl border border-gray-800 p-12 text-center">
-              <Shield className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-xl font-bold mb-2">No Pending Verifications</h3>
-              <p className="text-gray-400">
-                {searchTerm 
-                  ? `No verification requests found matching "${searchTerm}"`
-                  : 'There are no verification requests awaiting review'}
-              </p>
-            </div>
-          </div>
-        ) : (
-          <VerificationList
-            users={filteredUsers}
-            searchTerm={searchTerm}
-            onSelectUser={setSelected}
-          />
-        )}
+            {filteredUsers.length === 0 ? (
+              <div className="max-w-7xl mx-auto px-4 md:px-6">
+                <div className="rounded-2xl border border-white/5 bg-black/40 px-8 py-14 text-center">
+                  <Shield className="w-14 h-14 text-white/20 mx-auto mb-4" />
+                  <h3 className="text-2xl font-semibold text-white">No Pending Verifications</h3>
+                  <p className="mt-3 text-sm text-gray-400">
+                    {searchTerm
+                      ? `No verification requests found matching "${searchTerm}"`
+                      : 'Everything looks good — there are no verification requests awaiting review.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <VerificationList
+                users={filteredUsers}
+                searchTerm={searchTerm}
+                onSelectUser={setSelected}
+              />
+            )}
+          </section>
+        </main>
 
         {selected && (
           <ReviewModal
@@ -379,10 +382,10 @@ export default function AdminVerificationRequestsPage() {
 
         {/* Processing overlay */}
         {isProcessing && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-[#121212] rounded-xl border border-gray-800 p-6">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div className="rounded-2xl border border-white/10 bg-[#0a0a0a] px-6 py-8 text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-[#ff950e]" />
-              <p className="text-gray-400">Processing verification...</p>
+              <p className="text-sm text-gray-400">Processing verification...</p>
             </div>
           </div>
         )}
