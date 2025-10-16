@@ -190,11 +190,11 @@ export default function Home() {
 
       <BanCheck>
         {/* FIXED GRADIENT BACKGROUND - Smooth wavy gradient flowing through entire page */}
-        <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
           <div 
-            className="absolute inset-x-0 top-0 w-full h-[5000px] bg-gradient-to-b from-black via-[#080808] via-[#101010] via-black via-[#080808] via-[#101010] via-black via-[#080808] via-[#101010] via-black to-[#080808]"
+            className="absolute inset-x-0 top-0 w-full h-[3600px]"
             style={{
-              backgroundSize: '100% 100%'
+              background: 'linear-gradient(to bottom, #000000 0%, #080808 12.5%, #101010 25%, #080808 37.5%, #000000 50%, #080808 62.5%, #101010 75%, #080808 87.5%, #000000 100%)'
             }}
           />
         </div>
