@@ -40,7 +40,7 @@ export default function WalletHeader({ totalUsers, onRefresh, onExport, isRefres
 
           <button
             onClick={onExport}
-            className="flex items-center justify-center gap-2 rounded-xl border border-[#ff950e]/40 bg-gradient-to-r from-[#ff950e]/20 via-[#ffb347]/10 to-transparent px-5 py-3 text-sm font-medium text-[#ffb347] transition hover:from-[#ff950e]/30 hover:via-[#ffb347]/20 hover:text-[#ffd79a]"
+            className="flex items-center justify-center gap-2 rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/20 px-5 py-3 text-sm font-medium text-[#ffb347] transition hover:bg-[#ff950e]/30 hover:text-[#ffd79a]"
           >
             <Download className="h-4 w-4" />
             Export Snapshot
