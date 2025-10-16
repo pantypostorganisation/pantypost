@@ -194,7 +194,7 @@ export default function Home() {
           <div 
             className="absolute inset-0 w-full h-screen"
             style={{
-              background: 'linear-gradient(to bottom, #000000 0%, #000000 35%, #030303 45%, #050505 55%, #080808 65%, #0a0a0a 75%, #0d0d0d 85%, #101010 100%)'
+              background: 'linear-gradient(to bottom, #000000 0%, #000000 60%, #030303 70%, #050505 77%, #080808 84%, #0a0a0a 88%, #0d0d0d 94%, #101010 100%)'
             }}
           />
         </div>
