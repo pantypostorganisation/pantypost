@@ -39,7 +39,7 @@ const FAQ_ITEMS = [
 export default function FAQSection() {
   return (
     <section
-      className="bg-gradient-to-b from-black to-[#101010] pt-16 pb-16 md:pt-20 md:pb-20 relative z-35 overflow-hidden"
+      className="bg-gradient-to-b from-[#101010] to-black pt-16 pb-16 md:pt-20 md:pb-20 relative z-35 overflow-hidden"
       aria-labelledby="homepage-faq-title"
     >
       {/* Enhanced Shape Divider with matching style */}
