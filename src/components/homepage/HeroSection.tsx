@@ -45,7 +45,7 @@ export default function HeroSection() {
   return (
     <section
       ref={heroRef}
-      className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 bg-gradient-to-b from-black via-[#080808] to-[#101010] overflow-hidden z-10"
+      className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 overflow-hidden"
     >
       {/* Subtle Noise Overlay */}
       <div

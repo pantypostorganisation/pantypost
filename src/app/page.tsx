@@ -17,7 +17,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 
 // Enhanced loading fallback components with pulse animations
 const SectionSkeleton = ({ height = "h-96" }: { height?: string }) => (
-  <div className={`${height} bg-gradient-to-b from-[#101010] to-black flex items-center justify-center`}>
+  <div className={`${height} flex items-center justify-center`}>
     <div className="text-center">
       <div className="w-8 h-8 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
       <div className="space-y-2">
@@ -38,7 +38,7 @@ const SectionErrorFallback = ({
   retry?: () => void; 
   error?: Error; 
 }) => (
-  <div className="min-h-[200px] bg-gradient-to-b from-[#101010] to-black flex items-center justify-center">
+  <div className="min-h-[200px] flex items-center justify-center">
     <div className="text-center p-8 max-w-md mx-auto">
       <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
         <span className="text-red-400 text-xl">⚠</span>
@@ -189,7 +189,29 @@ export default function Home() {
       </Head>
 
       <BanCheck>
-        <div className="min-h-screen bg-black flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
+        {/* FIXED GRADIENT BACKGROUND - Spans entire page */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          {/* Gradient band 1: 0-850px - from-black */}
+          <div 
+            className="absolute inset-x-0 top-0 h-[850px] bg-gradient-to-b from-black via-black/95 to-transparent"
+            style={{ zIndex: 0 }}
+          />
+          
+          {/* Gradient band 2: 850-1700px - via-[#0a0a0a] */}
+          <div 
+            className="absolute inset-x-0 h-[850px] bg-gradient-to-b from-transparent via-[#0a0a0a] to-transparent"
+            style={{ top: '850px', zIndex: 0 }}
+          />
+          
+          {/* Gradient band 3: 1700px+ - to-black */}
+          <div 
+            className="absolute inset-x-0 h-[850px] bg-gradient-to-b from-transparent via-black/95 to-black"
+            style={{ top: '1700px', zIndex: 0 }}
+          />
+        </div>
+
+        {/* CONTENT LAYER - All sections sit above the fixed gradient */}
+        <div className="relative z-10 min-h-screen flex flex-col font-sans text-white selection:bg-[#ff950e] selection:text-black overflow-x-hidden">
           
           {/* SEO: H1 for homepage - hidden but present for SEO */}
           <h1 className="sr-only">Buy and Sell Used Panties - PantyPost Marketplace</h1>
@@ -241,7 +263,7 @@ export default function Home() {
             will-change: opacity;
           }
 
-          /* Enhanced shimmer effect for loading states */}
+          /* Enhanced shimmer effect for loading states */
           .loading-shimmer {
             position: relative;
             overflow: hidden;
