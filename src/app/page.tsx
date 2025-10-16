@@ -192,18 +192,7 @@ export default function Home() {
         {/* FIXED GRADIENT BACKGROUND - Smooth wavy gradient flowing through entire page */}
         <div className="fixed inset-0 z-0 pointer-events-none">
           <div 
-            className="absolute inset-x-0 top-0 w-full h-[5000px] bg-gradient-to-b 
-              from-black 
-              via-[#080808] 
-              via-[#101010] 
-              via-black 
-              via-[#080808] 
-              via-[#101010] 
-              via-black 
-              via-[#080808] 
-              via-[#101010] 
-              via-black
-              to-[#080808]"
+            className="absolute inset-x-0 top-0 w-full h-[5000px] bg-gradient-to-b from-black via-[#080808] via-[#101010] via-black via-[#080808] via-[#101010] via-black via-[#080808] via-[#101010] via-black to-[#080808]"
             style={{
               backgroundSize: '100% 100%'
             }}
