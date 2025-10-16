@@ -189,47 +189,13 @@ export default function Home() {
       </Head>
 
       <BanCheck>
-        {/* FIXED GRADIENT BACKGROUND - Pure black top 35%, then smooth waves */}
+        {/* FIXED GRADIENT BACKGROUND - Pure black top, then super smooth gradient to bottom */}
         <div className="fixed inset-0 z-0 pointer-events-none">
-          {/* Top 35% - Pure Black */}
           <div 
-            className="absolute inset-x-0 top-0 h-[35vh] bg-black"
-          />
-          
-          {/* Transition zone - Black to first wave */}
-          <div 
-            className="absolute inset-x-0 h-[200px] bg-gradient-to-b from-black to-[#080808]"
-            style={{ top: '35vh' }}
-          />
-          
-          {/* Wave 1: Starting from 35vh + 200px */}
-          <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-[#101010] to-[#080808]"
-            style={{ top: 'calc(35vh + 200px)' }}
-          />
-          
-          {/* Wave 2 */}
-          <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-black to-[#080808]"
-            style={{ top: 'calc(35vh + 1000px)' }}
-          />
-          
-          {/* Wave 3 */}
-          <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-[#101010] to-[#080808]"
-            style={{ top: 'calc(35vh + 1800px)' }}
-          />
-          
-          {/* Wave 4 */}
-          <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-black to-[#080808]"
-            style={{ top: 'calc(35vh + 2600px)' }}
-          />
-          
-          {/* Wave 5 */}
-          <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-[#101010] to-[#080808]"
-            style={{ top: 'calc(35vh + 3400px)' }}
+            className="absolute inset-0 w-full h-[5000px]"
+            style={{
+              background: 'linear-gradient(to bottom, #000000 0%, #000000 35%, #030303 45%, #050505 55%, #080808 65%, #0a0a0a 75%, #0d0d0d 85%, #101010 100%)'
+            }}
           />
         </div>
 
