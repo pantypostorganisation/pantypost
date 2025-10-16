@@ -315,7 +315,7 @@ export default function FeaturesSection() {
   const shouldAnimate = !skipAnimation && (isInView || hasAnimated);
 
   return (
-    <div className="bg-gradient-to-b from-black to-[#101010] min-h-[850px] flex items-center pt-16 pb-16 md:pt-20 md:pb-20 relative z-30 overflow-hidden">
+    <div className="bg-gradient-to-b from-black to-[#101010] pt-16 pb-16 md:pt-20 md:pb-20 relative z-30 overflow-hidden">
       {/* Enhanced SEO structured data - secured */}
       {structuredData && (
         <script
@@ -327,7 +327,7 @@ export default function FeaturesSection() {
       )}
 
       {/* Content container */}
-      <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10 w-full" ref={containerRef}>
+      <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10" ref={containerRef}>
         <motion.h2
           className="text-3xl md:text-4xl lg:text-5xl font-bold text-center text-white mb-16 tracking-tight"
           initial={skipAnimation ? false : "hidden"}

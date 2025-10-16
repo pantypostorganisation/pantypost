@@ -45,7 +45,7 @@ export default function HeroSection() {
   return (
     <section
       ref={heroRef}
-      className="relative w-full min-h-[850px] flex items-center pt-10 pb-8 md:pt-12 md:pb-12 bg-gradient-to-b from-black via-[#080808] to-[#101010] overflow-hidden z-10"
+      className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 bg-gradient-to-b from-black via-[#080808] to-[#101010] overflow-hidden z-10"
     >
       {/* Subtle Noise Overlay */}
       <div
@@ -56,7 +56,7 @@ export default function HeroSection() {
       {/* Floating particles */}
       <FloatingParticles />
 
-      <div className="relative max-w-7xl mx-auto px-6 sm:px-8 flex flex-col md:flex-row items-center justify-between w-full z-10">
+      <div className="relative max-w-7xl mx-auto px-6 sm:px-8 flex flex-col md:flex-row items-center justify-between min-h-[70vh] md:min-h-[75vh] z-10">
         {/* LEFT: Info/CTA */}
         <div className="w-full md:w-1/2 lg:w-[48%] xl:w-[45%] relative">
           <motion.div

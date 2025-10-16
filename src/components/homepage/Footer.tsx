@@ -30,7 +30,7 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="bg-gradient-to-b from-black via-[#030303] to-[#050505] min-h-[850px] flex items-center pt-16 pb-16 md:pt-20 md:pb-20 relative z-50 overflow-hidden">
+    <footer className="bg-gradient-to-b from-black via-[#030303] to-[#050505] pt-16 pb-16 md:pt-20 md:pb-20 relative z-50 overflow-hidden">
       {/* Shape Divider 4 (Background Glow) */}
       <motion.div
         className="absolute -top-52 left-[-15%] md:left-[-5%] w-[130%] md:w-[80%] h-96 pointer-events-none z-0"
@@ -43,7 +43,7 @@ export default function Footer() {
       </motion.div>
 
       {/* Content container */}
-      <div className="relative max-w-7xl mx-auto px-6 md:px-8 z-10 w-full">
+      <div className="relative max-w-7xl mx-auto px-6 md:px-8 z-10">
         <div className="flex flex-col md:flex-row justify-between items-center">
           <div className="mb-6 md:mb-0 text-center md:text-left">
             <h2 className="text-xl font-bold text-[#ff950e]">Panty Post</h2>
