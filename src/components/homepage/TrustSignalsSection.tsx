@@ -37,7 +37,7 @@ const TRUST_SIGNALS = [
 
 export default function TrustSignalsSection() {
   return (
-    <div className="bg-gradient-to-b from-[#101010] to-black pt-8 md:pt-12 pb-16 md:pb-20 relative z-20 overflow-hidden">
+    <div className="bg-gradient-to-b from-[#101010] to-black min-h-[850px] flex items-center pt-8 md:pt-12 pb-16 md:pb-20 relative z-20 overflow-hidden">
       {/* Shape Divider 1 (Background Glow) */}
       <motion.div
         className="absolute -top-40 left-1/2 -translate-x-1/2 w-[150%] md:w-[100%] lg:w-[80%] h-80 pointer-events-none z-0"
@@ -51,7 +51,7 @@ export default function TrustSignalsSection() {
 
       {/* Content container */}
       <motion.div
-        className="relative max-w-5xl mx-auto px-6 md:px-8 z-10"
+        className="relative max-w-5xl mx-auto px-6 md:px-8 z-10 w-full"
         initial="hidden" 
         whileInView="visible" 
         viewport={VIEWPORT_CONFIG} 

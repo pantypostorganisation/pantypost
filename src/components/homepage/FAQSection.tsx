@@ -39,7 +39,7 @@ const FAQ_ITEMS = [
 export default function FAQSection() {
   return (
     <section
-      className="bg-gradient-to-b from-[#101010] via-black to-[#0a0a0a] pt-16 pb-16 md:pt-20 md:pb-20 relative z-35 overflow-hidden"
+      className="bg-gradient-to-b from-[#101010] via-black to-[#0a0a0a] min-h-[850px] flex items-center pt-16 pb-16 md:pt-20 md:pb-20 relative z-35 overflow-hidden"
       aria-labelledby="homepage-faq-title"
     >
       {/* Enhanced Shape Divider with matching style */}
@@ -53,7 +53,7 @@ export default function FAQSection() {
         <div className="absolute inset-0 bg-gradient-radial from-[#ff950e]/8 via-[#ff950e]/3 to-transparent blur-3xl rounded-[50%_50%_50%_50%/60%_40%_60%_40%] animate-spin-slow"></div>
       </motion.div>
 
-      <div className="mx-auto max-w-6xl px-6 relative z-10">
+      <div className="mx-auto max-w-6xl px-6 relative z-10 w-full">
         <motion.div
           initial="hidden"
           whileInView="visible"

@@ -9,7 +9,7 @@ import { CTA_CONTENT } from '@/utils/homepage-constants';
 
 export default function CTASection() {
   return (
-    <div className="bg-gradient-to-b from-[#0a0a0a] via-[#050505] to-black pt-16 pb-16 md:pt-20 md:pb-20 relative z-40 overflow-hidden">
+    <div className="bg-gradient-to-b from-[#0a0a0a] via-[#050505] to-black min-h-[850px] flex items-center pt-16 pb-16 md:pt-20 md:pb-20 relative z-40 overflow-hidden">
       {/* Shape Divider 3 (Background Glow) */}
       <motion.div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[100%] md:w-[70%] h-[500px] pointer-events-none z-0"
@@ -23,7 +23,7 @@ export default function CTASection() {
 
       {/* Content container */}
       <motion.div
-        className="relative max-w-3xl mx-auto px-6 md:px-12 text-center z-10"
+        className="relative max-w-3xl mx-auto px-6 md:px-12 text-center z-10 w-full"
         initial="hidden" 
         whileInView="visible" 
         viewport={{ once: true, amount: 0.4 }} 
