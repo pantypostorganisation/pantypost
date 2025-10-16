@@ -189,41 +189,47 @@ export default function Home() {
       </Head>
 
       <BanCheck>
-        {/* FIXED GRADIENT BACKGROUND - Uniform 800px bands with smooth transitions using original colors */}
+        {/* FIXED GRADIENT BACKGROUND - Pure black top 35%, then smooth waves */}
         <div className="fixed inset-0 z-0 pointer-events-none">
-          {/* Band 1: 0-800px - Black to Gray (smooth) */}
+          {/* Top 35% - Pure Black */}
           <div 
-            className="absolute inset-x-0 top-0 h-[800px] bg-gradient-to-b from-black via-[#080808] to-[#101010]"
+            className="absolute inset-x-0 top-0 h-[35vh] bg-black"
           />
           
-          {/* Band 2: 800-1600px - Gray to Black (smooth) */}
+          {/* Transition zone - Black to first wave */}
           <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#101010] via-[#080808] to-black"
-            style={{ top: '800px' }}
+            className="absolute inset-x-0 h-[200px] bg-gradient-to-b from-black to-[#080808]"
+            style={{ top: '35vh' }}
           />
           
-          {/* Band 3: 1600-2400px - Black to Gray (smooth) */}
+          {/* Wave 1: Starting from 35vh + 200px */}
           <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-black via-[#080808] to-[#101010]"
-            style={{ top: '1600px' }}
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-[#101010] to-[#080808]"
+            style={{ top: 'calc(35vh + 200px)' }}
           />
           
-          {/* Band 4: 2400-3200px - Gray to Black (smooth) */}
+          {/* Wave 2 */}
           <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#101010] via-[#080808] to-black"
-            style={{ top: '2400px' }}
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-black to-[#080808]"
+            style={{ top: 'calc(35vh + 1000px)' }}
           />
           
-          {/* Band 5: 3200-4000px - Black to Gray (smooth) */}
+          {/* Wave 3 */}
           <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-black via-[#080808] to-[#101010]"
-            style={{ top: '3200px' }}
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-[#101010] to-[#080808]"
+            style={{ top: 'calc(35vh + 1800px)' }}
           />
           
-          {/* Band 6: 4000-4800px - Gray to Black (smooth) */}
+          {/* Wave 4 */}
           <div 
-            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#101010] via-[#080808] to-black"
-            style={{ top: '4000px' }}
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-black to-[#080808]"
+            style={{ top: 'calc(35vh + 2600px)' }}
+          />
+          
+          {/* Wave 5 */}
+          <div 
+            className="absolute inset-x-0 h-[800px] bg-gradient-to-b from-[#080808] via-[#101010] to-[#080808]"
+            style={{ top: 'calc(35vh + 3400px)' }}
           />
         </div>
 
