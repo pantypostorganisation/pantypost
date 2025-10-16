@@ -635,12 +635,6 @@ function AdminWalletContent() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
-      <div className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-[#ff950e]/10 blur-3xl" aria-hidden="true" />
-        <div className="absolute top-1/3 -right-28 h-[28rem] w-[28rem] rounded-full bg-purple-500/10 blur-3xl" aria-hidden="true" />
-        <div className="absolute bottom-[-10%] left-1/2 h-80 w-80 -translate-x-1/2 rounded-full bg-blue-500/5 blur-3xl" aria-hidden="true" />
-      </div>
-
       <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-10">
           <section className="space-y-6">
@@ -653,7 +647,6 @@ function AdminWalletContent() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
-                <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-[#ff950e]/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
                 <div className="relative flex flex-col gap-3">
                   <span className="text-sm text-gray-400">Platform Balance</span>
                   <span className="text-3xl font-semibold text-white">{formatCurrency(summaryStats.totalBalance)}</span>
@@ -662,7 +655,6 @@ function AdminWalletContent() {
               </div>
 
               <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
-                <div className="absolute right-0 top-0 h-20 w-20 rounded-full bg-blue-500/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
                 <div className="relative flex flex-col gap-3">
                   <span className="text-sm text-gray-400">Average Wallet</span>
                   <span className="text-3xl font-semibold text-white">{formatCurrency(summaryStats.averageBalance)}</span>
@@ -671,7 +663,6 @@ function AdminWalletContent() {
               </div>
 
               <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
-                <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-emerald-500/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
                 <div className="relative space-y-3">
                   <span className="text-sm text-gray-400">Active Accounts</span>
                   <div className="flex items-center justify-between text-white">
@@ -694,7 +685,6 @@ function AdminWalletContent() {
               </div>
 
               <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
-                <div className="absolute right-0 top-0 h-24 w-24 rounded-full bg-rose-500/20 blur-2xl transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
                 <div className="relative space-y-3">
                   <span className="text-sm text-gray-400">Balance Health</span>
                   <div className="space-y-2 text-sm">
