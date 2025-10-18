@@ -210,10 +210,10 @@ const MessageInput: React.FC<MessageInputProps> = ({
             type="button"
             onClick={handleSend}
             disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
-            className={`px-3 py-2 rounded-lg flex items-center justify-center transition-colors text-sm font-medium ${
+            className={`flex items-center justify-center gap-1 px-3.5 py-1.5 rounded-2xl transition-colors text-sm font-semibold ${
               disabled || (!content.trim() && !selectedImage) || isUploading
-                ? 'bg-[#333] text-gray-500 cursor-not-allowed'
-                : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
+                ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
+                : 'bg-[#0a84ff] text-white hover:bg-[#0071e3]'
             }`}
             aria-label="Send message"
           >

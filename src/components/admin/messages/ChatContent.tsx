@@ -459,12 +459,14 @@ export default function ChatContent({
                   onSend();
                 }}
                 disabled={!canSend}
-                className={`flex items-center justify-center px-5 py-2 rounded-full ${
-                  canSend ? 'bg-[#ff950e] text-black hover:bg-[#e88800]' : 'bg-[#c17200] cursor-not-allowed text-gray-300'
-                } transition-colors duration-150 shadow-md`}
+                className={`flex items-center justify-center gap-2 px-4 py-1.5 rounded-2xl transition-colors duration-150 shadow-md text-sm font-semibold ${
+                  canSend
+                    ? 'bg-[#0a84ff] text-white hover:bg-[#0071e3]'
+                    : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
+                }`}
                 type="button"
               >
-                <span className="mr-1">Send</span>
+                <span>Send</span>
                 <ArrowRightCircle size={16} className="flex-shrink-0" />
               </button>
             </div>
