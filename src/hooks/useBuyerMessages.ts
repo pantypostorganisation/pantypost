@@ -156,20 +156,67 @@ export const useBuyerMessages = () => {
         console.log('[useBuyerMessages] Loading initial data...');
         console.log('[useBuyerMessages] User:', user.username);
         console.log('[useBuyerMessages] Is initialized:', isInitialized);
-        
+
         // If messages context is not initialized, refresh
         if (!isInitialized) {
           console.log('[useBuyerMessages] Context not initialized, refreshing...');
           await refreshMessages();
         }
-        
+
         setInitialLoadComplete(true);
         setMounted(true);
       }
     };
-    
+
     loadInitialData();
   }, [user, isInitialized, refreshMessages, initialLoadComplete]);
+
+  // Refresh messages when returning to the tab/app
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+
+    let isRefreshing = false;
+    let lastRefresh = 0;
+
+    const refreshIfVisible = async () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const now = Date.now();
+      // Throttle refreshes to avoid rapid consecutive calls
+      if (isRefreshing || now - lastRefresh < 1000) {
+        return;
+      }
+
+      isRefreshing = true;
+      try {
+        await refreshMessages();
+        setMessageUpdateCounter(prev => prev + 1);
+      } finally {
+        lastRefresh = Date.now();
+        isRefreshing = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      void refreshIfVisible();
+    };
+
+    const handleFocus = () => {
+      void refreshIfVisible();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [mounted, refreshMessages]);
   
   // Handle wallet context availability
   const getBuyerBalance = useCallback((username: string) => {
