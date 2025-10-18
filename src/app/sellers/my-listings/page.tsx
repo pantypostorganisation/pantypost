@@ -78,10 +78,7 @@ function MyListingsContent() {
   const remainingSlots = Math.max((maxListings ?? 0) - totalListings, 0);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-gradient-to-br from-black via-[#0b0916] to-black text-white py-12 sm:py-16">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[#ff950e]/10 to-transparent" />
-      <div className="pointer-events-none absolute -right-24 top-32 h-64 w-64 rounded-full bg-[#ff6a00]/20 blur-3xl" />
-      <div className="pointer-events-none absolute -left-20 bottom-10 h-72 w-72 rounded-full bg-purple-600/20 blur-3xl" />
+    <main className="relative min-h-screen overflow-hidden bg-black text-white py-12 sm:py-16">
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <section className="mb-12 overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-10 backdrop-blur-xl">
