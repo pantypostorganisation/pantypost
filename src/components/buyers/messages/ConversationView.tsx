@@ -20,7 +20,8 @@ import {
   User,
   MoreVertical,
   Ban,
-  Flag
+  Flag,
+  ArrowUp
 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import TypingIndicator from '@/components/messaging/TypingIndicator';
@@ -726,6 +727,8 @@ export default function ConversationView(props: ConversationViewProps) {
     </>
   );
 
+  const canSend = (!!replyMessage.trim() || !!selectedImage) && !isImageLoading;
+
   // Render composer
   const renderComposer = () => (
     <>
@@ -770,7 +773,7 @@ export default function ConversationView(props: ConversationViewProps) {
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="w-full p-3 pr-12 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
+            className="w-full p-3 pr-28 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
@@ -778,31 +781,48 @@ export default function ConversationView(props: ConversationViewProps) {
             aria-label="Message"
           />
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowEmojiPicker(!showEmojiPicker);
-            }}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-              showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-            } transition-colors duration-150`}
-            title="Emoji"
-            type="button"
-            aria-label="Toggle emoji picker"
-          >
-            <Smile size={20} className="flex-shrink-0" />
-          </button>
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowEmojiPicker(!showEmojiPicker);
+              }}
+              className={`flex items-center justify-center h-8 w-8 rounded-full ${
+                showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
+              } transition-colors duration-150`}
+              title="Emoji"
+              type="button"
+              aria-label="Toggle emoji picker"
+            >
+              <Smile size={20} className="flex-shrink-0" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!canSend) return;
+                setShowEmojiPicker(false);
+                stableHandleReply();
+              }}
+              className={`flex items-center justify-center h-9 w-9 rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] focus:ring-[#ff950e] ${
+                canSend ? 'bg-[#ff950e] text-black hover:bg-[#ffac3b]' : 'bg-[#333] text-gray-500 cursor-not-allowed'
+              }`}
+              aria-label="Send message"
+              disabled={!canSend}
+            >
+              <ArrowUp size={18} strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
 
         {replyMessage.length > 0 && (
           <div className="text-xs text-gray-400 mb-2 text-right">{replyMessage.length}/250</div>
         )}
 
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-0">
-            <img
-              src="/Send_Tip_Icon.png"
-              alt="Send Tip"
+        <div className="flex items-center gap-0">
+          <img
+            src="/Send_Tip_Icon.png"
+            alt="Send Tip"
               className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation();
@@ -844,20 +864,6 @@ export default function ConversationView(props: ConversationViewProps) {
               style={{ display: 'none' }}
               onChange={stableHandleImageSelect}
             />
-          </div>
-
-          <img
-            src="/Send_Button.png"
-            alt="Send"
-            onClick={(e) => {
-              e.stopPropagation();
-              stableHandleReply();
-            }}
-            className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
-              (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
-          />
         </div>
       </div>
 

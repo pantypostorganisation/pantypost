@@ -2,7 +2,7 @@
 'use client';
 
 import React, { forwardRef, useState, useCallback } from 'react';
-import { AlertTriangle, X, Smile, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, X, Smile, ShieldAlert, ArrowUp } from 'lucide-react';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { securityService } from '@/services/security.service';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -49,6 +49,8 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
     },
     ref
   ) => {
+    const canSend = (!!replyMessage.trim() || !!selectedImage) && !isImageLoading;
+
     const [validationError, setValidationError] = useState<string | null>(null);
 
     // Secure image selection with validation
@@ -153,28 +155,46 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               onChange={setReplyMessage}
               onKeyDown={onKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-              className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+              className="w-full p-3 pr-28 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
               rows={1}
               maxLength={250}
               characterCount={false}
               sanitize={true}
             />
 
-            {/* Emoji button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowEmojiPicker(!showEmojiPicker);
-              }}
-              className={`absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-                showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-              } transition-colors duration-150`}
-              title="Emoji"
-              type="button"
-              aria-pressed={showEmojiPicker}
-            >
-              <Smile size={20} className="flex-shrink-0" />
-            </button>
+            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center gap-2">
+              {/* Emoji button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowEmojiPicker(!showEmojiPicker);
+                }}
+                className={`flex items-center justify-center h-8 w-8 rounded-full ${
+                  showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
+                } transition-colors duration-150`}
+                title="Emoji"
+                type="button"
+                aria-pressed={showEmojiPicker}
+              >
+                <Smile size={20} className="flex-shrink-0" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canSend) return;
+                  setShowEmojiPicker(false);
+                  onReply();
+                }}
+                className={`flex items-center justify-center h-9 w-9 rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] focus:ring-[#ff950e] ${
+                  canSend ? 'bg-[#ff950e] text-black hover:bg-[#ffac3b]' : 'bg-[#333] text-gray-500 cursor-not-allowed'
+                }`}
+                aria-label="Send message"
+                disabled={!canSend}
+              >
+                <ArrowUp size={18} strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
 
           {/* Character count */}
@@ -183,7 +203,7 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           )}
 
           {/* Bottom row with attachment and send buttons */}
-          <div className="flex justify-between items-center">
+          <div className="flex items-center gap-0">
             {/* Attachment button */}
             <img
               src="/Attach_Image_Icon.png"
@@ -206,21 +226,6 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               ref={fileInputRef}
               style={{ display: 'none' }}
               onChange={handleSecureImageSelect}
-            />
-
-            {/* Send Button */}
-            <img
-              src="/Send_Button.png"
-              alt="Send"
-              onClick={(e) => {
-                e.stopPropagation();
-                onReply();
-              }}
-              className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
-                (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
-              title="Send message"
             />
           </div>
         </div>
