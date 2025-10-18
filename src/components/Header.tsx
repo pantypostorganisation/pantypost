@@ -128,72 +128,21 @@ export default function Header(): React.ReactElement | null {
   const canUseSearch = Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller'));
   const username = user?.username ? sanitizeStrict(user.username) : '';
   const profileImageSrc = useMemo(() => {
-    if (!user) {
+    if (!user?.profilePicture || typeof user.profilePicture !== 'string') {
       return null;
     }
 
-    const rawProfilePictureValues: Array<string | null> = [
-      typeof user.profilePicture === 'string' ? user.profilePicture : null,
-      (() => {
-        const candidate = (user as Record<string, unknown>).profilePic;
-        return typeof candidate === 'string' ? candidate : null;
-      })(),
-    ];
-
-    const profilePictureCandidates = rawProfilePictureValues.filter(
-      (value): value is string => typeof value === 'string' && value.trim().length > 0
-    );
-
-    if (profilePictureCandidates.length === 0) {
-      return null;
-    }
-
-    const normalizedProfilePicture = (() => {
-      const [rawCandidate] = profilePictureCandidates;
-      const raw = rawCandidate.trim();
-      if (
-        raw.startsWith('http://') ||
-        raw.startsWith('https://') ||
-        raw.startsWith('/') ||
-        raw.startsWith('data:')
-      ) {
-        return raw;
-      }
-      return `/${raw.replace(/^\/+/, '')}`;
-    })();
-
-    const sanitized = sanitizeUrl(normalizedProfilePicture);
+    const sanitized = sanitizeUrl(user.profilePicture);
     if (!sanitized) {
       return null;
     }
 
-    const resolved = resolveApiUrl(sanitized) ?? sanitized;
-
-    const profileUpdatedAt = (() => {
-      const extendedUser = user as Record<string, unknown>;
-      const updatedAtCandidates = [
-        extendedUser.profilePictureUpdatedAt,
-        extendedUser.profilePicUpdatedAt,
-        extendedUser.profilePicLastUpdated,
-      ];
-      for (const value of updatedAtCandidates) {
-        if (typeof value === 'string' && value.trim().length > 0) {
-          return value.trim();
-        }
-      }
-      return null;
-    })();
-
-    if (!profileUpdatedAt) {
-      return resolved;
-    }
-
-    const separator = resolved.includes('?') ? '&' : '?';
-    return `${resolved}${separator}v=${encodeURIComponent(profileUpdatedAt)}`;
-  }, [user]);
+    return resolveApiUrl(sanitized) ?? sanitized;
+  }, [user?.profilePicture]);
   const canDisplayUserAvatar = role === 'buyer' || role === 'seller';
-  const profileAvatarSrc = canDisplayUserAvatar ? profileImageSrc ?? null : null;
-  const showAvatarImage = canDisplayUserAvatar && Boolean(profileAvatarSrc);
+  const profileAvatarSrc = canDisplayUserAvatar
+    ? profileImageSrc ?? '/default-avatar.png'
+    : null;
   const avatarAltText = username ? `${username}'s avatar` : 'User avatar';
 
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
@@ -740,11 +689,12 @@ export default function Header(): React.ReactElement | null {
             {user && (
               <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
                 <div className="flex items-center gap-3">
-                  {showAvatarImage ? (
+                  {canDisplayUserAvatar ? (
                     <SecureImage
-                      src={profileAvatarSrc!}
+                      src={profileAvatarSrc ?? '/default-avatar.png'}
                       alt={avatarAltText}
                       className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
+                      fallbackSrc="/default-avatar.png"
                     />
                   ) : (
                     <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
@@ -1295,11 +1245,12 @@ export default function Header(): React.ReactElement | null {
           {user && (
             <div className="flex items-center gap-2 ml-1">
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
-                {showAvatarImage ? (
+                {canDisplayUserAvatar ? (
                   <SecureImage
-                    src={profileAvatarSrc!}
+                    src={profileAvatarSrc ?? '/default-avatar.png'}
                     alt={avatarAltText}
                     className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                    fallbackSrc="/default-avatar.png"
                   />
                 ) : (
                   <>
