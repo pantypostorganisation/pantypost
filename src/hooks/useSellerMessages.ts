@@ -161,8 +161,8 @@ export function useSellerMessages() {
     let isRefreshing = false;
     let lastRefresh = 0;
 
-    const refreshIfVisible = async () => {
-      if (document.visibilityState !== 'visible') {
+    const refreshIfVisible = async (force = false) => {
+      if (!force && document.visibilityState !== 'visible') {
         return;
       }
 
@@ -190,12 +190,18 @@ export function useSellerMessages() {
       void refreshIfVisible();
     };
 
+    const handlePageShow = () => {
+      void refreshIfVisible(true);
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
     };
   }, [mounted, refreshMessages]);
   
