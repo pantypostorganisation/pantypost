@@ -588,6 +588,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           tokenStorageRef.current.setTokens(tokens);
           setUser(response.data.user);
 
+          try {
+            await refreshSession();
+          } catch (refreshError) {
+            console.error('[Auth] Failed to hydrate user after login:', refreshError);
+          }
+
           console.log('[Auth] Login successful');
           setLoading(false);
           return true;
@@ -648,7 +654,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
     },
-    []
+    [refreshSession]
   );
 
   const logout = useCallback(async () => {
