@@ -148,9 +148,56 @@ export function useSellerMessages() {
         console.log('[useSellerMessages] Initialization complete');
       }
     };
-    
+
     initializeMessages();
   }, [user, isInitialized, messages, refreshMessages, initialLoadAttempted]);
+
+  // Refresh messages when returning to the tab/app
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+
+    let isRefreshing = false;
+    let lastRefresh = 0;
+
+    const refreshIfVisible = async () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const now = Date.now();
+      // Throttle refreshes to avoid rapid consecutive calls
+      if (isRefreshing || now - lastRefresh < 1000) {
+        return;
+      }
+
+      isRefreshing = true;
+      try {
+        await refreshMessages();
+        setMessageUpdateCounter(prev => prev + 1);
+      } finally {
+        lastRefresh = Date.now();
+        isRefreshing = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      void refreshIfVisible();
+    };
+
+    const handleFocus = () => {
+      void refreshIfVisible();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [mounted, refreshMessages]);
   
   // CRITICAL: Listen for new messages and handle optimistic updates
   useEffect(() => {
