@@ -114,8 +114,7 @@ export default function SellerProfileSettingsPage() {
       <RequireAuth role="seller">
         <main className="min-h-screen bg-gradient-to-b from-black via-[#0f0a06] to-black text-white py-12 px-4">
           <div className="max-w-6xl mx-auto space-y-12">
-            <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#1f120f] via-black to-[#0b0b0b] p-8 shadow-[0_25px_80px_-40px_rgba(255,149,14,0.35)]">
-              <div className="absolute inset-0 opacity-60 [mask-image:radial-gradient(circle_at_top,white,transparent_70%)] bg-[radial-gradient(circle_at_top,_#ff950e33,_transparent_60%)]" />
+            <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#1f120f] via-black to-[#0b0b0b] p-8">
               <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="flex flex-col gap-4">
                   <span className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-1 text-sm font-medium text-[#ff950e] w-fit">
@@ -148,7 +147,6 @@ export default function SellerProfileSettingsPage() {
                       key={label}
                       className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur"
                     >
-                      <div className="absolute -top-10 right-0 h-24 w-24 rounded-full bg-[#ff950e]/10 blur-3xl" />
                       <div className="relative flex flex-col gap-3">
                         <div className="flex items-center gap-2 text-sm text-gray-400">
                           <Icon className="h-4 w-4 text-[#ff950e]" />
@@ -183,7 +181,7 @@ export default function SellerProfileSettingsPage() {
                 </div>
 
                 {/* Save Button with loading and error states */}
-                <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-[#1a120f] to-black p-6 text-center shadow-[0_15px_50px_-35px_rgba(255,149,14,0.35)]">
+                <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-[#1a120f] to-black p-6 text-center">
                   <div className="mx-auto flex max-w-xs flex-col items-center gap-4 text-sm text-gray-300">
                     <p className="text-base font-medium text-white">Ready to publish your latest changes?</p>
                     <p className="text-xs text-gray-400">
