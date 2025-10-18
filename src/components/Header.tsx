@@ -32,8 +32,8 @@ import {
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
-import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
 import { HeaderSearch } from '@/components/HeaderSearch';
@@ -127,6 +127,16 @@ export default function Header(): React.ReactElement | null {
     user?.role === 'seller' && (user?.isVerified === true || user?.verificationStatus === 'verified');
   const canUseSearch = Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller'));
   const username = user?.username ? sanitizeStrict(user.username) : '';
+  const profileImageSrc = useMemo(() => {
+    if (!user?.profilePicture || typeof user.profilePicture !== 'string') {
+      return null;
+    }
+
+    const sanitized = sanitizeUrl(user.profilePicture);
+    return sanitized || null;
+  }, [user?.profilePicture]);
+  const shouldShowProfileImage = Boolean(profileImageSrc && (role === 'buyer' || role === 'seller'));
+  const avatarAltText = username ? `${username}'s avatar` : 'User avatar';
 
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
   useClickOutside(mobileMenuRef, () => {
@@ -672,11 +682,20 @@ export default function Header(): React.ReactElement | null {
             {user && (
               <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
-                    {role === 'seller' && <Heart className="w-5 h-5 text-[#ff950e]" />}
-                    {role === 'buyer' && <ShoppingBag className="w-5 h-5 text-[#ff950e]" />}
-                    {isAdminUser && <Crown className="w-5 h-5 text-purple-400" />}
-                  </div>
+                  {shouldShowProfileImage ? (
+                    <SecureImage
+                      src={profileImageSrc ?? '/default-avatar.png'}
+                      alt={avatarAltText}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
+                      fallbackSrc="/default-avatar.png"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
+                      {role === 'seller' && <Heart className="w-5 h-5 text-[#ff950e]" />}
+                      {role === 'buyer' && <ShoppingBag className="w-5 h-5 text-[#ff950e]" />}
+                      {isAdminUser && <Crown className="w-5 h-5 text-purple-400" />}
+                    </div>
+                  )}
                   <div>
                     <div className="text-[#ff950e] font-bold">{username}</div>
                     <div className="text-gray-400 text-xs capitalize">{isAdminUser ? 'Admin' : role}</div>
@@ -1217,9 +1236,20 @@ export default function Header(): React.ReactElement | null {
           {user && (
             <div className="flex items-center gap-2 ml-1">
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
-                {role === 'seller' && <Heart className="w-3.5 h-3.5 text-[#ff950e]" />}
-                {role === 'buyer' && <ShoppingBag className="w-3.5 h-3.5 text-[#ff950e]" />}
-                {isAdminUser && <Crown className="w-3.5 h-3.5 text-purple-400" />}
+                {shouldShowProfileImage ? (
+                  <SecureImage
+                    src={profileImageSrc ?? '/default-avatar.png'}
+                    alt={avatarAltText}
+                    className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                    fallbackSrc="/default-avatar.png"
+                  />
+                ) : (
+                  <>
+                    {role === 'seller' && <Heart className="w-3.5 h-3.5 text-[#ff950e]" />}
+                    {role === 'buyer' && <ShoppingBag className="w-3.5 h-3.5 text-[#ff950e]" />}
+                    {isAdminUser && <Crown className="w-3.5 h-3.5 text-purple-400" />}
+                  </>
+                )}
                 <span className="text-[#ff950e] font-bold text-xs">{username}</span>
                 <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
               </div>
