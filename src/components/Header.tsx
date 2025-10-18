@@ -23,7 +23,6 @@ import {
   DollarSign,
   Crown,
   Shield,
-  Heart,
   RotateCcw,
   Trash2,
   Ban,
@@ -135,7 +134,10 @@ export default function Header(): React.ReactElement | null {
     const sanitized = sanitizeUrl(user.profilePicture);
     return sanitized || null;
   }, [user?.profilePicture]);
-  const shouldShowProfileImage = Boolean(profileImageSrc && (role === 'buyer' || role === 'seller'));
+  const canDisplayUserAvatar = role === 'buyer' || role === 'seller';
+  const profileAvatarSrc = canDisplayUserAvatar
+    ? profileImageSrc ?? '/default-avatar.png'
+    : null;
   const avatarAltText = username ? `${username}'s avatar` : 'User avatar';
 
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
@@ -682,18 +684,20 @@ export default function Header(): React.ReactElement | null {
             {user && (
               <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
                 <div className="flex items-center gap-3">
-                  {shouldShowProfileImage ? (
+                  {canDisplayUserAvatar ? (
                     <SecureImage
-                      src={profileImageSrc ?? '/default-avatar.png'}
+                      src={profileAvatarSrc ?? '/default-avatar.png'}
                       alt={avatarAltText}
                       className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
                       fallbackSrc="/default-avatar.png"
                     />
                   ) : (
                     <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
-                      {role === 'seller' && <Heart className="w-5 h-5 text-[#ff950e]" />}
-                      {role === 'buyer' && <ShoppingBag className="w-5 h-5 text-[#ff950e]" />}
-                      {isAdminUser && <Crown className="w-5 h-5 text-purple-400" />}
+                      {isAdminUser ? (
+                        <Crown className="w-5 h-5 text-purple-400" />
+                      ) : (
+                        <User className="w-5 h-5 text-[#ff950e]" />
+                      )}
                     </div>
                   )}
                   <div>
@@ -1236,18 +1240,20 @@ export default function Header(): React.ReactElement | null {
           {user && (
             <div className="flex items-center gap-2 ml-1">
               <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
-                {shouldShowProfileImage ? (
+                {canDisplayUserAvatar ? (
                   <SecureImage
-                    src={profileImageSrc ?? '/default-avatar.png'}
+                    src={profileAvatarSrc ?? '/default-avatar.png'}
                     alt={avatarAltText}
                     className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
                     fallbackSrc="/default-avatar.png"
                   />
                 ) : (
                   <>
-                    {role === 'seller' && <Heart className="w-3.5 h-3.5 text-[#ff950e]" />}
-                    {role === 'buyer' && <ShoppingBag className="w-3.5 h-3.5 text-[#ff950e]" />}
-                    {isAdminUser && <Crown className="w-3.5 h-3.5 text-purple-400" />}
+                    {isAdminUser ? (
+                      <Crown className="w-3.5 h-3.5 text-purple-400" />
+                    ) : (
+                      <User className="w-3.5 h-3.5 text-[#ff950e]" />
+                    )}
                   </>
                 )}
                 <span className="text-[#ff950e] font-bold text-xs">{username}</span>
