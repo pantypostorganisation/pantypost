@@ -4,7 +4,8 @@
 import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { Search, X, Loader2 } from 'lucide-react';
 import { usersService } from '@/services';
-import { sanitizeStrict, sanitizeSearchQuery } from '@/utils/security/sanitization';
+import { sanitizeStrict, sanitizeSearchQuery, sanitizeUrl } from '@/utils/security/sanitization';
+import { resolveApiUrl } from '@/utils/url';
 
 type SearchUserResult = {
   username: string;
@@ -167,8 +168,13 @@ export const HeaderSearch = memo(function HeaderSearch({
                 return null;
               }
 
-              const picture = rawUser.profilePicture ||
+              const pictureRaw = rawUser.profilePicture ||
                 (rawUser as any)?.profilePic || null;
+              const sanitizedPicture =
+                typeof pictureRaw === 'string' ? sanitizeUrl(pictureRaw) : '';
+              const resolvedPicture = sanitizedPicture
+                ? resolveApiUrl(sanitizedPicture) ?? sanitizedPicture
+                : null;
               const pictureUpdatedRaw =
                 (rawUser as any)?.profilePictureUpdatedAt ??
                 (rawUser as any)?.profilePicUpdatedAt ??
@@ -183,7 +189,7 @@ export const HeaderSearch = memo(function HeaderSearch({
               return {
                 username: safeUsername,
                 role: rawUser.role,
-                profilePicture: picture,
+                profilePicture: resolvedPicture,
                 profilePictureUpdatedAt: pictureUpdatedAt,
                 isVerified: verified,
               } as SearchUserResult;

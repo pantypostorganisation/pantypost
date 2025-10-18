@@ -33,6 +33,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
+import { resolveApiUrl } from '@/utils/url';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
 import { HeaderSearch } from '@/components/HeaderSearch';
@@ -132,7 +133,11 @@ export default function Header(): React.ReactElement | null {
     }
 
     const sanitized = sanitizeUrl(user.profilePicture);
-    return sanitized || null;
+    if (!sanitized) {
+      return null;
+    }
+
+    return resolveApiUrl(sanitized) ?? sanitized;
   }, [user?.profilePicture]);
   const canDisplayUserAvatar = role === 'buyer' || role === 'seller';
   const profileAvatarSrc = canDisplayUserAvatar
