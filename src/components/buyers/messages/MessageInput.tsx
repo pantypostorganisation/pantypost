@@ -137,10 +137,14 @@ export default function MessageInput({
         <button
           onClick={handleReply}
           disabled={!replyMessage.trim() && !selectedImage}
-          className="p-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`flex items-center justify-center gap-1 px-3.5 py-1.5 rounded-2xl transition-colors text-sm font-semibold ${
+            !replyMessage.trim() && !selectedImage
+              ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
+              : 'bg-[#0a84ff] text-white hover:bg-[#0071e3]'
+          }`}
           aria-label="Send message"
         >
-          <Send size={20} />
+          <Send size={18} />
         </button>
       </div>
 
