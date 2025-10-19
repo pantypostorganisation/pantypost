@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Send, X } from 'lucide-react';
+import { Plus, Send, Smile, X } from 'lucide-react';
 import { compressImage } from '@/utils/imageUtils';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { securityService } from '@/services';
@@ -14,6 +14,8 @@ interface MessageInputProps {
   disabled?: boolean;
   maxLength?: number;
   showAttachmentButton?: boolean;
+  showEmojiButton?: boolean;
+  onEmojiClick?: () => void;
   className?: string;
   autoFocus?: boolean;
 }
@@ -27,6 +29,8 @@ const MessageInput: React.FC<MessageInputProps> = ({
   disabled = false,
   maxLength = 250,
   showAttachmentButton = true,
+  showEmojiButton = true,
+  onEmojiClick,
   className = '',
   autoFocus = false,
 }) => {
@@ -117,7 +121,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div className={`px-4 py-3 border-t border-gray-800 bg-[#1a1a1a] ${className}`}>
+    <div className={`px-4 py-3 border-t border-[#1f1f24] bg-[#111214] ${className}`}>
       {isUploading && (
         <div className="mb-2 flex items-center text-sm text-[#ff950e]">
           <div className="w-4 h-4 mr-2 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin"></div>
@@ -160,8 +164,8 @@ const MessageInput: React.FC<MessageInputProps> = ({
 
       <div className="flex flex-col gap-2">
         <div
-          className={`flex w-full items-center gap-3 rounded-2xl border border-[#2f3036] bg-[#1f1f24] px-3 py-2.5 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#4752e2] focus-within:ring-offset-2 focus-within:ring-offset-[#16161a] ${
-            showAttachmentButton ? '' : ''
+          className={`flex w-full items-center gap-2 rounded-[22px] border border-[#2b2d31] bg-[#1c1d22] px-3 py-2.5 transition-all duration-150 focus-within:border-[#4752e2] focus-within:ring-2 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-2 focus-within:ring-offset-[#111214] ${
+            disabled ? 'opacity-90' : ''
           }`}
         >
           {showAttachmentButton && (
@@ -169,7 +173,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
               <button
                 type="button"
                 onClick={triggerFileInput}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3b3c43] bg-[#272830] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3a3b42] bg-[#23242b] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#2d2e36] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={disabled || isUploading}
                 title="Attach Image"
                 aria-label="Attach image"
@@ -204,15 +208,32 @@ const MessageInput: React.FC<MessageInputProps> = ({
             />
           </div>
 
+          {showEmojiButton && (
+            <button
+              type="button"
+              onClick={() => {
+                if (disabled) return;
+                onEmojiClick?.();
+                textareaRef.current?.focus();
+              }}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-transparent text-gray-300 transition-colors duration-150 hover:text-white hover:bg-[#2d2f36] focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={disabled}
+              title="Add emoji"
+              aria-label="Add emoji"
+            >
+              <Smile size={18} />
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleSend}
               disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
-              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#111214] ${
                 disabled || (!content.trim() && !selectedImage) || isUploading
-                  ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
-                  : 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
+                  ? 'bg-[#2b2c31] text-gray-500 cursor-not-allowed focus:ring-[#2b2c31]'
+                  : 'bg-[#5865f2] text-white hover:bg-[#4752e2] focus:ring-[#5865f2]'
               }`}
               aria-label="Send message"
             >
@@ -221,7 +242,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           </div>
         </div>
 
-        <div className="self-end text-xs text-gray-400 text-right pr-3">{content.length}/{maxLength}</div>
+        <div className="self-end text-xs text-gray-500 text-right pr-1">{content.length}/{maxLength}</div>
       </div>
     </div>
   );
