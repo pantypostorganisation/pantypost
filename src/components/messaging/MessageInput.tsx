@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Paperclip, Send, X } from 'lucide-react';
+import { Plus, Send, X } from 'lucide-react';
 import { compressImage } from '@/utils/imageUtils';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { securityService } from '@/services';
@@ -160,13 +160,38 @@ const MessageInput: React.FC<MessageInputProps> = ({
 
       <div className="flex flex-col gap-2">
         <div className="relative">
+          {showAttachmentButton && (
+            <>
+              <button
+                type="button"
+                onClick={triggerFileInput}
+                className="absolute left-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-white transition-colors hover:bg-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={disabled || isUploading}
+                title="Attach Image"
+                aria-label="Attach image"
+              >
+                <Plus size={18} />
+              </button>
+              <input
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleImageSelect}
+                aria-hidden="true"
+                disabled={disabled}
+              />
+            </>
+          )}
           <SecureTextarea
             ref={textareaRef}
             value={content}
             onChange={setContent}
             onKeyDown={handleKeyDown}
             placeholder={selectedImage ? 'Add a caption...' : placeholder}
-            className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] resize-none"
+            className={`w-full pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] resize-none ${
+              showAttachmentButton ? 'pl-14 py-3' : 'p-3'
+            }`}
             rows={1}
             maxLength={maxLength}
             characterCount={false}
@@ -181,31 +206,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-2">
-            {showAttachmentButton && (
-              <button
-                type="button"
-                onClick={triggerFileInput}
-                className="p-2 rounded-full bg-[#ff950e] text-black hover:bg-[#e88800] disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={disabled || isUploading}
-                title="Attach Image"
-                aria-label="Attach image"
-              >
-                <Paperclip size={20} />
-              </button>
-            )}
-            <input
-              type="file"
-              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleImageSelect}
-              aria-hidden="true"
-              disabled={disabled}
-            />
-          </div>
-
+        <div className="flex items-center justify-end mt-2">
           <button
             type="button"
             onClick={handleSend}
