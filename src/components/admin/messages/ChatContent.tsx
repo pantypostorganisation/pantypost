@@ -461,7 +461,7 @@ export default function ChatContent({
                 disabled={!canSend}
                 className={`flex items-center justify-center gap-2 px-4 py-1.5 rounded-2xl transition-colors duration-150 shadow-md text-sm font-semibold ${
                   canSend
-                    ? 'bg-[#0a84ff] text-white hover:bg-[#0071e3]'
+                    ? 'bg-[#ff950e] text-black hover:bg-[#e88800]'
                     : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
                 }`}
                 type="button"

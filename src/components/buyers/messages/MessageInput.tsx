@@ -140,7 +140,7 @@ export default function MessageInput({
           className={`flex items-center justify-center gap-1 px-3.5 py-1.5 rounded-2xl transition-colors text-sm font-semibold ${
             !replyMessage.trim() && !selectedImage
               ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
-              : 'bg-[#0a84ff] text-white hover:bg-[#0071e3]'
+              : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
           }`}
           aria-label="Send message"
         >

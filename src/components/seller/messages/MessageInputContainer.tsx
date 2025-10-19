@@ -192,7 +192,7 @@ export default function MessageInputContainer({
               }}
               className={`flex items-center justify-center px-3.5 py-1.5 rounded-2xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] ${
                 canSend
-                  ? 'bg-[#0a84ff] text-white hover:bg-[#0071e3] focus:ring-[#0a84ff]'
+                  ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
                   : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
               }`}
               aria-label="Send message"
