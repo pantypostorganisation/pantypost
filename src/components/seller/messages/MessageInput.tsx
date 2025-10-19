@@ -148,7 +148,7 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
 
         {/* Message input with security */}
         <div className="px-4 py-3">
-          <div className="flex w-full items-end gap-3 rounded-lg border border-gray-700 bg-[#222] py-2 pl-2 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
+          <div className="flex w-full items-center gap-3 rounded-lg border border-gray-700 bg-[#222] py-1.5 pl-2 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
             <input
               type="file"
               accept="image/jpeg,image/png,image/gif,image/webp"
@@ -164,7 +164,7 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 if (isImageLoading) return;
                 onImageClick();
               }}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-9 w-9 aspect-square items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Attach image"
               title="Attach Image"
               disabled={isImageLoading}
@@ -178,7 +178,7 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               onChange={setReplyMessage}
               onKeyDown={onKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-              className="flex-1 bg-transparent py-3 text-white focus:outline-none focus:ring-0 min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+              className="flex-1 bg-transparent py-2 text-white focus:outline-none focus:ring-0 min-h-[36px] max-h-20 resize-none overflow-auto leading-tight"
               rows={1}
               maxLength={250}
               characterCount={false}
