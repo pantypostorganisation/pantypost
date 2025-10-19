@@ -79,7 +79,7 @@ export default function MessageInput({
 
       {imageError && <div className="mb-2 text-red-400 text-sm">{sanitizeStrict(imageError)}</div>}
 
-      <div className="flex items-end gap-2">
+      <div className="flex flex-col gap-1.5">
         <input
           ref={fileInputRef}
           type="file"
@@ -88,64 +88,68 @@ export default function MessageInput({
           className="hidden"
         />
 
-        <div className="flex gap-1">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isImageLoading}
-            className="p-2 text-gray-400 hover:text-white hover:bg-[#222] rounded-lg transition-colors disabled:opacity-50"
-            title="Attach image"
-            aria-label="Attach image"
-          >
-            <ImageIcon size={20} />
-          </button>
+        <div className="flex w-full items-center gap-2 rounded-2xl border border-[#2a2d31] bg-[#1a1c20] px-3.5 py-2 focus-within:border-[#3d4352] focus-within:ring-1 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-1 focus-within:ring-offset-[#1a1a1a]">
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isImageLoading}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[#363840] bg-[#202226] text-gray-300 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1a1a1a] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-60"
+              title="Attach image"
+              aria-label="Attach image"
+            >
+              <ImageIcon size={16} />
+            </button>
 
-          <button
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-2 text-gray-400 hover:text-white hover:bg-[#222] rounded-lg transition-colors relative"
-            title="Add emoji"
-            aria-label="Add emoji"
-          >
-            <Smile size={20} />
-          </button>
+            <button
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-gray-300 transition-colors duration-150 hover:text-white hover:bg-[#272a2f] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1a1a1a] focus:ring-[#4752e2]"
+              title="Add emoji"
+              aria-label="Add emoji"
+            >
+              <Smile size={16} />
+            </button>
 
-          <button
-            onClick={onCustomRequest}
-            className="p-2 text-gray-400 hover:text-white hover:bg-[#222] rounded-lg transition-colors"
-            title="Send custom request"
-            aria-label="Send custom request"
-          >
-            <Package size={20} />
-          </button>
-        </div>
+            <button
+              onClick={onCustomRequest}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-gray-300 transition-colors duration-150 hover:text-white hover:bg-[#272a2f] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1a1a1a] focus:ring-[#4752e2]"
+              title="Send custom request"
+              aria-label="Send custom request"
+            >
+              <Package size={16} />
+            </button>
+          </div>
 
-        <div className="flex-1">
           <SecureTextarea
             value={replyMessage}
             onChange={setReplyMessage}
             onKeyPress={handleKeyPress}
             placeholder="Type a message..."
             rows={1}
-            className="w-full !bg-[#222] !text-white !border-0 rounded-lg px-3 py-2 resize-none focus:outline-none focus:!ring-2 focus:!ring-[#ff950e] min-h-[40px] max-h-[120px]"
+            className="flex-1 !bg-transparent !text-white !border-0 !shadow-none !px-0 !py-0.5 text-[15px] placeholder:text-gray-500 resize-none focus:!outline-none focus:!ring-0 min-h-[34px] max-h-[120px]"
             style={{ height: 'auto', overflowY: replyMessage.split('\n').length > 3 ? 'auto' : 'hidden' }}
             sanitizer={messageSanitizer}
             maxLength={1000}
             characterCount={false}
             aria-label="Message"
           />
+
+          <button
+            onClick={handleReply}
+            disabled={!replyMessage.trim() && !selectedImage}
+            className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1a1a1a] ${
+              !replyMessage.trim() && !selectedImage
+                ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
+                : 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
+            }`}
+            aria-label="Send message"
+          >
+            <Send size={16} />
+          </button>
         </div>
 
-        <button
-          onClick={handleReply}
-          disabled={!replyMessage.trim() && !selectedImage}
-          className={`flex items-center justify-center gap-1 px-3.5 py-1.5 rounded-2xl transition-colors text-sm font-semibold ${
-            !replyMessage.trim() && !selectedImage
-              ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
-              : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-          }`}
-          aria-label="Send message"
-        >
-          <Send size={18} />
-        </button>
+        {replyMessage.length > 0 && (
+          <div className="text-[11px] text-gray-500 text-right pr-1">{replyMessage.length}/1000</div>
+        )}
       </div>
 
       {showEmojiPicker && (
