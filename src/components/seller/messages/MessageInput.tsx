@@ -155,7 +155,7 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               onChange={setReplyMessage}
               onKeyDown={onKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-              className="w-full p-3 pr-28 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+              className="w-full py-3 pr-24 pl-14 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
               rows={1}
               maxLength={250}
               characterCount={false}
@@ -170,21 +170,22 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               onChange={handleSecureImageSelect}
             />
 
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center gap-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (isImageLoading) return;
-                  onImageClick();
-                }}
-                className="flex items-center justify-center h-8 w-8 rounded-full bg-[#2b2b2b] text-gray-300 hover:text-white hover:bg-[#333] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-label="Attach image"
-                title="Attach Image"
-                disabled={isImageLoading}
-              >
-                <Plus size={18} />
-              </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isImageLoading) return;
+                onImageClick();
+              }}
+              className="absolute left-3 top-1/2 h-9 w-9 -translate-y-1/2 rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="Attach image"
+              title="Attach Image"
+              disabled={isImageLoading}
+            >
+              <Plus size={18} />
+            </button>
+
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center gap-2">
               {/* Emoji button */}
               <button
                 onClick={(e) => {
