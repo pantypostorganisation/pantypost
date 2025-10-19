@@ -158,18 +158,18 @@ const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2">
         <div
-          className={`flex w-full items-end gap-3 rounded-lg border border-gray-700 bg-[#222] py-1.5 ${
-            showAttachmentButton ? 'pl-2 pr-3' : 'px-3'
-          } focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#ff950e]`}
+          className={`flex w-full items-center gap-3 rounded-2xl border border-[#2f3036] bg-[#1f1f24] px-3 py-2.5 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#4752e2] focus-within:ring-offset-2 focus-within:ring-offset-[#16161a] ${
+            showAttachmentButton ? '' : ''
+          }`}
         >
           {showAttachmentButton && (
             <>
               <button
                 type="button"
                 onClick={triggerFileInput}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-white transition-colors hover:bg-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3b3c43] bg-[#272830] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={disabled || isUploading}
                 title="Attach Image"
                 aria-label="Attach image"
@@ -187,16 +187,14 @@ const MessageInput: React.FC<MessageInputProps> = ({
               />
             </>
           )}
-          <div className="relative flex-1">
+          <div className="flex-1">
             <SecureTextarea
               ref={textareaRef}
               value={content}
               onChange={setContent}
               onKeyDown={handleKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : placeholder}
-              className={`w-full bg-transparent pr-12 text-white focus:outline-none focus:ring-0 min-h-[42px] resize-none ${
-                showAttachmentButton ? 'py-2' : 'py-2'
-              }`}
+              className="w-full !bg-transparent !border-0 !shadow-none !px-0 !py-1.5 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[44px] resize-none"
               rows={1}
               maxLength={maxLength}
               characterCount={false}
@@ -204,28 +202,26 @@ const MessageInput: React.FC<MessageInputProps> = ({
               disabled={disabled}
               aria-label="Message text"
             />
-            <div className="pointer-events-none absolute bottom-1.5 right-3 text-xs text-gray-400">
-              {content.length}/{maxLength}
-            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                disabled || (!content.trim() && !selectedImage) || isUploading
+                  ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
+                  : 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
+              }`}
+              aria-label="Send message"
+            >
+              <Send size={18} />
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-end mt-1.5">
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
-            className={`flex items-center justify-center gap-1 px-3.5 py-1.5 rounded-2xl transition-colors text-sm font-semibold ${
-              disabled || (!content.trim() && !selectedImage) || isUploading
-                ? 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
-                : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-            }`}
-            aria-label="Send message"
-          >
-            <Send size={16} />
-            <span className="sr-only">Send</span>
-          </button>
-        </div>
+        <div className="text-xs text-gray-400 text-right">{content.length}/{maxLength}</div>
       </div>
     </div>
   );
