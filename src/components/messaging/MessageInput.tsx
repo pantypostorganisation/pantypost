@@ -159,13 +159,17 @@ const MessageInput: React.FC<MessageInputProps> = ({
       )}
 
       <div className="flex flex-col gap-2">
-        <div className="relative">
+        <div
+          className={`flex w-full items-end gap-3 rounded-lg border border-gray-700 bg-[#222] py-2 ${
+            showAttachmentButton ? 'pl-2 pr-3' : 'px-3'
+          } focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#ff950e]`}
+        >
           {showAttachmentButton && (
             <>
               <button
                 type="button"
                 onClick={triggerFileInput}
-                className="absolute left-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-white transition-colors hover:bg-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-white transition-colors hover:bg-[#3a3a3a] focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={disabled || isUploading}
                 title="Attach Image"
                 aria-label="Attach image"
@@ -183,26 +187,26 @@ const MessageInput: React.FC<MessageInputProps> = ({
               />
             </>
           )}
-          <SecureTextarea
-            ref={textareaRef}
-            value={content}
-            onChange={setContent}
-            onKeyDown={handleKeyDown}
-            placeholder={selectedImage ? 'Add a caption...' : placeholder}
-            className={`w-full pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] resize-none ${
-              showAttachmentButton ? 'pl-14 py-3' : 'p-3'
-            }`}
-            rows={1}
-            maxLength={maxLength}
-            characterCount={false}
-            sanitize={true}
-            disabled={disabled}
-            aria-label="Message text"
-          />
-          <div className="absolute bottom-2 right-2">
-            <span className="text-xs text-gray-400">
+          <div className="relative flex-1">
+            <SecureTextarea
+              ref={textareaRef}
+              value={content}
+              onChange={setContent}
+              onKeyDown={handleKeyDown}
+              placeholder={selectedImage ? 'Add a caption...' : placeholder}
+              className={`w-full bg-transparent pr-12 text-white focus:outline-none focus:ring-0 min-h-[60px] resize-none ${
+                showAttachmentButton ? 'py-3' : 'py-3'
+              }`}
+              rows={1}
+              maxLength={maxLength}
+              characterCount={false}
+              sanitize={true}
+              disabled={disabled}
+              aria-label="Message text"
+            />
+            <div className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">
               {content.length}/{maxLength}
-            </span>
+            </div>
           </div>
         </div>
 
