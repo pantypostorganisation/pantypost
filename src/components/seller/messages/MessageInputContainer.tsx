@@ -149,7 +149,30 @@ export default function MessageInputContainer({
 
       {/* Input area */}
       <div className="px-4 py-3">
-        <div className="relative mb-2">
+        <div className="flex w-full items-end gap-3 rounded-lg border border-gray-700 bg-[#222] py-2 pl-2 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleImageSelectFromInput}
+          />
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isImageLoading) return;
+              triggerFileInput();
+            }}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Attach image"
+            title="Attach Image"
+            disabled={isImageLoading}
+          >
+            <Plus size={18} />
+          </button>
+
           <SecureTextarea
             ref={inputRef}
             value={replyMessage}
@@ -159,36 +182,15 @@ export default function MessageInputContainer({
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="w-full p-3 pr-28 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
+            className="flex-1 !bg-transparent !border-0 !shadow-none py-3 text-white focus:!outline-none focus:!ring-0 min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
             characterCount={false}
             aria-label="Message"
           />
-          <input
-            type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp"
-            ref={fileInputRef}
-            style={{ display: 'none' }}
-            onChange={handleImageSelectFromInput}
-          />
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center gap-2">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isImageLoading) return;
-                triggerFileInput();
-              }}
-              className="flex items-center justify-center h-8 w-8 rounded-full bg-[#2b2b2b] text-gray-300 hover:text-white hover:bg-[#333] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="Attach image"
-              title="Attach Image"
-              disabled={isImageLoading}
-            >
-              <Plus size={18} />
-            </button>
-            {/* Emoji button integrated in textarea */}
+
+          <div className="flex items-center gap-2">
             <button
               onClick={(e) => {
                 e.stopPropagation();
