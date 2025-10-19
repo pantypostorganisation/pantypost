@@ -149,7 +149,7 @@ export default function MessageInputContainer({
 
       {/* Input area */}
       <div className="px-4 py-3">
-        <div className="flex w-full items-end gap-3 rounded-lg border border-gray-700 bg-[#222] py-2 pl-2 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
+        <div className="flex w-full items-center gap-3 rounded-2xl border border-[#2f3036] bg-[#1f1f24] px-3 py-2.5 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#4752e2] focus-within:ring-offset-2 focus-within:ring-offset-[#16161a]">
           <input
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
@@ -165,7 +165,7 @@ export default function MessageInputContainer({
               if (isImageLoading) return;
               triggerFileInput();
             }}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3b3c43] bg-[#272830] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Attach image"
             title="Attach Image"
             disabled={isImageLoading}
@@ -182,7 +182,7 @@ export default function MessageInputContainer({
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="flex-1 !bg-transparent !border-0 !shadow-none py-3 text-white focus:!outline-none focus:!ring-0 min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
+            className="flex-1 !bg-transparent !border-0 !shadow-none !px-0 !py-1.5 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[44px] max-h-20 !resize-none overflow-auto leading-tight"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
@@ -196,9 +196,11 @@ export default function MessageInputContainer({
                 e.stopPropagation();
                 setShowEmojiPicker(!showEmojiPicker);
               }}
-              className={`flex items-center justify-center h-8 w-8 rounded-full ${
-                showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-              } transition-colors duration-150`}
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                showEmojiPicker
+                  ? 'bg-[#ff950e] text-black focus:ring-[#ff950e]'
+                  : 'border border-[#3b3c43] bg-[#272830] text-gray-300 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:ring-[#4752e2]'
+              }`}
               title="Emoji"
               type="button"
               aria-label="Toggle emoji picker"
@@ -213,7 +215,7 @@ export default function MessageInputContainer({
                 setShowEmojiPicker(false);
                 handleReply();
               }}
-              className={`flex items-center justify-center px-3.5 py-1.5 rounded-2xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] ${
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
                 canSend
                   ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
                   : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'

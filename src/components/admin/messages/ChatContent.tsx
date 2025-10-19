@@ -3,7 +3,7 @@
 
 import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import {
-  ArrowRightCircle,
+  ArrowUp,
   CheckCheck,
   X,
   Paperclip,
@@ -377,20 +377,7 @@ export default function ChatContent({
 
           {/* Input */}
           <div className="px-4 py-3">
-            <div className="relative mb-2">
-              <SecureTextarea
-                ref={inputRef}
-                value={content}
-                onChange={setContent}
-                onKeyDown={handleKeyDown}
-                placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-                className="w-full p-3 pr-24 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
-                rows={1}
-                maxLength={250}
-                characterCount={false}
-                sanitize
-              />
-
+            <div className="flex w-full items-center gap-3 rounded-2xl border border-[#2f3036] bg-[#1f1f24] px-3 py-2.5 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#4752e2] focus-within:ring-offset-2 focus-within:ring-offset-[#16161a]">
               <input
                 type="file"
                 accept={ALLOWED_IMAGE_TYPES.join(',')}
@@ -399,78 +386,74 @@ export default function ChatContent({
                 onChange={handleImageSelect}
               />
 
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center gap-2">
-                <button
-                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.stopPropagation();
-                    if (isImageLoading) return;
-                    triggerFileInput();
-                  }}
-                  className="flex items-center justify-center h-8 w-8 rounded-full bg-[#2b2b2b] text-gray-300 hover:text-white hover:bg-[#333] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Attach Image"
-                  aria-label="Attach image"
-                  type="button"
-                  disabled={isImageLoading}
-                >
-                  <Plus size={18} />
-                </button>
+              <button
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation();
+                  if (isImageLoading) return;
+                  triggerFileInput();
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3b3c43] bg-[#272830] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
+                title="Attach Image"
+                aria-label="Attach image"
+                type="button"
+                disabled={isImageLoading}
+              >
+                <Plus size={18} />
+              </button>
 
-                {/* Emoji button */}
+              <SecureTextarea
+                ref={inputRef}
+                value={content}
+                onChange={setContent}
+                onKeyDown={handleKeyDown}
+                placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
+                className="flex-1 !bg-transparent !border-0 !shadow-none !px-0 !py-1.5 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[44px] max-h-20 !resize-none overflow-auto leading-tight"
+                rows={1}
+                maxLength={250}
+                characterCount={false}
+                sanitize
+              />
+
+              <div className="flex items-center gap-2">
                 <button
                   onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.stopPropagation();
                     setShowEmojiPicker((v) => !v);
                   }}
-                  className={`flex items-center justify-center h-8 w-8 rounded-full ${
-                    showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-                  } transition-colors duration-150`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                    showEmojiPicker
+                      ? 'bg-[#ff950e] text-black focus:ring-[#ff950e]'
+                      : 'border border-[#3b3c43] bg-[#272830] text-gray-300 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:ring-[#4752e2]'
+                  }`}
                   title="Emoji"
                   type="button"
                   aria-pressed={showEmojiPicker}
                 >
                   <Smile size={20} className="flex-shrink-0" />
                 </button>
-              </div>
-            </div>
 
-            {content.length > 0 && <div className="text-xs text-gray-400 mb-2 text-right">{content.length}/250</div>}
-
-            {/* Actions */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
                 <button
                   onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.stopPropagation();
-                    setShowEmojiPicker((v) => !v);
+                    if (!canSend) return;
+                    setShowEmojiPicker(false);
+                    onSend();
                   }}
-                  className={`md:hidden w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-md text-black text-2xl ${
-                    showEmojiPicker ? 'bg-[#e88800]' : 'bg-[#ff950e] hover:bg-[#e88800]'
-                  } transition-colors duration-150`}
-                  title="Emoji"
-                  aria-label="Emoji"
+                  disabled={!canSend}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                    canSend
+                      ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
+                      : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
+                  }`}
                   type="button"
+                  aria-label="Send message"
                 >
-                  <Smile size={26} />
+                  <ArrowUp size={16} strokeWidth={2.5} />
                 </button>
               </div>
-
-              <button
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.stopPropagation();
-                  onSend();
-                }}
-                disabled={!canSend}
-                className={`flex items-center justify-center gap-2 px-4 py-1.5 rounded-2xl transition-colors duration-150 shadow-md text-sm font-semibold ${
-                  canSend
-                    ? 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                    : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed'
-                }`}
-                type="button"
-              >
-                <span>Send</span>
-                <ArrowRightCircle size={16} className="flex-shrink-0" />
-              </button>
             </div>
+
+            {content.length > 0 && <div className="text-xs text-gray-400 mb-2 mt-2 text-right">{content.length}/250</div>}
           </div>
         </div>
       )}
