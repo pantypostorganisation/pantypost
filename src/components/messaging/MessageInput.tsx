@@ -121,7 +121,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div className={`px-4 py-3 border-t border-[#1f1f24] bg-[#111214] ${className}`}>
+    <div className={`px-4 py-2.5 border-t border-[#1f1f24] bg-[#111214] ${className}`}>
       {isUploading && (
         <div className="mb-2 flex items-center text-sm text-[#ff950e]">
           <div className="w-4 h-4 mr-2 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin"></div>
@@ -162,9 +162,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <div
-          className={`flex w-full items-center gap-2 rounded-[22px] border border-[#2b2d31] bg-[#1c1d22] px-3 py-2.5 transition-all duration-150 focus-within:border-[#4752e2] focus-within:ring-2 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-2 focus-within:ring-offset-[#111214] ${
+          className={`flex w-full items-center gap-2 rounded-2xl border border-[#2a2d31] bg-[#1a1c20] px-3.5 py-2 transition-all duration-150 focus-within:border-[#3d4352] focus-within:ring-1 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-1 focus-within:ring-offset-[#111214] ${
             disabled ? 'opacity-90' : ''
           }`}
         >
@@ -173,12 +173,12 @@ const MessageInput: React.FC<MessageInputProps> = ({
               <button
                 type="button"
                 onClick={triggerFileInput}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3a3b42] bg-[#23242b] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#2d2e36] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-[#363840] bg-[#202226] text-gray-300 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={disabled || isUploading}
                 title="Attach Image"
                 aria-label="Attach image"
               >
-                <Plus size={18} />
+                <Plus size={16} />
               </button>
               <input
                 type="file"
@@ -198,7 +198,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
               onChange={setContent}
               onKeyDown={handleKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : placeholder}
-              className="w-full !bg-transparent !border-0 !shadow-none !px-0 !py-0 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 leading-[1.6] min-h-[40px] resize-none flex items-center"
+              className="w-full !bg-transparent !border-0 !shadow-none !px-0 !py-0.5 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 leading-[1.6] min-h-[34px] resize-none flex items-center"
               rows={1}
               maxLength={maxLength}
               characterCount={false}
@@ -216,12 +216,12 @@ const MessageInput: React.FC<MessageInputProps> = ({
                 onEmojiClick?.();
                 textareaRef.current?.focus();
               }}
-              className="flex h-10 w-10 items-center justify-center rounded-full border border-transparent text-gray-300 transition-colors duration-150 hover:text-white hover:bg-[#2d2f36] focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-gray-300 transition-colors duration-150 hover:text-white hover:bg-[#272a2f] focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={disabled}
               title="Add emoji"
               aria-label="Add emoji"
             >
-              <Smile size={18} />
+              <Smile size={16} />
             </button>
           )}
 
@@ -230,19 +230,19 @@ const MessageInput: React.FC<MessageInputProps> = ({
               type="button"
               onClick={handleSend}
               disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
-              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#111214] ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#111214] ${
                 disabled || (!content.trim() && !selectedImage) || isUploading
                   ? 'bg-[#2b2c31] text-gray-500 cursor-not-allowed focus:ring-[#2b2c31]'
                   : 'bg-[#5865f2] text-white hover:bg-[#4752e2] focus:ring-[#5865f2]'
               }`}
               aria-label="Send message"
             >
-              <Send size={18} />
+              <Send size={16} />
             </button>
           </div>
         </div>
 
-        <div className="self-end text-xs text-gray-500 text-right pr-1">{content.length}/{maxLength}</div>
+        <div className="self-end text-[11px] text-gray-500 text-right pr-1">{content.length}/{maxLength}</div>
       </div>
     </div>
   );
