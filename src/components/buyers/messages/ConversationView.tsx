@@ -21,7 +21,8 @@ import {
   MoreVertical,
   Ban,
   Flag,
-  ArrowUp
+  ArrowUp,
+  Plus
 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import TypingIndicator from '@/components/messaging/TypingIndicator';
@@ -781,7 +782,29 @@ export default function ConversationView(props: ConversationViewProps) {
             aria-label="Message"
           />
 
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={stableHandleImageSelect}
+          />
+
           <div className="absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isImageLoading) return;
+                triggerFileInput();
+              }}
+              className="flex items-center justify-center h-8 w-8 rounded-full bg-[#2b2b2b] text-gray-300 hover:text-white hover:bg-[#333] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Attach Image"
+              type="button"
+              aria-label="Attach image"
+              disabled={isImageLoading}
+            >
+              <Plus size={18} />
+            </button>
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -834,20 +857,6 @@ export default function ConversationView(props: ConversationViewProps) {
             />
 
             <img
-              src="/Attach_Image_Icon.png"
-              alt="Attach Image"
-              className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={(e) => {
-                if (isImageLoading) return;
-                e.stopPropagation();
-                triggerFileInput();
-              }}
-              title="Attach Image"
-            />
-
-            <img
               src="/Custom_Request_Icon.png"
               alt="Custom Request"
               className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
@@ -859,13 +868,6 @@ export default function ConversationView(props: ConversationViewProps) {
             />
 
             {/* Hidden file input with strict types */}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={stableHandleImageSelect}
-            />
         </div>
       </div>
 

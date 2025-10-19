@@ -8,13 +8,13 @@ import {
   X,
   Paperclip,
   Smile,
-  Image as ImageIcon,
   ShieldAlert,
   AlertTriangle,
   Clock,
   BadgeCheck,
   MessageCircle,
-  MessageSquarePlus
+  MessageSquarePlus,
+  Plus
 } from 'lucide-react';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 import { Message } from '@/types/message';
@@ -384,28 +384,53 @@ export default function ChatContent({
                 onChange={setContent}
                 onKeyDown={handleKeyDown}
                 placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-                className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+                className="w-full p-3 pr-24 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
                 rows={1}
                 maxLength={250}
                 characterCount={false}
                 sanitize
               />
 
-              {/* Emoji button */}
-              <button
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.stopPropagation();
-                  setShowEmojiPicker((v) => !v);
-                }}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-                  showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-                } transition-colors duration-150`}
-                title="Emoji"
-                type="button"
-                aria-pressed={showEmojiPicker}
-              >
-                <Smile size={20} className="flex-shrink-0" />
-              </button>
+              <input
+                type="file"
+                accept={ALLOWED_IMAGE_TYPES.join(',')}
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleImageSelect}
+              />
+
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center gap-2">
+                <button
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    e.stopPropagation();
+                    if (isImageLoading) return;
+                    triggerFileInput();
+                  }}
+                  className="flex items-center justify-center h-8 w-8 rounded-full bg-[#2b2b2b] text-gray-300 hover:text-white hover:bg-[#333] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Attach Image"
+                  aria-label="Attach image"
+                  type="button"
+                  disabled={isImageLoading}
+                >
+                  <Plus size={18} />
+                </button>
+
+                {/* Emoji button */}
+                <button
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    e.stopPropagation();
+                    setShowEmojiPicker((v) => !v);
+                  }}
+                  className={`flex items-center justify-center h-8 w-8 rounded-full ${
+                    showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
+                  } transition-colors duration-150`}
+                  title="Emoji"
+                  type="button"
+                  aria-pressed={showEmojiPicker}
+                >
+                  <Smile size={20} className="flex-shrink-0" />
+                </button>
+              </div>
             </div>
 
             {content.length > 0 && <div className="text-xs text-gray-400 mb-2 text-right">{content.length}/250</div>}
@@ -413,22 +438,6 @@ export default function ChatContent({
             {/* Actions */}
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-4">
-                <button
-                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.stopPropagation();
-                    triggerFileInput();
-                  }}
-                  disabled={isImageLoading}
-                  className={`w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-md ${
-                    isImageLoading ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                  } transition-colors duration-150`}
-                  title="Attach Image"
-                  aria-label="Attach Image"
-                  type="button"
-                >
-                  <ImageIcon size={26} />
-                </button>
-
                 <button
                   onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.stopPropagation();
@@ -443,14 +452,6 @@ export default function ChatContent({
                 >
                   <Smile size={26} />
                 </button>
-
-                <input
-                  type="file"
-                  accept={ALLOWED_IMAGE_TYPES.join(',')}
-                  ref={fileInputRef}
-                  style={{ display: 'none' }}
-                  onChange={handleImageSelect}
-                />
               </div>
 
               <button
