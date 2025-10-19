@@ -158,9 +158,9 @@ const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <div
-          className={`flex w-full items-end gap-3 rounded-lg border border-gray-700 bg-[#222] py-2 ${
+          className={`flex w-full items-end gap-3 rounded-lg border border-gray-700 bg-[#222] py-1.5 ${
             showAttachmentButton ? 'pl-2 pr-3' : 'px-3'
           } focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#ff950e]`}
         >
@@ -194,8 +194,8 @@ const MessageInput: React.FC<MessageInputProps> = ({
               onChange={setContent}
               onKeyDown={handleKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : placeholder}
-              className={`w-full bg-transparent pr-12 text-white focus:outline-none focus:ring-0 min-h-[60px] resize-none ${
-                showAttachmentButton ? 'py-3' : 'py-3'
+              className={`w-full bg-transparent pr-12 text-white focus:outline-none focus:ring-0 min-h-[42px] resize-none ${
+                showAttachmentButton ? 'py-2' : 'py-2'
               }`}
               rows={1}
               maxLength={maxLength}
@@ -204,13 +204,13 @@ const MessageInput: React.FC<MessageInputProps> = ({
               disabled={disabled}
               aria-label="Message text"
             />
-            <div className="pointer-events-none absolute bottom-2 right-3 text-xs text-gray-400">
+            <div className="pointer-events-none absolute bottom-1.5 right-3 text-xs text-gray-400">
               {content.length}/{maxLength}
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-end mt-2">
+        <div className="flex items-center justify-end mt-1.5">
           <button
             type="button"
             onClick={handleSend}
