@@ -187,14 +187,14 @@ const MessageInput: React.FC<MessageInputProps> = ({
               />
             </>
           )}
-          <div className="flex-1">
+          <div className="flex-1 flex items-center">
             <SecureTextarea
               ref={textareaRef}
               value={content}
               onChange={setContent}
               onKeyDown={handleKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : placeholder}
-              className="w-full !bg-transparent !border-0 !shadow-none !px-0 !py-1.5 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[44px] resize-none"
+              className="w-full !bg-transparent !border-0 !shadow-none !px-0 !py-0 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 leading-[1.6] min-h-[40px] resize-none flex items-center"
               rows={1}
               maxLength={maxLength}
               characterCount={false}
@@ -221,7 +221,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
           </div>
         </div>
 
-        <div className="text-xs text-gray-400 text-right">{content.length}/{maxLength}</div>
+        <div className="self-end text-xs text-gray-400 text-right pr-3">{content.length}/{maxLength}</div>
       </div>
     </div>
   );
