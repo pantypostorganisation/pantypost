@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useCallback } from 'react';
-import { X, Smile, AlertTriangle, ShieldAlert, ArrowUp } from 'lucide-react';
+import { X, Smile, AlertTriangle, ShieldAlert, ArrowUp, Plus } from 'lucide-react';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -166,7 +166,28 @@ export default function MessageInputContainer({
             characterCount={false}
             aria-label="Message"
           />
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleImageSelectFromInput}
+          />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isImageLoading) return;
+                triggerFileInput();
+              }}
+              className="flex items-center justify-center h-8 w-8 rounded-full bg-[#2b2b2b] text-gray-300 hover:text-white hover:bg-[#333] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Attach image"
+              title="Attach Image"
+              disabled={isImageLoading}
+            >
+              <Plus size={18} />
+            </button>
             {/* Emoji button integrated in textarea */}
             <button
               onClick={(e) => {
@@ -206,32 +227,6 @@ export default function MessageInputContainer({
         {replyMessage.length > 0 && (
           <div className="text-xs text-gray-400 mb-2 text-right">{replyMessage.length}/250</div>
         )}
-
-        <div className="flex items-center gap-0">
-            {/* Attach image button */}
-            <img
-              src="/Attach_Image_Icon.png"
-              alt="Attach Image"
-              className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={(e) => {
-                if (isImageLoading) return;
-                e.stopPropagation();
-                triggerFileInput();
-              }}
-              title="Attach Image"
-            />
-
-            {/* Hidden file input */}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleImageSelectFromInput}
-            />
-        </div>
       </div>
 
       {/* Inline emoji picker */}

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { forwardRef, useState, useCallback } from 'react';
-import { AlertTriangle, X, Smile, ShieldAlert, ArrowUp } from 'lucide-react';
+import { AlertTriangle, X, Smile, ShieldAlert, ArrowUp, Plus } from 'lucide-react';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { securityService } from '@/services/security.service';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -162,7 +162,29 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               sanitize={true}
             />
 
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              onChange={handleSecureImageSelect}
+            />
+
             <div className="absolute right-3 top-1/2 transform -translate-y-1/2 mt-[-4px] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isImageLoading) return;
+                  onImageClick();
+                }}
+                className="flex items-center justify-center h-8 w-8 rounded-full bg-[#2b2b2b] text-gray-300 hover:text-white hover:bg-[#333] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Attach image"
+                title="Attach Image"
+                disabled={isImageLoading}
+              >
+                <Plus size={18} />
+              </button>
               {/* Emoji button */}
               <button
                 onClick={(e) => {
@@ -203,33 +225,6 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           {replyMessage.length > 0 && (
             <div className="text-xs text-gray-400 mb-2 text-right">{replyMessage.length}/250</div>
           )}
-
-          {/* Bottom row with attachment and send buttons */}
-          <div className="flex items-center gap-0">
-            {/* Attachment button */}
-            <img
-              src="/Attach_Image_Icon.png"
-              alt="Attach Image"
-              className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              onClick={(e) => {
-                if (isImageLoading) return;
-                e.stopPropagation();
-                onImageClick();
-              }}
-              title="Attach Image"
-            />
-
-            {/* Hidden file input with secure constraints */}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleSecureImageSelect}
-            />
-          </div>
         </div>
       </div>
     );
