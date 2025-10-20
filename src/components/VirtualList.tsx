@@ -30,6 +30,10 @@ export function VirtualList<T>({
     getScrollElement: () => parentRef.current,
     estimateSize: () => safeItemHeight,
     overscan: safeOverscan,
+    measureElement: (element) =>
+      element instanceof HTMLElement
+        ? element.getBoundingClientRect().height
+        : safeItemHeight,
   });
 
   return (
@@ -44,6 +48,7 @@ export function VirtualList<T>({
         {virtualizer.getVirtualItems().map((virtualItem) => (
           <div
             key={virtualItem.key}
+            ref={virtualizer.measureElement}
             style={{
               position: 'absolute',
               top: 0,
