@@ -99,8 +99,8 @@ export default function MessageInput({
         </div>
       )}
 
-      <div className="px-4 py-2.5">
-        <div className="flex w-full items-center gap-2.5 rounded-lg border border-gray-700 bg-[#222] py-1 pl-2.5 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
+      <div className="px-4 pt-2.5">
+        <div className="flex w-full items-center gap-2 rounded-full border border-[#2f2f2f] bg-[#1a1a1a] px-3 py-1.5 focus-within:ring-1 focus-within:ring-[#ff950e]">
           <input
             ref={fileInputRef}
             type="file"
@@ -116,7 +116,7 @@ export default function MessageInput({
               if (isImageLoading) return;
               fileInputRef.current?.click();
             }}
-            className="flex h-8 w-8 aspect-square items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#3a3a3a] bg-[#232323] text-gray-300 transition-colors duration-150 hover:bg-[#2d2d2d] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
             title="Attach image"
             aria-label="Attach image"
             disabled={isImageLoading}
@@ -144,9 +144,9 @@ export default function MessageInput({
                 e.stopPropagation();
                 setShowEmojiPicker(!showEmojiPicker);
               }}
-              className={`flex items-center justify-center h-8 w-8 rounded-full ${
-                showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-              } transition-colors duration-150`}
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 ${
+                showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#2d2d2d]'
+              }`}
               title="Emoji"
               aria-label="Toggle emoji picker"
               aria-pressed={showEmojiPicker}
@@ -157,24 +157,12 @@ export default function MessageInput({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onCustomRequest();
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] focus:ring-[#ff950e]"
-              title="Send custom request"
-              aria-label="Send custom request"
-            >
-              <img src="/Custom_Request_Icon.png" alt="Custom request" className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
                 if (!canSend) return;
                 setShowEmojiPicker(false);
                 handleReply();
               }}
               disabled={!canSend}
-              className={`flex items-center justify-center px-3 py-1.5 rounded-2xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1a1a1a] ${
                 canSend
                   ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
                   : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
@@ -184,6 +172,21 @@ export default function MessageInput({
               <ArrowUp size={16} strokeWidth={2.5} />
             </button>
           </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3 text-sm text-gray-300">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCustomRequest();
+            }}
+            className="flex items-center gap-2 rounded-full border border-[#2f2f2f] bg-[#1f1f1f] px-4 py-1.5 text-gray-200 transition-colors duration-150 hover:bg-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            title="Send custom request"
+            aria-label="Send custom request"
+          >
+            <img src="/Custom_Request_Icon.png" alt="Custom request" className="h-4 w-4" />
+            <span>Custom Request</span>
+          </button>
         </div>
       </div>
 

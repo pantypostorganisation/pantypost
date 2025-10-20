@@ -761,8 +761,8 @@ export default function ConversationView(props: ConversationViewProps) {
       )}
 
       {/* Input */}
-      <div className="px-4 py-2.5">
-        <div className="flex w-full items-center gap-2.5 rounded-lg border border-gray-700 bg-[#222] py-1 pl-2.5 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
+      <div className="px-4 pt-2.5">
+        <div className="flex w-full items-center gap-2 rounded-full border border-[#2f2f2f] bg-[#1a1a1a] px-3 py-1.5 focus-within:ring-1 focus-within:ring-[#ff950e]">
           <input
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
@@ -777,7 +777,7 @@ export default function ConversationView(props: ConversationViewProps) {
               if (isImageLoading) return;
               triggerFileInput();
             }}
-            className="flex h-8 w-8 aspect-square items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#3a3a3a] bg-[#232323] text-gray-300 transition-colors duration-150 hover:bg-[#2d2d2d] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
             title="Attach Image"
             type="button"
             aria-label="Attach image"
@@ -809,11 +809,11 @@ export default function ConversationView(props: ConversationViewProps) {
                 e.stopPropagation();
                 setShowEmojiPicker(!showEmojiPicker);
               }}
-              className={`flex items-center justify-center h-8 w-8 rounded-full ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 ${
                 showEmojiPicker
                   ? 'bg-[#ff950e] text-black'
-                  : 'text-[#ff950e] hover:bg-[#333]'
-              } transition-colors duration-150`}
+                  : 'text-[#ff950e] hover:bg-[#2d2d2d]'
+              }`}
               title="Emoji"
               type="button"
               aria-label="Toggle emoji picker"
@@ -825,35 +825,11 @@ export default function ConversationView(props: ConversationViewProps) {
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowTipModal(true);
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] focus:ring-[#ff950e]"
-              aria-label="Send tip"
-              title="Send Tip"
-            >
-              <img src="/Send_Tip_Icon.png" alt="Send tip" className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowCustomRequestModal(true);
-              }}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] focus:ring-[#ff950e]"
-              aria-label="Send custom request"
-              title="Send Custom Request"
-            >
-              <img src="/Custom_Request_Icon.png" alt="Custom request" className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
                 if (!canSend) return;
                 setShowEmojiPicker(false);
                 stableHandleReply();
               }}
-              className={`flex items-center justify-center px-3 py-1.5 rounded-2xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1a1a1a] ${
                 canSend
                   ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
                   : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
@@ -864,6 +840,32 @@ export default function ConversationView(props: ConversationViewProps) {
               <ArrowUp size={16} strokeWidth={2.5} />
             </button>
           </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3 text-sm text-gray-300">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowTipModal(true);
+            }}
+            className="flex items-center gap-2 rounded-full border border-[#2f2f2f] bg-[#1f1f1f] px-4 py-1.5 text-gray-200 transition-colors duration-150 hover:bg-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            aria-label="Send tip"
+          >
+            <img src="/Send_Tip_Icon.png" alt="Send tip" className="h-4 w-4" />
+            <span>Send Tip</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowCustomRequestModal(true);
+            }}
+            className="flex items-center gap-2 rounded-full border border-[#2f2f2f] bg-[#1f1f1f] px-4 py-1.5 text-gray-200 transition-colors duration-150 hover:bg-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            aria-label="Send custom request"
+          >
+            <img src="/Custom_Request_Icon.png" alt="Custom request" className="h-4 w-4" />
+            <span>Custom Request</span>
+          </button>
         </div>
       </div>
 
