@@ -147,8 +147,8 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
         )}
 
         {/* Message input with security */}
-        <div className="px-4 py-3">
-          <div className="flex w-full items-center gap-3 rounded-lg border border-gray-700 bg-[#222] py-1.5 pl-2 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
+        <div className="px-4 py-2.5">
+          <div className="flex w-full items-center gap-2.5 rounded-lg border border-gray-700 bg-[#222] py-1 pl-2.5 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
             <input
               type="file"
               accept="image/jpeg,image/png,image/gif,image/webp"
@@ -164,7 +164,7 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 if (isImageLoading) return;
                 onImageClick();
               }}
-              className="flex h-9 w-9 aspect-square items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-8 w-8 aspect-square items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Attach image"
               title="Attach Image"
               disabled={isImageLoading}
@@ -178,14 +178,14 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               onChange={setReplyMessage}
               onKeyDown={onKeyDown}
               placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-              className="flex-1 bg-transparent py-2 text-white focus:outline-none focus:ring-0 min-h-[36px] max-h-20 resize-none overflow-auto leading-tight"
+              className="flex-1 bg-transparent py-1.5 text-white focus:outline-none focus:ring-0 min-h-[32px] max-h-20 resize-none overflow-auto leading-tight"
               rows={1}
               maxLength={250}
               characterCount={false}
               sanitize={true}
             />
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -208,7 +208,7 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                   setShowEmojiPicker(false);
                   onReply();
                 }}
-                className={`flex items-center justify-center px-3.5 py-1.5 rounded-2xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] ${
+                className={`flex items-center justify-center px-3 py-1.5 rounded-2xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] ${
                   canSend
                     ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
                     : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
@@ -221,10 +221,6 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
             </div>
           </div>
 
-          {/* Character count */}
-          {replyMessage.length > 0 && (
-            <div className="text-xs text-gray-400 mb-2 text-right">{replyMessage.length}/250</div>
-          )}
         </div>
       </div>
     );
