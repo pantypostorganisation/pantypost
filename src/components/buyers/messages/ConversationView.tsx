@@ -9,13 +9,11 @@ import {
   ShieldAlert,
   X,
   Smile,
-  Sparkles,
   Clock,
   CheckCircle2,
   XCircle,
   Edit3,
   ShoppingBag,
-  Package,
   ChevronLeft,
   User,
   MoreVertical,
@@ -763,8 +761,8 @@ export default function ConversationView(props: ConversationViewProps) {
       )}
 
       {/* Input */}
-      <div className="px-4 py-3">
-        <div className="flex w-full items-center gap-3 rounded-2xl border border-[#2f3036] bg-[#1f1f24] px-3 py-2.5 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#4752e2] focus-within:ring-offset-2 focus-within:ring-offset-[#16161a]">
+      <div className="px-4 py-2.5">
+        <div className="flex w-full items-center gap-2.5 rounded-lg border border-gray-700 bg-[#222] py-1 pl-2.5 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
           <input
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
@@ -779,7 +777,7 @@ export default function ConversationView(props: ConversationViewProps) {
               if (isImageLoading) return;
               triggerFileInput();
             }}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3b3c43] bg-[#272830] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-8 w-8 aspect-square items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] disabled:cursor-not-allowed disabled:opacity-50"
             title="Attach Image"
             type="button"
             aria-label="Attach image"
@@ -792,12 +790,12 @@ export default function ConversationView(props: ConversationViewProps) {
             ref={inputRef}
             value={replyMessage}
             onChange={handleTypingChange}
-            onKeyPress={handleKeyDown}
+            onKeyDown={handleKeyDown}
             onFocus={(e) => {
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="flex-1 !bg-transparent !border-0 !shadow-none !px-0 !py-1.5 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[44px] max-h-20 !resize-none overflow-auto leading-tight"
+            className="flex-1 bg-transparent py-1.5 text-white focus:outline-none focus:ring-0 min-h-[32px] max-h-20 resize-none overflow-auto leading-tight"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
@@ -805,22 +803,47 @@ export default function ConversationView(props: ConversationViewProps) {
             aria-label="Message"
           />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 setShowEmojiPicker(!showEmojiPicker);
               }}
-              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+              className={`flex items-center justify-center h-8 w-8 rounded-full ${
                 showEmojiPicker
-                  ? 'bg-[#ff950e] text-black focus:ring-[#ff950e]'
-                  : 'border border-[#3b3c43] bg-[#272830] text-gray-300 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:ring-[#4752e2]'
-              }`}
+                  ? 'bg-[#ff950e] text-black'
+                  : 'text-[#ff950e] hover:bg-[#333]'
+              } transition-colors duration-150`}
               title="Emoji"
               type="button"
               aria-label="Toggle emoji picker"
+              aria-pressed={showEmojiPicker}
             >
               <Smile size={20} className="flex-shrink-0" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTipModal(true);
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] focus:ring-[#ff950e]"
+              aria-label="Send tip"
+              title="Send Tip"
+            >
+              <img src="/Send_Tip_Icon.png" alt="Send tip" className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowCustomRequestModal(true);
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-600 bg-[#2b2b2b] text-gray-300 transition-colors duration-150 hover:bg-[#333] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] focus:ring-[#ff950e]"
+              aria-label="Send custom request"
+              title="Send Custom Request"
+            >
+              <img src="/Custom_Request_Icon.png" alt="Custom request" className="w-4 h-4" />
             </button>
             <button
               type="button"
@@ -830,7 +853,7 @@ export default function ConversationView(props: ConversationViewProps) {
                 setShowEmojiPicker(false);
                 stableHandleReply();
               }}
-              className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+              className={`flex items-center justify-center px-3 py-1.5 rounded-2xl transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#222] ${
                 canSend
                   ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
                   : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
@@ -841,36 +864,6 @@ export default function ConversationView(props: ConversationViewProps) {
               <ArrowUp size={16} strokeWidth={2.5} />
             </button>
           </div>
-        </div>
-
-        {replyMessage.length > 0 && (
-          <div className="text-xs text-gray-400 mb-2 text-right">{replyMessage.length}/250</div>
-        )}
-
-        <div className="flex items-center gap-0">
-          <img
-            src="/Send_Tip_Icon.png"
-            alt="Send Tip"
-              className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowTipModal(true);
-              }}
-              title="Send Tip"
-            />
-
-            <img
-              src="/Custom_Request_Icon.png"
-              alt="Custom Request"
-              className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowCustomRequestModal(true);
-              }}
-              title="Send Custom Request"
-            />
-
-            {/* Hidden file input with strict types */}
         </div>
       </div>
 
