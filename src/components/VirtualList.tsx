@@ -30,10 +30,6 @@ export function VirtualList<T>({
     getScrollElement: () => parentRef.current,
     estimateSize: () => safeItemHeight,
     overscan: safeOverscan,
-    measureElement: (element) =>
-      element instanceof HTMLElement
-        ? element.getBoundingClientRect().height
-        : safeItemHeight,
   });
 
   return (
