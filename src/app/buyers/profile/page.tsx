@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import BanCheck from '@/components/BanCheck';
-import { getGlobalAuthToken } from '@/context/AuthContext';
+import { getGlobalAuthToken, useAuth } from '@/context/AuthContext';
 import { buildApiUrl, API_BASE_URL } from '@/services/api.config';
 import { COUNTRY_TO_CODE, flagFromCountryName } from '@/constants/countries';
 import { AlertTriangle, Loader2, MapPin, ShieldCheck, Upload } from 'lucide-react';
@@ -89,6 +89,7 @@ function getToken(): string {
 const COUNTRY_OPTIONS = Object.keys(COUNTRY_TO_CODE).sort((a, b) => a.localeCompare(b));
 
 export default function BuyerSelfProfilePage() {
+  const { updateUser } = useAuth(); // ADD this to get updateUser function
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,10 +120,10 @@ export default function BuyerSelfProfilePage() {
     setError(null);
     setSuccess(null);
     try {
-      const url = buildApiUrl('/profilebuyer'); // << unified builder
+      const url = buildApiUrl('/profilebuyer');
       const resp = await fetch(url, {
         method: 'GET',
-        credentials: 'include', // allow cookie-based auth too
+        credentials: 'include',
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
@@ -194,7 +195,7 @@ export default function BuyerSelfProfilePage() {
     setError(null);
     setSuccess(null);
     try {
-      const url = buildApiUrl('/profilebuyer'); // << unified builder
+      const url = buildApiUrl('/profilebuyer');
       const resp = await fetch(url, {
         method: 'PATCH',
         credentials: 'include',
@@ -248,11 +249,29 @@ export default function BuyerSelfProfilePage() {
 
         setSuccess('Profile saved.');
         const broadcastSource = candidateData || form;
+        
+        // FIX: Update the auth context to trigger header re-render
+        const finalProfilePic = sanitizeProfilePicValue(broadcastSource.profilePic ?? form.profilePic);
+        const resolvedProfilePicUrl = resolveProfilePicUrl(finalProfilePic);
+        
+        // Update the user in AuthContext if profile picture changed
+        if (updateUser && resolvedProfilePicUrl) {
+          try {
+            await updateUser({
+              profilePicture: resolvedProfilePicUrl,
+              bio: broadcastSource.bio || form.bio || '',
+            });
+          } catch (err) {
+            console.error('Failed to update auth context:', err);
+          }
+        }
+        
+        // Also broadcast for any other components listening
         broadcastProfileUpdate({
           username: broadcastSource.username || form.username,
           bio: broadcastSource.bio || form.bio || '',
           country: broadcastSource.country || form.country || '',
-          profilePic: sanitizeProfilePicValue(broadcastSource.profilePic ?? form.profilePic),
+          profilePic: finalProfilePic,
         });
       }
     } catch {
@@ -369,7 +388,6 @@ export default function BuyerSelfProfilePage() {
                         <div className="relative h-32 w-32 overflow-hidden rounded-full border border-[#ff950e]/30 bg-neutral-950/90 p-[3px] sm:h-36 sm:w-36">
                           <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-neutral-950">
                             {previewUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
                               <img src={previewUrl} alt="Profile preview" className="h-full w-full object-cover" />
                             ) : (
                               <span className="text-3xl font-semibold text-neutral-500">{usernameInitial}</span>
@@ -494,7 +512,6 @@ export default function BuyerSelfProfilePage() {
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                           <div className="relative h-20 w-20 overflow-hidden rounded-full border border-neutral-800 bg-neutral-900">
                             {previewUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
                               <img src={previewUrl} alt="Profile preview" className="h-full w-full object-cover" />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center text-sm text-neutral-500">No photo</div>
