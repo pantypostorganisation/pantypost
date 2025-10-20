@@ -1,9 +1,8 @@
 // src/components/seller/messages/MessagesList.tsx
 'use client';
 
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import MessageItem from './MessageItem';
-import { VirtualList } from '@/components/VirtualList';
 
 interface MessagesListProps {
   threadMessages: any[];
@@ -113,70 +112,43 @@ export default function MessagesList({
     });
   }, [threadMessages, user, sellerRequests, latestCustomRequestIndex]);
 
-  // Render function for virtual list
-  const renderMessage = useCallback((item: typeof messageData[0]) => {
-    return (
-      <MessageItem
-        key={item.key}
-        msg={item.msg}
-        index={item.index}
-        isFromMe={item.isFromMe}
-        user={user}
-        activeThread={activeThread}
-        onMessageVisible={handleMessageVisible}
-        customReq={item.customReq}
-        isLatestCustom={item.isLatestCustom}
-        isPaid={item.isPaid}
-        showActionButtons={item.showActionButtons}
-        handleAccept={() => item.customReq && handleAccept(item.customReq.id)}
-        handleDecline={() => item.customReq && handleDecline(item.customReq.id)}
-        handleEditRequest={() => item.customReq && handleEditRequest(
-          item.customReq.id, 
-          item.customReq.title, 
-          item.customReq.price, 
-          item.customReq.description || ''
-        )}
-        editRequestId={editRequestId}
-        editTitle={editTitle}
-        setEditTitle={setEditTitle}
-        editPrice={editPrice}
-        setEditPrice={setEditPrice}
-        editMessage={editMessage}
-        setEditMessage={setEditMessage}
-        handleEditSubmit={handleEditSubmit}
-        setEditRequestId={setEditRequestId}
-        statusBadge={createStatusBadge}
-        setPreviewImage={setPreviewImage}
-      />
-    );
-  }, [
-    user,
-    activeThread,
-    handleMessageVisible,
-    handleAccept,
-    handleDecline,
-    handleEditRequest,
-    editRequestId,
-    editTitle,
-    setEditTitle,
-    editPrice,
-    setEditPrice,
-    editMessage,
-    setEditMessage,
-    handleEditSubmit,
-    setEditRequestId,
-    createStatusBadge,
-    setPreviewImage
-  ]);
-
+  // Render messages in a simple list to match buyer experience and avoid nested scrolling
   return (
-    <div className="flex-1 overflow-hidden">
-      <VirtualList
-        items={messageData}
-        itemHeight={100} // Adjust based on average message height
-        renderItem={renderMessage}
-        className="p-4 h-full overflow-y-auto"
-      />
+    <div className="flex flex-col space-y-3">
+      {messageData.map((item) => (
+        <MessageItem
+          key={item.key}
+          msg={item.msg}
+          index={item.index}
+          isFromMe={item.isFromMe}
+          user={user}
+          activeThread={activeThread}
+          onMessageVisible={handleMessageVisible}
+          customReq={item.customReq}
+          isLatestCustom={item.isLatestCustom}
+          isPaid={item.isPaid}
+          showActionButtons={item.showActionButtons}
+          handleAccept={() => item.customReq && handleAccept(item.customReq.id)}
+          handleDecline={() => item.customReq && handleDecline(item.customReq.id)}
+          handleEditRequest={() => item.customReq && handleEditRequest(
+            item.customReq.id,
+            item.customReq.title,
+            item.customReq.price,
+            item.customReq.description || ''
+          )}
+          editRequestId={editRequestId}
+          editTitle={editTitle}
+          setEditTitle={setEditTitle}
+          editPrice={editPrice}
+          setEditPrice={setEditPrice}
+          editMessage={editMessage}
+          setEditMessage={setEditMessage}
+          handleEditSubmit={handleEditSubmit}
+          setEditRequestId={setEditRequestId}
+          statusBadge={createStatusBadge}
+          setPreviewImage={setPreviewImage}
+        />
+      ))}
     </div>
   );
 }
