@@ -1,7 +1,7 @@
 /* public/sw.js */
 
 /* ---------- SW version (BUMP THIS to force update) ---------- */
-const SW_VERSION = 'pp-sw-v7'; // ← bump this string when you deploy
+const SW_VERSION = 'pp-sw-v8'; // ← BUMPED for favicon change
 
 /* ---------- Cache names ---------- */
 const STATIC_CACHE = `${SW_VERSION}-static`;
@@ -13,7 +13,7 @@ const STATIC_ASSET_PATTERNS = [
   /^\/icons?\//,
   /^\/images?\//,
   /^\/manifest\.json$/,
-  /^\/favicon\.ico$/,
+  /^\/favicon\.(ico|png)$/,  // Updated to match both .ico and .png
 ];
 
 /* Utility: check if request is same-origin */
@@ -41,8 +41,8 @@ function isApiOrCrossOrigin(req) {
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(STATIC_CACHE);
-    // You can add tiny always-needed files here if you want, but it's optional.
-    await cache.addAll(['/manifest.json', '/favicon.ico'].filter(Boolean));
+    // Pre-cache essential files including new favicon
+    await cache.addAll(['/manifest.json', '/favicon.png'].filter(Boolean));
     self.skipWaiting();
   })());
 });

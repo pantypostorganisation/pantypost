@@ -135,7 +135,7 @@ export default function Header(): React.ReactElement | null {
     const rawProfilePictureValues: Array<string | null> = [
       typeof user.profilePicture === 'string' ? user.profilePicture : null,
       (() => {
-        const candidate = (user as Record<string, unknown>).profilePic;
+        const candidate = (user as unknown as Record<string, unknown>).profilePic;
         return typeof candidate === 'string' ? candidate : null;
       })(),
     ];
@@ -170,7 +170,7 @@ export default function Header(): React.ReactElement | null {
     const resolved = resolveApiUrl(sanitized) ?? sanitized;
 
     const profileUpdatedAt = (() => {
-      const extendedUser = user as Record<string, unknown>;
+      const extendedUser = user as unknown as Record<string, unknown>;
       const updatedAtCandidates = [
         extendedUser.profilePictureUpdatedAt,
         extendedUser.profilePicUpdatedAt,

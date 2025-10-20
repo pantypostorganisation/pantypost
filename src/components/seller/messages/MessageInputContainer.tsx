@@ -148,8 +148,8 @@ export default function MessageInputContainer({
       )}
 
       {/* Input area */}
-      <div className="px-5 py-3">
-        <div className="flex w-full items-center gap-2 rounded-full border border-[#2b2d33] bg-[#14161b]/95 px-4 py-1.5 transition-all duration-200 shadow-[0_6px_18px_rgba(0,0,0,0.35)] focus-within:border-[#4752e2] focus-within:ring-2 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-2 focus-within:ring-offset-[#090a0d]">
+      <div className="px-4 py-2.5">
+        <div className="flex w-full items-center gap-2 rounded-2xl border border-[#2a2d31] bg-[#1a1c20] px-3.5 py-2 focus-within:border-[#3d4352] focus-within:ring-1 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-1 focus-within:ring-offset-[#16161a]">
           <input
             type="file"
             accept="image/jpeg,image/png,image/gif,image/webp"
@@ -165,7 +165,7 @@ export default function MessageInputContainer({
               if (isImageLoading) return;
               triggerFileInput();
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#3a3d45] bg-[#1d1f25] text-gray-300 transition-colors duration-200 hover:border-[#525661] hover:bg-[#262931] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#090a0d] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-[#363840] bg-[#202226] text-gray-300 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Attach image"
             title="Attach Image"
             disabled={isImageLoading}
@@ -182,7 +182,7 @@ export default function MessageInputContainer({
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="flex-1 !bg-transparent !border-0 !shadow-none !px-0 !py-0 text-[14px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[30px] max-h-20 !resize-none overflow-auto leading-[1.55]"
+            className="flex-1 !bg-transparent !border-0 !shadow-none !px-0 !py-1 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[34px] max-h-20 !resize-none overflow-auto leading-tight"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
@@ -196,10 +196,10 @@ export default function MessageInputContainer({
                 e.stopPropagation();
                 setShowEmojiPicker(!showEmojiPicker);
               }}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#090a0d] ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
                 showEmojiPicker
                   ? 'bg-[#ff950e] text-black focus:ring-[#ff950e]'
-                  : 'border border-transparent text-gray-300 hover:text-white hover:bg-[#262931] focus:ring-[#4752e2]'
+                  : 'border border-transparent text-gray-300 hover:text-white hover:bg-[#272a2f] focus:ring-[#4752e2]'
               }`}
               title="Emoji"
               type="button"
@@ -215,7 +215,7 @@ export default function MessageInputContainer({
                 setShowEmojiPicker(false);
                 handleReply();
               }}
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#090a0d] ${
+              className={`flex h-9 w-9 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
                 canSend
                   ? 'bg-gradient-to-r from-[#ff9c27] to-[#f97316] text-black shadow-[0_6px_18px_rgba(249,115,22,0.35)] hover:from-[#ff8b1c] hover:to-[#f97316] focus:ring-[#f97316]'
                   : 'bg-[#262931] text-gray-500 cursor-not-allowed focus:ring-[#262931]'
@@ -229,7 +229,7 @@ export default function MessageInputContainer({
         </div>
 
         {replyMessage.length > 0 && (
-          <div className="text-xs text-gray-500 mb-1 text-right tracking-tight">{replyMessage.length}/250</div>
+          <div className="text-[11px] text-gray-500 mb-1 text-right">{replyMessage.length}/250</div>
         )}
       </div>
 
