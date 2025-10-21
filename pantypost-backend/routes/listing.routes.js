@@ -613,10 +613,6 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Continue with the rest of the routes unchanged...
-// (POST /api/listings/:id/purchase, POST /api/listings/:id/views, etc.)
-// [Rest of the file remains the same from line 452 onwards]
-
 // POST /api/listings/:id/purchase - Direct purchase endpoint with premium check
 router.post('/:id/purchase', authMiddleware, async (req, res) => {
   try {
@@ -718,10 +714,20 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/views - Track listing view
+// POST /api/listings/:id/views - Track listing view (CRITICAL FIX: Always increment)
 router.post('/:id/views', async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id);
+    const listingId = req.params.id;
+    
+    console.log('[Views] Tracking view for listing:', listingId);
+    
+    // CRITICAL FIX: Use findByIdAndUpdate with $inc to atomically increment the view count
+    // This ensures the counter increments properly even with concurrent requests
+    const listing = await Listing.findByIdAndUpdate(
+      listingId,
+      { $inc: { views: 1 } }, // Atomically increment views by 1
+      { new: true, upsert: false } // Return the updated document
+    );
     
     if (!listing) {
       return res.status(404).json({
@@ -730,15 +736,14 @@ router.post('/:id/views', async (req, res) => {
       });
     }
     
-    // Increment views
-    listing.views = (listing.views || 0) + 1;
-    await listing.save();
+    console.log('[Views] View count updated:', listing.views);
     
     res.json({
       success: true,
       views: listing.views
     });
   } catch (error) {
+    console.error('[Views] Error tracking view:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -1037,10 +1042,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     });
   }
 });
-
-// Continue with remaining routes unchanged...
-// [POST /api/listings/:id/end-auction, POST /api/listings/:id/cancel-auction, etc.]
-// [Rest of the file remains exactly the same]
 
 // POST /api/listings/:id/end-auction - End an auction using settlement service (with race condition prevention)
 router.post('/:id/end-auction', async (req, res) => {

@@ -417,7 +417,7 @@ export const useBrowseDetail = () => {
     loadListing();
   }, [listingId, listings, refreshListings]);
 
-  // CRITICAL FIX: Load seller reviews from backend API
+  // Load seller reviews from backend API
   useEffect(() => {
     const loadSellerReviews = async () => {
       if (!listing?.seller) {
@@ -499,45 +499,51 @@ export const useBrowseDetail = () => {
 
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // Track view count
+  // CRITICAL FIX: Track view count - increment EVERY time, even for repeat views
   useEffect(() => {
     const trackView = async () => {
-      if (!listing) return;
+      if (!listing || !listingId) return;
       
-      if (listing.views !== undefined && !viewIncrementedRef.current) {
-        setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
-      }
+      // FIXED: Remove the viewIncrementedRef check to allow repeat views
+      // Every page load should increment the view counter
       
-      if (!viewIncrementedRef.current) {
-        viewIncrementedRef.current = true;
+      try {
+        console.log('[BrowseDetail] Tracking view for listing:', listingId);
         
-        try {
-          if (user && user.username !== listing.seller) {
-            await listingsService.updateViews({
-              listingId: listing.id,
-              viewerId: user.username,
-            });
-          } else if (!user) {
-            await listingsService.updateViews({
-              listingId: listing.id,
-            });
-          }
+        // Call the backend to increment views
+        await listingsService.updateViews({
+          listingId: listingId,
+          viewerId: user?.username, // Optional: track who viewed it
+        });
+        
+        // Fetch the updated view count from backend
+        const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listingId);
+        
+        if (viewsResponse.success && viewsResponse.data !== undefined) {
+          console.log('[BrowseDetail] Updated view count:', viewsResponse.data);
+          setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
           
-          const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listing.id);
-          if (viewsResponse.success && viewsResponse.data !== undefined) {
-            setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
-          }
-        } catch (error) {
-          console.error('Error tracking view:', error);
-          if (listing.views !== undefined) {
-            setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
-          }
+          // Also update the listing object
+          setListing(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              views: viewsResponse.data as number
+            };
+          });
+        }
+      } catch (error) {
+        console.error('[BrowseDetail] Error tracking view:', error);
+        // Fallback: use the listing's existing view count
+        if (listing.views !== undefined) {
+          setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
         }
       }
     };
     
+    // Track view when listing loads
     trackView();
-  }, [listing, user]);
+  }, [listing?.id, listingId, user?.username]); // Re-run when listingId changes (new page view)
 
   const getTimerProgress = useCallback(() => {
     if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
@@ -681,7 +687,7 @@ export const useBrowseDetail = () => {
     };
   }, [isAuction, user, listing?.id, checkCurrentUserFunds, updateState]);
 
-  // CRITICAL FIX: Load seller profile with proper URL resolution
+  // Load seller profile with proper URL resolution
   useEffect(() => {
     const loadProfileData = async () => {
       if (listing?.seller) {
