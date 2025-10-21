@@ -3,7 +3,7 @@
 
 import { Crown, Clock, Lock, Gavel, Eye, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageGalleryProps } from '@/types/browseDetail';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 
 export default function ImageGallery({
   images,
@@ -18,6 +18,27 @@ export default function ImageGallery({
   forceUpdateTimer
 }: ImageGalleryProps) {
   const isLocked = isLockedPremium ?? false;
+
+  // FIXED: Use viewCount prop with fallback to listing.views
+  const displayViewCount = useMemo(() => {
+    // Priority: viewCount prop > listing.views > 0
+    if (viewCount !== undefined && viewCount !== null) {
+      return viewCount;
+    }
+    if (listing?.views !== undefined && listing?.views !== null) {
+      return listing.views;
+    }
+    return 0;
+  }, [viewCount, listing?.views]);
+
+  // Format view count for display (add commas for large numbers)
+  const formattedViewCount = useMemo(() => {
+    const count = displayViewCount;
+    if (count >= 1000) {
+      return count.toLocaleString();
+    }
+    return count.toString();
+  }, [displayViewCount]);
 
   const handlePrevImage = useCallback(() => {
     if (!images.length) return;
@@ -38,7 +59,6 @@ export default function ImageGallery({
       target.src = '/placeholder-panty.png';
     }
     target.onerror = null;
-    // eslint-disable-next-line no-console
     console.warn('Image failed to load:', images[currentIndex]);
   };
 
@@ -51,7 +71,6 @@ export default function ImageGallery({
       target.src = '/placeholder-panty.png';
     }
     target.onerror = null;
-    // eslint-disable-next-line no-console
     console.warn('Thumbnail failed to load:', originalUrl);
   };
 
@@ -121,10 +140,10 @@ export default function ImageGallery({
             )}
           </div>
 
-          {/* View count */}
-          <div className="absolute top-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
-            <Eye className="w-3 h-3" />
-            {viewCount}
+          {/* FIXED: View count display with proper value */}
+          <div className="absolute top-3 right-3 bg-black/70 text-white px-2.5 py-1.5 rounded-full text-xs flex items-center gap-1.5 backdrop-blur-sm">
+            <Eye className="w-3.5 h-3.5" />
+            <span className="font-medium">{formattedViewCount}</span>
           </div>
 
           {/* Premium lock */}
