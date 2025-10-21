@@ -629,7 +629,7 @@ export function useSellerMessages() {
       });
 
       // For image messages, allow empty text
-      const messageContent = sanitizedContent || (selectedImage ? 'Image shared' : '');
+      const messageContent = sanitizedContent;
 
       // Create optimistic message
       const tempId = uuidv4();

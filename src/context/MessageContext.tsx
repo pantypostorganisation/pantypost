@@ -390,10 +390,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       let sanitizedContent = content;
-      if (options?.type === 'image' && !sanitizedContent.trim() && options?.meta?.imageUrl) {
-        sanitizedContent = 'Image shared';
-      }
-
       if (sanitizedContent.trim()) {
         const contentValidation = messageSchemas.messageContent.safeParse(sanitizedContent);
         if (!contentValidation.success) {
