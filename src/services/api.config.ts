@@ -703,12 +703,26 @@ class ApiClient {
       if (data.success !== undefined) {
         // Backend returns { success, data, error } format
         if (data.success) {
-          const sanitizedData = this.sanitizeResponse<T>(data.data);
+          const {
+            data: nestedData,
+            meta: responseMeta,
+            error: _ignoredError,
+            success: _ignoredSuccess,
+            ...fallbackPayload
+          } = data;
+
+          const payload =
+            nestedData !== undefined
+              ? nestedData
+              : (Object.keys(fallbackPayload).length > 0 ? fallbackPayload : undefined);
+
+          const sanitizedData = this.sanitizeResponse<T>(payload as T);
+
           return {
             success: true,
             data: sanitizedData,
             meta: {
-              ...data.meta,
+              ...(typeof responseMeta === 'object' && responseMeta !== null ? responseMeta : {}),
               requestId,
             },
           };

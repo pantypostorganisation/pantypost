@@ -123,6 +123,64 @@ interface BackendListing {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const VIEW_CACHE_DURATION = 30 * 1000; // 30 seconds
 
+const VIEW_RESPONSE_KEYS = ['views', 'viewCount', 'count', 'totalViews'];
+
+function parseViewNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function extractViewCount(payload: unknown, depth: number = 0): number | undefined {
+  if (payload === null || payload === undefined || depth > 5) {
+    return undefined;
+  }
+
+  const direct = parseViewNumber(payload);
+  if (direct !== undefined) {
+    return direct;
+  }
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const nested = extractViewCount(item, depth + 1);
+      if (nested !== undefined) {
+        return nested;
+      }
+    }
+    return undefined;
+  }
+
+  if (typeof payload === 'object') {
+    for (const key of VIEW_RESPONSE_KEYS) {
+      const candidate = parseViewNumber((payload as Record<string, unknown>)[key]);
+      if (candidate !== undefined) {
+        return candidate;
+      }
+    }
+
+    for (const nestedKey of ['data', 'result', 'payload', 'attributes', 'response']) {
+      if (nestedKey in (payload as Record<string, unknown>)) {
+        const nested = extractViewCount((payload as Record<string, unknown>)[nestedKey], depth + 1);
+        if (nested !== undefined) {
+          return nested;
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
 // Create a custom schema for listing creation that handles number conversion properly
 const createListingValidationSchema = z.object({
   title: listingSchemas.title,
@@ -1368,19 +1426,29 @@ export class ListingsService {
           method: 'POST',
           body: JSON.stringify({ viewerId: sanitizedViewerId }),
         });
-        
-        // CRITICAL FIX: Backend returns { success: true, views: 47 } directly
-        // NOT wrapped in a data property!
+
         if (response.success) {
-          // Try multiple possible locations for the view count
-          const viewCount = (response as any).views ?? response.data?.views ?? 0;
-          
-          console.log('[ListingsService] Response:', response);
-          console.log('[ListingsService] Updated views, new count:', viewCount);
-          
+          const primaryPayload = response.data ?? response;
+          let viewCount = extractViewCount(primaryPayload);
+
+          if (viewCount === undefined) {
+            viewCount = extractViewCount(response);
+          }
+
+          if (viewCount === undefined) {
+            console.warn('[ListingsService] Unable to extract view count from update response:', response);
+            return {
+              success: false,
+              error: response.error || { message: 'Failed to parse view count from response' },
+            };
+          }
+
+          console.log('[ListingsService] Update views response payload:', primaryPayload);
+          console.log('[ListingsService] Extracted view count:', viewCount);
+
           // Update cache with new count
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: Date.now() });
-          
+
           return {
             success: true,
             data: viewCount
@@ -1439,17 +1507,28 @@ export class ListingsService {
 
       if (FEATURES.USE_API_LISTINGS) {
         const response = await apiCall<any>(`/listings/${sanitizedId}/views`);
-        
+
         if (response.success) {
-          // CRITICAL FIX: Backend returns { success: true, views: 45 }
-          // apiCall wraps it as { success: true, data: { success: true, views: 45 } }
-          // So we need to read from response.data.views OR response.views
-          const viewCount = response.data?.views ?? (response as any).views ?? 0;
-          
-          console.log('[ListingsService] Got view count from backend:', viewCount);
-          
+          const primaryPayload = response.data ?? response;
+          let viewCount = extractViewCount(primaryPayload);
+
+          if (viewCount === undefined) {
+            viewCount = extractViewCount(response);
+          }
+
+          if (viewCount === undefined) {
+            console.warn('[ListingsService] Unable to extract view count from getListingViews response:', response);
+            return {
+              success: false,
+              error: response.error || { message: 'Failed to parse view count from response' },
+            };
+          }
+
+          console.log('[ListingsService] getListingViews response payload:', primaryPayload);
+          console.log('[ListingsService] Extracted view count:', viewCount);
+
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: now });
-          
+
           return {
             success: true,
             data: viewCount,
