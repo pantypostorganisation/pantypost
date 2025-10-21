@@ -121,29 +121,60 @@ export interface CustomRequestData {
 }
 
 // Validation schemas
-const sendMessageSchema = z.object({
-  sender: z.string().min(1).max(30).transform(sanitizeStrict),
-  receiver: z.string().min(1).max(30).transform(sanitizeStrict),
-  content: messageSchemas.messageContent,
-  type: z.enum(['normal', 'customRequest', 'image', 'tip']).optional(),
-  meta: z.object({
-    id: z.string().optional(),
-    title: z.string().max(100).transform(sanitizeStrict).optional(),
-    price: z.number().positive().max(10000).optional(),
-    tags: z.array(z.string().max(30).transform(sanitizeStrict)).max(10).optional(),
-    message: z.string().max(500).transform(sanitizeStrict).optional(),
-    imageUrl: z.string().url().optional(),
-    tipAmount: z.number().positive().max(500).optional(),
-  }).optional(),
-  attachments: z.array(z.object({
-    id: z.string(),
-    type: z.enum(['image', 'file']),
-    url: z.string(),
-    name: z.string().max(255).optional(),
-    size: z.number().positive().optional(),
-    mimeType: z.string().optional(),
-  })).max(10).optional(),
-});
+const sendMessageSchema = z
+  .object({
+    sender: z.string().min(1).max(30).transform(sanitizeStrict),
+    receiver: z.string().min(1).max(30).transform(sanitizeStrict),
+    content: z.union([
+      messageSchemas.messageContent,
+      z
+        .string()
+        .length(0)
+        .transform(() => '')
+    ]),
+    type: z.enum(['normal', 'customRequest', 'image', 'tip']).optional(),
+    meta: z
+      .object({
+        id: z.string().optional(),
+        title: z.string().max(100).transform(sanitizeStrict).optional(),
+        price: z.number().positive().max(10000).optional(),
+        tags: z.array(z.string().max(30).transform(sanitizeStrict)).max(10).optional(),
+        message: z.string().max(500).transform(sanitizeStrict).optional(),
+        imageUrl: z.string().url().optional(),
+        tipAmount: z.number().positive().max(500).optional(),
+      })
+      .optional(),
+    attachments: z
+      .array(
+        z.object({
+          id: z.string(),
+          type: z.enum(['image', 'file']),
+          url: z.string(),
+          name: z.string().max(255).optional(),
+          size: z.number().positive().optional(),
+          mimeType: z.string().optional(),
+        })
+      )
+      .max(10)
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasImage = data.type === 'image' || !!data.meta?.imageUrl;
+    if (!hasImage && data.content.trim().length === 0) {
+      ctx.addIssue({
+        path: ['content'],
+        code: z.ZodIssueCode.custom,
+        message: 'Message cannot be empty',
+      });
+    }
+    if (hasImage && data.meta?.imageUrl && !data.meta.imageUrl.startsWith('http')) {
+      ctx.addIssue({
+        path: ['meta', 'imageUrl'],
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid image URL',
+      });
+    }
+  });
 
 const blockUserSchema = z.object({
   blocker: z.string().min(1).max(30).transform(sanitizeStrict),

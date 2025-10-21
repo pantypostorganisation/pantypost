@@ -389,6 +389,8 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         return;
       }
 
+      const isImageMessage = options?.type === 'image' || !!options?.meta?.imageUrl;
+
       let sanitizedContent = content;
       if (sanitizedContent.trim()) {
         const contentValidation = messageSchemas.messageContent.safeParse(sanitizedContent);
@@ -397,6 +399,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           return;
         }
         sanitizedContent = contentValidation.data;
+      } else if (!isImageMessage) {
+        console.error('Message content cannot be empty');
+        return;
+      } else {
+        sanitizedContent = '';
       }
 
       let sanitizedMeta = options?.meta;

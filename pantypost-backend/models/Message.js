@@ -19,8 +19,11 @@ const messageSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: true,
-    maxlength: 1000
+    maxlength: 1000,
+    default: '',
+    required: function() {
+      return !(this.type === 'image' && this.meta && this.meta.imageUrl);
+    }
   },
   type: {
     type: String,
