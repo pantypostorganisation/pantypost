@@ -1369,9 +1369,13 @@ export class ListingsService {
           body: JSON.stringify({ viewerId: sanitizedViewerId }),
         });
         
-        // FIXED: Return the view count from the POST response
+        // CRITICAL FIX: Backend returns { success: true, views: 47 } directly
+        // NOT wrapped in a data property!
         if (response.success) {
-          const viewCount = response.data?.views ?? (response as any).views ?? 0;
+          // Try multiple possible locations for the view count
+          const viewCount = (response as any).views ?? response.data?.views ?? 0;
+          
+          console.log('[ListingsService] Response:', response);
           console.log('[ListingsService] Updated views, new count:', viewCount);
           
           // Update cache with new count
