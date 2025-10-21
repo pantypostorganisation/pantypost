@@ -129,13 +129,6 @@ const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      {validationError && (
-        <div className="mb-2 text-sm text-red-400 flex items-center">
-          <span className="mr-1">⚠️</span>
-          {sanitizeStrict(validationError)}
-        </div>
-      )}
-
       {selectedImage && (
         <div className="mb-2">
           <div className="relative inline-block">
@@ -191,21 +184,35 @@ const MessageInput: React.FC<MessageInputProps> = ({
               />
             </>
           )}
-          <div className="flex-1 flex items-center">
-            <SecureTextarea
-              ref={textareaRef}
-              value={content}
-              onChange={setContent}
-              onKeyDown={handleKeyDown}
-              placeholder={selectedImage ? 'Add a caption...' : placeholder}
-              className="w-full !bg-transparent !border-0 !shadow-none !px-0 !py-[6px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 leading-[1.6] min-h-[30px] resize-none"
-              rows={1}
-              maxLength={maxLength}
-              characterCount={false}
-              sanitize={true}
-              disabled={disabled}
-              aria-label="Message text"
-            />
+          <div className="flex flex-1 items-center gap-2 min-w-0">
+            <div className="flex-1 min-w-0">
+              <SecureTextarea
+                ref={textareaRef}
+                value={content}
+                onChange={setContent}
+                onKeyDown={handleKeyDown}
+                placeholder={selectedImage ? 'Add a caption...' : placeholder}
+                className="w-full !bg-transparent !border-0 !shadow-none !px-0 !py-[6px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 leading-[1.6] min-h-[30px] resize-none"
+                rows={1}
+                maxLength={maxLength}
+                characterCount={false}
+                sanitize={true}
+                disabled={disabled}
+                aria-label="Message text"
+              />
+            </div>
+            {validationError && (
+              <div
+                className="ml-1 flex items-center gap-1 text-xs text-red-400 whitespace-nowrap"
+                role="alert"
+                aria-live="polite"
+              >
+                <span aria-hidden="true">⚠️</span>
+                <span className="truncate max-w-[140px] sm:max-w-[200px]">
+                  {sanitizeStrict(validationError)}
+                </span>
+              </div>
+            )}
           </div>
 
           {showEmojiButton && (

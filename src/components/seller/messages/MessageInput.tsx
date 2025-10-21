@@ -138,14 +138,6 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           <div className="px-4 pt-3 pb-0 text-sm text-gray-400">Loading image...</div>
         )}
 
-        {/* Error display */}
-        {(imageError || validationError) && (
-          <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center">
-            <AlertTriangle size={14} className="mr-1" />
-            {sanitizeStrict(imageError || validationError || '')}
-          </div>
-        )}
-
         {/* Message input with security */}
         <div className="px-4 py-2.5">
           <div className="flex w-full items-center gap-2.5 rounded-lg border border-gray-700 bg-[#222] py-1 pl-2.5 pr-3 focus-within:border-transparent focus-within:ring-1 focus-within:ring-[#ff950e]">
@@ -172,18 +164,34 @@ const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               <Plus size={18} />
             </button>
 
-            <SecureTextarea
-              ref={ref}
-              value={replyMessage}
-              onChange={setReplyMessage}
-              onKeyDown={onKeyDown}
-              placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-              className="flex-1 self-center bg-transparent py-[6px] text-white focus:outline-none focus:ring-0 min-h-[32px] max-h-20 resize-none overflow-auto leading-[1.6]"
-              rows={1}
-              maxLength={250}
-              characterCount={false}
-              sanitize={true}
-            />
+            <div className="flex flex-1 items-center gap-2 min-w-0">
+              <div className="flex-1 min-w-0">
+                <SecureTextarea
+                  ref={ref}
+                  value={replyMessage}
+                  onChange={setReplyMessage}
+                  onKeyDown={onKeyDown}
+                  placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
+                  className="w-full self-center bg-transparent py-[6px] text-white focus:outline-none focus:ring-0 min-h-[32px] max-h-20 resize-none overflow-auto leading-[1.6]"
+                  rows={1}
+                  maxLength={250}
+                  characterCount={false}
+                  sanitize={true}
+                />
+              </div>
+              {(imageError || validationError) && (
+                <div
+                  className="ml-1 flex items-center gap-1 text-xs text-red-400 whitespace-nowrap"
+                  role="alert"
+                  aria-live="polite"
+                >
+                  <AlertTriangle size={14} className="flex-shrink-0" />
+                  <span className="truncate max-w-[140px] sm:max-w-[200px]">
+                    {sanitizeStrict(imageError || validationError || '')}
+                  </span>
+                </div>
+              )}
+            </div>
 
             <div className="flex items-center gap-1.5">
               <button

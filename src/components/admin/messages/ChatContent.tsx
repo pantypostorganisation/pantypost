@@ -368,13 +368,6 @@ export default function ChatContent({
               Loading image...
             </div>
           )}
-          {imageError && (
-            <div className="px-4 pt-3 pb-0 text-sm text-red-400 flex items-center" role="alert" aria-live="assertive">
-              <AlertTriangle size={14} className="mr-1" />
-              {imageError}
-            </div>
-          )}
-
           {/* Input */}
           <div className="px-4 py-3">
             <div className="flex w-full items-center gap-3 rounded-2xl border border-[#2f3036] bg-[#1f1f24] px-3 py-2.5 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#4752e2] focus-within:ring-offset-2 focus-within:ring-offset-[#16161a]">
@@ -401,18 +394,34 @@ export default function ChatContent({
                 <Plus size={18} />
               </button>
 
-              <SecureTextarea
-                ref={inputRef}
-                value={content}
-                onChange={setContent}
-                onKeyDown={handleKeyDown}
-                placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-                className="flex-1 self-center !bg-transparent !border-0 !shadow-none !px-0 !py-[6px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[44px] max-h-20 !resize-none overflow-auto leading-[1.6]"
-                rows={1}
-                maxLength={250}
-                characterCount={false}
-                sanitize
-              />
+              <div className="flex flex-1 items-center gap-2 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <SecureTextarea
+                    ref={inputRef}
+                    value={content}
+                    onChange={setContent}
+                    onKeyDown={handleKeyDown}
+                    placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
+                    className="w-full self-center !bg-transparent !border-0 !shadow-none !px-0 !py-[6px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[44px] max-h-20 !resize-none overflow-auto leading-[1.6]"
+                    rows={1}
+                    maxLength={250}
+                    characterCount={false}
+                    sanitize
+                  />
+                </div>
+                {imageError && (
+                  <div
+                    className="ml-1 flex items-center gap-1 text-xs text-red-400 whitespace-nowrap"
+                    role="alert"
+                    aria-live="polite"
+                  >
+                    <AlertTriangle size={14} className="flex-shrink-0" />
+                    <span className="truncate max-w-[140px] sm:max-w-[220px]">
+                      {sanitizeStrict(imageError)}
+                    </span>
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center gap-2">
                 <button
