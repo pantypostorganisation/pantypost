@@ -795,7 +795,7 @@ export default function ConversationView(props: ConversationViewProps) {
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="flex-1 self-center !bg-transparent !border-0 !shadow-none !px-0 !py-0 text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[32px] max-h-20 !resize-none overflow-auto leading-[1.6] flex items-center"
+            className="flex-1 self-center !bg-transparent !border-0 !shadow-none !px-0 !py-[6px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[32px] max-h-20 !resize-none overflow-auto leading-[1.6]"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
