@@ -714,7 +714,7 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/views - Track listing view (CRITICAL FIX: Always increment)
+// POST /api/listings/:id/views - Track listing view (FIXED: Always increment and return new count)
 router.post('/:id/views', async (req, res) => {
   try {
     const listingId = req.params.id;
@@ -726,21 +726,26 @@ router.post('/:id/views', async (req, res) => {
     const listing = await Listing.findByIdAndUpdate(
       listingId,
       { $inc: { views: 1 } }, // Atomically increment views by 1
-      { new: true, upsert: false } // Return the updated document
+      { new: true, upsert: false } // Return the updated document with new view count
     );
     
     if (!listing) {
+      console.log('[Views] Listing not found:', listingId);
       return res.status(404).json({
         success: false,
         error: 'Listing not found'
       });
     }
     
-    console.log('[Views] View count updated:', listing.views);
+    // Ensure views is a number (default to 1 if somehow undefined)
+    const currentViews = listing.views || 1;
     
+    console.log('[Views] View count updated to:', currentViews);
+    
+    // IMPORTANT: Return the view count directly in the response
     res.json({
       success: true,
-      views: listing.views
+      views: currentViews
     });
   } catch (error) {
     console.error('[Views] Error tracking view:', error);
@@ -751,23 +756,34 @@ router.post('/:id/views', async (req, res) => {
   }
 });
 
-// GET /api/listings/:id/views - Get listing views
+// GET /api/listings/:id/views - Get listing views (FIXED: Ensure consistent response)
 router.get('/:id/views', async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id);
+    const listingId = req.params.id;
+    
+    console.log('[Views] Getting view count for listing:', listingId);
+    
+    const listing = await Listing.findById(listingId).select('views');
     
     if (!listing) {
+      console.log('[Views] Listing not found:', listingId);
       return res.status(404).json({
         success: false,
         error: 'Listing not found'
       });
     }
     
+    // Ensure views is a number
+    const viewCount = listing.views || 0;
+    
+    console.log('[Views] Current view count:', viewCount);
+    
     res.json({
       success: true,
-      views: listing.views || 0
+      views: viewCount
     });
   } catch (error) {
+    console.error('[Views] Error getting views:', error);
     res.status(500).json({
       success: false,
       error: error.message
