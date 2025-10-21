@@ -1,1178 +1,1277 @@
-// src/hooks/useBrowseDetail.ts
+// pantypost-backend/routes/listing.routes.js
+const express = require('express');
+const router = express.Router();
+const Listing = require('../models/Listing');
+const Order = require('../models/Order');
+const Wallet = require('../models/Wallet');
+const Transaction = require('../models/Transaction');
+const User = require('../models/User');
+const Notification = require('../models/Notification');
+const Subscription = require('../models/Subscription');
+const authMiddleware = require('../middleware/auth.middleware');
+const AuctionSettlementService = require('../services/auctionSettlement');
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
-import { useWallet } from '@/context/WalletContext';
-import { useListings } from '@/context/ListingContext';
-import { useWebSocket } from '@/context/WebSocketContext';
-import { useAuction } from '@/context/AuctionContext';
-import { WebSocketEvent } from '@/types/websocket';
-import { getUserProfileData } from '@/utils/profileUtils';
-import { getSellerTierMemoized } from '@/utils/sellerTiers';
-import { storageService, listingsService, reviewsService } from '@/services';
-import { 
-  isAuctionActive, 
-  calculateTotalPayable, 
-  formatTimeRemaining, 
-  formatRelativeTime,
-  extractSellerInfo 
-} from '@/utils/browseDetailUtils';
-import { getBuyerDebitAmount, hasSufficientBalance, getAmountNeeded, getAuctionTotalPayable } from '@/utils/pricing';
-import { DetailState, ListingWithDetails, BidHistoryItem } from '@/types/browseDetail';
-import { securityService, sanitize } from '@/services/security.service';
-import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { financialSchemas } from '@/utils/validation/schemas';
-import { ApiResponse } from '@/services/api.config';
-import { isAdmin } from '@/utils/security/permissions';
-import { resolveApiUrl } from '@/utils/url';
+// ============= HELPER FUNCTIONS FOR PREMIUM CONTENT =============
 
-const AUCTION_UPDATE_INTERVAL = 1000;
-const FUNDING_CHECK_INTERVAL = 10000;
-const NAVIGATION_DELAY = 500;
-const AUCTION_EXPIRY_CHECK_INTERVAL = 5000;
-
-const initialState: DetailState = {
-  purchaseStatus: '',
-  isProcessing: false,
-  showPurchaseSuccess: false,
-  showAuctionSuccess: false,
-  sellerProfile: { bio: null, pic: null, subscriptionPrice: null },
-  showStickyBuy: false,
-  bidAmount: '',
-  bidStatus: {},
-  biddingEnabled: false,
-  bidsHistory: [],
-  showBidHistory: false,
-  forceUpdateTimer: {},
-  viewCount: 0,
-  isBidding: false,
-  bidError: null,
-  bidSuccess: null,
-  currentImageIndex: 0
-};
-
-interface Message {
-  id?: string;
-  sender: string;
-  receiver: string;
-  content: string;
-  date: string;
-  read?: boolean;
-  isRead?: boolean;
+/**
+ * Check if a user is subscribed to a seller
+ */
+async function isUserSubscribedToSeller(buyer, seller) {
+  if (!buyer || !seller) return false;
+  
+  try {
+    const subscription = await Subscription.findOne({
+      subscriber: buyer,
+      creator: seller,
+      status: 'active'
+    });
+    
+    return !!subscription;
+  } catch (error) {
+    console.error('[Premium] Error checking subscription:', error);
+    return false;
+  }
 }
 
-export const useBrowseDetail = () => {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { user } = useAuth();
-  const { 
-    getBuyerBalance,
-    orderHistory
-  } = useWallet();
-  const { 
-    listings,
-    users,
-    subscriptions,
-    placeBid: listingsPlaceBid,
-    purchaseListingAndRemove,
-    refreshListings
-  } = useListings();
-  const { processEndedAuction } = useAuction();
+/**
+ * Populate seller profile data for a listing
+ */
+async function populateSellerProfile(listing) {
+  try {
+    const seller = await User.findOne({ username: listing.seller });
+    if (seller) {
+      // Add seller profile data to listing
+      listing.sellerProfile = {
+        bio: seller.bio || null,
+        pic: seller.profilePic || null
+      };
+      listing.isSellerVerified = seller.isVerified || false;
+      listing.sellerSalesCount = await Order.countDocuments({ 
+        seller: listing.seller, 
+        status: { $in: ['completed', 'delivered'] } 
+      });
+    }
+    return listing;
+  } catch (error) {
+    console.error('[Listing] Error populating seller profile:', error);
+    return listing;
+  }
+}
+
+/**
+ * Filter listing data based on premium access
+ * Returns a sanitized version of the listing for non-subscribers
+ */
+function filterPremiumContent(listing, hasAccess) {
+  // If user has access or it's not premium, return full listing
+  if (hasAccess || !listing.isPremium) {
+    return listing;
+  }
   
-  const wsContext = useWebSocket();
-  const subscribe = wsContext?.subscribe || (() => () => {});
-  const isConnected = wsContext?.isConnected || false;
+  // For premium content without access, return limited data
+  const sanitized = {
+    _id: listing._id,
+    id: listing._id || listing.id,
+    title: listing.title,
+    seller: listing.seller,
+    isPremium: true,
+    status: listing.status,
+    createdAt: listing.createdAt,
+    isVerified: listing.isVerified,
+    
+    // Include seller profile data even for locked content
+    sellerProfile: listing.sellerProfile,
+    isSellerVerified: listing.isSellerVerified,
+    sellerSalesCount: listing.sellerSalesCount,
+    
+    // Obscure sensitive data
+    description: 'Premium content - Subscribe to view full details',
+    price: listing.price, // Show price but not allow purchase
+    markedUpPrice: listing.markedUpPrice,
+    
+    // Only show first image blurred (frontend will handle blur)
+    imageUrls: listing.imageUrls?.length > 0 ? [listing.imageUrls[0]] : [],
+    
+    // Hide detailed information
+    tags: [],
+    hoursWorn: undefined,
+    views: listing.views || 0,
+    
+    // Hide auction details for premium auctions
+    auction: listing.auction?.isAuction ? {
+      isAuction: true,
+      status: listing.auction.status,
+      endTime: listing.auction.endTime,
+      // Hide bid details
+      currentBid: undefined,
+      highestBidder: undefined,
+      bidCount: 0,
+      bids: []
+    } : undefined,
+    
+    // Add flag for frontend to know content is locked
+    isLocked: true
+  };
   
-  const rateLimiter = getRateLimiter();
-  
-  // State
-  const [state, setState] = useState<DetailState>(initialState);
-  const [listing, setListing] = useState<ListingWithDetails | undefined>();
-  const [sellerReviews, setSellerReviews] = useState<any[]>([]);
-  const [sellerAverageRating, setSellerAverageRating] = useState<number | null>(null);
-  const [sellerReviewStats, setSellerReviewStats] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [rateLimitError, setRateLimitError] = useState<string | null>(null);
-  const [auctionExpiryProcessed, setAuctionExpiryProcessed] = useState(false);
-  const [realtimeBids, setRealtimeBids] = useState<BidHistoryItem[]>([]);
-  const [lastBidUpdate, setLastBidUpdate] = useState<number>(Date.now());
-  
-  // Refs
-  const isPurchasingRef = useRef(false);
-  const hasPurchasedRef = useRef(false);
-  const lastProcessedPaymentRef = useRef<string | null>(null);
-  const imageRef = useRef<HTMLDivElement>(null);
-  const bidInputRef = useRef<HTMLInputElement>(null);
-  const bidButtonRef = useRef<HTMLButtonElement>(null);
-  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const mountedRef = useRef(true);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const auctionExpiryTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const hasMarkedRef = useRef(false);
-  const viewTrackedRef = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const isProcessingAuctionEndRef = useRef(false);
+  return sanitized;
+}
 
-  // Core data
-  const rawListingId = params?.id as string;
-  const listingId = rawListingId ? sanitize.strict(rawListingId) : '';
-  const currentUsername = user?.username || null;
+/**
+ * Middleware to check premium access for a specific listing
+ */
+async function checkPremiumAccess(req, res, next) {
+  try {
+    const listing = req.listing; // Assumes listing is attached by previous middleware
+    
+    if (!listing || !listing.isPremium) {
+      req.hasPremiumAccess = true;
+      return next();
+    }
+    
+    // Check if user is authenticated
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      req.hasPremiumAccess = false;
+      return next();
+    }
+    
+    // Decode token to get user (without failing the request)
+    try {
+      const jwt = require('jsonwebtoken');
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+      const username = decoded.username;
+      
+      // Seller always has access to their own listings
+      if (username === listing.seller) {
+        req.hasPremiumAccess = true;
+        return next();
+      }
+      
+      // Admin always has access
+      if (decoded.role === 'admin') {
+        req.hasPremiumAccess = true;
+        return next();
+      }
+      
+      // Check subscription for buyers
+      if (decoded.role === 'buyer') {
+        req.hasPremiumAccess = await isUserSubscribedToSeller(username, listing.seller);
+      } else {
+        req.hasPremiumAccess = false;
+      }
+      
+    } catch (error) {
+      // Token invalid or expired
+      req.hasPremiumAccess = false;
+    }
+    
+    next();
+  } catch (error) {
+    console.error('[Premium] Error in checkPremiumAccess middleware:', error);
+    req.hasPremiumAccess = false;
+    next();
+  }
+}
 
-  // Determine if auction
-  const isAuction = !!(listing?.auction?.isAuction || (listing?.auction && listing.auction.startingPrice !== undefined));
-  const isAuctionListing = isAuction;
-  const isAuctionEnded = isAuction && listing?.auction && !isAuctionActive(listing.auction);
+// ============= LISTING ROUTES =============
 
-  // Reserve price checks
-  const hasReserve = !!listing?.auction?.reservePrice;
-  const currentBid = listing?.auction?.highestBid || 0;
-  const reserveMet = hasReserve && listing?.auction?.reservePrice ? currentBid >= listing.auction.reservePrice : true;
-
-  // Role guards
-  const userIsAdmin = !!isAdmin(user as any);
-  const isSellerOfListing = !!(user?.username && listing?.seller && user.username === listing.seller);
-  const canEndAuction = userIsAdmin || isSellerOfListing;
-  const isBidderView = !!(user?.role === 'buyer' && !canEndAuction);
-
-  // Helper functions
-  const updateState = useCallback((updates: Partial<DetailState> | ((prev: DetailState) => Partial<DetailState>)) => {
-    if (!mountedRef.current) return;
-    setState(prev => {
-      const newUpdates = typeof updates === 'function' ? updates(prev) : updates;
-      return { ...prev, ...newUpdates };
+// GET /api/listings/debug - Debug endpoint to see all listings
+router.get('/debug', async (req, res) => {
+  try {
+    const listings = await Listing.find({});
+    res.json({
+      success: true,
+      count: listings.length,
+      listings: listings
     });
-  }, []);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
-  // WebSocket subscriptions for real-time updates
-  useEffect(() => {
-    if (!isConnected || !isAuction || !listingId || !mountedRef.current || !subscribe) return;
-
-    const unsubscribeBid = subscribe(WebSocketEvent.AUCTION_BID, (data: any) => {
-      if (data.listingId !== listingId) return;
-
-      console.log('[BrowseDetail] Real-time bid received:', data);
-
-      const newBidForHistory: BidHistoryItem = {
-        bidder: data.bidder || data.username,
-        amount: data.amount || 0,
-        date: data.timestamp || new Date().toISOString()
+// GET /api/listings - Get all listings with advanced filters
+router.get('/', async (req, res) => {
+  try {
+    const { 
+      search,
+      seller, 
+      tags,
+      minPrice, 
+      maxPrice, 
+      isPremium,
+      isAuction,
+      status = 'active',
+      hoursWorn,
+      sort = 'date',
+      order = 'desc',
+      page = 1,
+      limit = 20
+    } = req.query;
+    
+    // Build filter
+    let filter = {};
+    
+    // Status filter
+    if (status === 'active') {
+      filter.$or = [
+        { status: 'active' },
+        { status: { $exists: false } }
+      ];
+    } else if (status) {
+      filter.status = status;
+    }
+    
+    // Text search
+    if (search) {
+      const searchCondition = {
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } }
+        ]
       };
-
-      const newBidForListing = {
-        id: data.id || `bid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        bidder: data.bidder || data.username,
-        amount: data.amount || 0,
-        date: data.timestamp || new Date().toISOString()
-      };
-
-      setListing(prev => {
-        if (!prev || !prev.auction) return prev;
+      
+      if (filter.$or) {
+        const statusCondition = { $or: filter.$or };
+        delete filter.$or;
+        filter.$and = [statusCondition, searchCondition];
+      } else {
+        filter.$or = searchCondition.$or;
+      }
+    }
+    
+    // Seller filter
+    if (seller) filter.seller = seller;
+    
+    // Tags filter
+    if (tags) {
+      const tagArray = tags.split(',').map(tag => tag.trim());
+      filter.tags = { $in: tagArray };
+    }
+    
+    // Premium filter
+    if (isPremium !== undefined) filter.isPremium = isPremium === 'true';
+    
+    // Auction filter
+    if (isAuction !== undefined) filter['auction.isAuction'] = isAuction === 'true';
+    
+    // Price filter
+    if (!isAuction || isAuction === 'false') {
+      if (minPrice || maxPrice) {
+        filter.price = {};
+        if (minPrice) filter.price.$gte = parseFloat(minPrice);
+        if (maxPrice) filter.price.$lte = parseFloat(maxPrice);
+      }
+    }
+    
+    // Hours worn filter
+    if (hoursWorn) {
+      const hours = parseInt(hoursWorn);
+      if (hours > 0) {
+        filter.hoursWorn = { $gte: hours };
+      }
+    }
+    
+    // Build sort
+    let sortObj = {};
+    switch (sort) {
+      case 'date':
+        sortObj.createdAt = order === 'asc' ? 1 : -1;
+        break;
+      case 'price':
+        if (isAuction === 'true') {
+          sortObj['auction.currentBid'] = order === 'asc' ? 1 : -1;
+        } else {
+          sortObj.price = order === 'asc' ? 1 : -1;
+        }
+        break;
+      case 'views':
+        sortObj.views = order === 'asc' ? 1 : -1;
+        break;
+      case 'popularity':
+        sortObj.views = -1;
+        sortObj.createdAt = -1;
+        break;
+      default:
+        sortObj.createdAt = -1;
+    }
+    
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = Math.min(parseInt(limit), 100);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Execute query
+    const [listings, totalCount] = await Promise.all([
+      Listing.find(filter)
+        .sort(sortObj)
+        .skip(skip)
+        .limit(limitNum),
+      Listing.countDocuments(filter)
+    ]);
+    
+    // Populate seller profiles for all listings
+    const populatedListings = await Promise.all(
+      listings.map(listing => populateSellerProfile(listing.toObject()))
+    );
+    
+    // Check user authentication and subscriptions for premium content filtering
+    let processedListings = populatedListings;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        const username = decoded.username;
+        const role = decoded.role;
         
-        const updatedBids = [...(prev.auction.bids || []), newBidForListing]
-          .sort((a, b) => b.amount - a.amount)
-          .slice(0, 20);
-        
-        return {
-          ...prev,
-          auction: {
-            ...prev.auction,
-            highestBid: newBidForListing.amount,
-            highestBidder: newBidForListing.bidder,
-            bids: updatedBids
+        // Process each listing for premium content
+        processedListings = await Promise.all(populatedListings.map(async (listing) => {
+          if (!listing.isPremium) return listing;
+          
+          // Seller sees their own listings
+          if (username === listing.seller) return listing;
+          
+          // Admin sees everything
+          if (role === 'admin') return listing;
+          
+          // Check subscription for buyers
+          if (role === 'buyer') {
+            const hasAccess = await isUserSubscribedToSeller(username, listing.seller);
+            return filterPremiumContent(listing, hasAccess);
           }
-        } as ListingWithDetails;
+          
+          // Others get filtered content
+          return filterPremiumContent(listing, false);
+        }));
+      } catch (error) {
+        // Invalid token - filter all premium content
+        processedListings = populatedListings.map(listing => 
+          filterPremiumContent(listing, false)
+        );
+      }
+    } else {
+      // No token - filter all premium content
+      processedListings = populatedListings.map(listing => 
+        filterPremiumContent(listing, false)
+      );
+    }
+    
+    res.json({
+      success: true,
+      data: processedListings,
+      meta: {
+        page: pageNum,
+        pageSize: limitNum,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limitNum)
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings/search-suggestions - Get search suggestions
+router.get('/search-suggestions', async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || q.length < 2) {
+      return res.json({ success: true, suggestions: [] });
+    }
+    
+    const suggestions = await Listing.find({
+      status: 'active',
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { tags: { $regex: q, $options: 'i' } }
+      ]
+    })
+    .select('title tags')
+    .limit(10);
+    
+    const titleSuggestions = suggestions.map(l => l.title);
+    const tagSuggestions = [...new Set(suggestions.flatMap(l => l.tags))];
+    
+    res.json({
+      success: true,
+      suggestions: {
+        titles: titleSuggestions,
+        tags: tagSuggestions.filter(tag => 
+          tag.toLowerCase().includes(q.toLowerCase())
+        )
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings/popular-tags - Get popular tags
+router.get('/popular-tags', async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+    
+    const popularTags = await Listing.aggregate([
+      { $match: { status: 'active' } },
+      { $unwind: '$tags' },
+      { $group: {
+        _id: '$tags',
+        count: { $sum: 1 }
+      }},
+      { $sort: { count: -1 } },
+      { $limit: parseInt(limit) },
+      { $project: {
+        tag: '$_id',
+        count: 1,
+        _id: 0
+      }}
+    ]);
+    
+    res.json({
+      success: true,
+      data: popularTags
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/listings/stats - Get listing statistics
+router.get('/stats', async (req, res) => {
+  try {
+    const [
+      totalListings,
+      activeListings,
+      activeAuctions,
+      totalSold
+    ] = await Promise.all([
+      Listing.countDocuments(),
+      Listing.countDocuments({ status: 'active' }),
+      Listing.countDocuments({ 
+        status: 'active', 
+        'auction.isAuction': true,
+        'auction.status': 'active'
+      }),
+      Listing.countDocuments({ status: 'sold' })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        total: totalListings,
+        active: activeListings,
+        activeAuctions: activeAuctions,
+        sold: totalSold
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/listings - Create a new listing
+router.post('/', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'seller') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only sellers can create listings'
       });
+    }
+    
+    const listingData = req.body;
+    listingData.seller = req.user.username;
+    
+    // Handle images
+    if (listingData.imageUrl && !listingData.imageUrls) {
+      listingData.imageUrls = [listingData.imageUrl];
+      delete listingData.imageUrl;
+    }
+    
+    if (!listingData.imageUrls || listingData.imageUrls.length === 0) {
+      listingData.imageUrls = ['https://via.placeholder.com/300'];
+    }
+    
+    // Handle auction data
+    if (listingData.isAuction) {
+      listingData.auction = {
+        isAuction: true,
+        startingPrice: Math.floor(listingData.startingPrice || 0),
+        reservePrice: listingData.reservePrice ? Math.floor(listingData.reservePrice) : undefined,
+        endTime: new Date(listingData.endTime),
+        currentBid: 0,
+        highestBid: 0,  // Initialize highestBid
+        bidCount: 0,
+        bids: [],
+        status: 'active',
+        bidIncrement: 1  // Always use $1 increments
+      };
+      
+      delete listingData.isAuction;
+      delete listingData.startingPrice;
+      delete listingData.reservePrice;
+      delete listingData.endTime;
+      delete listingData.price;
+    }
+    
+    const listing = new Listing(listingData);
+    await listing.save();
+    
+    // Populate seller profile for the response
+    const populatedListing = await populateSellerProfile(listing.toObject());
+    
+    // Emit WebSocket event
+    if (global.webSocketService) {
+      global.webSocketService.emitNewListing(populatedListing);
+    }
+    
+    res.json({
+      success: true,
+      data: populatedListing
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
-      setRealtimeBids(prev => {
-        const updated = [newBidForHistory, ...prev]
-          .filter((bid, index, self) => 
-            index === self.findIndex(b => b.bidder === bid.bidder && b.amount === bid.amount)
-          )
-          .sort((a, b) => b.amount - a.amount)
-          .slice(0, 5);
-        return updated;
+// GET /api/listings/:id - Get a specific listing with premium enforcement
+router.get('/:id', async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
       });
-
-      updateState(prevState => ({
-        bidsHistory: [newBidForHistory, ...prevState.bidsHistory]
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      }));
-
-      setLastBidUpdate(Date.now());
-
-      if (newBidForHistory.bidder === currentUsername) {
-        updateState({ 
-          bidSuccess: 'Your bid was placed successfully!',
-          bidError: null 
-        });
-      }
-    });
-
-    const unsubscribeEnded = subscribe(WebSocketEvent.AUCTION_ENDED, (data: any) => {
-      if (data.listingId === listingId) {
-        console.log('[BrowseDetail] Auction ended event received');
-        
-        setListing(prev => {
-          if (!prev || !prev.auction) return prev;
-          
-          return {
-            ...prev,
-            auction: {
-              ...prev.auction,
-              status: data.status === 'reserve_not_met' ? 'reserve_not_met' : 'ended'
-            }
-          } as ListingWithDetails;
-        });
-        
-        refreshListings();
-      }
-    });
-
-    const unsubscribeReserve = subscribe('auction:reserve_not_met' as WebSocketEvent, (data: any) => {
-      if (data.listingId === listingId) {
-        console.log('[BrowseDetail] Reserve not met event received');
-        
-        setListing(prev => {
-          if (!prev || !prev.auction) return prev;
-          
-          return {
-            ...prev,
-            auction: {
-              ...prev.auction,
-              status: 'reserve_not_met'
-            }
-          } as ListingWithDetails;
-        });
-      }
-    });
-
-    // Listen for auction won event
-    const unsubscribeWon = subscribe('auction:won' as WebSocketEvent, (data: any) => {
-      console.log('[BrowseDetail] Auction won event received:', data);
+    }
+    
+    // Populate seller profile
+    const populatedListing = await populateSellerProfile(listing.toObject());
+    
+    // Check premium access
+    let hasAccess = true;
+    
+    if (listing.isPremium) {
+      const token = req.headers.authorization?.replace('Bearer ', '');
       
-      // Check if this is for the current listing and user
-      if (data.listingId === listingId || data.listingId === listing?.id) {
-        if (currentUsername && (data.winner === currentUsername || data.winnerId === currentUsername)) {
-          console.log('[BrowseDetail] Current user won the auction!');
-          updateState({ showAuctionSuccess: true });
-          
-          // Navigate to orders after a delay
-          setTimeout(() => {
-            if (mountedRef.current) {
-              router.push('/buyers/my-orders');
-            }
-          }, 5000);
-        }
-      }
-    });
-
-    return () => {
-      unsubscribeBid();
-      unsubscribeEnded();
-      unsubscribeReserve();
-      unsubscribeWon();
-    };
-  }, [isConnected, isAuction, listingId, currentUsername, subscribe, updateState, refreshListings, router, listing?.id]);
-
-  // Auto-check and process expired auctions
-  useEffect(() => {
-    if (!isAuction || !listing?.auction || auctionExpiryProcessed || !mountedRef.current) return;
-    if (isProcessingAuctionEndRef.current) return;
-
-    const checkAuctionExpiry = async () => {
-      if (!listing.auction?.endTime) return;
-      
-      const now = new Date();
-      const endTime = new Date(listing.auction.endTime);
-      
-      if (endTime <= now && listing.auction.status === 'active') {
-        console.log('[BrowseDetail] Auction has expired, needs processing');
-        
-        if (isProcessingAuctionEndRef.current) {
-          console.log('[BrowseDetail] Already processing auction end');
-          return;
-        }
-        
-        isProcessingAuctionEndRef.current = true;
-        setAuctionExpiryProcessed(true);
-
-        setListing(prev => {
-          if (!prev || !prev.auction) return prev;
-          return {
-            ...prev,
-            auction: {
-              ...prev.auction,
-              status: reserveMet ? 'ended' : ('reserve_not_met' as any)
-            }
-          } as ListingWithDetails;
-        });
-
-        updateState({ biddingEnabled: false });
-
-        // Always trigger backend processing
+      if (token) {
         try {
-          console.log('[BrowseDetail] Triggering backend auction end processing');
-          const response = await listingsService.endAuction(listing.id);
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+          const username = decoded.username;
+          const role = decoded.role;
           
-          if (response.success) {
-            console.log('[BrowseDetail] Auction end processed successfully');
-            await refreshListings();
-            
-            if (listing.auction.highestBidder === currentUsername && reserveMet) {
-              updateState({ showAuctionSuccess: true });
-              setTimeout(() => {
-                if (mountedRef.current) {
-                  router.push('/buyers/my-orders');
-                }
-              }, 5000);
-            }
+          // Check access
+          if (username === listing.seller || role === 'admin') {
+            hasAccess = true;
+          } else if (role === 'buyer') {
+            hasAccess = await isUserSubscribedToSeller(username, listing.seller);
           } else {
-            const msg = (response.error?.message || '').toLowerCase();
-            if (msg.includes('already processed') || msg.includes('auction is not active')) {
-              console.log('[BrowseDetail] Auction already processed on backend');
-              await refreshListings();
-            } else {
-              console.warn('[BrowseDetail] Failed to process auction end:', response.error);
-            }
+            hasAccess = false;
           }
         } catch (error) {
-          const m = (error as any)?.message?.toLowerCase?.() || '';
-          if (m.includes('already processed') || m.includes('auction is not active')) {
-            console.log('[BrowseDetail] Auction already ended, refreshing');
-            try { await refreshListings(); } catch {}
-          } else {
-            console.warn('[BrowseDetail] Error processing auction end:', error);
-          }
-        } finally {
-          isProcessingAuctionEndRef.current = false;
+          hasAccess = false;
         }
+      } else {
+        hasAccess = false;
       }
-    };
-
-    checkAuctionExpiry();
-    auctionExpiryTimerRef.current = setInterval(checkAuctionExpiry, AUCTION_EXPIRY_CHECK_INTERVAL);
-
-    return () => {
-      if (auctionExpiryTimerRef.current) {
-        clearInterval(auctionExpiryTimerRef.current);
-        auctionExpiryTimerRef.current = null;
-      }
-    };
-  }, [isAuction, listing, auctionExpiryProcessed, currentUsername, refreshListings, router, updateState, reserveMet]);
-
-  // Load listing
-  useEffect(() => {
-    const loadListing = async () => {
-      if (!listingId) return;
-
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-
-      abortControllerRef.current = new AbortController();
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const contextListing = listings.find(l => l.id === listingId);
-        
-        if (contextListing) {
-          setListing(contextListing as ListingWithDetails);
-          setState(prev => ({ ...prev, viewCount: contextListing.views || 0 }));
-          setIsLoading(false);
-        } else {
-          const result = await listingsService.getListing(listingId);
-          
-          if (!mountedRef.current) return;
-
-          if (result.success && result.data) {
-            setListing(result.data as ListingWithDetails);
-            setState(prev => ({ ...prev, viewCount: result.data?.views || 0 }));
-            await refreshListings();
-          } else {
-            setError(result.error?.message || 'Listing not found');
-          }
-          
-          setIsLoading(false);
-        }
-      } catch (error: any) {
-        if (!mountedRef.current) return;
-        
-        if (error.name === 'AbortError') {
-          console.log('Request was cancelled');
-          return;
-        }
-
-        console.error('Error loading listing:', error);
-        setError(error.message || 'Failed to load listing');
-        setIsLoading(false);
-      }
-    };
-
-    loadListing();
-  }, [listingId, listings, refreshListings]);
-
-  // Load seller reviews from backend API
-  useEffect(() => {
-    const loadSellerReviews = async () => {
-      if (!listing?.seller) {
-        console.log('[BrowseDetail] No seller found in listing');
-        return;
-      }
-
-      try {
-        console.log('[BrowseDetail] Loading reviews for seller:', listing.seller);
-        
-        // Fetch reviews from the backend API
-        const reviewsResponse = await reviewsService.getSellerReviews(listing.seller);
-        
-        console.log('[BrowseDetail] Reviews API response:', reviewsResponse);
-        
-        if (reviewsResponse.success && reviewsResponse.data) {
-          const { reviews, stats } = reviewsResponse.data;
-          
-          console.log('[BrowseDetail] Loaded reviews:', reviews?.length || 0, 'Stats:', stats);
-          
-          setSellerReviews(reviews || []);
-          setSellerReviewStats(stats || null);
-          
-          // Set average rating
-          if (stats && typeof stats.avgRating === 'number') {
-            setSellerAverageRating(stats.avgRating);
-            console.log('[BrowseDetail] Set average rating:', stats.avgRating);
-          } else if (reviews && reviews.length > 0) {
-            // Fallback: calculate average if stats not provided
-            const totalRating = reviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
-            const avgRating = totalRating / reviews.length;
-            setSellerAverageRating(Math.round(avgRating * 10) / 10);
-            console.log('[BrowseDetail] Calculated average rating:', Math.round(avgRating * 10) / 10);
-          } else {
-            setSellerAverageRating(null);
-            console.log('[BrowseDetail] No reviews found, setting rating to null');
-          }
-        } else {
-          console.warn('[BrowseDetail] Failed to load reviews:', reviewsResponse.error);
-          setSellerReviews([]);
-          setSellerAverageRating(null);
-        }
-      } catch (error) {
-        console.error('[BrowseDetail] Error loading seller reviews:', error);
-        setSellerReviews([]);
-        setSellerAverageRating(null);
-      }
-    };
-
-    loadSellerReviews();
-  }, [listing?.seller]);
-
-  // Merge realtime bids with existing bids
-  const mergedBidsHistory = useMemo(() => {
-    const allBids = [...realtimeBids, ...state.bidsHistory];
-    const uniqueBids = allBids.filter((bid, index, self) =>
-      index === self.findIndex(b => 
-        b.bidder === bid.bidder && 
-        b.amount === bid.amount && 
-        Math.abs(new Date(b.date).getTime() - new Date(b.date).getTime()) < 1000
-      )
-    );
-    return uniqueBids.sort((a, b) => b.amount - a.amount);
-  }, [realtimeBids, state.bidsHistory]);
-
-  // Computed values
-  const images = listing?.imageUrls || [];
-  const currentHighestBid = listing?.auction?.highestBid || 0;
-  const currentTotalPayable = isAuction ? getAuctionTotalPayable(currentHighestBid) : 0;
-  const didUserBid = listing?.auction?.bids?.some(bid => bid.bidder === currentUsername) ?? false;
-  const isUserHighestBidder = listing?.auction?.highestBidder === currentUsername;
-  const buyerBalance = user ? getBuyerBalance(user.username) : 0;
-  
-  // Check subscription
-  const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
-    const buyerSubs = subscriptions[buyerUsername] || [];
-    return buyerSubs.includes(sellerUsername);
-  }, [subscriptions]);
-
-  const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
-
-  // CRITICAL FIX: Track view count ONCE per listing load
-  useEffect(() => {
-    const trackView = async () => {
-      if (!listing || !listingId || viewTrackedRef.current) {
-        return;
-      }
-      
-      viewTrackedRef.current = true;
-      
-      try {
-        console.log('[BrowseDetail] Tracking view for listing:', listingId);
-        
-        // CRITICAL FIX: updateViews now returns the new count directly!
-        const updateResult = await listingsService.updateViews({
-          listingId: listingId,
-          viewerId: user?.username,
-        });
-        
-        if (!updateResult.success) {
-          console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
-          return;
-        }
-        
-        // Use the count from the update response - NO SECOND API CALL!
-        const viewCount = updateResult.data ?? 0;
-        
-        console.log('[BrowseDetail] Updated view count:', viewCount);
-        
-        // Update state
-        setState(prev => ({ ...prev, viewCount: viewCount }));
-        
-        // Update listing WITHOUT causing re-render loop
-        setListing(prev => {
-          if (!prev) return prev;
-          if (prev.views === viewCount) return prev;
-          return {
-            ...prev,
-            views: viewCount
-          };
-        });
-      } catch (error) {
-        console.error('[BrowseDetail] Error tracking view:', error);
-      }
-    };
-    
-    trackView();
-  }, [listing?.id, listingId, user?.username]);
-
-  // Reset view tracking when navigating to different listing
-  useEffect(() => {
-    viewTrackedRef.current = false;
-  }, [listingId]);
-
-  const getTimerProgress = useCallback(() => {
-    if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
-    const now = new Date().getTime();
-    const startTime = new Date(listing.date).getTime();
-    const endTime = new Date(listing.auction.endTime).getTime();
-    const totalDuration = endTime - startTime;
-    const elapsed = now - startTime;
-    return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
-  }, [isAuction, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
-
-  // Check current user funds
-  const checkCurrentUserFunds = useCallback(() => {
-    if (!isAuction || !listing?.auction) {
-      updateState({ 
-        biddingEnabled: true,
-        bidStatus: {}
-      });
-      return;
     }
     
-    if (!user || user.role !== "buyer") return;
+    const responseData = filterPremiumContent(populatedListing, hasAccess);
     
-    if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
-      updateState({ 
-        biddingEnabled: true,
-        bidStatus: {}
-      });
-      return;
-    }
-
-    const balance = getBuyerBalance(user.username);
-    console.log('[useBrowseDetail] Checking funds - current balance:', balance);
-    
-    const startingBid = listing.auction.startingPrice || 0;
-    const minimumBid = (listing.auction.highestBid || startingBid) + 1;
-    const totalRequired = getAuctionTotalPayable(minimumBid);
-    const hasEnoughFunds = balance >= totalRequired;
-
-    console.log('[useBrowseDetail] Fund check:', {
-      balance,
-      minimumBid,
-      totalRequired,
-      hasEnoughFunds
+    res.json({
+      success: true,
+      data: responseData,
+      premiumAccess: hasAccess
     });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
-    updateState({ 
-      biddingEnabled: hasEnoughFunds,
-      bidStatus: hasEnoughFunds ? {} : {
+// POST /api/listings/:id/purchase - Direct purchase endpoint with premium check
+router.post('/:id/purchase', authMiddleware, async (req, res) => {
+  try {
+    const { buyerId } = req.body;
+    const listingId = req.params.id;
+    
+    // Validate buyer
+    const buyerUsername = buyerId || req.user.username;
+    if (!buyerUsername) {
+      return res.status(400).json({
         success: false,
-        message: `Insufficient funds. You need $${totalRequired.toFixed(2)} to place this bid.`
+        error: 'Buyer information required'
+      });
+    }
+    
+    // Get listing
+    const listing = await Listing.findById(listingId);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    // PREMIUM CHECK: Prevent purchase of premium items without subscription
+    if (listing.isPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(buyerUsername, listing.seller);
+      
+      if (!isSubscribed) {
+        return res.status(403).json({
+          success: false,
+          error: 'You must be subscribed to this seller to purchase premium content',
+          requiresSubscription: true,
+          seller: listing.seller
+        });
+      }
+    }
+    
+    // Check if already sold
+    if (listing.status === 'sold') {
+      return res.status(400).json({
+        success: false,
+        error: 'This item has already been sold'
+      });
+    }
+    
+    // Check if it's an auction
+    if (listing.auction && listing.auction.isAuction) {
+      return res.status(400).json({
+        success: false,
+        error: 'This is an auction listing. Please use the bid system.'
+      });
+    }
+    
+    // Check if buyer is the seller
+    if (listing.seller === buyerUsername) {
+      return res.status(400).json({
+        success: false,
+        error: 'You cannot purchase your own listing'
+      });
+    }
+    
+    // Mark as sold immediately to prevent race conditions
+    listing.status = 'sold';
+    listing.buyerId = buyerUsername;
+    listing.soldAt = new Date();
+    await listing.save();
+    
+    // Emit WebSocket event immediately so UI updates right away
+    if (global.webSocketService) {
+      global.webSocketService.emitListingSold(listing, buyerUsername);
+      
+      // Also emit a specific event for the listing being removed
+      global.webSocketService.broadcast('listing:sold', {
+        listingId: listing._id.toString(),
+        id: listing._id.toString(),
+        buyer: buyerUsername,
+        seller: listing.seller,
+        timestamp: new Date()
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Purchase marked as complete',
+      data: {
+        listing: listing,
+        status: 'sold',
+        buyer: buyerUsername
       }
     });
-  }, [user, isAuction, listing?.auction, getBuyerBalance, updateState, state.isProcessing]);
+  } catch (error) {
+    console.error('[Purchase] Error in purchase endpoint:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
-  const formatBidDate = useCallback((date: string) => formatRelativeTime(date), []);
-
-  // Suggested bid amount calculation
-  const suggestedBidAmount = useMemo(() => {
-    if (!isAuction || !listing?.auction) return null;
+// POST /api/listings/:id/views - Track listing view (CRITICAL FIX: Always increment)
+router.post('/:id/views', async (req, res) => {
+  try {
+    const listingId = req.params.id;
     
-    const currentBid = listing.auction.highestBid || 0;
-    const startingBid = listing.auction.startingPrice || 0;
-    const minBidAmount = currentBid > 0 ? currentBid + 1 : startingBid;
+    console.log('[Views] Tracking view for listing:', listingId);
     
-    return minBidAmount.toString();
-  }, [isAuction, listing?.auction]);
+    // CRITICAL FIX: Use findByIdAndUpdate with $inc to atomically increment the view count
+    // This ensures the counter increments properly even with concurrent requests
+    const listing = await Listing.findByIdAndUpdate(
+      listingId,
+      { $inc: { views: 1 } }, // Atomically increment views by 1
+      { new: true, upsert: false } // Return the updated document
+    );
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    console.log('[Views] View count updated:', listing.views);
+    
+    res.json({
+      success: true,
+      views: listing.views
+    });
+  } catch (error) {
+    console.error('[Views] Error tracking view:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
-  // Mark messages as read
-  const markMessagesAsRead = useCallback(async (receiverUsername: string, senderUsername: string) => {
+// GET /api/listings/:id/views - Get listing views
+router.get('/:id/views', async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      views: listing.views || 0
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/listings/:id/bid - Place a bid on an auction with premium check
+router.post('/:id/bid', authMiddleware, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const bidder = req.user.username;
+    
+    // CRITICAL FIX: Ensure amount is always an integer
+    const bidAmount = Math.floor(Number(amount));
+    
+    if (!bidAmount || bidAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid bid amount'
+      });
+    }
+    
+    const listing = await Listing.findById(req.params.id);
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    // PREMIUM CHECK: Prevent bidding on premium auctions without subscription
+    if (listing.isPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(bidder, listing.seller);
+      
+      if (!isSubscribed) {
+        return res.status(403).json({
+          success: false,
+          error: 'You must be subscribed to this seller to bid on premium auctions',
+          requiresSubscription: true,
+          seller: listing.seller
+        });
+      }
+    }
+    
+    if (!listing.auction || !listing.auction.isAuction) {
+      return res.status(400).json({
+        success: false,
+        error: 'This is not an auction listing'
+      });
+    }
+    
+    if (listing.auction.status !== 'active' || new Date() >= listing.auction.endTime) {
+      return res.status(400).json({
+        success: false,
+        error: 'Auction has ended'
+      });
+    }
+    
+    // Validate minimum bid with integer math
+    const currentBid = Math.floor(listing.auction.highestBid || listing.auction.currentBid || 0);
+    const startingPrice = Math.floor(listing.auction.startingPrice || 0);
+    const minimumBid = currentBid > 0 ? currentBid + 1 : startingPrice;
+    
+    if (bidAmount < minimumBid) {
+      return res.status(400).json({
+        success: false,
+        error: `Minimum bid is $${minimumBid}`
+      });
+    }
+    
+    const buyerWallet = await Wallet.findOne({ username: bidder });
+    if (!buyerWallet || !buyerWallet.hasBalance(bidAmount)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Insufficient balance to place this bid'
+      });
+    }
+    
+    const previousHighestBidder = listing.auction.highestBidder;
+    const previousHighestBid = Math.floor(listing.auction.highestBid || listing.auction.currentBid || 0);
+    
+    // Store the current balance before withdrawal
+    const bidderPreviousBalance = buyerWallet.balance;
+    
+    // Check if this is an incremental bid (user raising their own bid)
+    const isIncrementalBid = previousHighestBidder === bidder && previousHighestBid > 0;
+    
     try {
-      const messagesKey = `messages`;
-      const allMessages = await storageService.getItem<Record<string, Message[]>>(messagesKey, {});
+      // CRITICAL FIX: Update BOTH currentBid and highestBid fields
+      listing.auction.currentBid = bidAmount;
+      listing.auction.highestBid = bidAmount;  // ALWAYS update highestBid
+      listing.auction.highestBidder = bidder;
+      listing.auction.bidCount += 1;
       
-      const conversationKey = [receiverUsername, senderUsername].sort().join('-');
-      const messages = allMessages[conversationKey] || [];
-      
-      const updatedMessages = messages.map(msg => {
-        if (msg.receiver === receiverUsername && msg.sender === senderUsername && !msg.read) {
-          return { ...msg, read: true, isRead: true };
-        }
-        return msg;
+      // Add to bids array
+      listing.auction.bids.push({
+        bidder: bidder,
+        amount: bidAmount,
+        date: new Date()
       });
       
-      allMessages[conversationKey] = updatedMessages;
-      await storageService.setItem(messagesKey, allMessages);
-    } catch (error) {
-      console.error('Mark messages as read error:', error);
-    }
-  }, []);
-
-  // Listen for wallet balance updates and refunds
-  useEffect(() => {
-    if (!isAuction || !user || user.role !== 'buyer') return;
-    
-    const handleBalanceUpdate = (event: CustomEvent) => {
-      console.log('[useBrowseDetail] Balance update received:', event.detail);
+      await listing.save();
       
-      if (event.detail.username === user.username) {
-        checkCurrentUserFunds();
-        updateState({ 
-          bidError: null,
-          bidSuccess: null
-        });
-      }
-    };
-    
-    const handleUserRefunded = (event: CustomEvent) => {
-      console.log('[useBrowseDetail] User refunded:', event.detail);
+      // Populate seller profile for the response
+      const populatedListing = await populateSellerProfile(listing.toObject());
       
-      if (event.detail.username === user.username && 
-          event.detail.listingId === listing?.id) {
-        updateState({ 
-          bidStatus: {
-            success: true,
-            message: `You were outbid! Your funds ($${event.detail.amount.toFixed(2)}) have been refunded.`
-          },
-          bidError: null,
-          bidSuccess: null
-        });
+      // Create database notification for seller about new bid
+      await Notification.createBidNotification(listing.seller, bidder, listing, bidAmount);
+      console.log('[Bid] Created database notification for seller');
+      
+      if (isIncrementalBid) {
+        // For incremental bids, only charge the difference (NO FEE)
+        const bidDifference = bidAmount - previousHighestBid;
+        await buyerWallet.withdraw(bidDifference);
         
-        setTimeout(() => {
-          checkCurrentUserFunds();
-        }, 100);
-      }
-    };
-    
-    const handleCheckBidStatus = () => {
-      console.log('[useBrowseDetail] Checking bid status after balance change');
-      checkCurrentUserFunds();
-    };
-    
-    window.addEventListener('wallet:buyer-balance-updated', handleBalanceUpdate as EventListener);
-    window.addEventListener('wallet:user-refunded', handleUserRefunded as EventListener);
-    window.addEventListener('auction:check-bid-status', handleCheckBidStatus);
-    
-    return () => {
-      window.removeEventListener('wallet:buyer-balance-updated', handleBalanceUpdate as EventListener);
-      window.removeEventListener('wallet:user-refunded', handleUserRefunded as EventListener);
-      window.removeEventListener('auction:check-bid-status', handleCheckBidStatus);
-    };
-  }, [isAuction, user, listing?.id, checkCurrentUserFunds, updateState]);
-
-  // Load seller profile with proper URL resolution
-  useEffect(() => {
-    const loadProfileData = async () => {
-      if (listing?.seller) {
-        try {
-          const listingWithProfile = listing as any;
-          if (listingWithProfile.sellerProfile) {
-            const profilePic = listingWithProfile.sellerProfile.pic ? 
-              resolveApiUrl(listingWithProfile.sellerProfile.pic) : null;
+        const holdTransaction = new Transaction({
+          type: 'bid_hold',
+          amount: bidDifference,
+          from: bidder,
+          to: 'platform_escrow',
+          fromRole: 'buyer',
+          toRole: 'admin',
+          description: `Incremental bid on auction: ${listing.title} (difference only)`,
+          status: 'completed',
+          metadata: {
+            auctionId: listing._id.toString(),
+            bidAmount: bidAmount,
+            previousBid: previousHighestBid,
+            incrementalAmount: bidDifference
+          }
+        });
+        await holdTransaction.save();
+        
+        console.log(`Incremental bid: charged difference of $${bidDifference} (no fee)`);
+        
+        // Emit balance update for the bidder
+        if (global.webSocketService) {
+          global.webSocketService.emitBalanceUpdate(
+            bidder, 
+            'buyer', 
+            bidderPreviousBalance, 
+            buyerWallet.balance, 
+            `Incremental bid placed on ${listing.title}`
+          );
+        }
+      } else {
+        // New bidder - hold exact bid amount (NO FEE)
+        await buyerWallet.withdraw(bidAmount);
+        
+        const holdTransaction = new Transaction({
+          type: 'bid_hold',
+          amount: bidAmount,
+          from: bidder,
+          to: 'platform_escrow',
+          fromRole: 'buyer',
+          toRole: 'admin',
+          description: `Bid placed on auction: ${listing.title}`,
+          status: 'completed',
+          metadata: {
+            auctionId: listing._id.toString(),
+            bidAmount: bidAmount
+          }
+        });
+        await holdTransaction.save();
+        
+        // Emit balance update for the new bidder
+        if (global.webSocketService) {
+          global.webSocketService.emitBalanceUpdate(
+            bidder, 
+            'buyer', 
+            bidderPreviousBalance, 
+            buyerWallet.balance, 
+            `Bid placed on ${listing.title}`
+          );
+        }
+        
+        // Refund previous bidder if there was one
+        if (previousHighestBidder && previousHighestBid > 0) {
+          const previousBidderWallet = await Wallet.findOne({ username: previousHighestBidder });
+          if (previousBidderWallet) {
+            const previousBidderOldBalance = previousBidderWallet.balance;
+            await previousBidderWallet.deposit(previousHighestBid);
             
-            updateState({ 
-              sellerProfile: { 
-                bio: listingWithProfile.sellerProfile.bio || null,
-                pic: profilePic,
-                subscriptionPrice: listingWithProfile.sellerProfile.subscriptionPrice || null
-              } 
+            const refundTransaction = new Transaction({
+              type: 'bid_refund',
+              amount: previousHighestBid,
+              from: 'platform_escrow',
+              to: previousHighestBidder,
+              fromRole: 'admin',
+              toRole: 'buyer',
+              description: `Outbid refund for auction: ${listing.title}`,
+              status: 'completed',
+              metadata: {
+                auctionId: listing._id.toString(),
+                reason: 'outbid',
+                newHighestBidder: bidder
+              }
             });
-          } else {
-            const profileData = await getUserProfileData(listing.seller);
-            if (profileData) {
-              const profilePic = profileData.profilePic ? 
-                resolveApiUrl(profileData.profilePic) : null;
+            await refundTransaction.save();
+            
+            // CRITICAL: Emit balance update for the outbid user
+            if (global.webSocketService) {
+              console.log(`[Auction] Emitting balance update for outbid user ${previousHighestBidder}`);
               
-              updateState({ 
-                sellerProfile: { 
-                  bio: profileData.bio ? sanitize.strict(profileData.bio) : null,
-                  pic: profilePic,
-                  subscriptionPrice: profileData.subscriptionPrice
-                } 
+              // Emit the balance update event
+              global.webSocketService.emitBalanceUpdate(
+                previousHighestBidder, 
+                'buyer', 
+                previousBidderOldBalance, 
+                previousBidderWallet.balance, 
+                `Outbid refund for ${listing.title}`
+              );
+              
+              // Also emit a specific refund event
+              global.webSocketService.emitToUser(previousHighestBidder, 'wallet:refund', {
+                username: previousHighestBidder,
+                amount: previousHighestBid,
+                balance: previousBidderWallet.balance,
+                reason: 'outbid_refund',
+                listingId: listing._id.toString(),
+                listingTitle: listing.title,
+                newBidder: bidder,
+                timestamp: new Date()
+              });
+              
+              // Create notification for outbid user
+              await Notification.createNotification({
+                recipient: previousHighestBidder,
+                type: 'outbid',
+                title: 'You were outbid!',
+                message: `You were outbid on "${listing.title}". Your bid of $${previousHighestBid} has been refunded.`,
+                metadata: {
+                  listingId: listing._id.toString(),
+                  refundAmount: previousHighestBid,
+                  newBidAmount: bidAmount,
+                  newBidder: bidder
+                },
+                priority: 'high',
+                relatedId: listing._id.toString(),
+                relatedType: 'auction'
               });
             }
           }
-        } catch (error) {
-          console.error('Error loading seller profile:', error);
         }
       }
-    };
-
-    loadProfileData();
-  }, [listing?.seller, listing, updateState]);
-
-  useEffect(() => {
-    if (listing?.seller && currentUsername && !hasMarkedRef.current) {
-      markMessagesAsRead(currentUsername, listing.seller);
-      hasMarkedRef.current = true;
-    }
-  }, [listing?.seller, currentUsername, markMessagesAsRead]);
-
-  useEffect(() => {
-    if (isAuction && listing?.auction?.bids) {
-      const historyItems: BidHistoryItem[] = listing.auction.bids.map(bid => ({
-        bidder: bid.bidder,
-        amount: bid.amount,
-        date: bid.date
-      }));
       
-      const sortedBids = historyItems.sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      updateState({ bidsHistory: sortedBids });
-    } else {
-      updateState({ bidsHistory: [] });
-    }
-  }, [isAuction, listing?.auction?.bids, updateState]);
-
-  useEffect(() => {
-    if (isAuction && isAuctionEnded && user?.role === "buyer" && isUserHighestBidder && !state.showAuctionSuccess) {
-      setTimeout(() => {
-        updateState({ showAuctionSuccess: true });
-        setTimeout(() => {
-          router.push('/buyers/my-orders');
-        }, 10000);
-      }, 1000);
-    }
-  }, [isAuction, isAuctionEnded, user?.role, isUserHighestBidder, state.showAuctionSuccess, router, updateState]);
-
-  useEffect(() => {
-    if (!isAuction) {
-      updateState({ 
-        biddingEnabled: true,
-        bidStatus: {}
-      });
-      return;
-    }
-    
-    if (isAuctionEnded) return;
-    
-    if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
-      updateState({ 
-        biddingEnabled: true,
-        bidStatus: {}
-      });
-      return;
-    }
-    
-    checkCurrentUserFunds();
-    
-    fundingTimerRef.current = setInterval(() => {
-      checkCurrentUserFunds();
-    }, FUNDING_CHECK_INTERVAL);
-    
-    return () => {
-      if (fundingTimerRef.current) {
-        clearInterval(fundingTimerRef.current);
-        fundingTimerRef.current = null;
+      // Emit WebSocket event for the bid
+      if (global.webSocketService) {
+        global.webSocketService.emitNewBid(populatedListing, {
+          bidder: bidder,
+          amount: bidAmount,
+          date: new Date()
+        });
       }
-    };
-  }, [isAuction, isAuctionEnded, state.isProcessing, checkCurrentUserFunds, updateState]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleScroll = () => {
-      if (!imageRef.current) return;
-      const rect = imageRef.current.getBoundingClientRect();
-      updateState({ showStickyBuy: rect.bottom < 60 });
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [updateState]);
-
-  useEffect(() => {
-    if (!isAuction || isAuctionEnded || !mountedRef.current) {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-      return;
-    }
-
-    timerRef.current = setInterval(() => {
-      if (mountedRef.current) {
-        updateState({ forceUpdateTimer: {} });
-      }
-    }, AUCTION_UPDATE_INTERVAL);
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [isAuction, isAuctionEnded, updateState]);
-
-  // Action handlers
-  const handlePurchase = useCallback(async () => {
-    if (!user || !listing || state.isProcessing) return;
-    
-    if (user.role !== 'buyer') {
-      updateState({ 
-        purchaseStatus: 'Only buyers can make purchases',
-        isProcessing: false 
-      });
-      return;
-    }
-
-    setRateLimitError(null);
-
-    const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
-    if (!rateLimitResult.allowed) {
-      setRateLimitError(`Too many requests. Please wait ${rateLimitResult.waitTime} seconds.`);
-      updateState({ 
-        purchaseStatus: `Please wait ${rateLimitResult.waitTime} seconds before trying again.`,
-        isProcessing: false 
-      });
-      return;
-    }
-
-    const freshBalance = getBuyerBalance(user.username);
-    const requiredAmount = getBuyerDebitAmount(listing);
-    
-    if (!hasSufficientBalance(freshBalance, listing)) {
-      const amountNeeded = getAmountNeeded(freshBalance, listing);
-      updateState({ 
-        purchaseStatus: `Insufficient balance. You need ${amountNeeded.toFixed(2)} more.`,
-        isProcessing: false 
-      });
-      return;
-    }
-
-    isPurchasingRef.current = true;
-    hasPurchasedRef.current = false;
-
-    updateState({ 
-      isProcessing: true, 
-      purchaseStatus: 'Processing...', 
-      bidStatus: {},
-      biddingEnabled: true,
-      bidError: null,
-      bidSuccess: null
-    });
-
-    try {
-      const success = await purchaseListingAndRemove(listing, user.username);
       
-      if (success) {
-        hasPurchasedRef.current = true;
-        updateState({ 
-          showPurchaseSuccess: true,
-          purchaseStatus: 'Purchase successful!',
-          isProcessing: false,
-          bidStatus: {},
-          biddingEnabled: true
-        });
-        
-        if (navigationTimeoutRef.current) {
-          clearTimeout(navigationTimeoutRef.current);
-        }
-        
-        navigationTimeoutRef.current = setTimeout(() => {
-          if (mountedRef.current) {
-            router.push('/buyers/my-orders');
-          }
-        }, 3000);
-      } else {
-        isPurchasingRef.current = false;
-        updateState({ 
-          purchaseStatus: 'Purchase failed. Please check your wallet balance.',
-          isProcessing: false 
-        });
-      }
-    } catch (error) {
-      console.error('Purchase error:', error);
-      isPurchasingRef.current = false;
-      updateState({ 
-        purchaseStatus: 'An error occurred. Please try again.',
-        isProcessing: false 
+      res.json({
+        success: true,
+        data: populatedListing,
+        message: `Bid placed successfully! You are now the highest bidder at $${bidAmount}!`
+      });
+    } catch (bidError) {
+      return res.status(400).json({
+        success: false,
+        error: bidError.message
       });
     }
-  }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState, rateLimiter, getBuyerBalance]);
-
-  const handleBidSubmit = useCallback(async () => {
-    if (!isAuction || !listing || state.isBidding || !user || user.role !== 'buyer') return;
-
-    setRateLimitError(null);
-    updateState({ bidError: null, bidSuccess: null });
-
-    const bidValidation = securityService.validateAmount(state.bidAmount, {
-      min: 0.01,
-      max: 10000
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
-
-    if (!bidValidation.valid || !bidValidation.value) {
-      updateState({ 
-        bidError: bidValidation.error || 'Please enter a valid bid amount',
-        bidSuccess: null 
-      });
-      return;
-    }
-
-    const bidValue = bidValidation.value;
-
-    const currentBid = listing.auction?.highestBid || 0;
-    const startingBid = listing.auction?.startingPrice || 0;
-    const minBidAmount = currentBid > 0 ? currentBid + 1 : startingBid;
-
-    if (bidValue < minBidAmount) {
-      updateState({ 
-        bidError: `Minimum bid is $${minBidAmount.toFixed(2)}`,
-        bidSuccess: null 
-      });
-      return;
-    }
-
-    const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
-    if (!rateLimitResult.allowed) {
-      setRateLimitError(`Too many bids. Please wait ${rateLimitResult.waitTime} seconds.`);
-      updateState({ 
-        bidError: `Please wait ${rateLimitResult.waitTime} seconds before bidding again.`,
-        bidSuccess: null 
-      });
-      return;
-    }
-
-    updateState({ 
-      isBidding: true, 
-      bidError: null, 
-      bidSuccess: null 
-    });
-
-    try {
-      const success = await listingsPlaceBid(listing.id, user.username, bidValue);
-      
-      if (success) {
-        updateState({ 
-          bidAmount: '',
-          bidSuccess: 'Bid placed successfully!',
-          bidError: null,
-          isBidding: false,
-          bidStatus: {
-            success: true,
-            message: 'You are now the highest bidder!'
-          }
-        });
-
-        const result = await listingsService.getListing(listing.id);
-        if (result.success && result.data) {
-          setListing(result.data as ListingWithDetails);
-          setState(prev => ({ ...prev, viewCount: result.data?.views || prev.viewCount }));
-        }
-
-        setTimeout(() => {
-          if (mountedRef.current) {
-            updateState({ bidSuccess: null });
-          }
-        }, 3000);
-      } else {
-        updateState({ 
-          bidError: 'Failed to place bid. Please check your balance and try again.',
-          bidSuccess: null,
-          isBidding: false 
-        });
-      }
-    } catch (error) {
-      console.error('Bid submission error:', error);
-      updateState({ 
-        bidError: 'An error occurred while placing your bid.',
-        bidSuccess: null,
-        isBidding: false 
-      });
-    }
-  }, [isAuction, listing, state.isBidding, state.bidAmount, user, listingsPlaceBid, updateState, rateLimiter]);
-
-  const handleImageNavigation = useCallback((newIndex: number) => {
-    const sanitizedIndex = Math.floor(newIndex);
-    if (sanitizedIndex >= 0 && sanitizedIndex < images.length) {
-      updateState({ currentImageIndex: sanitizedIndex });
-    }
-  }, [images.length, updateState]);
-
-  const handleBidAmountChange = useCallback((value: string) => {
-    updateState({ bidAmount: value });
-  }, [updateState]);
-
-  // Cleanup
-  useEffect(() => {
-    mountedRef.current = true;
-    
-    return () => {
-      mountedRef.current = false;
-      isPurchasingRef.current = false;
-      hasPurchasedRef.current = false;
-      viewTrackedRef.current = false;
-      if (navigationTimeoutRef.current) {
-        clearTimeout(navigationTimeoutRef.current);
-      }
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      if (fundingTimerRef.current) {
-        clearInterval(fundingTimerRef.current);
-      }
-      if (auctionExpiryTimerRef.current) {
-        clearInterval(auctionExpiryTimerRef.current);
-      }
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
-
-  // Extract seller info with reviews
-  const sellerInfo = useMemo(() => {
-    if (!listing) return null;
-    const info = extractSellerInfo(listing, users || {}, orderHistory as any);
-    return info ? {
-      ...info,
-      averageRating: sellerAverageRating,
-      reviewCount: sellerReviews.length
-    } : null;
-  }, [listing, users, orderHistory, sellerAverageRating, sellerReviews.length]);
-
-  const calculateTotalPayableFixed = useCallback((amount: number) => {
-    return getAuctionTotalPayable(amount);
-  }, []);
-
-  // If loading, return loading state
-  if (isLoading) {
-    return {
-      user,
-      listing: undefined,
-      listingId,
-      images: [],
-      isAuctionListing: false,
-      isAuctionEnded: false,
-      didUserBid: false,
-      isUserHighestBidder: false,
-      currentHighestBid: 0,
-      currentTotalPayable: 0,
-      suggestedBidAmount: null,
-      needsSubscription: false,
-      currentUsername: '',
-      buyerBalance,
-      realtimeBids: [],
-      mergedBidsHistory: [],
-      lastBidUpdate: Date.now(),
-      hasReserve: false,
-      reserveMet: true,
-      ...initialState,
-      imageRef,
-      bidInputRef,
-      bidButtonRef,
-      handlePurchase: () => {},
-      handleBidSubmit: () => {},
-      handleImageNavigation: () => {},
-      handleBidAmountChange: () => {},
-      updateState: () => {},
-      getTimerProgress: () => 0,
-      formatTimeRemaining: () => '',
-      formatBidDate: () => '',
-      calculateTotalPayable: () => 0,
-      router,
-      sellerTierInfo: null,
-      isVerified: false,
-      sellerAverageRating: null,
-      sellerReviewCount: 0,
-      isLoading: true,
-      error: null,
-      rateLimitError: null
-    };
   }
+});
 
-  // Return everything including the review data
-  return {
-    user,
-    listing,
-    listingId,
-    images,
-    isAuctionListing: isAuction,
-    isAuctionEnded: isAuctionEnded || false,
-    didUserBid,
-    isUserHighestBidder,
-    currentHighestBid,
-    currentTotalPayable,
-    suggestedBidAmount,
-    needsSubscription: needsSubscription || false,
-    currentUsername: currentUsername || '',
-    buyerBalance,
-    realtimeBids,
-    mergedBidsHistory,
-    lastBidUpdate,
-    hasReserve,
-    reserveMet,
-    purchaseStatus: state.purchaseStatus,
-    isProcessing: state.isProcessing,
-    showPurchaseSuccess: state.showPurchaseSuccess,
-    showAuctionSuccess: state.showAuctionSuccess,
-    sellerProfile: state.sellerProfile,
-    showStickyBuy: state.showStickyBuy,
-    bidAmount: state.bidAmount,
-    bidStatus: (isAuction && !isPurchasingRef.current && !hasPurchasedRef.current && !state.isProcessing) ? state.bidStatus : {},
-    biddingEnabled: state.biddingEnabled,
-    bidsHistory: state.bidsHistory,
-    showBidHistory: state.showBidHistory,
-    forceUpdateTimer: state.forceUpdateTimer,
-    viewCount: state.viewCount,
-    isBidding: state.isBidding,
-    bidError: state.bidError,
-    bidSuccess: state.bidSuccess,
-    currentImageIndex: state.currentImageIndex,
-    imageRef,
-    bidInputRef,
-    bidButtonRef,
-    handlePurchase,
-    handleBidSubmit,
-    handleImageNavigation,
-    handleBidAmountChange,
-    updateState,
-    getTimerProgress,
-    formatTimeRemaining: (endTime: string) => formatTimeRemaining(endTime),
-    formatBidDate,
-    calculateTotalPayable: calculateTotalPayableFixed,
-    router,
-    sellerTierInfo: sellerInfo?.tierInfo,
-    isVerified: sellerInfo?.isVerified || false,
-    sellerAverageRating: sellerAverageRating,
-    sellerReviewCount: sellerReviews.length,
-    isLoading: false,
-    error,
-    rateLimitError
-  };
-};
+// POST /api/listings/:id/end-auction - End an auction using settlement service (with race condition prevention)
+router.post('/:id/end-auction', async (req, res) => {
+  try {
+    // First check if auction exists and is still active
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    if (!listing.auction || !listing.auction.isAuction) {
+      return res.status(400).json({
+        success: false,
+        error: 'This is not an auction listing'
+      });
+    }
+    
+    // Check if already processed
+    if (listing.auction.status !== 'active') {
+      console.log(`[Auction] Auction ${req.params.id} already processed with status: ${listing.auction.status}`);
+      return res.json({
+        success: true,
+        message: 'Auction already processed',
+        data: {
+          status: listing.auction.status,
+          listingId: listing._id
+        }
+      });
+    }
+    
+    // Check if auction has actually ended
+    const now = new Date();
+    if (listing.auction.endTime > now) {
+      const timeLeft = Math.floor((listing.auction.endTime - now) / 1000);
+      return res.status(400).json({
+        success: false,
+        error: `Auction has not ended yet. ${timeLeft} seconds remaining.`
+      });
+    }
+    
+    // Use atomic update to prevent race conditions
+    const updatedListing = await Listing.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        'auction.status': 'active' // Only process if still active
+      },
+      { 
+        $set: { 'auction.status': 'processing' } // Mark as processing
+      },
+      { new: false } // Return the original document
+    );
+    
+    // If no document was updated, another request already processed it
+    if (!updatedListing) {
+      console.log(`[Auction] Auction ${req.params.id} already being processed by another request`);
+      
+      // Get the current status
+      const currentListing = await Listing.findById(req.params.id);
+      return res.json({
+        success: true,
+        message: 'Auction already processed',
+        data: {
+          status: currentListing?.auction?.status || 'unknown',
+          listingId: req.params.id
+        }
+      });
+    }
+    
+    // Now process the auction
+    const result = await AuctionSettlementService.processEndedAuction(req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error('[Auction] Error ending auction:', error);
+    
+    // Try to reset status if processing failed
+    try {
+      await Listing.findOneAndUpdate(
+        { 
+          _id: req.params.id,
+          'auction.status': 'processing'
+        },
+        { 
+          $set: { 'auction.status': 'error' }  // Set to error state, not active
+        }
+      );
+    } catch (resetError) {
+      console.error('[Auction] Failed to set error status:', resetError);
+    }
+    
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/listings/:id/cancel-auction - Cancel an auction
+router.post('/:id/cancel-auction', authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    // Only seller or admin can cancel
+    if (listing.seller !== req.user.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to cancel this auction'
+      });
+    }
+    
+    const result = await AuctionSettlementService.cancelAuction(
+      req.params.id,
+      req.user.username
+    );
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[Auction] Error cancelling auction:', error);
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/listings/:id - Update a listing
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    if (listing.seller !== req.user.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only edit your own listings'
+      });
+    }
+    
+    delete req.body.seller;
+    
+    if (listing.auction && listing.auction.isAuction && 
+        listing.auction.status === 'active' && listing.auction.bidCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot edit an active auction with bids'
+      });
+    }
+    
+    Object.assign(listing, req.body);
+    await listing.save();
+    
+    // Populate seller profile for the response
+    const populatedListing = await populateSellerProfile(listing.toObject());
+    
+    if (global.webSocketService) {
+      global.webSocketService.emitListingUpdated(populatedListing);
+    }
+    
+    res.json({
+      success: true,
+      data: populatedListing
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/listings/:id - Delete a listing
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+    
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+    
+    if (listing.seller !== req.user.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'Not authorized to delete this listing'
+      });
+    }
+    
+    if (listing.auction && listing.auction.isAuction && 
+        listing.auction.status === 'active' && listing.auction.bidCount > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete an active auction with bids'
+      });
+    }
+    
+    listing.status = 'deleted';
+    await listing.save();
+    
+    if (global.webSocketService) {
+      global.webSocketService.emitListingDeleted(listing._id);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Listing deleted successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+module.exports = router;
