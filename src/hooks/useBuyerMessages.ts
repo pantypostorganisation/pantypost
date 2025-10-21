@@ -1172,7 +1172,7 @@ export const useBuyerMessages = () => {
       
       // Upload to Cloudinary instead of just reading as base64
       console.log('Uploading image to Cloudinary...');
-      const uploadResult = await uploadToCloudinary(file);
+      const uploadResult = await uploadToCloudinary(file, 'message');
       
       // Set the Cloudinary URL, not base64 data
       setSelectedImage(uploadResult.url);

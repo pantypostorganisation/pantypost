@@ -970,7 +970,7 @@ export function useSellerMessages() {
       
       // Upload to Cloudinary
       console.log('Uploading image to Cloudinary...');
-      const uploadResult = await uploadToCloudinary(file);
+      const uploadResult = await uploadToCloudinary(file, 'message');
       
       // Validate returned URL
       const urlValidation = z.string().url().safeParse(uploadResult.url);
