@@ -502,23 +502,16 @@ export const useBrowseDetail = () => {
   // CRITICAL FIX: Track view count ONCE per listing load
   useEffect(() => {
     const trackView = async () => {
-      // Guard: Don't track if no listing or already tracked
       if (!listing || !listingId || viewTrackedRef.current) {
-        console.log('[BrowseDetail] Skipping view track:', { 
-          hasListing: !!listing, 
-          listingId, 
-          alreadyTracked: viewTrackedRef.current 
-        });
         return;
       }
       
-      // Mark as tracked immediately to prevent duplicate calls
       viewTrackedRef.current = true;
       
       try {
         console.log('[BrowseDetail] Tracking view for listing:', listingId);
         
-        // Call the service to update views
+        // CRITICAL FIX: updateViews now returns the new count directly!
         const updateResult = await listingsService.updateViews({
           listingId: listingId,
           viewerId: user?.username,
@@ -526,52 +519,36 @@ export const useBrowseDetail = () => {
         
         if (!updateResult.success) {
           console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
-          // Reset tracking flag on failure so it can retry
-          viewTrackedRef.current = false;
           return;
         }
         
-        // CRITICAL: updateResult.data contains the new view count
-        const newViewCount = updateResult.data ?? 0;
+        // Use the count from the update response - NO SECOND API CALL!
+        const viewCount = updateResult.data ?? 0;
         
-        console.log('[BrowseDetail] View tracked successfully, new count:', newViewCount);
+        console.log('[BrowseDetail] Updated view count:', viewCount);
         
-        // Update local state with the new view count
-        setState(prev => ({ 
-          ...prev, 
-          viewCount: newViewCount 
-        }));
+        // Update state
+        setState(prev => ({ ...prev, viewCount: viewCount }));
         
-        // Update the listing object to reflect the new view count
-        // But only if the count actually changed to avoid re-render loops
+        // Update listing WITHOUT causing re-render loop
         setListing(prev => {
           if (!prev) return prev;
-          if (prev.views === newViewCount) return prev; // No change needed
-          
-          console.log('[BrowseDetail] Updating listing views from', prev.views, 'to', newViewCount);
+          if (prev.views === viewCount) return prev;
           return {
             ...prev,
-            views: newViewCount
+            views: viewCount
           };
         });
       } catch (error) {
         console.error('[BrowseDetail] Error tracking view:', error);
-        // Reset tracking flag on error so it can retry
-        viewTrackedRef.current = false;
       }
     };
     
-    // Small delay to ensure listing data is ready
-    const timeoutId = setTimeout(trackView, 100);
-    
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [listing?.id, listingId, user?.username]); // Only depend on stable IDs
+    trackView();
+  }, [listing?.id, listingId, user?.username]);
 
-  // Reset view tracking when navigating to a different listing
+  // Reset view tracking when navigating to different listing
   useEffect(() => {
-    console.log('[BrowseDetail] Listing changed, resetting view tracking for:', listingId);
     viewTrackedRef.current = false;
   }, [listingId]);
 
