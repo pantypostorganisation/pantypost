@@ -114,8 +114,21 @@ export const useBrowseDetail = () => {
   const auctionExpiryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasMarkedRef = useRef(false);
   const viewTrackedRef = useRef(false);
+  const viewTrackingInProgressRef = useRef(false);
+  const listingLoadedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isProcessingAuctionEndRef = useRef(false);
+
+  const listingsRef = useRef(listings);
+  const refreshListingsRef = useRef(refreshListings);
+
+  useEffect(() => {
+    listingsRef.current = listings;
+  }, [listings]);
+
+  useEffect(() => {
+    refreshListingsRef.current = refreshListings;
+  }, [refreshListings]);
 
   // Core data
   const rawListingId = params?.id as string;
@@ -366,6 +379,10 @@ export const useBrowseDetail = () => {
 
   // Load listing
   useEffect(() => {
+    listingLoadedRef.current = false;
+    viewTrackedRef.current = false;
+    viewTrackingInProgressRef.current = false;
+
     const loadListing = async () => {
       if (!listingId) return;
 
@@ -379,30 +396,38 @@ export const useBrowseDetail = () => {
       setError(null);
 
       try {
-        const contextListing = listings.find(l => l.id === listingId);
-        
+        const contextListing = listingsRef.current?.find(l => l.id === listingId);
+
         if (contextListing) {
           setListing(contextListing as ListingWithDetails);
           setState(prev => ({ ...prev, viewCount: contextListing.views || 0 }));
+          listingLoadedRef.current = true;
           setIsLoading(false);
-        } else {
-          const result = await listingsService.getListing(listingId);
-          
-          if (!mountedRef.current) return;
-
-          if (result.success && result.data) {
-            setListing(result.data as ListingWithDetails);
-            setState(prev => ({ ...prev, viewCount: result.data?.views || 0 }));
-            await refreshListings();
-          } else {
-            setError(result.error?.message || 'Listing not found');
-          }
-          
-          setIsLoading(false);
+          return;
         }
+
+        const result = await listingsService.getListing(listingId);
+
+        if (!mountedRef.current) return;
+
+        if (result.success && result.data) {
+          setListing(result.data as ListingWithDetails);
+          setState(prev => ({ ...prev, viewCount: result.data?.views || 0 }));
+          listingLoadedRef.current = true;
+
+          try {
+            await refreshListingsRef.current?.();
+          } catch (refreshError) {
+            console.warn('[BrowseDetail] Failed to refresh listings after load:', refreshError);
+          }
+        } else {
+          setError(result.error?.message || 'Listing not found');
+        }
+
+        setIsLoading(false);
       } catch (error: any) {
         if (!mountedRef.current) return;
-        
+
         if (error.name === 'AbortError') {
           console.log('Request was cancelled');
           return;
@@ -415,7 +440,14 @@ export const useBrowseDetail = () => {
     };
 
     loadListing();
-  }, [listingId, listings, refreshListings]);
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, [listingId]);
 
   // Load seller reviews from backend API
   useEffect(() => {
@@ -499,57 +531,110 @@ export const useBrowseDetail = () => {
 
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // CRITICAL FIX: Track view count ONCE per listing load
+  const listingLoaded = listingLoadedRef.current;
+
   useEffect(() => {
+    if (!listingId) {
+      return;
+    }
+
+    const contextListing = listings.find(l => l.id === listingId);
+
+    if (!contextListing) {
+      return;
+    }
+
+    setListing(prev => {
+      if (prev && prev.id === contextListing.id) {
+        return { ...prev, ...contextListing } as ListingWithDetails;
+      }
+      return contextListing as ListingWithDetails;
+    });
+
+    if (!listingLoadedRef.current) {
+      listingLoadedRef.current = true;
+    }
+
+    if (typeof contextListing.views === 'number' && Number.isFinite(contextListing.views)) {
+      setState(prev => prev.viewCount === contextListing.views ? prev : { ...prev, viewCount: contextListing.views });
+    }
+  }, [listings, listingId]);
+
+  // Track view count once the listing is fully loaded
+  useEffect(() => {
+    if (!listingId || !listingLoaded) {
+      return;
+    }
+
+    if (viewTrackedRef.current || viewTrackingInProgressRef.current) {
+      return;
+    }
+
+    let cancelled = false;
+
     const trackView = async () => {
-      if (!listing || !listingId || viewTrackedRef.current) {
+      if (!listingLoadedRef.current || viewTrackedRef.current || viewTrackingInProgressRef.current) {
         return;
       }
-      
-      viewTrackedRef.current = true;
-      
+
+      viewTrackingInProgressRef.current = true;
+
       try {
         console.log('[BrowseDetail] Tracking view for listing:', listingId);
-        
-        // CRITICAL FIX: updateViews now returns the new count directly!
+
         const updateResult = await listingsService.updateViews({
-          listingId: listingId,
+          listingId,
           viewerId: user?.username,
         });
-        
+
         if (!updateResult.success) {
           console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
           return;
         }
-        
-        // Use the count from the update response - NO SECOND API CALL!
-        const viewCount = updateResult.data ?? 0;
-        
+
+        const viewCount = typeof updateResult.data === 'number' ? updateResult.data : Number(updateResult.data ?? 0);
+
+        if (!Number.isFinite(viewCount)) {
+          console.warn('[BrowseDetail] Invalid view count returned from update:', updateResult.data);
+          return;
+        }
+
+        if (!mountedRef.current || cancelled) {
+          return;
+        }
+
+        viewTrackedRef.current = true;
+
         console.log('[BrowseDetail] Updated view count:', viewCount);
-        
-        // Update state
-        setState(prev => ({ ...prev, viewCount: viewCount }));
-        
-        // Update listing WITHOUT causing re-render loop
+
+        setState(prev => ({ ...prev, viewCount }));
+
         setListing(prev => {
-          if (!prev) return prev;
-          if (prev.views === viewCount) return prev;
+          if (!prev || prev.views === viewCount) return prev;
           return {
             ...prev,
-            views: viewCount
+            views: viewCount,
           };
         });
       } catch (error) {
         console.error('[BrowseDetail] Error tracking view:', error);
+      } finally {
+        viewTrackingInProgressRef.current = false;
       }
     };
-    
-    trackView();
-  }, [listing?.id, listingId, user?.username]);
 
-  // Reset view tracking when navigating to different listing
+    trackView();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [listingId, user?.username, listingLoaded]);
+
+  // Reset tracking refs when navigating between listings
   useEffect(() => {
     viewTrackedRef.current = false;
+    viewTrackingInProgressRef.current = false;
+    listingLoadedRef.current = false;
   }, [listingId]);
 
   const getTimerProgress = useCallback(() => {
@@ -1037,6 +1122,8 @@ export const useBrowseDetail = () => {
       isPurchasingRef.current = false;
       hasPurchasedRef.current = false;
       viewTrackedRef.current = false;
+      viewTrackingInProgressRef.current = false;
+      listingLoadedRef.current = false;
       if (navigationTimeoutRef.current) {
         clearTimeout(navigationTimeoutRef.current);
       }
