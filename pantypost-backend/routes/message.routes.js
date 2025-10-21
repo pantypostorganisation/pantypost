@@ -275,7 +275,9 @@ router.post('/send', authMiddleware, async (req, res) => {
     const sender = req.user.username;
     
     // Validate input
-    if (!receiver || !content) {
+    const hasImage = type === 'image' || (meta && meta.imageUrl);
+
+    if (!receiver || (!content && !hasImage)) {
       return res.status(400).json({
         success: false,
         error: 'Receiver and content are required'
