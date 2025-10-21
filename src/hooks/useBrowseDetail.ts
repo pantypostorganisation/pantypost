@@ -511,6 +511,7 @@ export const useBrowseDetail = () => {
       try {
         console.log('[BrowseDetail] Tracking view for listing:', listingId);
         
+        // CRITICAL FIX: updateViews now returns the new count directly!
         const updateResult = await listingsService.updateViews({
           listingId: listingId,
           viewerId: user?.username,
@@ -521,30 +522,23 @@ export const useBrowseDetail = () => {
           return;
         }
         
-        // CRITICAL FIX: Fetch views and handle the correct response format
-        const viewsResponse = await listingsService.getListingViews(listingId);
+        // Use the count from the update response - NO SECOND API CALL!
+        const viewCount = updateResult.data ?? 0;
         
-        console.log('[BrowseDetail] Views response:', viewsResponse);
+        console.log('[BrowseDetail] Updated view count:', viewCount);
         
-        if (viewsResponse.success) {
-          // FIXED: Backend returns { success: true, views: 41 } NOT { success: true, data: 41 }
-          const viewCount = (viewsResponse as any).views || viewsResponse.data || 0;
-          
-          console.log('[BrowseDetail] Updated view count:', viewCount);
-          
-          // Update state
-          setState(prev => ({ ...prev, viewCount: viewCount }));
-          
-          // Update listing WITHOUT causing re-render loop
-          setListing(prev => {
-            if (!prev) return prev;
-            if (prev.views === viewCount) return prev;
-            return {
-              ...prev,
-              views: viewCount
-            };
-          });
-        }
+        // Update state
+        setState(prev => ({ ...prev, viewCount: viewCount }));
+        
+        // Update listing WITHOUT causing re-render loop
+        setListing(prev => {
+          if (!prev) return prev;
+          if (prev.views === viewCount) return prev;
+          return {
+            ...prev,
+            views: viewCount
+          };
+        });
       } catch (error) {
         console.error('[BrowseDetail] Error tracking view:', error);
       }

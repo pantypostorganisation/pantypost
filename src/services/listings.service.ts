@@ -1355,19 +1355,38 @@ export class ListingsService {
   }
 
   /**
-   * Update listing views
+   * Update listing views - RETURNS the new count
    */
-  async updateViews(update: ListingViewUpdate): Promise<ApiResponse<void>> {
+  async updateViews(update: ListingViewUpdate): Promise<ApiResponse<number>> {
     try {
       // Sanitize inputs
       const sanitizedId = sanitize.strict(update.listingId);
       const sanitizedViewerId = update.viewerId ? sanitize.username(update.viewerId) : undefined;
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<void>(`/listings/${sanitizedId}/views`, {
+        const response = await apiCall<any>(`/listings/${sanitizedId}/views`, {
           method: 'POST',
           body: JSON.stringify({ viewerId: sanitizedViewerId }),
         });
+        
+        // FIXED: Return the view count from the POST response
+        if (response.success) {
+          const viewCount = response.data?.views ?? (response as any).views ?? 0;
+          console.log('[ListingsService] Updated views, new count:', viewCount);
+          
+          // Update cache with new count
+          this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: Date.now() });
+          
+          return {
+            success: true,
+            data: viewCount
+          };
+        }
+        
+        return {
+          success: false,
+          error: response.error || { message: 'Failed to update views' }
+        };
       }
 
       // LocalStorage implementation
@@ -1379,10 +1398,13 @@ export class ListingsService {
       viewsData[sanitizedId] = (viewsData[sanitizedId] || 0) + 1;
       await storageService.setItem('listing_views', viewsData);
 
-      // Invalidate view cache for this listing
-      this.viewsCache.delete(sanitizedId);
+      // Update cache
+      this.viewsCache.set(sanitizedId, { count: viewsData[sanitizedId], timestamp: Date.now() });
 
-      return { success: true };
+      return { 
+        success: true,
+        data: viewsData[sanitizedId]
+      };
     } catch (error) {
       console.error('Update views error:', error);
       return {
