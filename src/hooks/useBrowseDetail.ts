@@ -113,7 +113,7 @@ export const useBrowseDetail = () => {
   const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const auctionExpiryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasMarkedRef = useRef(false);
-  const viewTrackedRef = useRef(false); // FIXED: Single ref to track if view was counted
+  const viewTrackedRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isProcessingAuctionEndRef = useRef(false);
 
@@ -477,7 +477,7 @@ export const useBrowseDetail = () => {
       index === self.findIndex(b => 
         b.bidder === bid.bidder && 
         b.amount === bid.amount && 
-        Math.abs(new Date(b.date).getTime() - new Date(bid.date).getTime()) < 1000
+        Math.abs(new Date(b.date).getTime() - new Date(b.date).getTime()) < 1000
       )
     );
     return uniqueBids.sort((a, b) => b.amount - a.amount);
@@ -502,64 +502,61 @@ export const useBrowseDetail = () => {
   // CRITICAL FIX: Track view count ONCE per listing load
   useEffect(() => {
     const trackView = async () => {
-      // FIXED: Only track if we haven't tracked for this specific listing yet
       if (!listing || !listingId || viewTrackedRef.current) {
         return;
       }
       
-      // Mark as tracked IMMEDIATELY to prevent double-tracking
       viewTrackedRef.current = true;
       
       try {
         console.log('[BrowseDetail] Tracking view for listing:', listingId);
         
-        // Call the backend to increment views
         const updateResult = await listingsService.updateViews({
           listingId: listingId,
-          viewerId: user?.username, // Optional: track who viewed it
+          viewerId: user?.username,
         });
         
         if (!updateResult.success) {
           console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
-          // Don't reset viewTrackedRef - we tried, that's enough
           return;
         }
         
-        // Fetch the updated view count from backend
-        const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listingId);
+        // CRITICAL FIX: Fetch views and handle the correct response format
+        const viewsResponse = await listingsService.getListingViews(listingId);
         
-        if (viewsResponse.success && viewsResponse.data !== undefined) {
-          console.log('[BrowseDetail] Updated view count:', viewsResponse.data);
+        console.log('[BrowseDetail] Views response:', viewsResponse);
+        
+        if (viewsResponse.success) {
+          // FIXED: Backend returns { success: true, views: 41 } NOT { success: true, data: 41 }
+          const viewCount = (viewsResponse as any).views || viewsResponse.data || 0;
+          
+          console.log('[BrowseDetail] Updated view count:', viewCount);
           
           // Update state
-          setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
+          setState(prev => ({ ...prev, viewCount: viewCount }));
           
-          // CRITICAL: Update the listing object WITHOUT triggering a re-render loop
+          // Update listing WITHOUT causing re-render loop
           setListing(prev => {
             if (!prev) return prev;
-            // Only update if the views actually changed
-            if (prev.views === viewsResponse.data) return prev;
+            if (prev.views === viewCount) return prev;
             return {
               ...prev,
-              views: viewsResponse.data as number
+              views: viewCount
             };
           });
         }
       } catch (error) {
         console.error('[BrowseDetail] Error tracking view:', error);
-        // Don't reset viewTrackedRef on error - we tried once, that's enough
       }
     };
     
-    // Track view when listing loads
     trackView();
-  }, [listing?.id, listingId, user?.username]); // Only re-run if the actual listing ID changes
+  }, [listing?.id, listingId, user?.username]);
 
-  // FIXED: Reset the view tracking flag when navigating to a different listing
+  // Reset view tracking when navigating to different listing
   useEffect(() => {
-    // Reset the ref when the listingId changes (navigating to a new listing)
     viewTrackedRef.current = false;
-  }, [listingId]); // Only listingId, not listing object
+  }, [listingId]);
 
   const getTimerProgress = useCallback(() => {
     if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
@@ -708,10 +705,8 @@ export const useBrowseDetail = () => {
     const loadProfileData = async () => {
       if (listing?.seller) {
         try {
-          // First check if the listing already has sellerProfile data from backend
           const listingWithProfile = listing as any;
           if (listingWithProfile.sellerProfile) {
-            // Use the profile data from the listing and resolve the pic URL
             const profilePic = listingWithProfile.sellerProfile.pic ? 
               resolveApiUrl(listingWithProfile.sellerProfile.pic) : null;
             
@@ -723,10 +718,8 @@ export const useBrowseDetail = () => {
               } 
             });
           } else {
-            // Fallback to fetching from profile utils
             const profileData = await getUserProfileData(listing.seller);
             if (profileData) {
-              // Resolve the profile picture URL if it exists
               const profilePic = profileData.profilePic ? 
                 resolveApiUrl(profileData.profilePic) : null;
               
@@ -1049,7 +1042,7 @@ export const useBrowseDetail = () => {
       mountedRef.current = false;
       isPurchasingRef.current = false;
       hasPurchasedRef.current = false;
-      viewTrackedRef.current = false; // FIXED: Reset on unmount
+      viewTrackedRef.current = false;
       if (navigationTimeoutRef.current) {
         clearTimeout(navigationTimeoutRef.current);
       }
