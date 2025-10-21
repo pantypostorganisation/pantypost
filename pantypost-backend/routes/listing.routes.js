@@ -13,9 +13,6 @@ const AuctionSettlementService = require('../services/auctionSettlement');
 
 // ============= HELPER FUNCTIONS FOR PREMIUM CONTENT =============
 
-/**
- * Check if a user is subscribed to a seller
- */
 async function isUserSubscribedToSeller(buyer, seller) {
   if (!buyer || !seller) return false;
   
@@ -33,14 +30,10 @@ async function isUserSubscribedToSeller(buyer, seller) {
   }
 }
 
-/**
- * Populate seller profile data for a listing
- */
 async function populateSellerProfile(listing) {
   try {
     const seller = await User.findOne({ username: listing.seller });
     if (seller) {
-      // Add seller profile data to listing
       listing.sellerProfile = {
         bio: seller.bio || null,
         pic: seller.profilePic || null
@@ -58,17 +51,11 @@ async function populateSellerProfile(listing) {
   }
 }
 
-/**
- * Filter listing data based on premium access
- * Returns a sanitized version of the listing for non-subscribers
- */
 function filterPremiumContent(listing, hasAccess) {
-  // If user has access or it's not premium, return full listing
   if (hasAccess || !listing.isPremium) {
     return listing;
   }
   
-  // For premium content without access, return limited data
   const sanitized = {
     _id: listing._id,
     id: listing._id || listing.id,
@@ -78,104 +65,33 @@ function filterPremiumContent(listing, hasAccess) {
     status: listing.status,
     createdAt: listing.createdAt,
     isVerified: listing.isVerified,
-    
-    // Include seller profile data even for locked content
     sellerProfile: listing.sellerProfile,
     isSellerVerified: listing.isSellerVerified,
     sellerSalesCount: listing.sellerSalesCount,
-    
-    // Obscure sensitive data
     description: 'Premium content - Subscribe to view full details',
-    price: listing.price, // Show price but not allow purchase
+    price: listing.price,
     markedUpPrice: listing.markedUpPrice,
-    
-    // Only show first image blurred (frontend will handle blur)
     imageUrls: listing.imageUrls?.length > 0 ? [listing.imageUrls[0]] : [],
-    
-    // Hide detailed information
     tags: [],
     hoursWorn: undefined,
     views: listing.views || 0,
-    
-    // Hide auction details for premium auctions
     auction: listing.auction?.isAuction ? {
       isAuction: true,
       status: listing.auction.status,
       endTime: listing.auction.endTime,
-      // Hide bid details
       currentBid: undefined,
       highestBidder: undefined,
       bidCount: 0,
       bids: []
     } : undefined,
-    
-    // Add flag for frontend to know content is locked
     isLocked: true
   };
   
   return sanitized;
 }
 
-/**
- * Middleware to check premium access for a specific listing
- */
-async function checkPremiumAccess(req, res, next) {
-  try {
-    const listing = req.listing; // Assumes listing is attached by previous middleware
-    
-    if (!listing || !listing.isPremium) {
-      req.hasPremiumAccess = true;
-      return next();
-    }
-    
-    // Check if user is authenticated
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      req.hasPremiumAccess = false;
-      return next();
-    }
-    
-    // Decode token to get user (without failing the request)
-    try {
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-      const username = decoded.username;
-      
-      // Seller always has access to their own listings
-      if (username === listing.seller) {
-        req.hasPremiumAccess = true;
-        return next();
-      }
-      
-      // Admin always has access
-      if (decoded.role === 'admin') {
-        req.hasPremiumAccess = true;
-        return next();
-      }
-      
-      // Check subscription for buyers
-      if (decoded.role === 'buyer') {
-        req.hasPremiumAccess = await isUserSubscribedToSeller(username, listing.seller);
-      } else {
-        req.hasPremiumAccess = false;
-      }
-      
-    } catch (error) {
-      // Token invalid or expired
-      req.hasPremiumAccess = false;
-    }
-    
-    next();
-  } catch (error) {
-    console.error('[Premium] Error in checkPremiumAccess middleware:', error);
-    req.hasPremiumAccess = false;
-    next();
-  }
-}
-
 // ============= LISTING ROUTES =============
 
-// GET /api/listings/debug - Debug endpoint to see all listings
 router.get('/debug', async (req, res) => {
   try {
     const listings = await Listing.find({});
@@ -192,7 +108,6 @@ router.get('/debug', async (req, res) => {
   }
 });
 
-// GET /api/listings - Get all listings with advanced filters
 router.get('/', async (req, res) => {
   try {
     const { 
@@ -211,10 +126,8 @@ router.get('/', async (req, res) => {
       limit = 20
     } = req.query;
     
-    // Build filter
     let filter = {};
     
-    // Status filter
     if (status === 'active') {
       filter.$or = [
         { status: 'active' },
@@ -224,7 +137,6 @@ router.get('/', async (req, res) => {
       filter.status = status;
     }
     
-    // Text search
     if (search) {
       const searchCondition = {
         $or: [
@@ -242,22 +154,17 @@ router.get('/', async (req, res) => {
       }
     }
     
-    // Seller filter
     if (seller) filter.seller = seller;
     
-    // Tags filter
     if (tags) {
       const tagArray = tags.split(',').map(tag => tag.trim());
       filter.tags = { $in: tagArray };
     }
     
-    // Premium filter
     if (isPremium !== undefined) filter.isPremium = isPremium === 'true';
     
-    // Auction filter
     if (isAuction !== undefined) filter['auction.isAuction'] = isAuction === 'true';
     
-    // Price filter
     if (!isAuction || isAuction === 'false') {
       if (minPrice || maxPrice) {
         filter.price = {};
@@ -266,7 +173,6 @@ router.get('/', async (req, res) => {
       }
     }
     
-    // Hours worn filter
     if (hoursWorn) {
       const hours = parseInt(hoursWorn);
       if (hours > 0) {
@@ -274,7 +180,6 @@ router.get('/', async (req, res) => {
       }
     }
     
-    // Build sort
     let sortObj = {};
     switch (sort) {
       case 'date':
@@ -298,12 +203,10 @@ router.get('/', async (req, res) => {
         sortObj.createdAt = -1;
     }
     
-    // Pagination
     const pageNum = parseInt(page);
     const limitNum = Math.min(parseInt(limit), 100);
     const skip = (pageNum - 1) * limitNum;
     
-    // Execute query
     const [listings, totalCount] = await Promise.all([
       Listing.find(filter)
         .sort(sortObj)
@@ -312,12 +215,10 @@ router.get('/', async (req, res) => {
       Listing.countDocuments(filter)
     ]);
     
-    // Populate seller profiles for all listings
     const populatedListings = await Promise.all(
       listings.map(listing => populateSellerProfile(listing.toObject()))
     );
     
-    // Check user authentication and subscriptions for premium content filtering
     let processedListings = populatedListings;
     const token = req.headers.authorization?.replace('Bearer ', '');
     
@@ -328,33 +229,26 @@ router.get('/', async (req, res) => {
         const username = decoded.username;
         const role = decoded.role;
         
-        // Process each listing for premium content
         processedListings = await Promise.all(populatedListings.map(async (listing) => {
           if (!listing.isPremium) return listing;
           
-          // Seller sees their own listings
           if (username === listing.seller) return listing;
           
-          // Admin sees everything
           if (role === 'admin') return listing;
           
-          // Check subscription for buyers
           if (role === 'buyer') {
             const hasAccess = await isUserSubscribedToSeller(username, listing.seller);
             return filterPremiumContent(listing, hasAccess);
           }
           
-          // Others get filtered content
           return filterPremiumContent(listing, false);
         }));
       } catch (error) {
-        // Invalid token - filter all premium content
         processedListings = populatedListings.map(listing => 
           filterPremiumContent(listing, false)
         );
       }
     } else {
-      // No token - filter all premium content
       processedListings = populatedListings.map(listing => 
         filterPremiumContent(listing, false)
       );
@@ -378,7 +272,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// GET /api/listings/search-suggestions - Get search suggestions
 router.get('/search-suggestions', async (req, res) => {
   try {
     const { q } = req.query;
@@ -417,7 +310,6 @@ router.get('/search-suggestions', async (req, res) => {
   }
 });
 
-// GET /api/listings/popular-tags - Get popular tags
 router.get('/popular-tags', async (req, res) => {
   try {
     const { limit = 20 } = req.query;
@@ -450,7 +342,6 @@ router.get('/popular-tags', async (req, res) => {
   }
 });
 
-// GET /api/listings/stats - Get listing statistics
 router.get('/stats', async (req, res) => {
   try {
     const [
@@ -486,7 +377,6 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// POST /api/listings - Create a new listing
 router.post('/', authMiddleware, async (req, res) => {
   try {
     if (req.user.role !== 'seller') {
@@ -499,7 +389,6 @@ router.post('/', authMiddleware, async (req, res) => {
     const listingData = req.body;
     listingData.seller = req.user.username;
     
-    // Handle images
     if (listingData.imageUrl && !listingData.imageUrls) {
       listingData.imageUrls = [listingData.imageUrl];
       delete listingData.imageUrl;
@@ -509,7 +398,6 @@ router.post('/', authMiddleware, async (req, res) => {
       listingData.imageUrls = ['https://via.placeholder.com/300'];
     }
     
-    // Handle auction data
     if (listingData.isAuction) {
       listingData.auction = {
         isAuction: true,
@@ -517,11 +405,11 @@ router.post('/', authMiddleware, async (req, res) => {
         reservePrice: listingData.reservePrice ? Math.floor(listingData.reservePrice) : undefined,
         endTime: new Date(listingData.endTime),
         currentBid: 0,
-        highestBid: 0,  // Initialize highestBid
+        highestBid: 0,
         bidCount: 0,
         bids: [],
         status: 'active',
-        bidIncrement: 1  // Always use $1 increments
+        bidIncrement: 1
       };
       
       delete listingData.isAuction;
@@ -534,10 +422,8 @@ router.post('/', authMiddleware, async (req, res) => {
     const listing = new Listing(listingData);
     await listing.save();
     
-    // Populate seller profile for the response
     const populatedListing = await populateSellerProfile(listing.toObject());
     
-    // Emit WebSocket event
     if (global.webSocketService) {
       global.webSocketService.emitNewListing(populatedListing);
     }
@@ -554,7 +440,6 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/listings/:id - Get a specific listing with premium enforcement
 router.get('/:id', async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -566,10 +451,8 @@ router.get('/:id', async (req, res) => {
       });
     }
     
-    // Populate seller profile
     const populatedListing = await populateSellerProfile(listing.toObject());
     
-    // Check premium access
     let hasAccess = true;
     
     if (listing.isPremium) {
@@ -582,7 +465,6 @@ router.get('/:id', async (req, res) => {
           const username = decoded.username;
           const role = decoded.role;
           
-          // Check access
           if (username === listing.seller || role === 'admin') {
             hasAccess = true;
           } else if (role === 'buyer') {
@@ -613,17 +495,11 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Continue with the rest of the routes unchanged...
-// (POST /api/listings/:id/purchase, POST /api/listings/:id/views, etc.)
-// [Rest of the file remains the same from line 452 onwards]
-
-// POST /api/listings/:id/purchase - Direct purchase endpoint with premium check
 router.post('/:id/purchase', authMiddleware, async (req, res) => {
   try {
     const { buyerId } = req.body;
     const listingId = req.params.id;
     
-    // Validate buyer
     const buyerUsername = buyerId || req.user.username;
     if (!buyerUsername) {
       return res.status(400).json({
@@ -632,7 +508,6 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
       });
     }
     
-    // Get listing
     const listing = await Listing.findById(listingId);
     
     if (!listing) {
@@ -642,7 +517,6 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
       });
     }
     
-    // PREMIUM CHECK: Prevent purchase of premium items without subscription
     if (listing.isPremium) {
       const isSubscribed = await isUserSubscribedToSeller(buyerUsername, listing.seller);
       
@@ -656,7 +530,6 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
       }
     }
     
-    // Check if already sold
     if (listing.status === 'sold') {
       return res.status(400).json({
         success: false,
@@ -664,7 +537,6 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if it's an auction
     if (listing.auction && listing.auction.isAuction) {
       return res.status(400).json({
         success: false,
@@ -672,7 +544,6 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
       });
     }
     
-    // Check if buyer is the seller
     if (listing.seller === buyerUsername) {
       return res.status(400).json({
         success: false,
@@ -680,17 +551,14 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
       });
     }
     
-    // Mark as sold immediately to prevent race conditions
     listing.status = 'sold';
     listing.buyerId = buyerUsername;
     listing.soldAt = new Date();
     await listing.save();
     
-    // Emit WebSocket event immediately so UI updates right away
     if (global.webSocketService) {
       global.webSocketService.emitListingSold(listing, buyerUsername);
       
-      // Also emit a specific event for the listing being removed
       global.webSocketService.broadcast('listing:sold', {
         listingId: listing._id.toString(),
         id: listing._id.toString(),
@@ -718,27 +586,39 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/views - Track listing view
+// CRITICAL FIX: POST /api/listings/:id/views - Track listing view with atomic increment
 router.post('/:id/views', async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id);
+    const listingId = req.params.id;
+    
+    console.log('[Views] Tracking view for listing:', listingId);
+    
+    const listing = await Listing.findById(listingId);
     
     if (!listing) {
+      console.log('[Views] Listing not found:', listingId);
       return res.status(404).json({
         success: false,
         error: 'Listing not found'
       });
     }
     
-    // Increment views
-    listing.views = (listing.views || 0) + 1;
-    await listing.save();
+    // CRITICAL FIX: Use findByIdAndUpdate with $inc for atomic increment
+    // This prevents race conditions and ensures views are properly tracked
+    const updatedListing = await Listing.findByIdAndUpdate(
+      listingId,
+      { $inc: { views: 1 } },
+      { new: true }
+    );
+    
+    console.log('[Views] View incremented. New count:', updatedListing.views);
     
     res.json({
       success: true,
-      views: listing.views
+      views: updatedListing.views
     });
   } catch (error) {
+    console.error('[Views] Error tracking view:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -746,10 +626,12 @@ router.post('/:id/views', async (req, res) => {
   }
 });
 
-// GET /api/listings/:id/views - Get listing views
+// CRITICAL FIX: GET /api/listings/:id/views - Get listing views
 router.get('/:id/views', async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id);
+    const listingId = req.params.id;
+    
+    const listing = await Listing.findById(listingId).select('views');
     
     if (!listing) {
       return res.status(404).json({
@@ -757,12 +639,15 @@ router.get('/:id/views', async (req, res) => {
         error: 'Listing not found'
       });
     }
+    
+    console.log('[Views] Retrieved view count for', listingId, ':', listing.views);
     
     res.json({
       success: true,
       views: listing.views || 0
     });
   } catch (error) {
+    console.error('[Views] Error getting views:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -770,13 +655,11 @@ router.get('/:id/views', async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/bid - Place a bid on an auction with premium check
 router.post('/:id/bid', authMiddleware, async (req, res) => {
   try {
     const { amount } = req.body;
     const bidder = req.user.username;
     
-    // CRITICAL FIX: Ensure amount is always an integer
     const bidAmount = Math.floor(Number(amount));
     
     if (!bidAmount || bidAmount <= 0) {
@@ -794,7 +677,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
-    // PREMIUM CHECK: Prevent bidding on premium auctions without subscription
     if (listing.isPremium) {
       const isSubscribed = await isUserSubscribedToSeller(bidder, listing.seller);
       
@@ -822,7 +704,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       });
     }
     
-    // Validate minimum bid with integer math
     const currentBid = Math.floor(listing.auction.highestBid || listing.auction.currentBid || 0);
     const startingPrice = Math.floor(listing.auction.startingPrice || 0);
     const minimumBid = currentBid > 0 ? currentBid + 1 : startingPrice;
@@ -845,20 +726,16 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
     const previousHighestBidder = listing.auction.highestBidder;
     const previousHighestBid = Math.floor(listing.auction.highestBid || listing.auction.currentBid || 0);
     
-    // Store the current balance before withdrawal
     const bidderPreviousBalance = buyerWallet.balance;
     
-    // Check if this is an incremental bid (user raising their own bid)
     const isIncrementalBid = previousHighestBidder === bidder && previousHighestBid > 0;
     
     try {
-      // CRITICAL FIX: Update BOTH currentBid and highestBid fields
       listing.auction.currentBid = bidAmount;
-      listing.auction.highestBid = bidAmount;  // ALWAYS update highestBid
+      listing.auction.highestBid = bidAmount;
       listing.auction.highestBidder = bidder;
       listing.auction.bidCount += 1;
       
-      // Add to bids array
       listing.auction.bids.push({
         bidder: bidder,
         amount: bidAmount,
@@ -867,15 +744,12 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       
       await listing.save();
       
-      // Populate seller profile for the response
       const populatedListing = await populateSellerProfile(listing.toObject());
       
-      // Create database notification for seller about new bid
       await Notification.createBidNotification(listing.seller, bidder, listing, bidAmount);
       console.log('[Bid] Created database notification for seller');
       
       if (isIncrementalBid) {
-        // For incremental bids, only charge the difference (NO FEE)
         const bidDifference = bidAmount - previousHighestBid;
         await buyerWallet.withdraw(bidDifference);
         
@@ -899,7 +773,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         
         console.log(`Incremental bid: charged difference of $${bidDifference} (no fee)`);
         
-        // Emit balance update for the bidder
         if (global.webSocketService) {
           global.webSocketService.emitBalanceUpdate(
             bidder, 
@@ -910,7 +783,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
           );
         }
       } else {
-        // New bidder - hold exact bid amount (NO FEE)
         await buyerWallet.withdraw(bidAmount);
         
         const holdTransaction = new Transaction({
@@ -929,7 +801,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         });
         await holdTransaction.save();
         
-        // Emit balance update for the new bidder
         if (global.webSocketService) {
           global.webSocketService.emitBalanceUpdate(
             bidder, 
@@ -940,7 +811,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
           );
         }
         
-        // Refund previous bidder if there was one
         if (previousHighestBidder && previousHighestBid > 0) {
           const previousBidderWallet = await Wallet.findOne({ username: previousHighestBidder });
           if (previousBidderWallet) {
@@ -964,11 +834,9 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
             });
             await refundTransaction.save();
             
-            // CRITICAL: Emit balance update for the outbid user
             if (global.webSocketService) {
               console.log(`[Auction] Emitting balance update for outbid user ${previousHighestBidder}`);
               
-              // Emit the balance update event
               global.webSocketService.emitBalanceUpdate(
                 previousHighestBidder, 
                 'buyer', 
@@ -977,7 +845,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
                 `Outbid refund for ${listing.title}`
               );
               
-              // Also emit a specific refund event
               global.webSocketService.emitToUser(previousHighestBidder, 'wallet:refund', {
                 username: previousHighestBidder,
                 amount: previousHighestBid,
@@ -989,7 +856,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
                 timestamp: new Date()
               });
               
-              // Create notification for outbid user
               await Notification.createNotification({
                 recipient: previousHighestBidder,
                 type: 'outbid',
@@ -1010,7 +876,6 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
         }
       }
       
-      // Emit WebSocket event for the bid
       if (global.webSocketService) {
         global.webSocketService.emitNewBid(populatedListing, {
           bidder: bidder,
@@ -1038,14 +903,8 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
   }
 });
 
-// Continue with remaining routes unchanged...
-// [POST /api/listings/:id/end-auction, POST /api/listings/:id/cancel-auction, etc.]
-// [Rest of the file remains exactly the same]
-
-// POST /api/listings/:id/end-auction - End an auction using settlement service (with race condition prevention)
 router.post('/:id/end-auction', async (req, res) => {
   try {
-    // First check if auction exists and is still active
     const listing = await Listing.findById(req.params.id);
     
     if (!listing) {
@@ -1062,7 +921,6 @@ router.post('/:id/end-auction', async (req, res) => {
       });
     }
     
-    // Check if already processed
     if (listing.auction.status !== 'active') {
       console.log(`[Auction] Auction ${req.params.id} already processed with status: ${listing.auction.status}`);
       return res.json({
@@ -1075,7 +933,6 @@ router.post('/:id/end-auction', async (req, res) => {
       });
     }
     
-    // Check if auction has actually ended
     const now = new Date();
     if (listing.auction.endTime > now) {
       const timeLeft = Math.floor((listing.auction.endTime - now) / 1000);
@@ -1085,23 +942,20 @@ router.post('/:id/end-auction', async (req, res) => {
       });
     }
     
-    // Use atomic update to prevent race conditions
     const updatedListing = await Listing.findOneAndUpdate(
       { 
         _id: req.params.id,
-        'auction.status': 'active' // Only process if still active
+        'auction.status': 'active'
       },
       { 
-        $set: { 'auction.status': 'processing' } // Mark as processing
+        $set: { 'auction.status': 'processing' }
       },
-      { new: false } // Return the original document
+      { new: false }
     );
     
-    // If no document was updated, another request already processed it
     if (!updatedListing) {
       console.log(`[Auction] Auction ${req.params.id} already being processed by another request`);
       
-      // Get the current status
       const currentListing = await Listing.findById(req.params.id);
       return res.json({
         success: true,
@@ -1113,13 +967,11 @@ router.post('/:id/end-auction', async (req, res) => {
       });
     }
     
-    // Now process the auction
     const result = await AuctionSettlementService.processEndedAuction(req.params.id);
     res.json(result);
   } catch (error) {
     console.error('[Auction] Error ending auction:', error);
     
-    // Try to reset status if processing failed
     try {
       await Listing.findOneAndUpdate(
         { 
@@ -1127,7 +979,7 @@ router.post('/:id/end-auction', async (req, res) => {
           'auction.status': 'processing'
         },
         { 
-          $set: { 'auction.status': 'error' }  // Set to error state, not active
+          $set: { 'auction.status': 'error' }
         }
       );
     } catch (resetError) {
@@ -1141,7 +993,6 @@ router.post('/:id/end-auction', async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/cancel-auction - Cancel an auction
 router.post('/:id/cancel-auction', authMiddleware, async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -1153,7 +1004,6 @@ router.post('/:id/cancel-auction', authMiddleware, async (req, res) => {
       });
     }
     
-    // Only seller or admin can cancel
     if (listing.seller !== req.user.username && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -1176,7 +1026,6 @@ router.post('/:id/cancel-auction', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/listings/:id - Update a listing
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -1208,7 +1057,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
     Object.assign(listing, req.body);
     await listing.save();
     
-    // Populate seller profile for the response
     const populatedListing = await populateSellerProfile(listing.toObject());
     
     if (global.webSocketService) {
@@ -1227,7 +1075,6 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
-// DELETE /api/listings/:id - Delete a listing
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);

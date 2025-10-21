@@ -250,17 +250,14 @@ export const useBrowseDetail = () => {
       }
     });
 
-    // Listen for auction won event
     const unsubscribeWon = subscribe('auction:won' as WebSocketEvent, (data: any) => {
       console.log('[BrowseDetail] Auction won event received:', data);
       
-      // Check if this is for the current listing and user
       if (data.listingId === listingId || data.listingId === listing?.id) {
         if (currentUsername && (data.winner === currentUsername || data.winnerId === currentUsername)) {
           console.log('[BrowseDetail] Current user won the auction!');
           updateState({ showAuctionSuccess: true });
           
-          // Navigate to orders after a delay
           setTimeout(() => {
             if (mountedRef.current) {
               router.push('/buyers/my-orders');
@@ -313,7 +310,6 @@ export const useBrowseDetail = () => {
 
         updateState({ biddingEnabled: false });
 
-        // Always trigger backend processing
         try {
           console.log('[BrowseDetail] Triggering backend auction end processing');
           const response = await listingsService.endAuction(listing.id);
@@ -417,7 +413,7 @@ export const useBrowseDetail = () => {
     loadListing();
   }, [listingId, listings, refreshListings]);
 
-  // CRITICAL FIX: Load seller reviews from backend API
+  // Load seller reviews from backend API
   useEffect(() => {
     const loadSellerReviews = async () => {
       if (!listing?.seller) {
@@ -428,7 +424,6 @@ export const useBrowseDetail = () => {
       try {
         console.log('[BrowseDetail] Loading reviews for seller:', listing.seller);
         
-        // Fetch reviews from the backend API
         const reviewsResponse = await reviewsService.getSellerReviews(listing.seller);
         
         console.log('[BrowseDetail] Reviews API response:', reviewsResponse);
@@ -441,12 +436,10 @@ export const useBrowseDetail = () => {
           setSellerReviews(reviews || []);
           setSellerReviewStats(stats || null);
           
-          // Set average rating
           if (stats && typeof stats.avgRating === 'number') {
             setSellerAverageRating(stats.avgRating);
             console.log('[BrowseDetail] Set average rating:', stats.avgRating);
           } else if (reviews && reviews.length > 0) {
-            // Fallback: calculate average if stats not provided
             const totalRating = reviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
             const avgRating = totalRating / reviews.length;
             setSellerAverageRating(Math.round(avgRating * 10) / 10);
@@ -499,36 +492,49 @@ export const useBrowseDetail = () => {
 
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // Track view count
+  // CRITICAL FIX: Track view count with proper async handling
   useEffect(() => {
     const trackView = async () => {
-      if (!listing) return;
+      if (!listing || !listingId) return;
       
+      // Set initial view count from listing data
       if (listing.views !== undefined && !viewIncrementedRef.current) {
         setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
       }
       
+      // Only increment once per mount
       if (!viewIncrementedRef.current) {
         viewIncrementedRef.current = true;
         
         try {
-          if (user && user.username !== listing.seller) {
-            await listingsService.updateViews({
-              listingId: listing.id,
-              viewerId: user.username,
-            });
-          } else if (!user) {
-            await listingsService.updateViews({
-              listingId: listing.id,
-            });
-          }
+          // CRITICAL FIX: Always call updateViews regardless of user
+          // The backend will handle the increment
+          console.log('[useBrowseDetail] Tracking view for listing:', listingId);
           
-          const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listing.id);
-          if (viewsResponse.success && viewsResponse.data !== undefined) {
-            setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
-          }
+          await listingsService.updateViews({
+            listingId: listingId,
+            viewerId: user?.username, // Optional - for analytics
+          });
+          
+          console.log('[useBrowseDetail] View tracked successfully');
+          
+          // CRITICAL FIX: Immediately fetch the updated view count
+          // Use a small delay to ensure the backend has processed the increment
+          setTimeout(async () => {
+            try {
+              const viewsResponse = await listingsService.getListingViews(listingId);
+              if (viewsResponse.success && viewsResponse.data !== undefined) {
+                console.log('[useBrowseDetail] Updated view count:', viewsResponse.data);
+                setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
+              }
+            } catch (error) {
+              console.error('[useBrowseDetail] Error fetching updated view count:', error);
+            }
+          }, 500); // 500ms delay to ensure backend processing
+          
         } catch (error) {
-          console.error('Error tracking view:', error);
+          console.error('[useBrowseDetail] Error tracking view:', error);
+          // Fallback to listing's view count if available
           if (listing.views !== undefined) {
             setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
           }
@@ -537,7 +543,7 @@ export const useBrowseDetail = () => {
     };
     
     trackView();
-  }, [listing, user]);
+  }, [listing, listingId, user]);
 
   const getTimerProgress = useCallback(() => {
     if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
@@ -681,15 +687,13 @@ export const useBrowseDetail = () => {
     };
   }, [isAuction, user, listing?.id, checkCurrentUserFunds, updateState]);
 
-  // CRITICAL FIX: Load seller profile with proper URL resolution
+  // Load seller profile with proper URL resolution
   useEffect(() => {
     const loadProfileData = async () => {
       if (listing?.seller) {
         try {
-          // First check if the listing already has sellerProfile data from backend
           const listingWithProfile = listing as any;
           if (listingWithProfile.sellerProfile) {
-            // Use the profile data from the listing and resolve the pic URL
             const profilePic = listingWithProfile.sellerProfile.pic ? 
               resolveApiUrl(listingWithProfile.sellerProfile.pic) : null;
             
@@ -701,10 +705,8 @@ export const useBrowseDetail = () => {
               } 
             });
           } else {
-            // Fallback to fetching from profile utils
             const profileData = await getUserProfileData(listing.seller);
             if (profileData) {
-              // Resolve the profile picture URL if it exists
               const profilePic = profileData.profilePic ? 
                 resolveApiUrl(profileData.profilePic) : null;
               
