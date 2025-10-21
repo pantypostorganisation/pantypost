@@ -1412,11 +1412,18 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        const response = await apiCall<{ views: number }>(`/listings/${sanitizedId}/views`);
+        const response = await apiCall<any>(`/listings/${sanitizedId}/views`);
         
-        if (response.success && response.data) {
-          const viewCount = (response.data as any).views || 0;
+        if (response.success) {
+          // CRITICAL FIX: Backend returns { success: true, views: 45 }
+          // apiCall wraps it as { success: true, data: { success: true, views: 45 } }
+          // So we need to read from response.data.views OR response.views
+          const viewCount = response.data?.views ?? (response as any).views ?? 0;
+          
+          console.log('[ListingsService] Got view count from backend:', viewCount);
+          
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: now });
+          
           return {
             success: true,
             data: viewCount,
