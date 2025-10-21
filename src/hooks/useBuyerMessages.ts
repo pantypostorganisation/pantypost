@@ -679,7 +679,7 @@ export const useBuyerMessages = () => {
     // Create optimistic message
     const tempId = uuidv4();
     const threadId = getConversationKey(user.username, activeThread);
-    const messageContent = replyMessage.trim() || (selectedImage ? 'Image shared' : '');
+    const messageContent = replyMessage.trim();
     
     const optimisticMsg: OptimisticMessage = {
       id: tempId,
