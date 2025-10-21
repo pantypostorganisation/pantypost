@@ -1356,7 +1356,6 @@ export class ListingsService {
 
   /**
    * Update listing views - RETURNS the new count
-   * FIXED: Properly extracts view count from backend response
    */
   async updateViews(update: ListingViewUpdate): Promise<ApiResponse<number>> {
     try {
@@ -1365,52 +1364,22 @@ export class ListingsService {
       const sanitizedViewerId = update.viewerId ? sanitize.username(update.viewerId) : undefined;
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Sending view track request for:', sanitizedId);
-        
         const response = await apiCall<any>(`/listings/${sanitizedId}/views`, {
           method: 'POST',
           body: JSON.stringify({ viewerId: sanitizedViewerId }),
         });
         
-        console.log('[ListingsService] Raw API response:', response);
-        
+        // CRITICAL FIX: Backend returns { success: true, views: 47 } directly
+        // NOT wrapped in a data property!
         if (response.success) {
-          // CRITICAL FIX: The backend returns { success: true, views: 47 }
-          // But apiCall might wrap it as { success: true, data: { success: true, views: 47 } }
-          // So we need to check multiple locations in order of likelihood
-          let viewCount = 0;
+          // Try multiple possible locations for the view count
+          const viewCount = (response as any).views ?? response.data?.views ?? 0;
           
-          // First check if views is in the wrapped data
-          if (response.data && typeof response.data === 'object' && 'views' in response.data) {
-            viewCount = response.data.views;
-            console.log('[ListingsService] Found views in response.data.views:', viewCount);
-          } 
-          // Then check if views is directly on the response
-          else if ('views' in response) {
-            viewCount = (response as any).views;
-            console.log('[ListingsService] Found views in response.views:', viewCount);
-          }
-          // Fallback to checking nested success response
-          else if (response.data && response.data.success && response.data.views !== undefined) {
-            viewCount = response.data.views;
-            console.log('[ListingsService] Found views in nested response:', viewCount);
-          }
-          
-          // Ensure we have a valid number
-          viewCount = Number(viewCount) || 0;
-          
-          console.log('[ListingsService] Final extracted view count:', viewCount);
+          console.log('[ListingsService] Response:', response);
+          console.log('[ListingsService] Updated views, new count:', viewCount);
           
           // Update cache with new count
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: Date.now() });
-          
-          // Also update the listing in cache if we have it
-          if (this.listingsCache.data) {
-            const cachedListing = this.listingsCache.data.find(l => l.id === sanitizedId);
-            if (cachedListing) {
-              cachedListing.views = viewCount;
-            }
-          }
           
           return {
             success: true,
@@ -1418,14 +1387,13 @@ export class ListingsService {
           };
         }
         
-        console.error('[ListingsService] View update failed:', response.error);
         return {
           success: false,
           error: response.error || { message: 'Failed to update views' }
         };
       }
 
-      // LocalStorage implementation fallback
+      // LocalStorage implementation
       const viewsData = await storageService.getItem<Record<string, number>>(
         'listing_views',
         {}
@@ -1435,17 +1403,14 @@ export class ListingsService {
       await storageService.setItem('listing_views', viewsData);
 
       // Update cache
-      const newCount = viewsData[sanitizedId];
-      this.viewsCache.set(sanitizedId, { count: newCount, timestamp: Date.now() });
-
-      console.log('[ListingsService] LocalStorage view count updated to:', newCount);
+      this.viewsCache.set(sanitizedId, { count: viewsData[sanitizedId], timestamp: Date.now() });
 
       return { 
         success: true,
-        data: newCount
+        data: viewsData[sanitizedId]
       };
     } catch (error) {
-      console.error('[ListingsService] Update views error:', error);
+      console.error('Update views error:', error);
       return {
         success: false,
         error: { message: 'Failed to update views' },
@@ -1454,7 +1419,7 @@ export class ListingsService {
   }
 
   /**
-   * Get listing views with caching - FIXED version
+   * Get listing views with caching
    */
   async getListingViews(listingId: string): Promise<ApiResponse<number>> {
     try {
@@ -1466,7 +1431,6 @@ export class ListingsService {
       const now = Date.now();
       
       if (cached && now - cached.timestamp < VIEW_CACHE_DURATION) {
-        console.log('[ListingsService] Returning cached view count:', cached.count);
         return {
           success: true,
           data: cached.count,
@@ -1474,30 +1438,16 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Fetching view count from backend for:', sanitizedId);
-        
         const response = await apiCall<any>(`/listings/${sanitizedId}/views`);
         
-        console.log('[ListingsService] Get views raw response:', response);
-        
         if (response.success) {
-          // Same extraction logic as updateViews
-          let viewCount = 0;
+          // CRITICAL FIX: Backend returns { success: true, views: 45 }
+          // apiCall wraps it as { success: true, data: { success: true, views: 45 } }
+          // So we need to read from response.data.views OR response.views
+          const viewCount = response.data?.views ?? (response as any).views ?? 0;
           
-          // Check multiple possible locations
-          if (response.data && typeof response.data === 'object' && 'views' in response.data) {
-            viewCount = response.data.views;
-          } else if ('views' in response) {
-            viewCount = (response as any).views;
-          } else if (response.data && response.data.success && response.data.views !== undefined) {
-            viewCount = response.data.views;
-          }
+          console.log('[ListingsService] Got view count from backend:', viewCount);
           
-          viewCount = Number(viewCount) || 0;
-          
-          console.log('[ListingsService] Retrieved view count:', viewCount);
-          
-          // Update cache
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: now });
           
           return {
@@ -1505,11 +1455,9 @@ export class ListingsService {
             data: viewCount,
           };
         }
-        
-        console.error('[ListingsService] Failed to get views:', response.error);
       }
 
-      // LocalStorage fallback
+      // LocalStorage implementation
       const viewsData = await storageService.getItem<Record<string, number>>(
         'listing_views',
         {}
@@ -1518,14 +1466,12 @@ export class ListingsService {
       const count = viewsData[sanitizedId] || 0;
       this.viewsCache.set(sanitizedId, { count, timestamp: now });
 
-      console.log('[ListingsService] LocalStorage view count:', count);
-
       return {
         success: true,
         data: count,
       };
     } catch (error) {
-      console.error('[ListingsService] Get listing views error:', error);
+      console.error('Get listing views error:', error);
       return {
         success: false,
         error: { message: 'Failed to get listing views' },
