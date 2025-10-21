@@ -113,7 +113,7 @@ export const useBrowseDetail = () => {
   const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const auctionExpiryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasMarkedRef = useRef(false);
-  const viewIncrementedRef = useRef(false);
+  const viewTrackedRef = useRef(false); // FIXED: Single ref to track if view was counted
   const abortControllerRef = useRef<AbortController | null>(null);
   const isProcessingAuctionEndRef = useRef(false);
 
@@ -499,33 +499,46 @@ export const useBrowseDetail = () => {
 
   const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // CRITICAL FIX: Track view count - increment EVERY time, even for repeat views
+  // CRITICAL FIX: Track view count ONCE per listing load
   useEffect(() => {
     const trackView = async () => {
-      if (!listing || !listingId) return;
+      // FIXED: Only track if we haven't tracked for this specific listing yet
+      if (!listing || !listingId || viewTrackedRef.current) {
+        return;
+      }
       
-      // FIXED: Remove the viewIncrementedRef check to allow repeat views
-      // Every page load should increment the view counter
+      // Mark as tracked IMMEDIATELY to prevent double-tracking
+      viewTrackedRef.current = true;
       
       try {
         console.log('[BrowseDetail] Tracking view for listing:', listingId);
         
         // Call the backend to increment views
-        await listingsService.updateViews({
+        const updateResult = await listingsService.updateViews({
           listingId: listingId,
           viewerId: user?.username, // Optional: track who viewed it
         });
+        
+        if (!updateResult.success) {
+          console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
+          // Don't reset viewTrackedRef - we tried, that's enough
+          return;
+        }
         
         // Fetch the updated view count from backend
         const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listingId);
         
         if (viewsResponse.success && viewsResponse.data !== undefined) {
           console.log('[BrowseDetail] Updated view count:', viewsResponse.data);
+          
+          // Update state
           setState(prev => ({ ...prev, viewCount: viewsResponse.data as number }));
           
-          // Also update the listing object
+          // CRITICAL: Update the listing object WITHOUT triggering a re-render loop
           setListing(prev => {
             if (!prev) return prev;
+            // Only update if the views actually changed
+            if (prev.views === viewsResponse.data) return prev;
             return {
               ...prev,
               views: viewsResponse.data as number
@@ -534,16 +547,19 @@ export const useBrowseDetail = () => {
         }
       } catch (error) {
         console.error('[BrowseDetail] Error tracking view:', error);
-        // Fallback: use the listing's existing view count
-        if (listing.views !== undefined) {
-          setState(prev => ({ ...prev, viewCount: listing.views || 0 }));
-        }
+        // Don't reset viewTrackedRef on error - we tried once, that's enough
       }
     };
     
     // Track view when listing loads
     trackView();
-  }, [listing?.id, listingId, user?.username]); // Re-run when listingId changes (new page view)
+  }, [listing?.id, listingId, user?.username]); // Only re-run if the actual listing ID changes
+
+  // FIXED: Reset the view tracking flag when navigating to a different listing
+  useEffect(() => {
+    // Reset the ref when the listingId changes (navigating to a new listing)
+    viewTrackedRef.current = false;
+  }, [listingId]); // Only listingId, not listing object
 
   const getTimerProgress = useCallback(() => {
     if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
@@ -1033,6 +1049,7 @@ export const useBrowseDetail = () => {
       mountedRef.current = false;
       isPurchasingRef.current = false;
       hasPurchasedRef.current = false;
+      viewTrackedRef.current = false; // FIXED: Reset on unmount
       if (navigationTimeoutRef.current) {
         clearTimeout(navigationTimeoutRef.current);
       }
