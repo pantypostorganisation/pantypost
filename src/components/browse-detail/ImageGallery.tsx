@@ -4,6 +4,7 @@
 import { Crown, Clock, Lock, Gavel, Eye, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageGalleryProps } from '@/types/browseDetail';
 import { useCallback } from 'react';
+import AnimatedViewCounter from './AnimatedViewCounter';
 
 export default function ImageGallery({
   images,
@@ -124,7 +125,7 @@ export default function ImageGallery({
           {/* View count */}
           <div className="absolute top-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
             <Eye className="w-3 h-3" />
-            {viewCount}
+            <AnimatedViewCounter value={viewCount} />
           </div>
 
           {/* Premium lock */}
