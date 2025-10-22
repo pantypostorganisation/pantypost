@@ -2,14 +2,21 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRef, useState, useEffect } from 'react';
 import { ShoppingBag, TrendingUp } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { itemVariants, containerVariants, fadeInVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { HERO_CONTENT } from '@/utils/homepage-constants';
 import TrustBadges from './TrustBadges';
-import FloatingParticles from './FloatingParticles';
 import AnimatedUserCounter from './AnimatedUserCounter';
+
+// Lazy load FloatingParticles for better initial load
+import dynamic from 'next/dynamic';
+const FloatingParticles = dynamic(() => import('./FloatingParticles'), {
+  ssr: false,
+  loading: () => null
+});
 
 // Suppress Framer Motion's false positive positioning warning in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -27,8 +34,8 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 
 export default function HeroSection() {
   const heroRef = useRef<HTMLElement>(null);
-  const [imgError, setImgError] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [phoneImageLoaded, setPhoneImageLoaded] = useState(false);
 
   // Only apply animations after mount to ensure smooth loading
   useEffect(() => {
@@ -47,14 +54,15 @@ export default function HeroSection() {
       ref={heroRef}
       className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 overflow-hidden"
     >
-      {/* Subtle Noise Overlay */}
+      {/* Subtle Noise Overlay - optimized with will-change */}
       <div
         className="absolute inset-0 opacity-[0.02] bg-[url('/noise.png')] bg-repeat pointer-events-none"
         role="presentation"
+        style={{ willChange: 'opacity' }}
       />
 
-      {/* Floating particles */}
-      <FloatingParticles />
+      {/* Floating particles - lazy loaded */}
+      {mounted && <FloatingParticles />}
 
       <div className="relative max-w-7xl mx-auto px-6 sm:px-8 flex flex-col md:flex-row items-center justify-between min-h-[70vh] md:min-h-[75vh] z-10">
         {/* LEFT: Info/CTA */}
@@ -66,7 +74,7 @@ export default function HeroSection() {
             viewport={VIEWPORT_CONFIG}
             variants={containerVariants}
           >
-            {/* UPDATED: Dynamic user counter instead of static badge */}
+            {/* Dynamic user counter */}
             <AnimatedUserCounter 
               className="mb-3" 
               compact={true}
@@ -124,7 +132,7 @@ export default function HeroSection() {
           </motion.div>
         </div>
 
-        {/* RIGHT: Phone Image - with parallax effect */}
+        {/* RIGHT: Phone Image - OPTIMIZED with Next.js Image */}
         <div className="w-full md:w-1/2 lg:w-[50%] xl:w-[50%] flex justify-center md:justify-end items-center h-full mt-8 md:mt-0 z-10 perspective pr-0 md:pr-12 lg:pr-20 xl:pr-24 relative">
           <motion.div
             initial="hidden"
@@ -132,23 +140,45 @@ export default function HeroSection() {
             viewport={{ once: true, amount: 0.5 }}
             variants={fadeInVariants}
             style={mounted ? { y } : {}}
+            className="relative"
           >
-            {!imgError ? (
-              <img
+            {/* Loading skeleton for phone image */}
+            {!phoneImageLoaded && (
+              <div 
+                className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 rounded-[2rem] animate-pulse"
+                style={{
+                  width: '300px',
+                  height: '520px',
+                }}
+              />
+            )}
+            
+            {/* OPTIMIZED: Next.js Image with priority loading */}
+            <div 
+              className={`transition-opacity duration-500 ${phoneImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+              style={{
+                filter: 'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))',
+              }}
+            >
+              <Image
                 src="/phone-mockup.png"
                 alt="PantyPost mobile app interface showcasing the marketplace"
-                className="h-[340px] sm:h-96 md:h-[440px] lg:h-[520px] w-auto transform transition-all duration-500 hover:scale-105 hover:rotate-3"
+                width={300}
+                height={520}
+                priority // Critical for above-the-fold content
+                quality={85} // Slightly reduce quality for better performance
+                placeholder="blur" // Show blur placeholder while loading
+                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAGCAYAAADkOT91AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAM0lEQVR4nGNgQAX/gZgRiP8D8X8kNhMSH6oOmwZsYjg1YBPDqgGbGE4N2MRwasDhLwYGADm3EQXVn3lFAAAAAElFTkSuQmCC"
+                className="h-auto w-auto transform transition-all duration-500 hover:scale-105 hover:rotate-3"
                 style={{
-                  filter:
-                    'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))',
+                  maxHeight: '520px',
+                  width: 'auto',
+                  height: 'auto'
                 }}
-                onError={() => setImgError(true)}
+                sizes="(max-width: 640px) 340px, (max-width: 768px) 400px, (max-width: 1024px) 440px, 520px"
+                onLoadingComplete={() => setPhoneImageLoaded(true)}
               />
-            ) : (
-              <div className="h-[340px] sm:h-96 md:h-[440px] lg:h-[520px] w-[200px] sm:w-[220px] md:w-[250px] lg:w-[300px] bg-gradient-to-br from-gray-800 to-gray-900 rounded-[2rem] border border-gray-700 flex items-center justify-center">
-                <span className="text-gray-400 text-sm">App Preview</span>
-              </div>
-            )}
+            </div>
           </motion.div>
         </div>
       </div>
