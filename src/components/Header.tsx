@@ -8,7 +8,7 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import {
   Bell,
   ShoppingBag,
@@ -37,7 +37,13 @@ import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
 import { resolveApiUrl } from '@/utils/url';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
-import { HeaderSearch } from '@/components/HeaderSearch';
+import dynamic from 'next/dynamic';
+
+// OPTIMIZED: Lazy load HeaderSearch to reduce initial bundle
+const HeaderSearch = dynamic(() => import('@/components/HeaderSearch').then(mod => ({ default: mod.HeaderSearch })), {
+  ssr: false,
+  loading: () => null
+});
 
 type UINotification = {
   id: string;
@@ -84,6 +90,39 @@ const useInterval = (callback: () => void, delay: number | null) => {
   };
 };
 
+// OPTIMIZED: Memoized mobile link component to prevent re-renders
+const MobileLink = memo(({ 
+  href, 
+  icon, 
+  label, 
+  badge, 
+  onClick 
+}: { 
+  href: string; 
+  icon: React.ReactNode; 
+  label: string; 
+  badge?: number;
+  onClick: () => void;
+}) => (
+  <Link
+    href={href}
+    className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1"
+    onClick={onClick}
+    style={{ touchAction: 'manipulation' }}
+  >
+    <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg">
+      {icon}
+    </div>
+    <span className="flex-1">{label}</span>
+    {badge && badge > 0 && (
+      <span className="bg-[#ff950e] text-black text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
+        {badge}
+      </span>
+    )}
+  </Link>
+));
+MobileLink.displayName = 'MobileLink';
+
 export default function Header(): React.ReactElement | null {
   const pathname = usePathname();
   const router = useRouter();
@@ -111,7 +150,6 @@ export default function Header(): React.ReactElement | null {
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
-  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
@@ -123,12 +161,16 @@ export default function Header(): React.ReactElement | null {
   const lastAuctionCheck = useRef(0);
   const hasRefreshedAdminData = useRef(false);
 
-  const isAdminUser = isAdmin(user);
-  const role = user?.role ?? null;
-  const isSellerVerified =
-    user?.role === 'seller' && (user?.isVerified === true || user?.verificationStatus === 'verified');
-  const canUseSearch = Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller'));
-  const username = user?.username ? sanitizeStrict(user.username) : '';
+  // OPTIMIZED: Memoize computed values to prevent re-calculations
+  const isAdminUser = useMemo(() => isAdmin(user), [user]);
+  const role = useMemo(() => user?.role ?? null, [user?.role]);
+  const isSellerVerified = useMemo(
+    () => user?.role === 'seller' && (user?.isVerified === true || user?.verificationStatus === 'verified'),
+    [user?.role, user?.isVerified, user?.verificationStatus]
+  );
+  const canUseSearch = useMemo(() => Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller')), [user, isAdminUser, role]);
+  const username = useMemo(() => (user?.username ? sanitizeStrict(user.username) : ''), [user?.username]);
+  
   const profileImageSrc = useMemo(() => {
     if (!user) {
       return null;
@@ -193,10 +235,11 @@ export default function Header(): React.ReactElement | null {
     const separator = resolved.includes('?') ? '&' : '?';
     return `${resolved}${separator}v=${encodeURIComponent(profileUpdatedAt)}`;
   }, [user]);
-  const canDisplayUserAvatar = role === 'buyer' || role === 'seller';
-  const profileAvatarSrc = canDisplayUserAvatar ? profileImageSrc ?? null : null;
-  const showAvatarImage = canDisplayUserAvatar && Boolean(profileAvatarSrc);
-  const avatarAltText = username ? `${username}'s avatar` : 'User avatar';
+  
+  const canDisplayUserAvatar = useMemo(() => role === 'buyer' || role === 'seller', [role]);
+  const profileAvatarSrc = useMemo(() => (canDisplayUserAvatar ? profileImageSrc ?? null : null), [canDisplayUserAvatar, profileImageSrc]);
+  const showAvatarImage = useMemo(() => canDisplayUserAvatar && Boolean(profileAvatarSrc), [canDisplayUserAvatar, profileAvatarSrc]);
+  const avatarAltText = useMemo(() => (username ? `${username}'s avatar` : 'User avatar'), [username]);
 
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
   useClickOutside(mobileMenuRef, () => {
@@ -581,27 +624,15 @@ export default function Header(): React.ReactElement | null {
     if (showNotifDropdown) setActiveNotifTab('active');
   }, [showNotifDropdown]);
 
-  const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
-    <Link
-      href={href}
-      className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1"
-      onClick={() => {
-        setMobileMenuOpen(false);
-        setShowMobileNotifications(false);
-      }}
-      style={{ touchAction: 'manipulation' }}
-    >
-      <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg">
-        {icon}
-      </div>
-      <span className="flex-1">{label}</span>
-      {badge && badge > 0 && (
-        <span className="bg-[#ff950e] text-black text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
-          {badge}
-        </span>
-      )}
-    </Link>
-  );
+  // OPTIMIZED: Memoize mobile menu close handler
+  const handleMobileMenuClose = useCallback(() => {
+    setMobileMenuOpen(false);
+    setShowMobileNotifications(false);
+  }, []);
+
+  const renderMobileLink = useCallback((href: string, icon: React.ReactNode, label: string, badge?: number) => (
+    <MobileLink key={href} href={href} icon={icon} label={label} badge={badge} onClick={handleMobileMenuClose} />
+  ), [handleMobileMenuClose]);
 
   const MobileNotificationsPanel = () => (
     <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a] to-[#111] z-[110] flex flex-col">
@@ -705,10 +736,7 @@ export default function Header(): React.ReactElement | null {
         className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[90] lg:hidden transition-opacity duration-300 ${
           mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => {
-          setMobileMenuOpen(false);
-          setShowMobileNotifications(false);
-        }}
+        onClick={handleMobileMenuClose}
       />
       
       {/* Increased z-index for menu content */}
@@ -725,25 +753,22 @@ export default function Header(): React.ReactElement | null {
           <>
             <div className="relative p-6 border-b border-[#ff950e]/30">
               <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setShowMobileNotifications(false);
-                }}
+                onClick={handleMobileMenuClose}
                 className="absolute top-4 right-4 text-[#ff950e] hover:text-white transition-colors p-2 z-10"
                 aria-label="Close menu"
               >
                 <X className="w-6 h-6" />
               </button>
               <div className="flex items-center justify-center">
-                {/* FIXED: Use Next.js Image component with priority for mobile menu logo */}
+                {/* OPTIMIZED: Use Next.js Image component with priority for mobile menu logo */}
                 <Image
                   src="/logo.png"
                   alt="Panty Post - Used Panties Marketplace"
                   width={80}
                   height={80}
                   priority
+                  quality={90}
                   className="w-20 h-auto drop-shadow-2xl"
-                  onLoad={() => setLogoLoaded(true)}
                 />
               </div>
             </div>
@@ -779,10 +804,7 @@ export default function Header(): React.ReactElement | null {
                 <HeaderSearch 
                   variant="mobile" 
                   canUseSearch={canUseSearch}
-                  onResultClick={() => {
-                    setMobileMenuOpen(false);
-                    setShowMobileNotifications(false);
-                  }}
+                  onResultClick={handleMobileMenuClose}
                 />
               </div>
             )}
@@ -870,20 +892,14 @@ export default function Header(): React.ReactElement | null {
                     <Link
                       href="/login"
                       className="block text-center bg-gradient-to-r from-[#2a2a2a] to-[#333] hover:from-[#333] hover:to-[#444] text-white font-bold px-4 py-3 rounded-lg transition-all duration-300 border border-[#444] hover:border-[#555]"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        setShowMobileNotifications(false);
-                      }}
+                      onClick={handleMobileMenuClose}
                     >
                       Log In
                     </Link>
                     <Link
                       href="/signup"
                       className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30"
-                      onClick={() => {
-                        setMobileMenuOpen(false);
-                        setShowMobileNotifications(false);
-                      }}
+                      onClick={handleMobileMenuClose}
                       style={{ color: '#2a2a2a' }}
                     >
                       Sign Up
@@ -896,8 +912,7 @@ export default function Header(): React.ReactElement | null {
                 <div className="pt-4 mt-4 border-t border-[#ff950e]/20">
                   <button
                     onClick={() => {
-                      setMobileMenuOpen(false);
-                      setShowMobileNotifications(false);
+                      handleMobileMenuClose();
                       logout();
                     }}
                     className="flex items-center gap-3 text-red-400 hover:bg-red-900/20 p-3 rounded-lg transition-all duration-200 w-full"
@@ -925,19 +940,15 @@ export default function Header(): React.ReactElement | null {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            {/* FIXED: Use Next.js Image component with priority for header logo */}
+            {/* OPTIMIZED: Use Next.js Image with priority */}
             <Image
               src="/logo.png"
               alt="Panty Post - Used Panties Marketplace"
               width={96}
               height={96}
               priority
+              quality={90}
               className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300"
-              style={{
-                opacity: logoLoaded ? 1 : 0,
-                transition: 'opacity 0.3s ease-in-out'
-              }}
-              onLoad={() => setLogoLoaded(true)}
             />
           </div>
         </Link>
