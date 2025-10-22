@@ -116,7 +116,10 @@ export const useBrowseDetail = () => {
   const viewTrackedRef = useRef(false);
   const viewTrackingInProgressRef = useRef(false);
   const listingLoadedRef = useRef(false);
-  const listingRef = useRef<ListingWithDetails | undefined>();
+  
+  // CRITICAL FIX: Add initial value to useRef
+  const listingRef = useRef<ListingWithDetails | undefined>(undefined);
+  
   const optimisticViewRef = useRef<{ previousState: number; previousListing: number | null } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isProcessingAuctionEndRef = useRef(false);
@@ -518,7 +521,7 @@ export const useBrowseDetail = () => {
       index === self.findIndex(b => 
         b.bidder === bid.bidder && 
         b.amount === bid.amount && 
-        Math.abs(new Date(b.date).getTime() - new Date(b.date).getTime()) < 1000
+        Math.abs(new Date(b.date).getTime() - new Date(bid.date).getTime()) < 1000
       )
     );
     return uniqueBids.sort((a, b) => b.amount - a.amount);
@@ -743,12 +746,13 @@ export const useBrowseDetail = () => {
     }
   }, [listings, listingId]);
 
-  // Track view count once the listing is fully loaded
+  // CRITICAL FIX: Track view when listing loads OR when user navigates back
   useEffect(() => {
     if (!listingId || !listingLoaded) {
       return;
     }
 
+    // Track view whenever the listing changes or loads
     trackView();
   }, [listingId, listingLoaded, trackView]);
 
