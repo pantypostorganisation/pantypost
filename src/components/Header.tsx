@@ -2,6 +2,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
@@ -110,6 +111,7 @@ export default function Header(): React.ReactElement | null {
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
   const [balanceUpdateTrigger, setBalanceUpdateTrigger] = useState(0);
+  const [logoLoaded, setLogoLoaded] = useState(false);
 
   const [clearingNotifications, setClearingNotifications] = useState(false);
   const [deletingNotifications, setDeletingNotifications] = useState(false);
@@ -733,7 +735,16 @@ export default function Header(): React.ReactElement | null {
                 <X className="w-6 h-6" />
               </button>
               <div className="flex items-center justify-center">
-                <img src="/logo.png" alt="Panty Post - Used Panties Marketplace" className="w-20 h-auto drop-shadow-2xl" />
+                {/* FIXED: Use Next.js Image component with priority for mobile menu logo */}
+                <Image
+                  src="/logo.png"
+                  alt="Panty Post - Used Panties Marketplace"
+                  width={80}
+                  height={80}
+                  priority
+                  className="w-20 h-auto drop-shadow-2xl"
+                  onLoad={() => setLogoLoaded(true)}
+                />
               </div>
             </div>
 
@@ -914,7 +925,20 @@ export default function Header(): React.ReactElement | null {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            <img src="/logo.png" alt="Panty Post - Used Panties Marketplace" className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300" />
+            {/* FIXED: Use Next.js Image component with priority for header logo */}
+            <Image
+              src="/logo.png"
+              alt="Panty Post - Used Panties Marketplace"
+              width={96}
+              height={96}
+              priority
+              className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300"
+              style={{
+                opacity: logoLoaded ? 1 : 0,
+                transition: 'opacity 0.3s ease-in-out'
+              }}
+              onLoad={() => setLogoLoaded(true)}
+            />
           </div>
         </Link>
 
