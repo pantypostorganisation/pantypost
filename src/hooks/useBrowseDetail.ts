@@ -547,10 +547,6 @@ export const useBrowseDetail = () => {
         return;
       }
 
-      if (!mountedRef.current) {
-        return;
-      }
-
       viewTrackingInProgressRef.current = true;
 
       let previousViewCount = 0;
