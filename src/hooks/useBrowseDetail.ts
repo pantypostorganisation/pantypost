@@ -116,6 +116,8 @@ export const useBrowseDetail = () => {
   const viewTrackedRef = useRef(false);
   const viewTrackingInProgressRef = useRef(false);
   const listingLoadedRef = useRef(false);
+  const listingRef = useRef<ListingWithDetails | undefined>();
+  const optimisticViewRef = useRef<{ previousState: number; previousListing: number | null } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isProcessingAuctionEndRef = useRef(false);
 
@@ -129,6 +131,10 @@ export const useBrowseDetail = () => {
   useEffect(() => {
     refreshListingsRef.current = refreshListings;
   }, [refreshListings]);
+
+  useEffect(() => {
+    listingRef.current = listing;
+  }, [listing]);
 
   // Core data
   const rawListingId = params?.id as string;
@@ -552,6 +558,46 @@ export const useBrowseDetail = () => {
       try {
         console.log('[BrowseDetail] Tracking view for listing:', listingId);
 
+        const sanitizeCount = (count: unknown): number => {
+          const numeric = typeof count === 'number' && Number.isFinite(count) ? count : 0;
+          return Math.max(0, Math.round(numeric));
+        };
+
+        let previousStateCount = 0;
+        const rawListingViews = listingRef.current?.views;
+        const previousListingCount =
+          typeof rawListingViews === 'number' && Number.isFinite(rawListingViews)
+            ? Math.max(0, Math.round(rawListingViews))
+            : null;
+
+        setState(prev => {
+          const current = sanitizeCount(prev.viewCount);
+          previousStateCount = current;
+          const optimistic = current + 1;
+          optimisticViewRef.current = {
+            previousState: current,
+            previousListing: previousListingCount,
+          };
+          return { ...prev, viewCount: optimistic };
+        });
+
+        setListing(prev => {
+          if (!prev) {
+            return prev;
+          }
+
+          const current = sanitizeCount(
+            typeof prev.views === 'number' && Number.isFinite(prev.views)
+              ? prev.views
+              : previousListingCount ?? previousStateCount
+          );
+          const optimistic = Math.max(current, previousStateCount + 1);
+          return {
+            ...prev,
+            views: optimistic,
+          };
+        });
+
         const updateResult = await listingsService.updateViews({
           listingId,
           viewerId: user?.username,
@@ -559,6 +605,17 @@ export const useBrowseDetail = () => {
 
         if (!updateResult.success) {
           console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
+          const fallback = optimisticViewRef.current;
+          if (fallback) {
+            setState(prev => ({ ...prev, viewCount: fallback.previousState }));
+            setListing(prev => {
+              if (!prev) return prev;
+              const nextViews = fallback.previousListing ?? fallback.previousState;
+              return { ...prev, views: nextViews };
+            });
+          }
+          viewTrackedRef.current = false;
+          optimisticViewRef.current = null;
           return;
         }
 
@@ -566,6 +623,17 @@ export const useBrowseDetail = () => {
 
         if (!Number.isFinite(viewCount)) {
           console.warn('[BrowseDetail] Invalid view count returned from update:', updateResult.data);
+          const fallback = optimisticViewRef.current;
+          if (fallback) {
+            setState(prev => ({ ...prev, viewCount: fallback.previousState }));
+            setListing(prev => {
+              if (!prev) return prev;
+              const nextViews = fallback.previousListing ?? fallback.previousState;
+              return { ...prev, views: nextViews };
+            });
+          }
+          viewTrackedRef.current = false;
+          optimisticViewRef.current = null;
           return;
         }
 
@@ -577,17 +645,40 @@ export const useBrowseDetail = () => {
 
         console.log('[BrowseDetail] Updated view count:', viewCount);
 
-        setState(prev => ({ ...prev, viewCount }));
+        const sanitizedServerCount = sanitizeCount(viewCount);
+
+        setState(prev => {
+          const current = sanitizeCount(prev.viewCount);
+          const next = Math.max(current, sanitizedServerCount);
+          return { ...prev, viewCount: next };
+        });
 
         setListing(prev => {
-          if (!prev || prev.views === viewCount) return prev;
+          if (!prev) return prev;
+          const current = sanitizeCount(prev.views);
+          const next = Math.max(current, sanitizedServerCount);
+          if (next === current) {
+            return prev;
+          }
           return {
             ...prev,
-            views: viewCount,
+            views: next,
           };
         });
+        optimisticViewRef.current = null;
       } catch (error) {
         console.error('[BrowseDetail] Error tracking view:', error);
+        const fallback = optimisticViewRef.current;
+        if (fallback) {
+          setState(prev => ({ ...prev, viewCount: fallback.previousState }));
+          setListing(prev => {
+            if (!prev) return prev;
+            const nextViews = fallback.previousListing ?? fallback.previousState;
+            return { ...prev, views: nextViews };
+          });
+        }
+        viewTrackedRef.current = false;
+        optimisticViewRef.current = null;
       } finally {
         viewTrackingInProgressRef.current = false;
       }
