@@ -607,10 +607,18 @@ export const useBrowseDetail = () => {
     }
 
     setListing(prev => {
-      if (prev && prev.id === contextListing.id) {
-        return { ...prev, ...contextListing } as ListingWithDetails;
+      const nextListing = prev && prev.id === contextListing.id
+        ? { ...prev, ...contextListing }
+        : { ...contextListing };
+
+      if (prev && typeof prev.views === 'number' && Number.isFinite(prev.views)) {
+        const sanitizedPrevViews = Math.max(0, Math.round(prev.views));
+        if (typeof nextListing.views !== 'number' || !Number.isFinite(nextListing.views) || nextListing.views < sanitizedPrevViews) {
+          nextListing.views = sanitizedPrevViews;
+        }
       }
-      return contextListing as ListingWithDetails;
+
+      return nextListing as ListingWithDetails;
     });
 
     if (!listingLoadedRef.current) {
@@ -618,7 +626,18 @@ export const useBrowseDetail = () => {
     }
 
     if (typeof contextListing.views === 'number' && Number.isFinite(contextListing.views)) {
-      setState(prev => prev.viewCount === contextListing.views ? prev : { ...prev, viewCount: contextListing.views });
+      const sanitizedViews = Math.max(0, Math.round(contextListing.views));
+
+      setState(prev => {
+        if (sanitizedViews <= prev.viewCount) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          viewCount: sanitizedViews,
+        };
+      });
     }
   }, [listings, listingId]);
 
