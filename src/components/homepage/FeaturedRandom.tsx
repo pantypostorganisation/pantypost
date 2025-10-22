@@ -22,7 +22,7 @@ const ListingSkeleton = React.memo(() => (
 ));
 ListingSkeleton.displayName = 'ListingSkeleton';
 
-// Optimized ListingCard component with Next.js Image
+// Optimized ListingCard component with regular img tag (like it was before)
 const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -68,7 +68,7 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
       <Link
         href={`/browse/${encodeURIComponent(listing.id)}`}
         className="block focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded-lg sm:rounded-xl"
-        prefetch={false} // Don't prefetch to reduce initial load
+        prefetch={false}
       >
         {/* Type Badge - Matching browse page positioning */}
         <div className="absolute top-2 sm:top-3 md:top-4 right-2 sm:right-3 md:right-4 z-10">
@@ -85,7 +85,7 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
           )}
         </div>
 
-        {/* Image Container - OPTIMIZED with Next.js Image */}
+        {/* Image Container - REVERTED to regular img tag like before */}
         <div className="relative aspect-[4/5] sm:aspect-square overflow-hidden bg-black">
           {firstImage ? (
             <>
@@ -94,22 +94,17 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
                 <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 animate-pulse" />
               )}
 
-              {/* Optimized Image */}
+              {/* Regular img tag - like it was working before */}
               {!imageError ? (
-                <Image
+                <img
                   src={firstImage}
                   alt={listing.title}
-                  fill
-                  sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, (max-width: 1024px) 25vw, 20vw"
-                  quality={75} // Reduce quality for thumbnail
-                  className={`object-cover group-hover:scale-110 transition-transform duration-500 ${
+                  className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
                     isPremiumLocked ? 'blur-md' : ''
                   } ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   onLoad={() => setImageLoaded(true)}
                   onError={() => setImageError(true)}
-                  loading="lazy" // Lazy load below-fold images
-                  placeholder="blur"
-                  blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAGCAYAAADkOT91AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAM0lEQVR4nGNgQAX/gZgRiP8D8X8kNhMSH6oOmwZsYjg1YBPDqgGbGE4N2MRwasDhLwYGADm3EQXVn3lFAAAAAElFTkSuQmCC"
+                  loading="lazy"
                 />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
@@ -242,7 +237,7 @@ export default function FeaturedRandom() {
 
         // OPTIMIZED: Reduce initial fetch limit for faster load
         const response = await listingsService.getListings({
-          limit: 50, // Reduced from 200 for faster initial load
+          limit: 50,
           sortBy: 'date',
           sortOrder: 'desc',
         });
@@ -293,7 +288,7 @@ export default function FeaturedRandom() {
     };
 
     fetchRandomListings();
-  }, []); // Only run once on mount
+  }, []);
 
   // Determine skeleton count
   const skeletonCount = 4;
