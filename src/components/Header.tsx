@@ -735,16 +735,18 @@ export default function Header(): React.ReactElement | null {
                 <X className="w-6 h-6" />
               </button>
               <div className="flex items-center justify-center">
-                {/* FIXED: Use Next.js Image component with priority for mobile menu logo */}
-                <Image
-                  src="/logo.png"
-                  alt="Panty Post - Used Panties Marketplace"
-                  width={80}
-                  height={80}
-                  priority
-                  className="w-20 h-auto drop-shadow-2xl"
-                  onLoad={() => setLogoLoaded(true)}
-                />
+                {/* FIXED: Mobile menu logo with container to prevent layout shift */}
+                <div className="relative w-20 h-20 flex items-center justify-center">
+                  <Image
+                    src="/logo.png"
+                    alt="Panty Post - Used Panties Marketplace"
+                    fill
+                    priority
+                    className="drop-shadow-2xl object-contain"
+                    sizes="80px"
+                    onLoad={() => setLogoLoaded(true)}
+                  />
+                </div>
               </div>
             </div>
 
@@ -925,20 +927,18 @@ export default function Header(): React.ReactElement | null {
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
             <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            {/* FIXED: Use Next.js Image component with priority for header logo */}
-            <Image
-              src="/logo.png"
-              alt="Panty Post - Used Panties Marketplace"
-              width={96}
-              height={96}
-              priority
-              className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300"
-              style={{
-                opacity: logoLoaded ? 1 : 0,
-                transition: 'opacity 0.3s ease-in-out'
-              }}
-              onLoad={() => setLogoLoaded(true)}
-            />
+            {/* FIXED: Desktop header logo with container to prevent layout shift */}
+            <div className="relative w-16 lg:w-24 h-16 lg:h-24 flex items-center justify-center">
+              <Image
+                src="/logo.png"
+                alt="Panty Post - Used Panties Marketplace"
+                fill
+                priority
+                className="drop-shadow-2xl transform group-hover:scale-105 transition duration-300 object-contain"
+                sizes="(max-width: 1024px) 64px, 96px"
+                onLoad={() => setLogoLoaded(true)}
+              />
+            </div>
           </div>
         </Link>
 
