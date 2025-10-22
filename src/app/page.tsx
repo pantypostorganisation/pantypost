@@ -1,70 +1,111 @@
 // src/app/page.tsx
 'use client';
 
-import { Suspense, useCallback } from 'react';
+import { Suspense, useCallback, lazy } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import BanCheck from '@/components/BanCheck';
 import HeroSection from '@/components/homepage/HeroSection';
 import TrustSignalsSection from '@/components/homepage/TrustSignalsSection';
-import FeaturesSection from '@/components/homepage/FeaturesSection';
 import CTASection from '@/components/homepage/CTASection';
 import Footer from '@/components/homepage/Footer';
-import FeaturedRandom from '@/components/homepage/FeaturedRandom';
-import FAQSection from '@/components/homepage/FAQSection';
 import Head from 'next/head';
+import dynamic from 'next/dynamic';
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 
-// Enhanced loading fallback components with pulse animations
-const SectionSkeleton = ({ height = "h-96" }: { height?: string }) => (
-  <div className={`${height} flex items-center justify-center`}>
-    <div className="text-center">
-      <div className="w-8 h-8 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-      <div className="space-y-2">
-        <div className="h-4 bg-gray-800/50 rounded w-32 mx-auto animate-pulse"></div>
-        <div className="h-3 bg-gray-800/30 rounded w-24 mx-auto animate-pulse delay-75"></div>
+// OPTIMIZED: Lazy load below-the-fold sections with custom loading states
+const FeaturedRandom = dynamic(() => import('@/components/homepage/FeaturedRandom'), {
+  loading: () => <FeaturedSkeleton />,
+  ssr: true, // Enable SSR for SEO
+});
+
+const FeaturesSection = dynamic(() => import('@/components/homepage/FeaturesSection'), {
+  loading: () => <FeaturesSkeleton />,
+  ssr: true,
+});
+
+const FAQSection = dynamic(() => import('@/components/homepage/FAQSection'), {
+  loading: () => <FAQSkeleton />,
+  ssr: true,
+});
+
+// Lightweight loading skeletons
+function FeaturedSkeleton() {
+  return (
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+      <div className="mb-6 sm:mb-8">
+        <div className="h-8 bg-gray-800/50 rounded w-48 mb-2 animate-pulse"></div>
+        <div className="h-4 bg-gray-800/30 rounded w-64 animate-pulse"></div>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-[#131313] rounded-lg sm:rounded-xl border border-white/10 overflow-hidden">
+            <div className="aspect-[4/5] sm:aspect-square bg-gray-800/50 animate-pulse"></div>
+            <div className="p-3 sm:p-4 md:p-5 space-y-2 sm:space-y-3">
+              <div className="h-4 sm:h-5 bg-gray-800/50 rounded animate-pulse"></div>
+              <div className="h-3 bg-gray-800/30 rounded w-2/3 animate-pulse"></div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
-  </div>
-);
+  );
+}
 
-// Enhanced error fallback with retry functionality
-const SectionErrorFallback = ({ 
-  sectionName, 
-  retry, 
-  error 
-}: { 
-  sectionName: string; 
-  retry?: () => void; 
-  error?: Error; 
-}) => (
-  <div className="min-h-[200px] flex items-center justify-center">
-    <div className="text-center p-8 max-w-md mx-auto">
-      <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-        <span className="text-red-400 text-xl">⚠</span>
+function FeaturesSkeleton() {
+  return (
+    <div className="pt-16 pb-16 md:pt-20 md:pb-20">
+      <div className="max-w-7xl mx-auto px-6 md:px-12">
+        <div className="text-center mb-16">
+          <div className="h-10 bg-gray-800/50 rounded w-64 mx-auto mb-4 animate-pulse"></div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="bg-[#131313] rounded-xl p-6 border border-white/10 animate-pulse">
+              <div className="w-12 h-12 bg-gray-700 rounded-full mb-5"></div>
+              <div className="h-6 bg-gray-700 rounded w-3/4 mb-3"></div>
+              <div className="space-y-2">
+                <div className="h-4 bg-gray-800 rounded"></div>
+                <div className="h-4 bg-gray-800 rounded w-5/6"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
-      <h3 className="text-red-400 font-semibold mb-2">Section Unavailable</h3>
-      <p className="text-gray-500 text-sm mb-4">
-        The {sectionName} section could not be loaded.
-      </p>
-      {error && process.env.NODE_ENV === 'development' && (
-        <p className="text-gray-600 text-xs mb-4 font-mono bg-gray-900/50 p-2 rounded">
-          {error.message}
-        </p>
-      )}
-      {retry && (
-        <button 
-          onClick={retry} 
-          className="text-[#ff950e] text-sm hover:underline hover:text-[#ff6b00] transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded px-2 py-1"
-        >
-          Try Again
-        </button>
-      )}
     </div>
-  </div>
-);
+  );
+}
 
-// Enhanced section wrapper with retry functionality
+function FAQSkeleton() {
+  return (
+    <div className="pt-16 pb-16 md:pt-20 md:pb-20">
+      <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-3xl text-center mb-12 sm:mb-16">
+          <div className="h-10 bg-gray-800/50 rounded w-64 mx-auto mb-4 animate-pulse"></div>
+          <div className="h-4 bg-gray-800/30 rounded w-96 mx-auto animate-pulse"></div>
+        </div>
+        <div className="grid gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-[#131313] rounded-2xl p-6 sm:p-8 border border-white/10 animate-pulse">
+              <div className="flex gap-4 sm:gap-6">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gray-700 rounded-2xl"></div>
+                <div className="flex-1 space-y-3">
+                  <div className="h-6 bg-gray-700 rounded w-3/4"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-gray-800 rounded"></div>
+                    <div className="h-4 bg-gray-800 rounded w-5/6"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Enhanced section wrapper with better error handling
 const SectionWrapper = ({ 
   children, 
   sectionName, 
@@ -81,13 +122,26 @@ const SectionWrapper = ({
   return (
     <ErrorBoundary 
       fallback={
-        <SectionErrorFallback 
-          sectionName={sectionName} 
-          retry={handleRetry}
-        />
+        <div className={`${fallbackHeight || 'min-h-[200px]'} flex items-center justify-center`}>
+          <div className="text-center p-8 max-w-md mx-auto">
+            <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="text-red-400 text-xl">⚠</span>
+            </div>
+            <h3 className="text-red-400 font-semibold mb-2">Section Unavailable</h3>
+            <p className="text-gray-500 text-sm mb-4">
+              The {sectionName} section could not be loaded.
+            </p>
+            <button 
+              onClick={handleRetry} 
+              className="text-[#ff950e] text-sm hover:underline hover:text-[#ff6b00] transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded px-2 py-1"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
       }
     >
-      <Suspense fallback={<SectionSkeleton height={fallbackHeight} />}>
+      <Suspense fallback={null}>
         {children}
       </Suspense>
     </ErrorBoundary>
@@ -194,7 +248,8 @@ export default function Home() {
           <div 
             className="absolute inset-0 w-full h-screen"
             style={{
-              background: 'linear-gradient(to bottom, #000000 0%, #000000 48%, #010101 52%, #020202 56%, #030303 60%, #040404 64%, #050505 68%, #060606 72%, #070707 76%, #080808 80%, #090909 84%, #0a0a0a 88%, #0c0c0c 92%, #0e0e0e 96%, #101010 100%)'
+              background: 'linear-gradient(to bottom, #000000 0%, #000000 48%, #010101 52%, #020202 56%, #030303 60%, #040404 64%, #050505 68%, #060606 72%, #070707 76%, #080808 80%, #090909 84%, #0a0a0a 88%, #0c0c0c 92%, #0e0e0e 96%, #101010 100%)',
+              willChange: 'transform'
             }}
           />
         </div>
@@ -205,37 +260,37 @@ export default function Home() {
           {/* SEO: H1 for homepage - hidden but present for SEO */}
           <h1 className="sr-only">Buy and Sell Used Panties - PantyPost Marketplace</h1>
           
-          {/* Hero Section with Error Boundary */}
+          {/* Hero Section - CRITICAL: Above the fold, no lazy loading */}
           <SectionWrapper sectionName="Hero" fallbackHeight="h-screen">
             <HeroSection />
           </SectionWrapper>
           
-          {/* Trust Signals Section with Error Boundary */}
+          {/* Trust Signals Section - CRITICAL: Above the fold on desktop */}
           <SectionWrapper sectionName="Trust Signals" fallbackHeight="h-64">
             <TrustSignalsSection />
           </SectionWrapper>
           
-          {/* Featured Random Listings Section */}
+          {/* Featured Random Listings Section - LAZY LOADED */}
           <SectionWrapper sectionName="Featured Listings" fallbackHeight="h-96">
             <FeaturedRandom />
           </SectionWrapper>
           
-          {/* Features Section with Error Boundary */}
+          {/* Features Section - LAZY LOADED */}
           <SectionWrapper sectionName="Features" fallbackHeight="h-96">
             <FeaturesSection />
           </SectionWrapper>
 
-          {/* FAQ Section with SEO-focused brand reinforcement */}
+          {/* FAQ Section - LAZY LOADED */}
           <SectionWrapper sectionName="FAQ" fallbackHeight="h-80">
             <FAQSection />
           </SectionWrapper>
 
-          {/* CTA Section with Error Boundary */}
+          {/* CTA Section - NO lazy loading (simple, small) */}
           <SectionWrapper sectionName="Call to Action" fallbackHeight="h-80">
             <CTASection />
           </SectionWrapper>
           
-          {/* Footer with Error Boundary */}
+          {/* Footer - NO lazy loading (simple, small) */}
           <SectionWrapper sectionName="Footer" fallbackHeight="h-64">
             <Footer />
           </SectionWrapper>
