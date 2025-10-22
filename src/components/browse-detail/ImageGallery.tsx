@@ -3,7 +3,32 @@
 
 import { Crown, Clock, Lock, Gavel, Eye, Package, ChevronLeft, ChevronRight } from 'lucide-react';
 import { ImageGalleryProps } from '@/types/browseDetail';
-import { useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSpring } from 'framer-motion';
+
+function useAnimatedCount(value: number) {
+  const sanitizedValue = Number.isFinite(value) ? value : 0;
+  const spring = useSpring(sanitizedValue, {
+    stiffness: 120,
+    damping: 18,
+    mass: 0.6
+  });
+  const [displayValue, setDisplayValue] = useState(() => Math.max(0, Math.round(sanitizedValue)));
+
+  useEffect(() => {
+    spring.set(Math.max(0, sanitizedValue));
+  }, [spring, sanitizedValue]);
+
+  useEffect(() => {
+    const unsubscribe = spring.on('change', latest => {
+      setDisplayValue(Math.max(0, Math.round(latest)));
+    });
+
+    return () => unsubscribe();
+  }, [spring]);
+
+  return useMemo(() => displayValue, [displayValue]);
+}
 
 export default function ImageGallery({
   images,
@@ -18,6 +43,25 @@ export default function ImageGallery({
   forceUpdateTimer
 }: ImageGalleryProps) {
   const isLocked = isLockedPremium ?? false;
+  const animatedViewCount = useAnimatedCount(viewCount ?? 0);
+  const formattedViewCount = useMemo(() => animatedViewCount.toLocaleString(), [animatedViewCount]);
+  const [showViewPulse, setShowViewPulse] = useState(false);
+
+  useEffect(() => {
+    setShowViewPulse(true);
+    const timeout = setTimeout(() => setShowViewPulse(false), 550);
+    return () => clearTimeout(timeout);
+  }, [animatedViewCount]);
+
+  const viewBadgeClassName = useMemo(
+    () =>
+      `absolute top-3 right-3 px-2 py-1 rounded-full text-xs flex items-center gap-1 border transition-all duration-300 ${
+        showViewPulse
+          ? 'bg-black/80 text-[#ffb347] border-[#ff950e]/60 shadow-[0_0_14px_rgba(255,149,14,0.35)]'
+          : 'bg-black/70 text-white border-transparent'
+      }`,
+    [showViewPulse]
+  );
 
   const handlePrevImage = useCallback(() => {
     if (!images.length) return;
@@ -122,9 +166,9 @@ export default function ImageGallery({
           </div>
 
           {/* View count */}
-          <div className="absolute top-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
+          <div className={viewBadgeClassName}>
             <Eye className="w-3 h-3" />
-            {viewCount}
+            {formattedViewCount}
           </div>
 
           {/* Premium lock */}

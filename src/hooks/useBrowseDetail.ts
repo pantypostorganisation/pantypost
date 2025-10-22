@@ -533,6 +533,124 @@ export const useBrowseDetail = () => {
 
   const listingLoaded = listingLoadedRef.current;
 
+  const trackView = useCallback(
+    async ({ force = false }: { force?: boolean } = {}) => {
+      if (!listingId || !listingLoadedRef.current) {
+        return;
+      }
+
+      if (force) {
+        viewTrackedRef.current = false;
+      }
+
+      if (viewTrackingInProgressRef.current || viewTrackedRef.current) {
+        return;
+      }
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      viewTrackingInProgressRef.current = true;
+
+      let previousViewCount = 0;
+      let previousListingViews: number | null = null;
+      let optimisticUpdateApplied = false;
+
+      setState(prev => {
+        previousViewCount = typeof prev.viewCount === 'number' && Number.isFinite(prev.viewCount) ? prev.viewCount : 0;
+        optimisticUpdateApplied = true;
+        return { ...prev, viewCount: previousViewCount + 1 };
+      });
+
+      setListing(prev => {
+        if (!prev) return prev;
+        previousListingViews = typeof prev.views === 'number' && Number.isFinite(prev.views) ? prev.views : previousViewCount;
+        return {
+          ...prev,
+          views: previousListingViews + 1,
+        } as ListingWithDetails;
+      });
+
+      try {
+        console.log('[BrowseDetail] Tracking view for listing:', listingId);
+
+        const updateResult = await listingsService.updateViews({
+          listingId,
+          viewerId: user?.username,
+        });
+
+        if (!updateResult.success) {
+          console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
+
+          if (optimisticUpdateApplied) {
+            setState(prev => ({ ...prev, viewCount: previousViewCount }));
+            setListing(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                views: previousListingViews ?? previousViewCount,
+              } as ListingWithDetails;
+            });
+          }
+          return;
+        }
+
+        const viewCount = typeof updateResult.data === 'number' ? updateResult.data : Number(updateResult.data ?? 0);
+
+        if (!Number.isFinite(viewCount)) {
+          console.warn('[BrowseDetail] Invalid view count returned from update:', updateResult.data);
+
+          if (optimisticUpdateApplied) {
+            setState(prev => ({ ...prev, viewCount: previousViewCount }));
+            setListing(prev => {
+              if (!prev) return prev;
+              return {
+                ...prev,
+                views: previousListingViews ?? previousViewCount,
+              } as ListingWithDetails;
+            });
+          }
+          return;
+        }
+
+        if (!mountedRef.current) {
+          return;
+        }
+
+        viewTrackedRef.current = true;
+
+        console.log('[BrowseDetail] Updated view count:', viewCount);
+
+        setState(prev => (prev.viewCount === viewCount ? prev : { ...prev, viewCount }));
+
+        setListing(prev => {
+          if (!prev || prev.views === viewCount) return prev;
+          return {
+            ...prev,
+            views: viewCount,
+          } as ListingWithDetails;
+        });
+      } catch (error) {
+        console.error('[BrowseDetail] Error tracking view:', error);
+
+        if (optimisticUpdateApplied) {
+          setState(prev => ({ ...prev, viewCount: previousViewCount }));
+          setListing(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              views: previousListingViews ?? previousViewCount,
+            } as ListingWithDetails;
+          });
+        }
+      } finally {
+        viewTrackingInProgressRef.current = false;
+      }
+    },
+    [listingId, user?.username]
+  );
+
   useEffect(() => {
     if (!listingId) {
       return;
@@ -566,69 +684,44 @@ export const useBrowseDetail = () => {
       return;
     }
 
-    if (viewTrackedRef.current || viewTrackingInProgressRef.current) {
+    trackView();
+  }, [listingId, listingLoaded, trackView]);
+
+  useEffect(() => {
+    if (!listingId) {
       return;
     }
 
-    let cancelled = false;
+    const resetTracking = () => {
+      viewTrackedRef.current = false;
+      viewTrackingInProgressRef.current = false;
+    };
 
-    const trackView = async () => {
-      if (!listingLoadedRef.current || viewTrackedRef.current || viewTrackingInProgressRef.current) {
-        return;
-      }
+    const handlePageShow = (event: Event) => {
+      const pageEvent = event as Event & { persisted?: boolean };
+      const navigationEntries =
+        typeof performance !== 'undefined' && 'getEntriesByType' in performance
+          ? (performance.getEntriesByType('navigation') as PerformanceNavigationTiming[])
+          : [];
 
-      viewTrackingInProgressRef.current = true;
+      const isBackForwardNavigation =
+        (pageEvent?.persisted ?? false) ||
+        navigationEntries.some(entry => entry.type === 'back_forward');
 
-      try {
-        console.log('[BrowseDetail] Tracking view for listing:', listingId);
-
-        const updateResult = await listingsService.updateViews({
-          listingId,
-          viewerId: user?.username,
-        });
-
-        if (!updateResult.success) {
-          console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
-          return;
-        }
-
-        const viewCount = typeof updateResult.data === 'number' ? updateResult.data : Number(updateResult.data ?? 0);
-
-        if (!Number.isFinite(viewCount)) {
-          console.warn('[BrowseDetail] Invalid view count returned from update:', updateResult.data);
-          return;
-        }
-
-        if (!mountedRef.current || cancelled) {
-          return;
-        }
-
-        viewTrackedRef.current = true;
-
-        console.log('[BrowseDetail] Updated view count:', viewCount);
-
-        setState(prev => ({ ...prev, viewCount }));
-
-        setListing(prev => {
-          if (!prev || prev.views === viewCount) return prev;
-          return {
-            ...prev,
-            views: viewCount,
-          };
-        });
-      } catch (error) {
-        console.error('[BrowseDetail] Error tracking view:', error);
-      } finally {
-        viewTrackingInProgressRef.current = false;
+      if (isBackForwardNavigation) {
+        resetTracking();
+        trackView({ force: true });
       }
     };
 
-    trackView();
+    window.addEventListener('pagehide', resetTracking);
+    window.addEventListener('pageshow', handlePageShow);
 
     return () => {
-      cancelled = true;
+      window.removeEventListener('pagehide', resetTracking);
+      window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [listingId, user?.username, listingLoaded]);
+  }, [listingId, trackView]);
 
   // Reset tracking refs when navigating between listings
   useEffect(() => {
