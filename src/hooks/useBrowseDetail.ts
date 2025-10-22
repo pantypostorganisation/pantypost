@@ -120,6 +120,9 @@ export const useBrowseDetail = () => {
   const optimisticViewRef = useRef<{ previousState: number; previousListing: number | null } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isProcessingAuctionEndRef = useRef(false);
+  
+  // CRITICAL FIX: Add ref to track the current listing ID for view tracking
+  const currentListingIdRef = useRef<string | null>(null);
 
   const listingsRef = useRef(listings);
   const refreshListingsRef = useRef(refreshListings);
@@ -545,6 +548,14 @@ export const useBrowseDetail = () => {
         return;
       }
 
+      // CRITICAL FIX: Check if we're tracking the same listing
+      // If we've navigated to a different listing, reset the tracking flag
+      if (currentListingIdRef.current !== listingId) {
+        console.log('[BrowseDetail] New listing detected, resetting view tracking');
+        viewTrackedRef.current = false;
+        currentListingIdRef.current = listingId;
+      }
+
       if (force) {
         viewTrackedRef.current = false;
       }
@@ -741,18 +752,22 @@ export const useBrowseDetail = () => {
     trackView();
   }, [listingId, listingLoaded, trackView]);
 
+  // CRITICAL FIX: Enhanced navigation detection for back/forward navigation
   useEffect(() => {
     if (!listingId) {
       return;
     }
 
     const resetTracking = () => {
+      console.log('[BrowseDetail] Page hide - resetting tracking');
       viewTrackedRef.current = false;
       viewTrackingInProgressRef.current = false;
     };
 
     const handlePageShow = (event: Event) => {
       const pageEvent = event as Event & { persisted?: boolean };
+      
+      // Check for back/forward navigation
       const navigationEntries =
         typeof performance !== 'undefined' && 'getEntriesByType' in performance
           ? (performance.getEntriesByType('navigation') as PerformanceNavigationTiming[])
@@ -762,26 +777,65 @@ export const useBrowseDetail = () => {
         (pageEvent?.persisted ?? false) ||
         navigationEntries.some(entry => entry.type === 'back_forward');
 
-      if (isBackForwardNavigation) {
-        resetTracking();
-        trackView({ force: true });
+      console.log('[BrowseDetail] Page show event:', { 
+        persisted: pageEvent?.persisted,
+        navigationType: navigationEntries[0]?.type,
+        isBackForward: isBackForwardNavigation,
+        currentListingId: listingId,
+        previousListingId: currentListingIdRef.current
+      });
+
+      if (isBackForwardNavigation || currentListingIdRef.current !== listingId) {
+        console.log('[BrowseDetail] Back/forward navigation detected or listing changed - forcing view track');
+        // Reset tracking flags
+        viewTrackedRef.current = false;
+        viewTrackingInProgressRef.current = false;
+        currentListingIdRef.current = listingId;
+        
+        // Track view after a small delay to ensure listing is loaded
+        setTimeout(() => {
+          if (listingLoadedRef.current && mountedRef.current) {
+            trackView({ force: true });
+          }
+        }, 100);
       }
+    };
+
+    // Also handle popstate for browser back/forward
+    const handlePopState = () => {
+      console.log('[BrowseDetail] Popstate event detected');
+      viewTrackedRef.current = false;
+      viewTrackingInProgressRef.current = false;
+      
+      setTimeout(() => {
+        if (listingLoadedRef.current && mountedRef.current) {
+          trackView({ force: true });
+        }
+      }, 100);
     };
 
     window.addEventListener('pagehide', resetTracking);
     window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('popstate', handlePopState);
 
     return () => {
       window.removeEventListener('pagehide', resetTracking);
       window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
     };
   }, [listingId, trackView]);
 
-  // Reset tracking refs when navigating between listings
+  // CRITICAL FIX: Reset tracking when listing ID changes
   useEffect(() => {
+    console.log('[BrowseDetail] Listing ID changed:', listingId);
     viewTrackedRef.current = false;
     viewTrackingInProgressRef.current = false;
     listingLoadedRef.current = false;
+    
+    // Update the current listing ID ref
+    if (listingId) {
+      currentListingIdRef.current = listingId;
+    }
   }, [listingId]);
 
   const getTimerProgress = useCallback(() => {
@@ -1271,6 +1325,7 @@ export const useBrowseDetail = () => {
       viewTrackedRef.current = false;
       viewTrackingInProgressRef.current = false;
       listingLoadedRef.current = false;
+      currentListingIdRef.current = null;
       if (navigationTimeoutRef.current) {
         clearTimeout(navigationTimeoutRef.current);
       }
