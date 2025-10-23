@@ -645,12 +645,36 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+<<<<<<< Updated upstream
         const balanceValue = resolveBalanceFromCandidates(
           data.balance,
           data.newBalance,
           data.data?.balance,
           data.payload?.balance
         );
+=======
+        const rawBalanceCandidates = [
+          data.balance,
+          data.newBalance,
+          data.data?.balance,
+          data.payload?.balance,
+        ];
+
+        let balanceValue: number | null = null;
+        for (const candidate of rawBalanceCandidates) {
+          if (typeof candidate === "number" && Number.isFinite(candidate)) {
+            balanceValue = candidate;
+            break;
+          }
+          if (typeof candidate === "string") {
+            const parsed = Number.parseFloat(candidate);
+            if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+              balanceValue = parsed;
+              break;
+            }
+          }
+        }
+>>>>>>> Stashed changes
 
         if (balanceValue === null) {
           console.warn("[WalletContext] Skipping balance update with no valid amount:", data);
@@ -720,6 +744,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+<<<<<<< Updated upstream
       const balanceValue = resolveBalanceFromCandidates(
         data.balance,
         data.newBalance,
@@ -727,6 +752,30 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         data.payload?.balance
       );
 
+=======
+      const rawBalanceCandidates = [
+        data.balance,
+        data.newBalance,
+        data.data?.balance,
+        data.payload?.balance,
+      ];
+
+      let balanceValue: number | null = null;
+      for (const candidate of rawBalanceCandidates) {
+        if (typeof candidate === "number" && Number.isFinite(candidate)) {
+          balanceValue = candidate;
+          break;
+        }
+        if (typeof candidate === "string") {
+          const parsed = Number.parseFloat(candidate);
+          if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+            balanceValue = parsed;
+            break;
+          }
+        }
+      }
+
+>>>>>>> Stashed changes
       if (balanceValue === null) {
         console.warn("[WalletContext] Skipping platform balance update with no valid amount:", data);
         return;
