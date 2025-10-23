@@ -98,11 +98,10 @@ class DeduplicationManager {
       });
 
       expiredKeys.forEach((key) => this.processedEvents.delete(key));
-    }, 10000); // Cleanup every 10 seconds
+    }, 10000);
   }
 
   isDuplicate(eventType: string, data: any): boolean {
-    // Create composite key based on event type
     let key: string;
 
     if (eventType === "balance_update") {
@@ -233,7 +232,7 @@ type WalletContextType = {
 
   // Tips and notifications
   sendTip: (buyer: string, seller: string, amount: number, message?: string) => Promise<boolean>;
-  setAddSellerNotificationCallback?: (fn: (seller: string, message: string) => void) => void;
+  setAddSellerNotificationCallback: (fn: (seller: string, message: string) => void) => void;
 
   // Admin actions
   adminCreditUser: (
@@ -295,7 +294,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const { user, apiClient } = useAuth();
   const webSocketContext = useWebSocket();
 
-  // Extract properties from WebSocket context safely
   const sendMessage = webSocketContext?.sendMessage;
   const subscribe = webSocketContext?.subscribe;
   const isConnected = webSocketContext?.isConnected || false;
@@ -309,11 +307,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [adminWithdrawals, setAdminWithdrawals] = useState<Withdrawal[]>([]);
   const [adminActions, setAdminActions] = useState<AdminAction[]>([]);
   const [depositLogs, setDepositLogs] = useState<DepositLog[]>([]);
-  const [addSellerNotification, setAddSellerNotification] = useState<
-    ((seller: string, message: string) => void) | null
-  >(null);
+  const [addSellerNotification, setAddSellerNotification] = useState<((seller: string, message: string) => void) | null>(null);
 
-  // Loading and initialization state
+  // CRITICAL FIX: Loading state should start true and only become false AFTER initialization
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
@@ -325,7 +321,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const deduplicationManager = useRef(new DeduplicationManager(30000));
   const throttleManager = useRef(new ThrottleManager());
 
-  // FIX: Add refs to track last fetched data for deduplication
   const lastFiredBalanceRef = useRef<{ balance: number; timestamp: number } | null>(null);
   const lastPlatformBalanceFetch = useRef<{ balance: number; timestamp: number } | null>(null);
   const lastAdminActionsFetch = useRef<number>(0);
@@ -391,13 +386,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // ---------- MOVED UP: fetchBalance (so it's defined before any usage) ----------
+  // Fetch balance
   const fetchBalance = useCallback(
     async (username: string): Promise<number> => {
       try {
         debugLog("Fetching balance for:", username);
 
-        // For admin users, always fetch platform wallet
         if (isAdminUser(username)) {
           debugLog("Admin user detected, fetching unified platform wallet");
 
@@ -413,7 +407,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return 0;
         }
 
-        // For regular users, fetch their individual wallet
         const response = await apiClient.get<any>(`/wallet/balance/${username}`);
 
         debugLog("Balance response:", response);
@@ -431,7 +424,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     },
     [apiClient]
   );
-  // ------------------------------------------------------------------------------
 
   // Orders & transactions fetchers
   const fetchOrderHistory = useCallback(
@@ -457,7 +449,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       try {
         debugLog("Fetching transactions for:", username);
 
-        // For admin users, fetch platform transactions
         const queryUsername = isAdminUser(username) ? "platform" : username;
 
         const response = await apiClient.get<any>(`/wallet/transactions/${queryUsername}`);
@@ -469,7 +460,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [apiClient]
   );
 
-  // Admin platform balance
+  // CRITICAL FIX: Admin platform balance fetch with proper state update
   const fetchAdminPlatformBalance = useCallback(async (): Promise<number> => {
     if (!user || (user.role !== "admin" && !isAdminUser(user.username))) {
       debugLog("Not admin user, skipping platform balance fetch");
@@ -502,12 +493,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
         lastPlatformBalanceFetch.current = { balance, timestamp: now };
 
-        if (balance !== adminBalance) {
-          setAdminBalanceState(balance);
-          fireAdminBalanceUpdateEvent(balance);
-        } else {
-          debugLog("Balance unchanged, skipping state update");
-        }
+        // CRITICAL FIX: Update state immediately before returning
+        setAdminBalanceState(balance);
+        fireAdminBalanceUpdateEvent(balance);
 
         return balance;
       }
@@ -999,7 +987,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [user, fetchAdminAnalytics]
   );
 
-  // Load all data from API
+  // CRITICAL FIX: Load all data from API with proper state updates
   const loadAllData = useCallback(async () => {
     if (!user) {
       debugLog("No user, skipping data load");
@@ -1012,18 +1000,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (user.role === "admin" || isAdminUser(user.username)) {
         debugLog("Admin detected - fetching unified platform wallet...");
 
+        // CRITICAL FIX: Fetch and set balance BEFORE marking as initialized
         const platformBalance = await fetchAdminPlatformBalance();
         await fetchAdminActions();
         const analyticsData = await fetchAdminAnalytics("all");
 
-        if (analyticsData) {
-          if (platformBalance !== adminBalance) {
-            setAdminBalanceState(platformBalance);
-            fireAdminBalanceUpdateEvent(platformBalance);
-          }
-
-          debugLog("Admin analytics loaded with unified balance:", platformBalance);
+        // Ensure balance is set
+        if (platformBalance !== adminBalance) {
+          setAdminBalanceState(platformBalance);
+          fireAdminBalanceUpdateEvent(platformBalance);
         }
+
+        debugLog("Admin analytics loaded with unified balance:", platformBalance);
 
         return true;
       }
@@ -1095,22 +1083,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [user, fetchAdminPlatformBalance, fetchAdminAnalytics, fireAdminBalanceUpdateEvent, fetchAdminActions]);
 
-  // Initialize on login/logout
+  // CRITICAL FIX: Initialize on login/logout with proper sequencing
   useEffect(() => {
     const initializeWallet = async () => {
       if (initializingRef.current || !user) return;
 
       initializingRef.current = true;
       setIsLoading(true);
+      setIsInitialized(false);
       setInitializationError(null);
 
       try {
         debugLog("Initializing wallet for user:", user.username);
+        
+        // Load data and wait for completion
         const loadSuccess = await loadAllData();
 
         if (loadSuccess) {
+          // CRITICAL FIX: Only mark as initialized AFTER data is loaded
+          debugLog("Wallet initialization complete - setting initialized flag");
           setIsInitialized(true);
-          debugLog("Wallet initialization complete");
         }
       } catch (error) {
         console.error("[WalletContext] Initialization error:", error);
@@ -1130,6 +1122,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setAdminBalanceState(0);
       setOrderHistory([]);
       setIsInitialized(false);
+      setIsLoading(false);
       deduplicationManager.current.destroy();
       deduplicationManager.current = new DeduplicationManager(30000);
       throttleManager.current.clear();
@@ -1416,7 +1409,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw error;
       }
     },
-    [apiClient, fetchBalance, emitBalanceUpdate, user]
+    [apiClient, fetchBalance, emitBalanceUpdate]
   );
 
   // Purchase listing
