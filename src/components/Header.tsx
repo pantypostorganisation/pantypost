@@ -410,43 +410,25 @@ export default function Header(): React.ReactElement | null {
     }
   }, [getSellerBalance, username, balanceUpdateTrigger]);
 
-  // CHANGE 1: Remove balanceUpdateTrigger from platformBalance dependencies
   const platformBalance = useMemo(() => {
-    if (isAdminUser && user) {
-      // Always return adminBalance directly without checking balanceUpdateTrigger
-      return adminBalance || 0;
-    }
+    if (isAdminUser && user) return adminBalance || 0;
     return 0;
-  }, [isAdminUser, user, adminBalance]); // Removed balanceUpdateTrigger dependency
+  }, [isAdminUser, user, adminBalance, balanceUpdateTrigger]);
 
-  // CHANGE 2: Update the balance update event listeners with console logs
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const handleAdminBalanceUpdate = (event: CustomEvent) => {
-      if (isAdminUser && user) {
-        console.log('[Header] Admin balance update event received:', event.detail);
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handleAdminBalanceUpdate = () => {
+      if (isAdminUser && user) setBalanceUpdateTrigger((prev) => prev + 1);
     };
-    
-    const handlePlatformBalanceUpdate = (event: CustomEvent) => {
-      if (isAdminUser && user) {
-        console.log('[Header] Platform balance update event received:', event.detail);
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handlePlatformBalanceUpdate = () => {
+      if (isAdminUser && user) setBalanceUpdateTrigger((prev) => prev + 1);
     };
-    
-    const handleBuyerBalanceUpdate = (event: CustomEvent) => {
-      if (user?.role === 'buyer') {
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handleBuyerBalanceUpdate = () => {
+      if (user?.role === 'buyer') setBalanceUpdateTrigger((prev) => prev + 1);
     };
-    
-    const handleSellerBalanceUpdate = (event: CustomEvent) => {
-      if (user?.role === 'seller') {
-        setBalanceUpdateTrigger((prev) => prev + 1);
-      }
+    const handleSellerBalanceUpdate = () => {
+      if (user?.role === 'seller') setBalanceUpdateTrigger((prev) => prev + 1);
     };
 
     window.addEventListener('wallet:admin-balance-updated', handleAdminBalanceUpdate as EventListener);
@@ -464,25 +446,28 @@ export default function Header(): React.ReactElement | null {
     };
   }, [isAdminUser, user]);
 
-  // CHANGE 3: Simplify the refreshAdminData effect
   useEffect(() => {
     if (isAdminUser && user && refreshAdminData && !hasRefreshedAdminData.current) {
       hasRefreshedAdminData.current = true;
-      console.log('[Header] Initial admin data refresh...');
-      
-      refreshAdminData()
-        .then(() => {
-          console.log('[Header] Admin data refresh complete');
+      let cancelled = false;
+      const refreshOnce = async () => {
+        if (cancelled) return;
+        try {
+          await refreshAdminData();
           setBalanceUpdateTrigger((prev) => prev + 1);
-        })
-        .catch((error) => {
+        } catch (error) {
           console.error('[Header] Error refreshing admin data:', error);
-        });
+        }
+      };
+      void refreshOnce();
+      return () => {
+        cancelled = true;
+      };
     }
-    
     if (!user || !isAdminUser) {
       hasRefreshedAdminData.current = false;
     }
+    return undefined;
   }, [isAdminUser, user?.id, refreshAdminData]);
 
   const unreadCount = useMemo(() => {
