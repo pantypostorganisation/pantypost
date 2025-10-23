@@ -142,6 +142,48 @@ const isAdminUser = (username: string): boolean => {
   );
 };
 
+const parseBalanceAmount = (value: unknown): number | null => {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value < 0) {
+      return null;
+    }
+
+    return Math.round(value * 100) / 100;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const normalized = trimmed.replace(/[^0-9.-]/g, "");
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number.parseFloat(normalized);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return null;
+    }
+
+    return Math.round(parsed * 100) / 100;
+  }
+
+  return null;
+};
+
+const resolveBalanceFromCandidates = (...candidates: unknown[]): number | null => {
+  for (const candidate of candidates) {
+    const parsed = parseBalanceAmount(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
 // Transaction throttle manager
 class ThrottleManager {
   private lastCallTimes: Map<string, number> = new Map();
@@ -497,19 +539,40 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       debugLog("Unified platform balance response:", response);
 
       if (response.success && response.data) {
-        const balance = response.data.balance || 0;
-        console.log("[Wallet] Unified platform wallet balance:", balance);
+        const balance = resolveBalanceFromCandidates(
+          response.data.balance,
+          response.data.newBalance,
+          response.data.data?.balance,
+          response.data.payload?.balance
+        );
 
-        lastPlatformBalanceFetch.current = { balance, timestamp: now };
+        if (balance === null) {
+          console.warn("[Wallet] Platform balance response missing valid amount", response.data);
+          return adminBalance;
+        }
 
-        if (balance !== adminBalance) {
-          setAdminBalanceState(balance);
-          fireAdminBalanceUpdateEvent(balance);
+        const balanceValidation = walletOperationSchemas.balanceAmount.safeParse(balance);
+        if (!balanceValidation.success) {
+          console.warn(
+            "[Wallet] Platform balance response failed validation:",
+            balanceValidation.error
+          );
+          return adminBalance;
+        }
+
+        const validatedBalance = balanceValidation.data;
+        console.log("[Wallet] Unified platform wallet balance:", validatedBalance);
+
+        lastPlatformBalanceFetch.current = { balance: validatedBalance, timestamp: now };
+
+        if (validatedBalance !== adminBalance) {
+          setAdminBalanceState(validatedBalance);
+          fireAdminBalanceUpdateEvent(validatedBalance);
         } else {
           debugLog("Balance unchanged, skipping state update");
         }
 
-        return balance;
+        return validatedBalance;
       }
 
       console.warn("[Wallet] Platform balance fetch failed:", response.error);
@@ -582,16 +645,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        let balanceValue: number;
-        if (typeof data.balance === "number") {
-          balanceValue = data.balance;
-        } else if (typeof data.newBalance === "number") {
-          balanceValue = data.newBalance;
-        } else if (data.data && typeof data.data.balance === "number") {
-          balanceValue = data.data.balance;
-        } else {
-          console.warn("[WalletContext] No valid balance in update data:", data);
-          balanceValue = 0;
+        const balanceValue = resolveBalanceFromCandidates(
+          data.balance,
+          data.newBalance,
+          data.data?.balance,
+          data.payload?.balance
+        );
+
+        if (balanceValue === null) {
+          console.warn("[WalletContext] Skipping balance update with no valid amount:", data);
+          return;
         }
 
         const balanceValidation = walletOperationSchemas.balanceAmount.safeParse(balanceValue);
@@ -657,17 +720,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      let balanceValue: number;
+      const balanceValue = resolveBalanceFromCandidates(
+        data.balance,
+        data.newBalance,
+        data.data?.balance,
+        data.payload?.balance
+      );
 
-      if (typeof data.balance === "number") {
-        balanceValue = data.balance;
-      } else if (typeof data.newBalance === "number") {
-        balanceValue = data.newBalance;
-      } else if (data.data && typeof data.data.balance === "number") {
-        balanceValue = data.data.balance;
-      } else {
-        console.warn("[WalletContext] No valid balance in platform update:", data);
-        balanceValue = 0;
+      if (balanceValue === null) {
+        console.warn("[WalletContext] Skipping platform balance update with no valid amount:", data);
+        return;
       }
 
       const balanceValidation = walletOperationSchemas.balanceAmount.safeParse(balanceValue);
@@ -936,9 +998,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (response.success && response.data) {
           const data = response.data;
 
-          if (data.adminBalance !== adminBalance) {
-            setAdminBalanceState(data.adminBalance);
-            fireAdminBalanceUpdateEvent(data.adminBalance);
+          const analyticsBalance = resolveBalanceFromCandidates(
+            data.adminBalance,
+            data.balance,
+            data.platformBalance,
+            data.summary?.platformBalance,
+            data.summary?.adminBalance
+          );
+
+          if (analyticsBalance !== null) {
+            const recentPlatformBalance = lastPlatformBalanceFetch.current;
+            const hasRecentPlatformBalance =
+              recentPlatformBalance && Date.now() - recentPlatformBalance.timestamp < 60000;
+
+            if (
+              hasRecentPlatformBalance &&
+              Math.abs(analyticsBalance - recentPlatformBalance.balance) > 0.01
+            ) {
+              console.warn(
+                "[WalletContext] Analytics admin balance differs from recent platform balance, keeping platform value",
+                { analyticsBalance, platformBalance: recentPlatformBalance.balance }
+              );
+            } else if (adminBalance !== analyticsBalance) {
+              setAdminBalanceState(analyticsBalance);
+              fireAdminBalanceUpdateEvent(analyticsBalance);
+            }
+          } else {
+            console.warn("[WalletContext] Analytics response missing valid admin balance", data);
           }
 
           setOrderHistory(data.orderHistory);
