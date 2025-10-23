@@ -35,10 +35,36 @@ export default function BulkActionModal({
   const handleSecureAmountChange = (value: string) => {
     if (value === '') {
       setAmount('');
+      setErrors(prev => ({ ...prev, amount: undefined }));
       return;
     }
     const sanitized = sanitizeCurrency(value);
     setAmount(sanitized.toString());
+    
+    // Validate amount
+    const numAmount = parseFloat(sanitized.toString());
+    if (isNaN(numAmount) || numAmount <= 0) {
+      setErrors(prev => ({ ...prev, amount: 'Please enter a valid amount greater than 0' }));
+    } else if (numAmount > 10000) {
+      setErrors(prev => ({ ...prev, amount: 'Amount cannot exceed $10,000' }));
+    } else {
+      setErrors(prev => ({ ...prev, amount: undefined }));
+    }
+  };
+
+  // Handle reason change with proper validation
+  const handleReasonChange = (value: string) => {
+    setReason(value);
+    
+    // FIXED: Match backend requirement of 10 characters minimum
+    const sanitized = sanitizeStrict(value).trim();
+    if (!sanitized || sanitized.length < 10) {
+      setErrors(prev => ({ ...prev, reason: 'Reason must be at least 10 characters' }));
+    } else if (sanitized.length > 500) {
+      setErrors(prev => ({ ...prev, reason: 'Reason cannot exceed 500 characters' }));
+    } else {
+      setErrors(prev => ({ ...prev, reason: undefined }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,8 +79,8 @@ export default function BulkActionModal({
       validationErrors.amount = 'Please enter a valid amount greater than 0';
     }
 
-    if (!sanitizedReason) {
-      validationErrors.reason = 'Please provide a reason';
+    if (!sanitizedReason || sanitizedReason.length < 10) { // FIXED: 10 character minimum
+      validationErrors.reason = 'Please provide a reason (minimum 10 characters)';
     }
 
     if (Object.keys(validationErrors).length > 0) {
@@ -69,6 +95,7 @@ export default function BulkActionModal({
     setAmount('');
     setReason('');
     setTouched({ amount: false, reason: false });
+    setErrors({});
   };
 
   const handleClose = () => {
@@ -79,6 +106,13 @@ export default function BulkActionModal({
     setErrors({});
     onClose();
   };
+
+  const canSubmit = Boolean(amount) && 
+                   Boolean(sanitizeStrict(reason).trim()) && 
+                   sanitizeStrict(reason).trim().length >= 10 && // FIXED: 10 character minimum
+                   !errors.amount && 
+                   !errors.reason &&
+                   !isLoading;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Bulk wallet action">
@@ -138,7 +172,7 @@ export default function BulkActionModal({
                 onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
                 step="0.01"
                 min="0"
-                max="999999.99"
+                max="10000"
                 className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
                 placeholder="0.00"
                 error={errors.amount}
@@ -150,13 +184,13 @@ export default function BulkActionModal({
 
             <div>
               <SecureTextarea
-                label="Reason"
+                label="Reason (minimum 10 characters)"
                 value={reason}
-                onChange={setReason}
+                onChange={handleReasonChange}
                 onBlur={() => setTouched((prev) => ({ ...prev, reason: true }))}
                 className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e] resize-none"
                 rows={3}
-                placeholder="Reason for this action..."
+                placeholder="Enter a detailed reason for this bulk action (at least 10 characters)..."
                 maxLength={500}
                 characterCount={true}
                 error={errors.reason}
@@ -165,6 +199,10 @@ export default function BulkActionModal({
                 sanitizer={sanitizeStrict}
                 required
               />
+              {/* Show character count helper */}
+              <div className="mt-1 text-xs text-gray-400">
+                {sanitizeStrict(reason).trim().length}/10 minimum characters
+              </div>
             </div>
           </div>
 
@@ -179,8 +217,8 @@ export default function BulkActionModal({
             </button>
             <button
               type="submit"
-              disabled={isLoading || !amount || !sanitizeStrict(reason).trim()}
-              className="px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] text-black rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+              disabled={!canSubmit}
+              className="px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] text-black rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               Apply to {selectedUsers.length} {selectedUsers.length === 1 ? 'user' : 'users'}

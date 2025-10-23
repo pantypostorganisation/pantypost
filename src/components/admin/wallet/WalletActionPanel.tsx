@@ -43,17 +43,48 @@ export default function WalletActionPanel({
   formatRole
 }: WalletActionPanelProps) {
   const [touched, setTouched] = useState({ amount: false, reason: false });
+  const [errors, setErrors] = useState<{ amount?: string; reason?: string }>({});
 
   const handleSecureAmountChange = (value: string) => {
     if (value === '') {
       setAmount('');
+      setErrors(prev => ({ ...prev, amount: undefined }));
     } else {
       const sanitized = sanitizeCurrency(value);
       setAmount(sanitized.toString());
+      
+      // Validate amount
+      const numAmount = parseFloat(sanitized.toString());
+      if (isNaN(numAmount) || numAmount <= 0) {
+        setErrors(prev => ({ ...prev, amount: 'Please enter a valid amount greater than 0' }));
+      } else if (numAmount > 10000) {
+        setErrors(prev => ({ ...prev, amount: 'Amount cannot exceed $10,000' }));
+      } else {
+        setErrors(prev => ({ ...prev, amount: undefined }));
+      }
     }
   };
 
-  const canSubmit = Boolean(amount) && Boolean(sanitizeStrict(reason).trim()) && !isLoading;
+  const handleReasonChange = (value: string) => {
+    setReason(value);
+    
+    // Validate reason - FIXED to match backend requirement (10 chars minimum)
+    const sanitized = sanitizeStrict(value).trim();
+    if (!sanitized || sanitized.length < 10) {
+      setErrors(prev => ({ ...prev, reason: 'Reason must be at least 10 characters' }));
+    } else if (sanitized.length > 500) {
+      setErrors(prev => ({ ...prev, reason: 'Reason cannot exceed 500 characters' }));
+    } else {
+      setErrors(prev => ({ ...prev, reason: undefined }));
+    }
+  };
+
+  const canSubmit = Boolean(amount) && 
+                   Boolean(sanitizeStrict(reason).trim()) && 
+                   sanitizeStrict(reason).trim().length >= 10 && // FIXED: Match backend requirement
+                   !isLoading && 
+                   !errors.amount && 
+                   !errors.reason;
 
   return (
     <div className="h-fit rounded-2xl border border-white/5 bg-gradient-to-br from-[#111111]/85 via-[#0b0b0b]/70 to-[#050505]/70 p-6 shadow-[0_20px_45px_rgba(0,0,0,0.5)]">
@@ -123,30 +154,36 @@ export default function WalletActionPanel({
               onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
               step="0.01"
               min="0"
-              max="999999.99"
+              max="10000"
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white backdrop-blur placeholder-gray-500 focus:border-[#ff950e] focus:outline-none"
               placeholder="0.00"
               touched={touched.amount}
+              error={errors.amount}
               sanitize={false}
             />
           </div>
 
-          {/* Reason */}
+          {/* Reason - FIXED with proper validation display */}
           <div>
             <SecureTextarea
-              label="Reason"
+              label="Reason (minimum 10 characters)"
               value={reason}
-              onChange={setReason}
+              onChange={handleReasonChange}
               onBlur={() => setTouched((prev) => ({ ...prev, reason: true }))}
               className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder-gray-500 backdrop-blur focus:border-[#ff950e] focus:outline-none resize-none"
               rows={3}
-              placeholder="Reason for this action..."
+              placeholder="Enter a detailed reason for this action (at least 10 characters)..."
               maxLength={500}
               characterCount={true}
               touched={touched.reason}
+              error={errors.reason}
               sanitize={true}
               sanitizer={sanitizeStrict}
             />
+            {/* Show character count helper */}
+            <div className="mt-1 text-xs text-gray-400">
+              {sanitizeStrict(reason).trim().length}/10 minimum characters
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -155,6 +192,7 @@ export default function WalletActionPanel({
               onClick={() => {
                 clearSelection();
                 setTouched({ amount: false, reason: false });
+                setErrors({});
               }}
               className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-white/20 hover:bg-white/10"
             >

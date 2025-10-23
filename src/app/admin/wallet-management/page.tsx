@@ -16,7 +16,6 @@ import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import { Loader2 } from 'lucide-react';
 import { WalletProvider, useWallet } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
-import { subscribeToWalletUpdates, getWalletBalanceListener } from '@/utils/walletSync';
 import { WebSocketEvent } from '@/types/websocket';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
@@ -38,10 +37,6 @@ function AdminWalletContent() {
   const wsContext = useWebSocket();
   const subscribe = wsContext?.subscribe || (() => () => {});
   const isConnected = wsContext?.isConnected || false;
-  
-  // Force re-render hook
-  const [, forceUpdate] = useState({});
-  const forceRender = useCallback(() => forceUpdate({}), []);
   
   // Track component mount status
   const isMountedRef = useRef(true);
@@ -66,8 +61,8 @@ function AdminWalletContent() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [showMessage, setShowMessage] = useState(false);
-  const [allUsers, setAllUsers] = useState<{username: string, role: string}[]>([]);
-  const [displayedUsers, setDisplayedUsers] = useState<{username: string, role: string}[]>([]);
+  const [allUsers, setAllUsers] = useState<{username: string, role: string, balance?: number}[]>([]);
+  const [displayedUsers, setDisplayedUsers] = useState<{username: string, role: string, balance?: number}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -78,6 +73,9 @@ function AdminWalletContent() {
   
   // Advanced features
   const [showBalances, setShowBalances] = useState(true);
+  
+  // Balance cache to prevent resets
+  const balanceCacheRef = useRef<{ [username: string]: number }>({});
 
   // Cleanup on unmount
   useEffect(() => {
@@ -86,24 +84,26 @@ function AdminWalletContent() {
     };
   }, []);
 
-  // Subscribe to WebSocket balance updates
+  // Subscribe to WebSocket balance updates - FIXED to prevent balance resets
   useEffect(() => {
     if (!isConnected || !isMountedRef.current) return;
 
     // Subscribe to wallet balance updates
     const unsubBalance = subscribe(WebSocketEvent.WALLET_BALANCE_UPDATE, (data: any) => {
       console.log('[AdminWallet] Received balance update:', data);
-      // Force component re-render when any balance updates
-      if (isMountedRef.current) {
-        forceRender();
+      
+      // Update cache instead of forcing re-render
+      if (data.username && typeof data.balance === 'number') {
+        balanceCacheRef.current[data.username] = data.balance;
       }
     });
 
     // Subscribe to wallet transactions
     const unsubTransaction = subscribe(WebSocketEvent.WALLET_TRANSACTION, (data: any) => {
       console.log('[AdminWallet] Received transaction:', data);
-      if (isMountedRef.current) {
-        forceRender();
+      // Only reload if it affects current view
+      if (isMountedRef.current && data.from && data.to) {
+        setTimeout(() => reloadData(), 1000);
       }
     });
 
@@ -111,53 +111,13 @@ function AdminWalletContent() {
       unsubBalance();
       unsubTransaction();
     };
-  }, [isConnected, subscribe, forceRender]);
+  }, [isConnected, subscribe, reloadData]);
 
-  // Subscribe to custom wallet updates
-  useEffect(() => {
-    const unsubscribe = subscribeToWalletUpdates((data) => {
-      console.log('[AdminWallet] Custom wallet update:', data);
-      if (isMountedRef.current) {
-        forceRender();
-      }
-    });
-
-    return unsubscribe;
-  }, [forceRender]);
-
-  // Subscribe to real-time balance updates for specific users
-  useEffect(() => {
-    const balanceListener = getWalletBalanceListener();
-    const subscriptions: (() => void)[] = [];
-
-    // Subscribe to balance updates for all displayed users
-    displayedUsers.forEach(user => {
-      const unsubscribe = balanceListener.subscribe(
-        user.username,
-        user.role as 'buyer' | 'seller',
-        (newBalance) => {
-          console.log(`[AdminWallet] Balance updated for ${user.username}: ${newBalance}`);
-          if (isMountedRef.current) {
-            forceRender();
-          }
-        }
-      );
-      subscriptions.push(unsubscribe);
-    });
-
-    return () => {
-      subscriptions.forEach(unsub => unsub());
-    };
-  }, [displayedUsers, forceRender]);
-
-  // Load all users - now using combined wallet data
+  // Load all users - FIXED to preserve balances
   useEffect(() => {
     if (!isMountedRef.current) return;
     
     console.log('=== LOADING USERS WITH REAL-TIME DATA ===');
-    console.log('Buyer balances:', buyerBalances);
-    console.log('Seller balances:', sellerBalances);
-    console.log('Wallet object:', wallet);
     
     let allUsersMap: {[key: string]: any} = {};
     
@@ -168,33 +128,49 @@ function AdminWalletContent() {
       });
     }
     
-    // Add buyers from buyerBalances
+    // Add buyers from buyerBalances with cached balance
     Object.keys(buyerBalances).forEach(username => {
+      const cachedBalance = balanceCacheRef.current[username] ?? buyerBalances[username];
       if (!allUsersMap[username]) {
         allUsersMap[username] = {
           username: username,
           role: 'buyer',
+          balance: cachedBalance
         };
+      } else {
+        allUsersMap[username].balance = cachedBalance;
       }
+      // Update cache
+      balanceCacheRef.current[username] = cachedBalance;
     });
     
-    // Add sellers from sellerBalances
+    // Add sellers from sellerBalances with cached balance
     Object.keys(sellerBalances).forEach(username => {
+      const cachedBalance = balanceCacheRef.current[username] ?? sellerBalances[username];
       if (!allUsersMap[username] || allUsersMap[username].role !== 'seller') {
         allUsersMap[username] = {
           username: username,
           role: 'seller',
+          balance: cachedBalance
         };
+      } else {
+        allUsersMap[username].balance = cachedBalance;
       }
+      // Update cache
+      balanceCacheRef.current[username] = cachedBalance;
     });
     
     // Add any remaining users from wallet object
     Object.keys(wallet).forEach(username => {
       if (!allUsersMap[username] && username !== 'admin') {
+        const cachedBalance = balanceCacheRef.current[username] ?? wallet[username];
         allUsersMap[username] = {
           username: username,
           role: 'buyer', // Default to buyer if not specified
+          balance: cachedBalance
         };
+        // Update cache
+        balanceCacheRef.current[username] = cachedBalance;
       }
     });
     
@@ -205,7 +181,8 @@ function AdminWalletContent() {
       })
       .map(([username, userData]) => ({
         username: sanitizeStrict(username),
-        role: userData.role || 'buyer'
+        role: userData.role || 'buyer',
+        balance: userData.balance ?? 0
       }));
     
     // Sort users
@@ -217,7 +194,7 @@ function AdminWalletContent() {
       return a.username.localeCompare(b.username);
     });
     
-    console.log('Final users:', sortedUsers);
+    console.log('Final users:', sortedUsers.length, 'users loaded');
     console.log('=== END LOADING ===');
     
     if (isMountedRef.current) {
@@ -225,7 +202,42 @@ function AdminWalletContent() {
     }
   }, [listingUsers, wallet, buyerBalances, sellerBalances, user]);
 
-  // Helper for formatting currency consistently across UI sections
+  // Get user balance - FIXED to use cached values
+  const getUserBalance = useCallback((username: string) => {
+    // Validate username
+    if (!username || typeof username !== 'string') return 0;
+    
+    // First check cache
+    if (balanceCacheRef.current[username] !== undefined) {
+      return balanceCacheRef.current[username];
+    }
+    
+    // Check if user is a buyer or seller
+    const user = allUsers.find(u => u.username === username);
+    let balance = 0;
+    
+    if (user) {
+      // Use balance from user object if available
+      if (user.balance !== undefined) {
+        balance = user.balance;
+      } else if (user.role === 'seller') {
+        balance = sellerBalances[username] ?? 0;
+      } else {
+        balance = buyerBalances[username] ?? wallet[username] ?? 0;
+      }
+    } else {
+      // Fallback to checking balances directly
+      balance = buyerBalances[username] ?? sellerBalances[username] ?? wallet[username] ?? 0;
+    }
+    
+    // Update cache
+    balanceCacheRef.current[username] = balance;
+    
+    // Ensure we always return a valid number
+    return isNaN(balance) ? 0 : balance;
+  }, [allUsers, buyerBalances, sellerBalances, wallet]);
+
+  // Helper for formatting currency consistently
   const formatCurrency = useCallback((amount: number) => {
     const safeAmount = Number.isFinite(amount) ? amount : 0;
     return new Intl.NumberFormat('en-US', {
@@ -235,47 +247,6 @@ function AdminWalletContent() {
       maximumFractionDigits: 2
     }).format(safeAmount);
   }, []);
-
-  // Get user balance - Fixed to handle all possible data formats
-  const getUserBalance = (username: string) => {
-    // Validate username
-    if (!username || typeof username !== 'string') return 0;
-    
-    // Check if user is a buyer or seller
-    const user = allUsers.find(u => u.username === username);
-    let balance = 0;
-    
-    if (user?.role === 'seller') {
-      const sellerBalance = sellerBalances[username];
-      // Handle case where balance might be an object
-      if (typeof sellerBalance === 'number') {
-        balance = sellerBalance;
-      } else if (sellerBalance && typeof sellerBalance === 'object' && 'balance' in sellerBalance) {
-        balance = (sellerBalance as any).balance;
-      } else {
-        balance = 0;
-      }
-    } else {
-      // Default to buyer balance
-      const buyerBalance = buyerBalances[username];
-      if (typeof buyerBalance === 'number') {
-        balance = buyerBalance;
-      } else if (buyerBalance && typeof buyerBalance === 'object' && 'balance' in buyerBalance) {
-        balance = (buyerBalance as any).balance;
-      } else {
-        // Fallback to wallet
-        const walletBalance = wallet[username];
-        if (typeof walletBalance === 'number') {
-          balance = walletBalance;
-        } else {
-          balance = 0;
-        }
-      }
-    }
-    
-    // Ensure we always return a valid number
-    return isNaN(balance) ? 0 : balance;
-  };
 
   const summaryStats = useMemo(() => {
     const safeUsers = Array.isArray(allUsers) ? allUsers : [];
@@ -321,12 +292,12 @@ function AdminWalletContent() {
       zeroPercentage: (zeroBalance / safeDivisor) * 100,
       negativePercentage: (negativeBalance / safeDivisor) * 100
     };
-  }, [allUsers, buyerBalances, sellerBalances, wallet]);
+  }, [allUsers, getUserBalance]);
 
   const selectedUserBalance = useMemo(() => {
     if (!selectedUser) return 0;
     return getUserBalance(selectedUser);
-  }, [selectedUser, buyerBalances, sellerBalances, wallet]);
+  }, [selectedUser, getUserBalance]);
 
   // Handle search term change with sanitization
   const handleSearchTermChange = (term: string) => {
@@ -368,7 +339,7 @@ function AdminWalletContent() {
     if (isMountedRef.current) {
       setDisplayedUsers(filtered);
     }
-  }, [searchTerm, allUsers, roleFilter, balanceFilter, wallet, buyerBalances, sellerBalances]);
+  }, [searchTerm, allUsers, roleFilter, balanceFilter, getUserBalance]);
 
   // Handle user selection
   const handleSelectUser = (username: string, role: string) => {
@@ -418,7 +389,7 @@ function AdminWalletContent() {
     }, 4000);
   };
 
-  // Validate amount and reason
+  // FIXED: Validate amount and reason with proper backend requirements
   const validateAction = (amount: string, reason: string): { valid: boolean; error?: string } => {
     const numAmount = parseFloat(amount);
     
@@ -430,12 +401,13 @@ function AdminWalletContent() {
       return { valid: false, error: 'Amount cannot exceed $10,000' };
     }
     
-    if (!reason || reason.trim().length < 3) {
-      return { valid: false, error: 'Please provide a reason (minimum 3 characters)' };
+    // FIXED: Backend requires minimum 10 characters for reason
+    if (!reason || reason.trim().length < 10) {
+      return { valid: false, error: 'Please provide a reason (minimum 10 characters)' };
     }
     
-    if (reason.length > 200) {
-      return { valid: false, error: 'Reason cannot exceed 200 characters' };
+    if (reason.length > 500) {
+      return { valid: false, error: 'Reason cannot exceed 500 characters' };
     }
     
     return { valid: true };
@@ -463,15 +435,12 @@ function AdminWalletContent() {
     }
   };
 
-  // Execute the wallet action
+  // Execute the wallet action - FIXED to handle balance updates properly
   const executeAction = async (numAmount: number) => {
     if (!isMountedRef.current) return;
     
     setIsLoading(true);
     
-    // Small delay for UI feedback
-    await new Promise(resolve => setTimeout(resolve, 500));
-
     const roleForWallet: 'buyer' | 'seller' = selectedUserRole === 'admin' ? 'buyer' : selectedUserRole as 'buyer' | 'seller';
     const sanitizedReason = sanitizeStrict(reason);
 
@@ -488,8 +457,15 @@ function AdminWalletContent() {
         setAmount('');
         setReason('');
         
-        // Force a re-render to show updated balance immediately
-        forceRender();
+        // Update balance cache immediately
+        const currentBalance = getUserBalance(selectedUser!);
+        const newBalance = actionType === 'credit' 
+          ? currentBalance + numAmount 
+          : currentBalance - numAmount;
+        balanceCacheRef.current[selectedUser!] = newBalance;
+        
+        // Reload data after a short delay
+        setTimeout(() => reloadData(), 500);
       } else {
         showMessageHelper(`Failed to ${actionType} account. ${actionType === 'debit' ? 'Check if user has sufficient balance.' : ''}`, 'error');
       }
@@ -500,7 +476,7 @@ function AdminWalletContent() {
     }
   };
 
-  // Handle bulk actions with validation
+  // Handle bulk actions with validation - FIXED
   const handleBulkAction = async (action: 'credit' | 'debit', amount: number, reason: string) => {
     if (!isMountedRef.current) return;
     
@@ -527,8 +503,17 @@ function AdminWalletContent() {
         success = await adminDebitUser(username, userRole, amount, sanitizedReason);
       }
 
-      if (success) successCount++;
-      else failCount++;
+      if (success) {
+        successCount++;
+        // Update cache for this user
+        const currentBalance = getUserBalance(username);
+        const newBalance = action === 'credit' 
+          ? currentBalance + amount 
+          : currentBalance - amount;
+        balanceCacheRef.current[username] = newBalance;
+      } else {
+        failCount++;
+      }
     }
 
     if (isMountedRef.current) {
@@ -541,12 +526,12 @@ function AdminWalletContent() {
       setShowBulkModal(false);
       setIsBulkLoading(false);
       
-      // Force re-render to show updated balances
-      forceRender();
+      // Reload data to get fresh balances
+      setTimeout(() => reloadData(), 500);
     }
   };
 
-  // Refresh data
+  // Refresh data - FIXED to preserve balance cache
   const handleRefresh = async () => {
     if (!isMountedRef.current) return;
     
@@ -563,7 +548,6 @@ function AdminWalletContent() {
     if (isMountedRef.current) {
       setIsRefreshing(false);
       showMessageHelper('Data refreshed successfully');
-      forceRender();
     }
   };
 
