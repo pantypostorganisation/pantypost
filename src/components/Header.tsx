@@ -159,7 +159,6 @@ export default function Header(): React.ReactElement | null {
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
-  const hasRefreshedAdminData = useRef(false);
 
   // OPTIMIZED: Memoize computed values to prevent re-calculations
   const isAdminUser = useMemo(() => isAdmin(user), [user]);
@@ -445,30 +444,6 @@ export default function Header(): React.ReactElement | null {
       window.removeEventListener('wallet:seller-balance-updated', handleSellerBalanceUpdate as EventListener);
     };
   }, [isAdminUser, user]);
-
-  useEffect(() => {
-    if (isAdminUser && user && refreshAdminData && !hasRefreshedAdminData.current) {
-      hasRefreshedAdminData.current = true;
-      let cancelled = false;
-      const refreshOnce = async () => {
-        if (cancelled) return;
-        try {
-          await refreshAdminData();
-          setBalanceUpdateTrigger((prev) => prev + 1);
-        } catch (error) {
-          console.error('[Header] Error refreshing admin data:', error);
-        }
-      };
-      void refreshOnce();
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (!user || !isAdminUser) {
-      hasRefreshedAdminData.current = false;
-    }
-    return undefined;
-  }, [isAdminUser, user?.id, refreshAdminData]);
 
   const unreadCount = useMemo(() => {
     if (!user?.username) return 0;
