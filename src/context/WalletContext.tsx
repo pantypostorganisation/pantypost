@@ -582,16 +582,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        let balanceValue: number;
-        if (typeof data.balance === "number") {
-          balanceValue = data.balance;
-        } else if (typeof data.newBalance === "number") {
-          balanceValue = data.newBalance;
-        } else if (data.data && typeof data.data.balance === "number") {
-          balanceValue = data.data.balance;
-        } else {
-          console.warn("[WalletContext] No valid balance in update data:", data);
-          balanceValue = 0;
+        const rawBalanceCandidates = [
+          data.balance,
+          data.newBalance,
+          data.data?.balance,
+          data.payload?.balance,
+        ];
+
+        let balanceValue: number | null = null;
+        for (const candidate of rawBalanceCandidates) {
+          if (typeof candidate === "number" && Number.isFinite(candidate)) {
+            balanceValue = candidate;
+            break;
+          }
+          if (typeof candidate === "string") {
+            const parsed = Number.parseFloat(candidate);
+            if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+              balanceValue = parsed;
+              break;
+            }
+          }
+        }
+
+        if (balanceValue === null) {
+          console.warn("[WalletContext] Skipping balance update with no valid amount:", data);
+          return;
         }
 
         const balanceValidation = walletOperationSchemas.balanceAmount.safeParse(balanceValue);
@@ -657,17 +672,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      let balanceValue: number;
+      const rawBalanceCandidates = [
+        data.balance,
+        data.newBalance,
+        data.data?.balance,
+        data.payload?.balance,
+      ];
 
-      if (typeof data.balance === "number") {
-        balanceValue = data.balance;
-      } else if (typeof data.newBalance === "number") {
-        balanceValue = data.newBalance;
-      } else if (data.data && typeof data.data.balance === "number") {
-        balanceValue = data.data.balance;
-      } else {
-        console.warn("[WalletContext] No valid balance in platform update:", data);
-        balanceValue = 0;
+      let balanceValue: number | null = null;
+      for (const candidate of rawBalanceCandidates) {
+        if (typeof candidate === "number" && Number.isFinite(candidate)) {
+          balanceValue = candidate;
+          break;
+        }
+        if (typeof candidate === "string") {
+          const parsed = Number.parseFloat(candidate);
+          if (!Number.isNaN(parsed) && Number.isFinite(parsed)) {
+            balanceValue = parsed;
+            break;
+          }
+        }
+      }
+
+      if (balanceValue === null) {
+        console.warn("[WalletContext] Skipping platform balance update with no valid amount:", data);
+        return;
       }
 
       const balanceValidation = walletOperationSchemas.balanceAmount.safeParse(balanceValue);
