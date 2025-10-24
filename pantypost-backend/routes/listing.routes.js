@@ -1177,8 +1177,8 @@ router.post('/:id/cancel-auction', authMiddleware, async (req, res) => {
   }
 });
 
-// PUT /api/listings/:id - Update a listing
-router.put('/:id', authMiddleware, async (req, res) => {
+// PATCH /api/listings/:id - Update a listing (FIXED: Changed from PUT to PATCH)
+router.patch('/:id', authMiddleware, async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
     
