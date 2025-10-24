@@ -52,8 +52,7 @@ export default function UsernameStep({
         <button
           type="submit"
           disabled={isDisabled || !username}
-          className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-          style={{ color: isDisabled || !username ? undefined : '#000' }}
+          className="w-full bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-gray-700 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
         >
           Continue
           <ArrowRight className="w-4 h-4" />
