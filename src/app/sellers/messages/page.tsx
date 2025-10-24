@@ -123,29 +123,29 @@ export default function SellerMessagesPage() {
     <BanCheck>
       <RequireAuth role="seller">
         {/* Desktop padding - hide on mobile */}
-        <div className="hidden md:block py-3 bg-black"></div>
-        
+        <div className="hidden md:block py-3 bg-black flex-shrink-0"></div>
+
         {/* Main container - matching buyer's responsive layout */}
-        <div className={`${
-          isMobile
-            ? activeThread
-              ? 'fixed inset-0'
-              : 'flex flex-col h-full'
-            : 'bg-black flex flex-col h-full'
-        }`}>
+        <div
+          className={`${
+            isMobile && activeThread
+              ? 'fixed inset-0 z-40 md:static md:inset-auto'
+              : 'relative'
+          } flex flex-1 flex-col h-full min-h-0 w-full bg-black overflow-hidden`}
+        >
           <div className={`${
-            isMobile 
-              ? 'w-full h-full flex flex-col overflow-hidden' 
-              : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg flex flex-col md:flex-row overflow-hidden'
+            isMobile
+              ? 'w-full h-full flex flex-col overflow-hidden min-h-0'
+              : 'flex-1 h-full max-w-6xl mx-auto w-full rounded-lg shadow-lg flex flex-col md:flex-row overflow-hidden min-h-0'
           } bg-[#121212]`}>
-            
+
             {/* Mobile: Only show ThreadsSidebar when no active thread */}
             <div className={`${
-              activeThread && isMobile 
-                ? 'hidden' 
-                : isMobile 
-                  ? 'flex flex-col h-full overflow-hidden' 
-                  : 'w-full md:w-1/3 overflow-hidden'
+              activeThread && isMobile
+                ? 'hidden'
+                : isMobile
+                  ? 'flex flex-col h-full overflow-hidden min-h-0'
+                  : 'w-full md:w-1/3 md:h-full overflow-hidden flex flex-col min-h-0'
             }`}>
               <ThreadsSidebar
                 isAdmin={isAdmin}
@@ -167,14 +167,14 @@ export default function SellerMessagesPage() {
             {/* Mobile: Only show conversation when thread is active */}
             {/* Desktop: Always show conversation area */}
             <div className={`${
-              !activeThread && isMobile 
-                ? 'hidden' 
+              !activeThread && isMobile
+                ? 'hidden'
                 : 'flex'
             } ${
-              isMobile 
-                ? 'flex-col h-full overflow-hidden' 
-                : 'w-full md:w-2/3'
-            } flex-col bg-[#121212] overflow-hidden`}>
+              isMobile
+                ? 'h-full overflow-hidden min-h-0'
+                : 'w-full md:w-2/3 md:h-full'
+            } flex flex-col bg-[#121212] overflow-hidden min-h-0`}>
               {activeThread ? (
                 <ConversationView
                   activeThread={activeThread}
@@ -228,7 +228,7 @@ export default function SellerMessagesPage() {
           </div>
 
           {/* Desktop bottom padding */}
-          <div className="hidden md:block py-3 bg-black"></div>
+          <div className="hidden md:block py-3 bg-black flex-shrink-0"></div>
 
           {/* Image Preview Modal */}
           {previewImage && (

@@ -171,23 +171,29 @@ export default function ConversationView({
   }, [isMobile]);
 
   // Auto-scroll to bottom
-  const scrollToBottom = useCallback((behavior: 'instant' | 'smooth' = 'instant') => {
-    if (!messagesContainerRef.current) return;
-    
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const scroller = messagesContainerRef.current;
+    if (!scroller) return;
+
     const isNearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
-    
+
     if (isNearBottom || !userHasScrolledRef.current) {
-      scroller.scrollTo({
-        top: scroller.scrollHeight,
-        behavior: behavior
+      requestAnimationFrame(() => {
+        scroller.scrollTo({
+          top: scroller.scrollHeight,
+          behavior,
+        });
+
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior, block: 'end' });
+        }
       });
     }
-  }, []);
+  }, [messagesEndRef]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom('instant');
+    scrollToBottom('auto');
   }, [threadMessages.length, scrollToBottom]);
 
   // Thread focus/blur
@@ -336,7 +342,7 @@ export default function ConversationView({
       messageInputControls.handleReply();
       
       setTimeout(() => {
-        scrollToBottom('instant');
+        scrollToBottom('auto');
         if (inputRef.current) {
           (inputRef.current as any).focus({ preventScroll: true });
         }
@@ -602,14 +608,14 @@ export default function ConversationView({
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden">
+      <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden min-h-0">
         {/* Mobile Header */}
         {renderMobileHeader()}
 
         {/* Messages container */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 py-2"
+          className="flex-1 overflow-y-auto px-3 py-2 min-h-0"
           style={{ 
             WebkitOverflowScrolling: 'touch'
           }}
@@ -685,15 +691,15 @@ export default function ConversationView({
 
   // Desktop Layout
   return (
-    <div className="h-full flex flex-col bg-[#121212]">
+    <div className="h-full flex flex-col bg-[#121212] min-h-0">
       {/* Desktop Header */}
       <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-sm">
         {renderDesktopHeader()}
       </div>
 
       {/* Desktop Messages */}
-      <div 
-        className="flex-1 overflow-y-auto bg-[#121212]" 
+      <div
+        className="flex-1 overflow-y-auto bg-[#121212] min-h-0"
         ref={messagesContainerRef}
       >
         <div className="max-w-3xl mx-auto space-y-4 p-4">
