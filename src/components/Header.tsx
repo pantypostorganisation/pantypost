@@ -16,7 +16,6 @@ import {
   MessageSquare,
   Users,
   User,
-  UserCircle,
   LogOut,
   Package,
   ShieldCheck,
@@ -169,6 +168,21 @@ export default function Header(): React.ReactElement | null {
   );
   const canUseSearch = useMemo(() => Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller')), [user, isAdminUser, role]);
   const username = useMemo(() => (user?.username ? sanitizeStrict(user.username) : ''), [user?.username]);
+  const profileHref = useMemo(() => {
+    if (!user || isAdminUser) {
+      return null;
+    }
+
+    if (role === 'seller') {
+      return '/sellers/profile';
+    }
+
+    if (role === 'buyer' && username) {
+      return `/buyers/${username}`;
+    }
+
+    return null;
+  }, [user, isAdminUser, role, username]);
   
   const profileImageSrc = useMemo(() => {
     if (!user) {
@@ -749,8 +763,12 @@ export default function Header(): React.ReactElement | null {
             </div>
 
             {user && (
-              <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
-                <div className="flex items-center gap-3">
+              profileHref ? (
+                <Link
+                  href={profileHref}
+                  onClick={handleMobileMenuClose}
+                  className="flex items-center gap-3 p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20 transition-colors duration-200 hover:bg-[#ff950e]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50"
+                >
                   {showAvatarImage ? (
                     <SecureImage
                       src={profileAvatarSrc!}
@@ -770,8 +788,32 @@ export default function Header(): React.ReactElement | null {
                     <div className="text-[#ff950e] font-bold">{username}</div>
                     <div className="text-gray-400 text-xs capitalize">{isAdminUser ? 'Admin' : role}</div>
                   </div>
+                </Link>
+              ) : (
+                <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
+                  <div className="flex items-center gap-3">
+                    {showAvatarImage ? (
+                      <SecureImage
+                        src={profileAvatarSrc!}
+                        alt={avatarAltText}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
+                        {isAdminUser ? (
+                          <Crown className="w-5 h-5 text-purple-400" />
+                        ) : (
+                          <User className="w-5 h-5 text-[#ff950e]" />
+                        )}
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-[#ff950e] font-bold">{username}</div>
+                      <div className="text-gray-400 text-xs capitalize">{isAdminUser ? 'Admin' : role}</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )
             )}
 
             {canUseSearch && (
@@ -809,7 +851,6 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Seller Menu</span>
                   </div>
                   {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
-                  {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
                   {renderMobileLink(
                     '/sellers/verify',
                     <img
@@ -853,8 +894,6 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Buyer Menu</span>
                   </div>
                   {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
-                  {username &&
-                    renderMobileLink(`/buyers/${username}`, <UserCircle className="w-5 h-5" />, 'Profile')}
                   {renderMobileLink('/buyers/my-orders', <Package className="w-5 h-5" />, 'My Orders')}
                   {renderMobileLink('/buyers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/wallet/buyer', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
@@ -1047,11 +1086,6 @@ export default function Header(): React.ReactElement | null {
                 <span>My Listings</span>
               </Link>
 
-              <Link href="/sellers/profile" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>Profile</span>
-              </Link>
-
               <Link
                 href="/sellers/verify"
                 className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs"
@@ -1241,16 +1275,6 @@ export default function Header(): React.ReactElement | null {
                 <span>Dashboard</span>
               </Link>
 
-              {username && (
-                <Link
-                  href={`/buyers/${username}`}
-                  className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
-                >
-                  <UserCircle className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                  <span>Profile</span>
-                </Link>
-              )}
-
               <Link href="/buyers/my-orders" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Orders</span>
@@ -1304,25 +1328,50 @@ export default function Header(): React.ReactElement | null {
 
           {user && (
             <div className="flex items-center gap-2 ml-1">
-              <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
-                {showAvatarImage ? (
-                  <SecureImage
-                    src={profileAvatarSrc!}
-                    alt={avatarAltText}
-                    className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
-                  />
-                ) : (
-                  <>
-                    {isAdminUser ? (
-                      <Crown className="w-3.5 h-3.5 text-purple-400" />
-                    ) : (
-                      <User className="w-3.5 h-3.5 text-[#ff950e]" />
-                    )}
-                  </>
-                )}
-                <span className="text-[#ff950e] font-bold text-xs">{username}</span>
-                <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
-              </div>
+              {profileHref ? (
+                <Link
+                  href={profileHref}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30 transition-colors duration-200 hover:bg-[#ff950e]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50"
+                >
+                  {showAvatarImage ? (
+                    <SecureImage
+                      src={profileAvatarSrc!}
+                      alt={avatarAltText}
+                      className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                    />
+                  ) : (
+                    <>
+                      {isAdminUser ? (
+                        <Crown className="w-3.5 h-3.5 text-purple-400" />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-[#ff950e]" />
+                      )}
+                    </>
+                  )}
+                  <span className="text-[#ff950e] font-bold text-xs">{username}</span>
+                  <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
+                  {showAvatarImage ? (
+                    <SecureImage
+                      src={profileAvatarSrc!}
+                      alt={avatarAltText}
+                      className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                    />
+                  ) : (
+                    <>
+                      {isAdminUser ? (
+                        <Crown className="w-3.5 h-3.5 text-purple-400" />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-[#ff950e]" />
+                      )}
+                    </>
+                  )}
+                  <span className="text-[#ff950e] font-bold text-xs">{username}</span>
+                  <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
+                </div>
+              )}
               <button
                 onClick={logout}
                 className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs cursor-pointer"
