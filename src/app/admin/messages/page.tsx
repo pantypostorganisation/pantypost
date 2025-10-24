@@ -58,7 +58,7 @@ export default function AdminMessagesPage() {
   if (!isAdmin) {
     return (
       <RequireAuth role="admin">
-        <div className="h-screen flex items-center justify-center bg-black">
+        <div className="h-full flex items-center justify-center bg-black">
           <div className="bg-[#121212] rounded-lg shadow-lg p-8 max-w-md">
             <div className="flex items-center mb-4">
               <AlertTriangle size={32} className="text-[#ff950e] mr-3" />
@@ -85,7 +85,7 @@ export default function AdminMessagesPage() {
     <RequireAuth role="admin">
       <div className="py-3 bg-black"></div>
 
-      <div className="h-screen bg-black flex flex-col overflow-hidden">
+      <div className="h-full bg-black flex flex-col overflow-hidden">
         <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
           {/* Left column - Message threads and User Directory */}
           <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
