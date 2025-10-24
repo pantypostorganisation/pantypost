@@ -198,7 +198,7 @@ export default function BuyerMessagesPage() {
       <BanCheck>
         <RequireAuth role="buyer">
           <div className="py-3 bg-black"></div>
-          <div className="h-screen bg-black flex items-center justify-center">
+          <div className="h-full bg-black flex items-center justify-center">
             <div className="text-white">Loading...</div>
           </div>
         </RequireAuth>
@@ -217,11 +217,11 @@ export default function BuyerMessagesPage() {
         {/* On mobile with activeThread: fixed positioning full screen */}
         {/* On desktop: always full height */}
         <div className={`${
-          isMobile 
-            ? activeThread 
-              ? 'fixed inset-0' 
-              : 'h-screen flex flex-col'
-            : 'h-screen bg-black flex flex-col'
+          isMobile
+            ? activeThread
+              ? 'fixed inset-0'
+              : 'flex flex-col h-full'
+            : 'bg-black flex flex-col h-full'
         }`}>
           <div className={`${
             isMobile 

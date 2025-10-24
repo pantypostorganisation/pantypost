@@ -111,7 +111,7 @@ export default function SellerMessagesPage() {
       <BanCheck>
         <RequireAuth role="seller">
           <div className="py-3 bg-black"></div>
-          <div className="h-screen bg-black flex items-center justify-center">
+          <div className="h-full bg-black flex items-center justify-center">
             <div className="text-white">Loading...</div>
           </div>
         </RequireAuth>
@@ -127,11 +127,11 @@ export default function SellerMessagesPage() {
         
         {/* Main container - matching buyer's responsive layout */}
         <div className={`${
-          isMobile 
-            ? activeThread 
-              ? 'fixed inset-0' 
-              : 'h-screen flex flex-col'
-            : 'h-screen bg-black flex flex-col'
+          isMobile
+            ? activeThread
+              ? 'fixed inset-0'
+              : 'flex flex-col h-full'
+            : 'bg-black flex flex-col h-full'
         }`}>
           <div className={`${
             isMobile 
