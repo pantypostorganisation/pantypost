@@ -122,7 +122,7 @@ export default function ThreadsSidebar({
       </div>
       
       {/* Thread List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         {filteredThreads.length === 0 ? (
           <div className="p-4 text-center text-gray-400">
             <MessageSquare className="mx-auto mb-2 opacity-50" size={24} />
