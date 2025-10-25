@@ -83,76 +83,77 @@ export default function AdminMessagesPage() {
 
   return (
     <RequireAuth role="admin">
-      <div className="py-3 bg-black"></div>
+      <div className="min-h-screen bg-black flex flex-col">
+        <div className="py-3 bg-black flex-shrink-0"></div>
 
-      <div className="h-full bg-black flex flex-col overflow-hidden">
-        <div className="flex-1 flex flex-col md:flex-row max-w-6xl mx-auto w-full bg-[#121212] rounded-lg shadow-lg overflow-hidden">
-          {/* Left column - Message threads and User Directory */}
-          <div className="w-full md:w-1/3 border-r border-gray-800 flex flex-col bg-[#121212]">
-            <MessagesHeader
-              filterBy={filterBy}
-              setFilterBy={setFilterBy}
-              totalUnreadCount={totalUnreadCount ?? 0}
-              showUserDirectory={showUserDirectory}
-              setShowUserDirectory={setShowUserDirectory}
-              searchQuery={searchQuery ?? ''}
-              setSearchQuery={setSearchQuery}
-              directorySearchQuery={directorySearchQuery ?? ''}
-              setDirectorySearchQuery={setDirectorySearchQuery}
-            />
+        <div className="flex-1 overflow-hidden">
+          <div className="mx-auto flex h-full w-full max-w-6xl flex-col rounded-lg bg-[#121212] shadow-lg md:flex-row min-h-0 overflow-hidden">
+            {/* Left column - Message threads and User Directory */}
+            <div className="flex w-full flex-1 flex-col border-r border-gray-800 bg-[#121212] min-h-0 md:w-1/3 md:flex-none">
+              <MessagesHeader
+                filterBy={filterBy}
+                setFilterBy={setFilterBy}
+                totalUnreadCount={totalUnreadCount ?? 0}
+                showUserDirectory={showUserDirectory}
+                setShowUserDirectory={setShowUserDirectory}
+                searchQuery={searchQuery ?? ''}
+                setSearchQuery={setSearchQuery}
+                directorySearchQuery={directorySearchQuery ?? ''}
+                setDirectorySearchQuery={setDirectorySearchQuery}
+              />
 
-            {/* Content Area - Either Conversations or User Directory */}
-            <div className="flex-1 overflow-y-auto bg-[#121212]">
-              {showUserDirectory ? (
-                <UserDirectoryContent
-                  allUsers={safeAllUsers}
-                  directorySearchQuery={directorySearchQuery ?? ''}
-                  filterBy={filterBy}
-                  onStartConversation={handleStartConversation}
-                  onClearFilters={() => {
-                    setDirectorySearchQuery('');
-                    setFilterBy('all');
-                  }}
-                />
-              ) : (
-                <ConversationsContent
-                  threads={safeThreads}
-                  lastMessages={safeLastMessages}
-                  unreadCounts={safeUnreadCounts}
-                  userProfiles={safeUserProfiles}
-                  activeThread={activeThread}
-                  searchQuery={searchQuery ?? ''}
-                  filterBy={filterBy}
-                  onThreadSelect={handleThreadSelect}
-                  onStartNewConversation={() => setShowUserDirectory(true)}
-                />
-              )}
+              {/* Content Area - Either Conversations or User Directory */}
+              <div className="flex-1 overflow-y-auto bg-[#121212]">
+                {showUserDirectory ? (
+                  <UserDirectoryContent
+                    allUsers={safeAllUsers}
+                    directorySearchQuery={directorySearchQuery ?? ''}
+                    filterBy={filterBy}
+                    onStartConversation={handleStartConversation}
+                    onClearFilters={() => {
+                      setDirectorySearchQuery('');
+                      setFilterBy('all');
+                    }}
+                  />
+                ) : (
+                  <ConversationsContent
+                    threads={safeThreads}
+                    lastMessages={safeLastMessages}
+                    unreadCounts={safeUnreadCounts}
+                    userProfiles={safeUserProfiles}
+                    activeThread={activeThread}
+                    searchQuery={searchQuery ?? ''}
+                    filterBy={filterBy}
+                    onThreadSelect={handleThreadSelect}
+                    onStartNewConversation={() => setShowUserDirectory(true)}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-
-          {/* Right column - Active conversation */}
-          <div className="w-full md:w-2/3 flex flex-col bg-[#121212]">
-            <ChatContent
-              activeThread={activeThread}
-              activeMessages={safeActiveMessages}
-              userProfiles={safeUserProfiles}
-              content={content}
-              setContent={setContent}
-              selectedImage={selectedImage}
-              setSelectedImage={setSelectedImage}
-              isUserBlocked={isUserBlocked}
-              isUserReported={isUserReported}
-              onSend={handleSend}
-              onBlockToggle={handleBlockToggle}
-              onReport={handleReport}
-              onStartNewConversation={() => setShowUserDirectory(true)}
-              username={safeUsername}
-            />
+            {/* Right column - Active conversation */}
+            <div className="flex w-full flex-1 flex-col bg-[#121212] min-h-0 md:w-2/3">
+              <ChatContent
+                activeThread={activeThread}
+                activeMessages={safeActiveMessages}
+                userProfiles={safeUserProfiles}
+                content={content}
+                setContent={setContent}
+                selectedImage={selectedImage}
+                setSelectedImage={setSelectedImage}
+                isUserBlocked={isUserBlocked}
+                isUserReported={isUserReported}
+                onSend={handleSend}
+                onBlockToggle={handleBlockToggle}
+                onReport={handleReport}
+                onStartNewConversation={() => setShowUserDirectory(true)}
+                username={safeUsername}
+              />
+            </div>
           </div>
         </div>
 
         {/* Bottom Padding */}
-        <div className="py-6 bg-black"></div>
+        <div className="py-6 bg-black flex-shrink-0"></div>
       </div>
     </RequireAuth>
   );
