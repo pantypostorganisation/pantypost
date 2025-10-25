@@ -118,37 +118,37 @@ export default function SellerMessagesPage() {
   // ----- className helpers (purely to keep JSX simple & error-proof) -----
   const outerWrap = isMobile && activeThread
     ? 'fixed inset-0 flex flex-col bg-black'
-    : 'flex h-full min-h-0 flex-1 flex-col bg-black';
+    : 'flex h-full min-h-0 max-h-full flex-1 flex-col bg-black';
 
   const innerWrap = `${
     isMobile
-      ? 'flex h-full min-h-0 flex-1 flex-col'
-      : 'mx-auto flex h-full min-h-0 flex-1 w-full max-w-6xl flex-col overflow-hidden rounded-lg shadow-lg md:flex-row'
+      ? 'flex h-full min-h-0 max-h-full flex-1 flex-col'
+      : 'mx-auto flex h-full min-h-0 max-h-full flex-1 w-full max-w-6xl flex-col overflow-hidden rounded-lg shadow-lg md:flex-row'
   } bg-[#121212]`;
 
   const sidebarWrap = `${
     activeThread && isMobile
       ? 'hidden'
       : isMobile
-        ? 'flex min-h-0 flex-1 flex-col overflow-hidden'
-        : 'w-full md:max-w-xs md:flex md:flex-col md:overflow-hidden md:min-h-0'
+        ? 'flex min-h-0 max-h-full flex-1 flex-col overflow-hidden'
+        : 'w-full md:max-w-xs md:flex md:flex-col md:overflow-hidden md:min-h-0 md:max-h-full'
   }`;
 
   const conversationWrap = `${
     !activeThread && isMobile ? 'hidden' : 'flex'
   } ${
-    isMobile ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : 'w-full md:flex-1'
-  } flex-col bg-[#121212] overflow-hidden min-h-0`;
+    isMobile ? 'flex min-h-0 max-h-full flex-1 flex-col overflow-hidden' : 'w-full md:flex-1'
+  } flex-col bg-[#121212] overflow-hidden min-h-0 max-h-full`;
 
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <div className="min-h-screen bg-black flex flex-col">
+        <div className="bg-black flex min-h-screen flex-col md:h-screen md:min-h-0">
           {/* Desktop padding - hide on mobile */}
           <div className="hidden md:block py-3 bg-black flex-shrink-0" />
 
           {/* Main container - matching buyer's responsive layout */}
-          <div className="flex-1 overflow-hidden relative">
+          <div className="flex-1 overflow-hidden relative min-h-0 md:h-[calc(100vh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]">
             <div className={outerWrap}>
               <div className={innerWrap}>
                 {/* Mobile: Only show ThreadsSidebar when no active thread */}
