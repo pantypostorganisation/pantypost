@@ -209,25 +209,26 @@ export default function BuyerMessagesPage() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        {/* Desktop padding - hide on mobile */}
-        <div className="hidden md:block py-3 bg-black"></div>
-        
-        {/* Main container */}
-        {/* On mobile without activeThread: relative positioning to flow with header */}
-        {/* On mobile with activeThread: fixed positioning full screen */}
-        {/* On desktop: always full height */}
-        <div className={`${
-          isMobile
-            ? activeThread
-              ? 'fixed inset-0'
-              : 'flex flex-col h-full min-h-screen'
-            : 'bg-black flex flex-col h-full min-h-screen'
-        }`}>
+        <div className="bg-black flex min-h-screen flex-col md:h-screen md:min-h-0">
+          {/* Desktop padding - hide on mobile */}
+          <div className="hidden md:block py-3 bg-black"></div>
+
+          {/* Main container */}
+          {/* On mobile without activeThread: relative positioning to flow with header */}
+          {/* On mobile with activeThread: fixed positioning full screen */}
+          {/* On desktop: always full height */}
           <div className={`${
             isMobile
-              ? 'w-full h-full flex flex-col overflow-hidden min-h-0'
-              : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg flex flex-col md:flex-row overflow-hidden min-h-0'
-          } bg-[#121212]`}>
+              ? activeThread
+                ? 'fixed inset-0'
+                : 'flex flex-col h-full min-h-screen'
+              : 'flex flex-1 flex-col min-h-0 md:h-[calc(100vh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]'
+          }`}>
+            <div className={`${
+              isMobile
+                ? 'w-full h-full flex flex-col overflow-hidden min-h-0'
+                : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg flex flex-col md:flex-row overflow-hidden min-h-0 md:max-h-full'
+            } bg-[#121212]`}>
             
             {/* Mobile: Only show ThreadsSidebar when no active thread */}
             <div className={`${
@@ -235,7 +236,7 @@ export default function BuyerMessagesPage() {
                 ? 'hidden'
                 : isMobile
                   ? 'flex flex-col h-full overflow-hidden min-h-0'
-                  : 'w-full md:w-1/3 overflow-hidden flex flex-col min-h-0'
+                  : 'w-full md:w-1/3 overflow-hidden flex flex-col min-h-0 md:max-h-full'
             }`}>
               <ThreadsSidebar
                 threads={threads}
@@ -265,8 +266,8 @@ export default function BuyerMessagesPage() {
             } ${
               isMobile
                 ? 'flex-col h-full overflow-hidden min-h-0'
-                : 'w-full md:w-2/3'
-            } flex-col bg-[#121212] overflow-hidden min-h-0`}>
+                : 'w-full md:w-2/3 md:max-h-full'
+            } flex-col bg-[#121212] overflow-hidden min-h-0 md:max-h-full`}>
               {activeThread ? (
                 <ConversationView
                   activeThread={activeThread}
@@ -329,66 +330,67 @@ export default function BuyerMessagesPage() {
           {/* Desktop bottom padding */}
           <div className="hidden md:block py-3 bg-black"></div>
         </div>
+      </div>
 
-        {/* Modals */}
-        {previewImage && (
-          <ImagePreviewModal
-            imageUrl={previewImage}
-            isOpen={true}
-            onClose={() => setPreviewImage(null)}
-          />
-        )}
-        
-        {showCustomRequestModal && activeThread && (
-          <CustomRequestModal
-            show={showCustomRequestModal}
-            onClose={closeCustomRequestModal}
-            activeThread={activeThread}
-            onSubmit={handleCustomRequestSubmit}
-            customRequestForm={{
-              title: customRequestForm.title ?? '',
-              price: customRequestForm.price ?? '',
-              description: customRequestForm.description ?? ''
-            }}
-            setCustomRequestForm={handleCustomRequestFormChange}
-            customRequestErrors={customRequestErrors}
-            isSubmittingRequest={isSubmittingRequest}
-            wallet={walletData}
-            user={user}
-          />
-        )}
-        
-        {showPayModal && payingRequest && activeThread && (
-          <PaymentModal
-            show={showPayModal}
-            onClose={() => {
-              setShowPayModal(false);
-              setPayingRequest(null);
-            }}
-            payingRequest={payingRequest}
-            wallet={walletData}
-            user={user}
-            onConfirmPay={handleConfirmPay}
-          />
-        )}
-        
-        {showTipModal && activeThread && (
-          <TipModal
-            show={showTipModal}
-            onClose={() => {
-              setShowTipModal(false);
-              setTipAmount('');
-              setTipResult(null);
-            }}
-            activeThread={activeThread}
-            tipAmount={tipAmount}
-            setTipAmount={setTipAmount}
-            tipResult={tipResult}
-            wallet={walletData}
-            user={user}
-            onSendTip={handleSendTip}
-          />
-        )}
+      {/* Modals */}
+      {previewImage && (
+        <ImagePreviewModal
+          imageUrl={previewImage}
+          isOpen={true}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
+
+      {showCustomRequestModal && activeThread && (
+        <CustomRequestModal
+          show={showCustomRequestModal}
+          onClose={closeCustomRequestModal}
+          activeThread={activeThread}
+          onSubmit={handleCustomRequestSubmit}
+          customRequestForm={{
+            title: customRequestForm.title ?? '',
+            price: customRequestForm.price ?? '',
+            description: customRequestForm.description ?? ''
+          }}
+          setCustomRequestForm={handleCustomRequestFormChange}
+          customRequestErrors={customRequestErrors}
+          isSubmittingRequest={isSubmittingRequest}
+          wallet={walletData}
+          user={user}
+        />
+      )}
+
+      {showPayModal && payingRequest && activeThread && (
+        <PaymentModal
+          show={showPayModal}
+          onClose={() => {
+            setShowPayModal(false);
+            setPayingRequest(null);
+          }}
+          payingRequest={payingRequest}
+          wallet={walletData}
+          user={user}
+          onConfirmPay={handleConfirmPay}
+        />
+      )}
+
+      {showTipModal && activeThread && (
+        <TipModal
+          show={showTipModal}
+          onClose={() => {
+            setShowTipModal(false);
+            setTipAmount('');
+            setTipResult(null);
+          }}
+          activeThread={activeThread}
+          tipAmount={tipAmount}
+          setTipAmount={setTipAmount}
+          tipResult={tipResult}
+          wallet={walletData}
+          user={user}
+          onSendTip={handleSendTip}
+        />
+      )}
       </RequireAuth>
     </BanCheck>
   );
