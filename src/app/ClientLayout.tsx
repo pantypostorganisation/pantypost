@@ -132,7 +132,7 @@ export default function ClientLayout({
           <div className={`flex flex-col fullscreen md:min-h-screen bg-black text-white ${showContent ? 'app-fade-in' : 'opacity-0'}`}>
             <BanCheck>
               {!shouldHideHeader && <Header />}
-              <main className="flex flex-1 overflow-hidden">
+              <main className="flex-1">
                 {children}
               </main>
               <AgeVerificationModal />
