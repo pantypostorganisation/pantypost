@@ -151,20 +151,22 @@ export default function ChatContent({
 
   if (!activeThread) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400">
-        <div className="text-center p-4">
-          <div className="flex justify-center mb-4">
-            <MessageCircle size={64} className="text-gray-600" />
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="flex flex-1 items-center justify-center text-gray-400">
+          <div className="text-center p-4">
+            <div className="mb-4 flex justify-center">
+              <MessageCircle size={64} className="text-gray-600" />
+            </div>
+            <p className="mb-2 text-xl">Select a conversation to view messages</p>
+            <p className="mb-4 text-sm">Your messages will appear here</p>
+            <button
+              onClick={onStartNewConversation}
+              className="mx-auto flex items-center justify-center rounded-lg bg-[#ff950e] px-4 py-2 font-medium text-black transition-colors hover:bg-[#e88800]"
+            >
+              <MessageSquarePlus size={16} className="mr-2" />
+              Start New Conversation
+            </button>
           </div>
-          <p className="text-xl mb-2">Select a conversation to view messages</p>
-          <p className="text-sm mb-4">Your messages will appear here</p>
-          <button
-            onClick={onStartNewConversation}
-            className="px-4 py-2 bg-[#ff950e] text-black font-medium rounded-lg hover:bg-[#e88800] transition-colors flex items-center justify-center mx-auto"
-          >
-            <MessageSquarePlus size={16} className="mr-2" />
-            Start New Conversation
-          </button>
         </div>
       </div>
     );
@@ -173,7 +175,7 @@ export default function ChatContent({
   const canSend = (!!content.trim() || !!selectedImage) && !isImageLoading;
 
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col">
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
         <div className="flex items-center">
@@ -243,7 +245,7 @@ export default function ChatContent({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+      <div className="flex-1 overflow-y-auto p-4 bg-[#121212] min-h-0">
         <div className="max-w-3xl mx-auto space-y-4">
           {activeMessages.map((msg, index) => {
             const isFromMe = msg.sender === username;
@@ -475,6 +477,6 @@ export default function ChatContent({
       )}
 
       <ImagePreviewModal imageUrl={previewImage || ''} isOpen={!!previewImage} onClose={() => setPreviewImage(null)} />
-    </>
+    </div>
   );
 }

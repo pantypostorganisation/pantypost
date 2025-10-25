@@ -209,24 +209,25 @@ export default function BuyerMessagesPage() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <div className="flex min-h-0 flex-1 flex-col bg-black">
+        <div className="min-h-screen bg-black flex flex-col">
           {/* Desktop padding - hide on mobile */}
-          <div className="hidden md:block py-3 bg-black"></div>
+          <div className="hidden md:block py-3 bg-black flex-shrink-0"></div>
 
           {/* Main container */}
           {/* On mobile without activeThread: relative positioning to flow with header */}
           {/* On mobile with activeThread: fixed positioning full screen */}
           {/* On desktop: always full height */}
-          <div className={`${
-            isMobile && activeThread
-              ? 'fixed inset-0 flex flex-col bg-black'
-              : 'flex min-h-0 flex-1 flex-col bg-black'
-          }`}>
+          <div className="flex-1 overflow-hidden relative">
             <div className={`${
-              isMobile
-                ? 'flex min-h-0 flex-1 flex-col'
-                : 'mx-auto flex min-h-0 flex-1 w-full max-w-6xl flex-col overflow-hidden rounded-lg shadow-lg md:flex-row'
-            } bg-[#121212]`}>
+              isMobile && activeThread
+                ? 'fixed inset-0 flex flex-col bg-black'
+                : 'flex h-full min-h-0 flex-1 flex-col bg-black'
+            }`}>
+              <div className={`${
+                isMobile
+                  ? 'flex h-full min-h-0 flex-1 flex-col'
+                  : 'mx-auto flex h-full min-h-0 flex-1 w-full max-w-6xl flex-col overflow-hidden rounded-lg shadow-lg md:flex-row'
+              } bg-[#121212]`}>
 
               {/* Mobile: Only show ThreadsSidebar when no active thread */}
               <div className={`${
@@ -326,7 +327,7 @@ export default function BuyerMessagesPage() {
             </div>
 
             {/* Desktop bottom padding */}
-            <div className="hidden md:block py-3 bg-black"></div>
+            <div className="hidden md:block py-3 bg-black flex-shrink-0"></div>
           </div>
         </div>
 
