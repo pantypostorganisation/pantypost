@@ -116,63 +116,6 @@ function filterPremiumContent(listing, hasAccess) {
   return sanitized;
 }
 
-/**
- * Middleware to check premium access for a specific listing
- */
-async function checkPremiumAccess(req, res, next) {
-  try {
-    const listing = req.listing; // Assumes listing is attached by previous middleware
-    
-    if (!listing || !listing.isPremium) {
-      req.hasPremiumAccess = true;
-      return next();
-    }
-    
-    // Check if user is authenticated
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    if (!token) {
-      req.hasPremiumAccess = false;
-      return next();
-    }
-    
-    // Decode token to get user (without failing the request)
-    try {
-      const jwt = require('jsonwebtoken');
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
-      const username = decoded.username;
-      
-      // Seller always has access to their own listings
-      if (username === listing.seller) {
-        req.hasPremiumAccess = true;
-        return next();
-      }
-      
-      // Admin always has access
-      if (decoded.role === 'admin') {
-        req.hasPremiumAccess = true;
-        return next();
-      }
-      
-      // Check subscription for buyers
-      if (decoded.role === 'buyer') {
-        req.hasPremiumAccess = await isUserSubscribedToSeller(username, listing.seller);
-      } else {
-        req.hasPremiumAccess = false;
-      }
-      
-    } catch (error) {
-      // Token invalid or expired
-      req.hasPremiumAccess = false;
-    }
-    
-    next();
-  } catch (error) {
-    console.error('[Premium] Error in checkPremiumAccess middleware:', error);
-    req.hasPremiumAccess = false;
-    next();
-  }
-}
-
 // ============= LISTING ROUTES =============
 
 // GET /api/listings/debug - Debug endpoint to see all listings
@@ -1177,9 +1120,16 @@ router.post('/:id/cancel-auction', authMiddleware, async (req, res) => {
   }
 });
 
-// PATCH /api/listings/:id - Update a listing (FIXED: Changed from PUT to PATCH)
-router.patch('/:id', authMiddleware, async (req, res) => {
+// CRITICAL FIX: UPDATE LISTING ENDPOINT
+// PUT /api/listings/:id - Update a listing (Support both PUT and PATCH)
+router.put('/:id', authMiddleware, updateListing);
+router.patch('/:id', authMiddleware, updateListing);
+
+async function updateListing(req, res) {
   try {
+    console.log('[UPDATE] Updating listing:', req.params.id);
+    console.log('[UPDATE] Update data:', req.body);
+    
     const listing = await Listing.findById(req.params.id);
     
     if (!listing) {
@@ -1197,7 +1147,10 @@ router.patch('/:id', authMiddleware, async (req, res) => {
     }
     
     delete req.body.seller;
+    delete req.body._id;
+    delete req.body.id;
     
+    // Can't edit active auction with bids
     if (listing.auction && listing.auction.isAuction && 
         listing.auction.status === 'active' && listing.auction.bidCount > 0) {
       return res.status(400).json({
@@ -1206,27 +1159,76 @@ router.patch('/:id', authMiddleware, async (req, res) => {
       });
     }
     
-    Object.assign(listing, req.body);
+    // CRITICAL FIX: Ensure price is properly updated and markedUpPrice is recalculated
+    if (req.body.price !== undefined) {
+      listing.price = Number(req.body.price);
+      listing.markedUpPrice = Math.round(listing.price * 1.1 * 100) / 100; // Recalculate markup
+      console.log('[UPDATE] Price updated to:', listing.price, 'Markup:', listing.markedUpPrice);
+    }
+    
+    // Update other fields
+    const fieldsToUpdate = ['title', 'description', 'tags', 'hoursWorn', 'isPremium', 'imageUrls', 'status'];
+    fieldsToUpdate.forEach(field => {
+      if (req.body[field] !== undefined) {
+        listing[field] = req.body[field];
+      }
+    });
+    
+    // Save the updated listing
     await listing.save();
     
     // Populate seller profile for the response
     const populatedListing = await populateSellerProfile(listing.toObject());
     
+    console.log('[UPDATE] Listing updated successfully:', populatedListing.price);
+    
+    // CRITICAL: Emit WebSocket event to update all clients in real-time
     if (global.webSocketService) {
+      console.log('[UPDATE] Emitting listing update via WebSocket');
+      
+      // Emit multiple events to ensure all clients get the update
       global.webSocketService.emitListingUpdated(populatedListing);
+      
+      // Also emit a specific update event with the full listing data
+      global.webSocketService.broadcast('listing:updated', {
+        listingId: listing._id.toString(),
+        id: listing._id.toString(),
+        listing: populatedListing,
+        timestamp: new Date()
+      });
+      
+      // Emit to specific listing room if it exists
+      global.webSocketService.emitToRoom(`listing:${listing._id}`, 'listing:price_updated', {
+        listingId: listing._id.toString(),
+        price: listing.price,
+        markedUpPrice: listing.markedUpPrice,
+        title: listing.title,
+        description: listing.description,
+        tags: listing.tags,
+        imageUrls: listing.imageUrls
+      });
     }
+    
+    // Clear any caching headers to prevent stale data
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
     
     res.json({
       success: true,
-      data: populatedListing
+      data: populatedListing,
+      message: 'Listing updated successfully'
     });
   } catch (error) {
+    console.error('[UPDATE] Error updating listing:', error);
     res.status(400).json({
       success: false,
       error: error.message
     });
   }
-});
+}
 
 // DELETE /api/listings/:id - Delete a listing
 router.delete('/:id', authMiddleware, async (req, res) => {
