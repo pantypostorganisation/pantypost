@@ -40,6 +40,19 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
     [listing.auction]
   );
 
+  // FIXED: Calculate the display price with markup for non-auction listings
+  const displayPrice = useMemo(() => {
+    if (isAuction) {
+      return listing.auction?.highestBid || listing.auction?.startingPrice || 0;
+    }
+    // Use markedUpPrice if available, otherwise calculate it
+    if ((listing as any).markedUpPrice) {
+      return (listing as any).markedUpPrice;
+    }
+    // Fallback: calculate 10% markup manually
+    return Math.round(listing.price * 1.1 * 100) / 100;
+  }, [isAuction, listing]);
+
   // Format time remaining for auctions
   const formatTimeRemaining = useMemo(() => {
     if (!isAuction || !listing.auction) return null;
@@ -161,7 +174,7 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
                   {listing.auction?.highestBid ? 'Current bid' : 'Starting at'}
                 </span>
                 <span className="font-bold text-white flex items-center text-sm sm:text-base md:text-lg">
-                  ${(listing.auction?.highestBid || listing.auction?.startingPrice || 0).toFixed(2)}
+                  ${displayPrice.toFixed(2)}
                 </span>
               </div>
               <div className="flex justify-between items-center text-[10px] sm:text-xs">
@@ -208,10 +221,14 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
               </div>
             </div>
 
+            {/* FIXED: Display the calculated price with markup for non-auction listings */}
             {!isAuction && (
               <div className="text-right">
                 <p className="font-bold text-[#ff950e] text-base sm:text-xl md:text-2xl">
-                  ${listing.price.toFixed(2)}
+                  ${displayPrice.toFixed(2)}
+                </p>
+                <p className="text-[10px] sm:text-xs text-gray-500 font-medium hidden sm:block">
+                  Buy Now
                 </p>
               </div>
             )}
