@@ -280,7 +280,7 @@ export default function ConversationView(props: ConversationViewProps) {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom('auto');
+    scrollToBottom('smooth');
   }, [threadMessages.length, scrollToBottom]);
 
   // Thread focus/blur
@@ -928,8 +928,8 @@ export default function ConversationView(props: ConversationViewProps) {
         {/* Messages container */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 py-2 min-h-0"
-          style={{ 
+          className="flex-1 overflow-y-auto px-3 py-2 min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
+          style={{
             WebkitOverflowScrolling: 'touch'
           }}
         >
@@ -939,7 +939,7 @@ export default function ConversationView(props: ConversationViewProps) {
         </div>
 
         {/* Composer with safe bottom */}
-        <div 
+        <div
           ref={composerRef}
           className="bg-[#111111] border-t border-gray-800 shadow-sm flex-shrink-0 safe-bottom"
         >
@@ -969,7 +969,7 @@ export default function ConversationView(props: ConversationViewProps) {
 
   // Desktop Layout
   return (
-    <div className="h-full flex flex-col bg-[#121212] min-h-0">
+    <div className="h-full flex flex-col bg-[#121212] min-h-0 overflow-hidden">
       {/* Desktop Header */}
       <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-sm">
         {renderDesktopHeader()}
@@ -977,10 +977,10 @@ export default function ConversationView(props: ConversationViewProps) {
 
       {/* Desktop Messages */}
       <div
-        className="flex-1 overflow-y-auto bg-[#121212] min-h-0"
+        className="flex-1 overflow-y-auto bg-[#121212] min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
         ref={messagesContainerRef}
       >
-        <div className="max-w-3xl mx-auto space-y-4 p-4">
+        <div className="max-w-3xl mx-auto space-y-3 p-4">
           {renderMessagesList()}
         </div>
       </div>
