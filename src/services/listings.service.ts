@@ -924,6 +924,13 @@ export class ListingsService {
           // Invalidate cache
           this.invalidateCache();
           
+          // CRITICAL FIX: Broadcast update event to refresh browse pages
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('listing:updated', { 
+              detail: { listingId: sanitizedId, listing: convertedListing } 
+            }));
+          }
+          
           return {
             success: true,
             data: convertedListing,
@@ -957,6 +964,13 @@ export class ListingsService {
 
       // Invalidate cache
       this.invalidateCache();
+
+      // CRITICAL FIX: Broadcast update event
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('listing:updated', { 
+          detail: { listingId: sanitizedId, listing: updatedListing } 
+        }));
+      }
 
       return {
         success: true,

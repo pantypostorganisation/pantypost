@@ -162,6 +162,7 @@ export const useBrowseListings = () => {
     window.addEventListener('listings:refreshed', handleRefreshNeeded);
     window.addEventListener('verification:status-changed', handleRefreshNeeded);
     window.addEventListener('user:verification-updated', handleRefreshNeeded);
+    window.addEventListener('listing:updated', handleRefreshNeeded);
     
     return () => {
       window.removeEventListener('listing:removed', handleRefreshNeeded);
@@ -170,6 +171,7 @@ export const useBrowseListings = () => {
       window.removeEventListener('listings:refreshed', handleRefreshNeeded);
       window.removeEventListener('verification:status-changed', handleRefreshNeeded);
       window.removeEventListener('user:verification-updated', handleRefreshNeeded);
+      window.removeEventListener('listing:updated', handleRefreshNeeded);
     };
   }, [fetchFreshListings]);
 
