@@ -83,13 +83,11 @@ export default function AdminMessagesPage() {
 
   return (
     <RequireAuth role="admin">
-      <div className="bg-black flex min-h-screen flex-col md:h-screen md:min-h-0">
-        <div className="py-3 bg-black flex-shrink-0"></div>
-
-        <div className="flex-1 overflow-hidden md:h-[calc(100vh-2.25rem)] md:max-h-[calc(100vh-2.25rem)]">
-          <div className="mx-auto flex h-full w-full max-w-6xl flex-col rounded-lg bg-[#121212] shadow-lg md:flex-row min-h-0 max-h-full overflow-hidden">
+      <div className="min-h-[100dvh] overflow-hidden overscroll-contain bg-black">
+        <main className="flex h-[calc(100dvh-64px)] w-full overscroll-contain">
+          <div className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-[#121212] shadow-lg md:flex-row">
             {/* Left column - Message threads and User Directory */}
-            <div className="flex w-full flex-1 flex-col border-r border-gray-800 bg-[#121212] min-h-0 md:w-1/3 md:flex-none md:max-h-full">
+            <div className="flex w-full flex-1 flex-col border-r border-gray-800 bg-[#121212] min-h-0 md:w-1/3 md:flex-none">
               <MessagesHeader
                 filterBy={filterBy}
                 setFilterBy={setFilterBy}
@@ -103,7 +101,7 @@ export default function AdminMessagesPage() {
               />
 
               {/* Content Area - Either Conversations or User Directory */}
-              <div className="flex-1 overflow-y-auto bg-[#121212]">
+              <div className="flex-1 overflow-y-auto overscroll-contain bg-[#121212] min-h-0">
                 {showUserDirectory ? (
                   <UserDirectoryContent
                     allUsers={safeAllUsers}
@@ -131,7 +129,7 @@ export default function AdminMessagesPage() {
               </div>
             </div>
             {/* Right column - Active conversation */}
-            <div className="flex w-full flex-1 flex-col bg-[#121212] min-h-0 md:w-2/3 md:max-h-full">
+            <div className="flex w-full flex-1 flex-col bg-[#121212] min-h-0 md:w-2/3">
               <ChatContent
                 activeThread={activeThread}
                 activeMessages={safeActiveMessages}
@@ -150,10 +148,7 @@ export default function AdminMessagesPage() {
               />
             </div>
           </div>
-        </div>
-
-        {/* Bottom Padding */}
-        <div className="py-6 bg-black flex-shrink-0"></div>
+        </main>
       </div>
     </RequireAuth>
   );
