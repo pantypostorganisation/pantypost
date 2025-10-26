@@ -127,17 +127,16 @@ export default function SellerMessagesPage() {
     isMobile
       ? 'w-full'
       : 'w-[320px] border-r border-gray-800'
-  } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 overflow-hidden`;
+  } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 h-full overflow-hidden`;
 
-  const conversationWrap = `${showConversation ? 'flex' : 'hidden'} flex-1 flex flex-col bg-[#121212] min-h-0 overflow-hidden`;
+  const conversationWrap = `${showConversation ? 'flex' : 'hidden'} flex-1 flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden`;
 
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <div className="min-h-[100dvh] overflow-hidden bg-black">
-          <main className="h-[calc(100dvh-64px)] overscroll-contain overflow-hidden">
-            <div className="flex h-full">
-              <div className={innerWrap}>
+        <div className="min-h-[100dvh] overflow-hidden overscroll-contain bg-black">
+          <main className="flex h-[calc(100dvh-64px)] w-full overscroll-contain">
+            <div className={innerWrap}>
                 <aside className={sidebarWrap}>
                   <ThreadsSidebar
                     isAdmin={isAdmin}

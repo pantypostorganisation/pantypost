@@ -206,131 +206,106 @@ export default function BuyerMessagesPage() {
     );
   }
 
+  const showSidebar = !isMobile || !activeThread;
+  const showConversation = !isMobile || !!activeThread;
+
+  const innerWrap = isMobile
+    ? 'flex h-full w-full min-h-0 overflow-hidden bg-[#121212]'
+    : 'mx-auto flex h-full w-full min-h-0 max-w-6xl overflow-hidden rounded-lg shadow-lg bg-[#121212]';
+
+  const sidebarWrap = `${showSidebar ? 'flex' : 'hidden'} ${
+    isMobile ? 'w-full' : 'w-[320px] border-r border-gray-800'
+  } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 h-full overflow-hidden`;
+
+  const conversationWrap = `${showConversation ? 'flex' : 'hidden'} flex-1 flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden`;
+
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <div className="bg-black flex min-h-screen flex-col md:h-screen md:min-h-0">
-          {/* Desktop padding - hide on mobile */}
-          <div className="hidden md:block py-3 bg-black"></div>
-
-          {/* Main container */}
-          {/* On mobile without activeThread: relative positioning to flow with header */}
-          {/* On mobile with activeThread: fixed positioning full screen */}
-          {/* On desktop: always full height */}
-          <div className={`${
-            isMobile
-              ? activeThread
-                ? 'fixed inset-0'
-                : 'flex flex-col h-full min-h-screen'
-              : 'flex flex-1 flex-col min-h-0 md:h-[calc(100vh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]'
-          }`}>
-            <div className={`${
-              isMobile
-                ? 'w-full h-full flex flex-col overflow-hidden min-h-0'
-                : 'flex-1 max-w-6xl mx-auto w-full rounded-lg shadow-lg flex flex-col md:flex-row overflow-hidden min-h-0 md:max-h-full'
-            } bg-[#121212]`}>
-            
-            {/* Mobile: Only show ThreadsSidebar when no active thread */}
-            <div className={`${
-              activeThread && isMobile
-                ? 'hidden'
-                : isMobile
-                  ? 'flex flex-col h-full overflow-hidden min-h-0'
-                  : 'w-full md:w-1/3 overflow-hidden flex flex-col min-h-0 md:max-h-full'
-            }`}>
-              <ThreadsSidebar
-                threads={threads}
-                lastMessages={lastMessages}
-                sellerProfiles={sellerProfiles}
-                uiUnreadCounts={uiUnreadCounts}
-                activeThread={activeThread}
-                setActiveThread={setActiveThread}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                filterBy={filterBy}
-                setFilterBy={setFilterBy}
-                totalUnreadCount={totalUnreadCount}
-                buyerRequests={buyerRequests}
-                setObserverReadMessages={setObserverReadMessages}
-              />
-            </div>
-            
-            {/* Mobile: Only show conversation when thread is active */}
-            {/* Desktop: Always show conversation area */}
-            <div className={`${
-              !activeThread && isMobile
-                ? 'hidden'
-                : 'flex'
-            } ${
-              isMobile
-                ? 'flex-col h-full overflow-hidden min-h-0'
-                : 'w-full md:w-2/3 md:max-h-full'
-            } flex-col bg-[#121212] overflow-hidden min-h-0 md:max-h-full`}>
-              {activeThread ? (
-                <ConversationView
-                  activeThread={activeThread}
+        <div className="min-h-[100dvh] overflow-hidden overscroll-contain bg-black">
+          <main className="flex h-[calc(100dvh-64px)] w-full overscroll-contain">
+            <div className={innerWrap}>
+              <aside className={sidebarWrap}>
+                <ThreadsSidebar
                   threads={threads}
-                  user={user}
+                  lastMessages={lastMessages}
                   sellerProfiles={sellerProfiles}
+                  uiUnreadCounts={uiUnreadCounts}
+                  activeThread={activeThread}
+                  setActiveThread={setActiveThread}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  filterBy={filterBy}
+                  setFilterBy={setFilterBy}
+                  totalUnreadCount={totalUnreadCount}
                   buyerRequests={buyerRequests}
-                  wallet={walletData}
-                  previewImage={previewImage}
-                  setPreviewImage={setPreviewImage}
-                  showEmojiPicker={showEmojiPicker}
-                  setShowEmojiPicker={setShowEmojiPicker}
-                  recentEmojis={recentEmojis}
-                  replyMessage={replyMessage}
-                  setReplyMessage={setReplyMessage}
-                  selectedImage={selectedImage}
-                  setSelectedImage={setSelectedImage}
-                  isImageLoading={isImageLoading}
-                  imageError={imageError}
-                  editRequestId={editRequestId}
-                  setEditRequestId={setEditRequestId}
-                  editPrice={numericEditPrice}
-                  setEditPrice={handleEditPriceChange}
-                  editTitle={editTitle}
-                  setEditTitle={setEditTitle}
-                  editTags={editTags}
-                  setEditTags={setEditTags}
-                  editMessage={editMessage}
-                  setEditMessage={setEditMessage}
-                  handleReply={handleReply}
-                  handleBlockToggle={handleBlockToggle}
-                  handleReport={handleReport}
-                  handleAccept={handleAccept}
-                  handleDecline={handleDecline}
-                  handleEditRequest={handleEditRequest}
-                  handleEditSubmit={handleEditSubmit}
-                  handlePayNow={handlePayNow}
-                  handleImageSelect={handleImageSelect}
-                  handleMessageVisible={handleMessageVisible}
-                  handleEmojiClick={handleEmojiClick}
-                  isUserBlocked={isUserBlocked(activeThread)}
-                  isUserReported={isUserReported(activeThread)}
-                  messagesEndRef={messagesEndRef}
-                  messagesContainerRef={messagesContainerRef}
-                  fileInputRef={fileInputRef}
-                  emojiPickerRef={emojiPickerRef}
-                  inputRef={inputRef}
-                  lastManualScrollTime={lastManualScrollTime}
-                  setShowCustomRequestModal={setShowCustomRequestModal}
-                  setShowTipModal={setShowTipModal}
-                  isMobile={isMobile}
-                  onBack={handleMobileBack}
+                  setObserverReadMessages={setObserverReadMessages}
                 />
-              ) : (
-                <EmptyState />
-              )}
+              </aside>
+
+              <section className={conversationWrap}>
+                {activeThread ? (
+                  <ConversationView
+                    activeThread={activeThread}
+                    threads={threads}
+                    user={user}
+                    sellerProfiles={sellerProfiles}
+                    buyerRequests={buyerRequests}
+                    wallet={walletData}
+                    previewImage={previewImage}
+                    setPreviewImage={setPreviewImage}
+                    showEmojiPicker={showEmojiPicker}
+                    setShowEmojiPicker={setShowEmojiPicker}
+                    recentEmojis={recentEmojis}
+                    replyMessage={replyMessage}
+                    setReplyMessage={setReplyMessage}
+                    selectedImage={selectedImage}
+                    setSelectedImage={setSelectedImage}
+                    isImageLoading={isImageLoading}
+                    imageError={imageError}
+                    editRequestId={editRequestId}
+                    setEditRequestId={setEditRequestId}
+                    editPrice={numericEditPrice}
+                    setEditPrice={handleEditPriceChange}
+                    editTitle={editTitle}
+                    setEditTitle={setEditTitle}
+                    editTags={editTags}
+                    setEditTags={setEditTags}
+                    editMessage={editMessage}
+                    setEditMessage={setEditMessage}
+                    handleReply={handleReply}
+                    handleBlockToggle={handleBlockToggle}
+                    handleReport={handleReport}
+                    handleAccept={handleAccept}
+                    handleDecline={handleDecline}
+                    handleEditRequest={handleEditRequest}
+                    handleEditSubmit={handleEditSubmit}
+                    handlePayNow={handlePayNow}
+                    handleImageSelect={handleImageSelect}
+                    handleMessageVisible={handleMessageVisible}
+                    handleEmojiClick={handleEmojiClick}
+                    isUserBlocked={isUserBlocked(activeThread)}
+                    isUserReported={isUserReported(activeThread)}
+                    messagesEndRef={messagesEndRef}
+                    messagesContainerRef={messagesContainerRef}
+                    fileInputRef={fileInputRef}
+                    emojiPickerRef={emojiPickerRef}
+                    inputRef={inputRef}
+                    lastManualScrollTime={lastManualScrollTime}
+                    setShowCustomRequestModal={setShowCustomRequestModal}
+                    setShowTipModal={setShowTipModal}
+                    isMobile={isMobile}
+                    onBack={handleMobileBack}
+                  />
+                ) : (
+                  <EmptyState />
+                )}
+              </section>
             </div>
-          </div>
-          
-          {/* Desktop bottom padding */}
-          <div className="hidden md:block py-3 bg-black"></div>
+          </main>
         </div>
-      </div>
 
       {/* Modals */}
       {previewImage && (

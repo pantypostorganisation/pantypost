@@ -151,7 +151,7 @@ export default function ChatContent({
 
   if (!activeThread) {
     return (
-      <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#121212]">
         <div className="flex flex-1 items-center justify-center text-gray-400">
           <div className="text-center p-4">
             <div className="mb-4 flex justify-center">
@@ -175,7 +175,7 @@ export default function ChatContent({
   const canSend = (!!content.trim() || !!selectedImage) && !isImageLoading;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#121212]">
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
         <div className="flex items-center">
@@ -245,7 +245,7 @@ export default function ChatContent({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-[#121212] min-h-0">
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 bg-[#121212] min-h-0">
         <div className="max-w-3xl mx-auto space-y-4">
           {activeMessages.map((msg, index) => {
             const isFromMe = msg.sender === username;
@@ -281,15 +281,17 @@ export default function ChatContent({
                   {/* Image message */}
                   {msg.type === 'image' && msg.meta?.imageUrl && (
                     <div className="mt-1 mb-2">
-                      <SecureImage
-                        src={msg.meta.imageUrl}
-                        alt="Shared image"
-                        className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                        onClick={(e: React.MouseEvent<HTMLImageElement>) => {
-                          e.stopPropagation();
-                          setPreviewImage(msg.meta?.imageUrl || null);
-                        }}
-                      />
+                      <div className="max-h-[60vh] overflow-hidden rounded-md bg-black/30">
+                        <SecureImage
+                          src={msg.meta.imageUrl}
+                          alt="Shared image"
+                          className="h-auto w-full cursor-pointer object-contain transition-opacity hover:opacity-90"
+                          onClick={(e: React.MouseEvent<HTMLImageElement>) => {
+                            e.stopPropagation();
+                            setPreviewImage(msg.meta?.imageUrl || null);
+                          }}
+                        />
+                      </div>
                       {msg.content && (
                         <div className={`mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
                           <SecureMessageDisplay content={msg.content} allowBasicFormatting={false} className="text-white" />
@@ -341,7 +343,7 @@ export default function ChatContent({
 
       {/* Composer */}
       {!isUserBlocked && (
-        <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+        <div className="relative flex-none border-t border-gray-800 bg-[#1a1a1a]">
           {showEmojiPicker && <EmojiPicker onEmojiSelect={handleEmojiSelect} onClose={() => setShowEmojiPicker(false)} />}
 
           {/* Selected image preview */}
@@ -461,7 +463,7 @@ export default function ChatContent({
       )}
 
       {isUserBlocked && (
-        <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+        <div className="flex flex-none items-center justify-center border-t border-gray-800 bg-[#1a1a1a] p-4 text-center text-sm text-red-400">
           <ShieldAlert size={16} className="mr-2" />
           You have blocked this user
           <button

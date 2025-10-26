@@ -921,14 +921,14 @@ export default function ConversationView(props: ConversationViewProps) {
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden min-h-0">
+      <div className="flex h-full flex-col overflow-hidden bg-[#121212] min-h-0">
         {/* Mobile Header */}
         {renderMobileHeader()}
 
         {/* Messages container */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 py-2 min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
+          className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
           style={{
             WebkitOverflowScrolling: 'touch'
           }}
@@ -941,7 +941,7 @@ export default function ConversationView(props: ConversationViewProps) {
         {/* Composer with safe bottom */}
         <div
           ref={composerRef}
-          className="bg-[#111111] border-t border-gray-800 shadow-sm flex-shrink-0 safe-bottom"
+          className="bg-[#111111] border-t border-gray-800 shadow-sm flex-none safe-bottom"
         >
           {!isUserBlocked ? (
             <div className="relative">
@@ -969,7 +969,7 @@ export default function ConversationView(props: ConversationViewProps) {
 
   // Desktop Layout
   return (
-    <div className="h-full flex flex-col bg-[#121212] min-h-0 overflow-hidden">
+    <div className="flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden">
       {/* Desktop Header */}
       <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-sm">
         {renderDesktopHeader()}
@@ -977,7 +977,7 @@ export default function ConversationView(props: ConversationViewProps) {
 
       {/* Desktop Messages */}
       <div
-        className="flex-1 overflow-y-auto bg-[#121212] min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
+        className="flex-1 overflow-y-auto overscroll-contain bg-[#121212] min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
         ref={messagesContainerRef}
       >
         <div className="max-w-3xl mx-auto space-y-3 p-4">
@@ -987,11 +987,11 @@ export default function ConversationView(props: ConversationViewProps) {
 
       {/* Desktop Composer */}
       {!isUserBlocked ? (
-        <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+        <div className="relative flex-none border-t border-gray-800 bg-[#1a1a1a]">
           {renderComposer()}
         </div>
       ) : (
-        <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+        <div className="flex flex-none items-center justify-center border-t border-gray-800 bg-[#1a1a1a] p-4 text-center text-sm text-red-400">
           <ShieldAlert size={16} className="mr-2" />
           You have blocked this seller
           <button
