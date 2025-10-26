@@ -116,43 +116,29 @@ export default function SellerMessagesPage() {
   }
 
   // ----- className helpers (purely to keep JSX simple & error-proof) -----
-  const outerWrap = isMobile && activeThread
-    ? 'fixed inset-0 flex flex-col bg-black'
-    : 'flex h-full min-h-0 max-h-full flex-1 flex-col bg-black';
+  const showSidebar = !isMobile || !activeThread;
+  const showConversation = !isMobile || !!activeThread;
 
-  const innerWrap = `${
+  const innerWrap = isMobile
+    ? 'flex h-full w-full min-h-0 overflow-hidden bg-[#121212]'
+    : 'mx-auto flex h-full w-full min-h-0 max-w-6xl overflow-hidden rounded-lg shadow-lg bg-[#121212]';
+
+  const sidebarWrap = `${showSidebar ? 'flex' : 'hidden'} ${
     isMobile
-      ? 'flex h-full min-h-0 max-h-full flex-1 flex-col'
-      : 'mx-auto flex h-full min-h-0 max-h-full flex-1 w-full max-w-6xl flex-col overflow-hidden rounded-lg shadow-lg md:flex-row'
-  } bg-[#121212]`;
+      ? 'w-full'
+      : 'w-[320px] border-r border-gray-800'
+  } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 overflow-hidden`;
 
-  const sidebarWrap = `${
-    activeThread && isMobile
-      ? 'hidden'
-      : isMobile
-        ? 'flex min-h-0 max-h-full flex-1 flex-col overflow-hidden'
-        : 'w-full md:max-w-xs md:flex md:flex-col md:overflow-hidden md:min-h-0 md:max-h-full'
-  }`;
-
-  const conversationWrap = `${
-    !activeThread && isMobile ? 'hidden' : 'flex'
-  } ${
-    isMobile ? 'flex min-h-0 max-h-full flex-1 flex-col overflow-hidden' : 'w-full md:flex-1'
-  } flex-col bg-[#121212] overflow-hidden min-h-0 max-h-full`;
+  const conversationWrap = `${showConversation ? 'flex' : 'hidden'} flex-1 flex flex-col bg-[#121212] min-h-0 overflow-hidden`;
 
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <div className="bg-black flex min-h-screen flex-col md:h-screen md:min-h-0">
-          {/* Desktop padding - hide on mobile */}
-          <div className="hidden md:block py-3 bg-black flex-shrink-0" />
-
-          {/* Main container - matching buyer's responsive layout */}
-          <div className="flex-1 overflow-hidden relative min-h-0 md:h-[calc(100vh-1.5rem)] md:max-h-[calc(100vh-1.5rem)]">
-            <div className={outerWrap}>
+        <div className="min-h-[100dvh] overflow-hidden bg-black">
+          <main className="h-[calc(100dvh-64px)] overscroll-contain overflow-hidden">
+            <div className="flex h-full">
               <div className={innerWrap}>
-                {/* Mobile: Only show ThreadsSidebar when no active thread */}
-                <div className={sidebarWrap}>
+                <aside className={sidebarWrap}>
                   <ThreadsSidebar
                     isAdmin={isAdmin}
                     threads={threads}
@@ -168,11 +154,9 @@ export default function SellerMessagesPage() {
                     setFilterBy={setFilterBy}
                     setObserverReadMessages={setObserverReadMessages}
                   />
-                </div>
+                </aside>
 
-                {/* Mobile: Only show conversation when thread is active */}
-                {/* Desktop: Always show conversation area */}
-                <div className={conversationWrap}>
+                <section className={conversationWrap}>
                   {activeThread ? (
                     <ConversationView
                       activeThread={activeThread}
@@ -222,13 +206,10 @@ export default function SellerMessagesPage() {
                   ) : (
                     <EmptyState />
                   )}
-                </div>
+                </section>
               </div>
-
-              {/* Desktop bottom padding */}
-              <div className="hidden md:block py-3 bg-black flex-shrink-0" />
             </div>
-          </div>
+          </main>
 
           {/* Image Preview Modal */}
           {previewImage && (
