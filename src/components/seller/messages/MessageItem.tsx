@@ -157,19 +157,21 @@ export default function MessageItem({
         {/* Image message with secure display */}
         {msg.type === 'image' && msg.meta?.imageUrl && (
           <div className="mt-1 mb-2">
-            <SecureImage
-              src={msg.meta.imageUrl}
-              alt="Shared image"
-              className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-              onError={() => console.error('Failed to load image')}
-              onClick={(e: React.MouseEvent<HTMLImageElement>) => {
-                e.stopPropagation();
-                setPreviewImage(msg.meta?.imageUrl || null);
-              }}
-            />
+            <div className="flex max-h-[60vh] items-center justify-center overflow-hidden rounded-md bg-black/30">
+              <SecureImage
+                src={msg.meta.imageUrl}
+                alt="Shared image"
+                className="h-auto w-full max-h-[60vh] cursor-pointer object-contain transition-opacity hover:opacity-90"
+                onError={() => console.error('Failed to load image')}
+                onClick={(e: React.MouseEvent<HTMLImageElement>) => {
+                  e.stopPropagation();
+                  setPreviewImage(msg.meta?.imageUrl || null);
+                }}
+              />
+            </div>
             {msg.content && (
               <div className={`mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
-                <SecureMessageDisplay 
+                <SecureMessageDisplay
                   content={msg.content}
                   allowBasicFormatting={false}
                   className={isFromMe ? 'text-black' : 'text-[#fefefe]'}

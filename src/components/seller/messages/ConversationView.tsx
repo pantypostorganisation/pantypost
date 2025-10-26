@@ -608,14 +608,14 @@ export default function ConversationView({
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden min-h-0">
+      <div className="flex h-full flex-1 flex-col overflow-hidden bg-[#121212]">
         {/* Mobile Header */}
         {renderMobileHeader()}
 
         {/* Messages container */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 py-2 min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-2 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
           style={{
             WebkitOverflowScrolling: 'touch'
           }}
@@ -656,7 +656,7 @@ export default function ConversationView({
         {/* Composer with safe bottom */}
         <div
           ref={composerRef}
-          className="bg-[#111111] border-t border-gray-800 shadow-sm flex-shrink-0 safe-bottom"
+          className="safe-bottom flex-none border-t border-gray-800 bg-[#111111] shadow-sm"
         >
           {!isUserBlocked ? (
             <MessageInputContainer
@@ -691,15 +691,15 @@ export default function ConversationView({
 
   // Desktop Layout
   return (
-    <div className="h-full flex flex-col bg-[#121212] min-h-0 overflow-hidden">
+    <div className="flex h-full w-full flex-1 flex-col overflow-hidden bg-[#121212] min-h-0">
       {/* Desktop Header */}
-      <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-sm">
+      <div className="flex-none border-b border-gray-800 bg-[#1a1a1a] shadow-sm">
         {renderDesktopHeader()}
       </div>
 
       {/* Desktop Messages */}
       <div
-        className="flex-1 overflow-y-auto bg-[#121212] min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
+        className="flex-1 min-h-0 overflow-y-auto overscroll-contain bg-[#121212] scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
         ref={messagesContainerRef}
       >
         <div className="max-w-3xl mx-auto space-y-3 p-4">
@@ -737,7 +737,7 @@ export default function ConversationView({
 
       {/* Desktop Composer */}
       {!isUserBlocked ? (
-        <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+        <div className="relative flex-none border-t border-gray-800 bg-[#1a1a1a]">
           <MessageInputContainer
             isUserBlocked={isUserBlocked}
             onBlockToggle={handleBlockToggle}
@@ -750,7 +750,7 @@ export default function ConversationView({
           />
         </div>
       ) : (
-        <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+        <div className="flex flex-none items-center justify-center border-t border-gray-800 bg-[#1a1a1a] p-4 text-center text-sm text-red-400">
           <ShieldAlert size={16} className="mr-2" />
           You have blocked this buyer
           <button
