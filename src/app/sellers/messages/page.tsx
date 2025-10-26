@@ -124,9 +124,7 @@ export default function SellerMessagesPage() {
     : 'mx-auto flex h-full w-full min-h-0 max-w-6xl overflow-hidden rounded-lg shadow-lg bg-[#121212]';
 
   const sidebarWrap = `${showSidebar ? 'flex' : 'hidden'} ${
-    isMobile
-      ? 'w-full'
-      : 'w-[320px] border-r border-gray-800'
+    isMobile ? 'w-full' : 'w-[320px] border-r border-gray-800'
   } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 h-full overflow-hidden`;
 
   const conversationWrap = `${showConversation ? 'flex' : 'hidden'} flex-1 flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden`;
@@ -137,76 +135,75 @@ export default function SellerMessagesPage() {
         <div className="min-h-[100dvh] overflow-hidden overscroll-contain bg-black">
           <main className="flex h-[calc(100dvh-64px)] w-full overscroll-contain">
             <div className={innerWrap}>
-                <aside className={sidebarWrap}>
-                  <ThreadsSidebar
-                    isAdmin={isAdmin}
-                    threads={threads}
-                    lastMessages={lastMessages}
-                    buyerProfiles={buyerProfiles}
-                    totalUnreadCount={totalUnreadCount}
-                    uiUnreadCounts={uiUnreadCounts}
-                    activeThread={activeThread}
-                    setActiveThread={setActiveThread}
-                    searchQuery={searchQuery}
-                    setSearchQuery={setSearchQuery}
-                    filterBy={filterBy}
-                    setFilterBy={setFilterBy}
-                    setObserverReadMessages={setObserverReadMessages}
-                  />
-                </aside>
+              <aside className={sidebarWrap}>
+                <ThreadsSidebar
+                  isAdmin={isAdmin}
+                  threads={threads}
+                  lastMessages={lastMessages}
+                  buyerProfiles={buyerProfiles}
+                  totalUnreadCount={totalUnreadCount}
+                  uiUnreadCounts={uiUnreadCounts}
+                  activeThread={activeThread}
+                  setActiveThread={setActiveThread}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  filterBy={filterBy}
+                  setFilterBy={setFilterBy}
+                  setObserverReadMessages={setObserverReadMessages}
+                />
+              </aside>
 
-                <section className={conversationWrap}>
-                  {activeThread ? (
-                    <ConversationView
-                      activeThread={activeThread}
-                      threads={threads}
-                      buyerProfiles={buyerProfiles}
-                      sellerRequests={sellerRequests}
-                      isUserBlocked={isUserBlocked}
-                      isUserReported={isUserReported}
-                      handleReport={handleReport}
-                      handleBlockToggle={handleBlockToggle}
-                      user={user}
-                      messageInputControls={{
-                        replyMessage,
-                        setReplyMessage,
-                        selectedImage,
-                        setSelectedImage,
-                        isImageLoading,
-                        setIsImageLoading,
-                        imageError,
-                        setImageError,
-                        showEmojiPicker,
-                        setShowEmojiPicker,
-                        recentEmojis,
-                        handleReply,
-                        handleEmojiClick,
-                        handleImageSelect,
-                      }}
-                      editRequestControls={{
-                        editRequestId,
-                        setEditRequestId,
-                        editPrice,
-                        setEditPrice,
-                        editTitle,
-                        setEditTitle,
-                        editMessage,
-                        setEditMessage,
-                        handleEditSubmit,
-                      }}
-                      handleAccept={handleAccept}
-                      handleDecline={handleDecline}
-                      handleEditRequest={handleEditRequest}
-                      handleMessageVisible={handleMessageVisible}
-                      setPreviewImage={setPreviewImage}
-                      isMobile={isMobile}
-                      onBack={handleMobileBack}
-                    />
-                  ) : (
-                    <EmptyState />
-                  )}
-                </section>
-              </div>
+              <section className={conversationWrap}>
+                {activeThread ? (
+                  <ConversationView
+                    activeThread={activeThread}
+                    threads={threads}
+                    buyerProfiles={buyerProfiles}
+                    sellerRequests={sellerRequests}
+                    isUserBlocked={isUserBlocked}
+                    isUserReported={isUserReported}
+                    handleReport={handleReport}
+                    handleBlockToggle={handleBlockToggle}
+                    user={user}
+                    messageInputControls={{
+                      replyMessage,
+                      setReplyMessage,
+                      selectedImage,
+                      setSelectedImage,
+                      isImageLoading,
+                      setIsImageLoading,
+                      imageError,
+                      setImageError,
+                      showEmojiPicker,
+                      setShowEmojiPicker,
+                      recentEmojis,
+                      handleReply,
+                      handleEmojiClick,
+                      handleImageSelect,
+                    }}
+                    editRequestControls={{
+                      editRequestId,
+                      setEditRequestId,
+                      editPrice,
+                      setEditPrice,
+                      editTitle,
+                      setEditTitle,
+                      editMessage,
+                      setEditMessage,
+                      handleEditSubmit,
+                    }}
+                    handleAccept={handleAccept}
+                    handleDecline={handleDecline}
+                    handleEditRequest={handleEditRequest}
+                    handleMessageVisible={handleMessageVisible}
+                    setPreviewImage={setPreviewImage}
+                    isMobile={isMobile}
+                    onBack={handleMobileBack}
+                  />
+                ) : (
+                  <EmptyState />
+                )}
+              </section>
             </div>
           </main>
 
