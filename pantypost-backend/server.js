@@ -45,6 +45,7 @@ const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
 const banRoutes = require('./routes/ban.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const statsRoutes = require('./routes/stats.routes');
 // NEW
 const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 
@@ -123,6 +124,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/stats', statsRoutes);
 
 // NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
 app.use('/api/profilebuyer', profileBuyerRoutes);

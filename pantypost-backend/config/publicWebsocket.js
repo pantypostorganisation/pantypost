@@ -1,5 +1,6 @@
 // pantypost-backend/config/publicWebsocket.js
 const socketIO = require('socket.io');
+const { getPaymentStats } = require('../utils/paymentStats');
 
 class PublicWebSocketService {
   constructor() {
@@ -20,13 +21,13 @@ class PublicWebSocketService {
     // No authentication required for public namespace
     this.io.on('connection', (socket) => {
       console.log('[PublicWS] Guest connected:', socket.id);
-      
+
       // Auto-join stats room
       socket.join(this.statsRoom);
-      
+
       // Send current stats immediately
       this.sendCurrentStats(socket);
-      
+
       socket.on('disconnect', () => {
         console.log('[PublicWS] Guest disconnected:', socket.id);
       });
@@ -45,8 +46,8 @@ class PublicWebSocketService {
 
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
-      const newUsersToday = await User.countDocuments({ 
-        createdAt: { $gte: todayStart } 
+      const newUsersToday = await User.countDocuments({
+        createdAt: { $gte: todayStart }
       });
 
       const stats = {
@@ -59,6 +60,12 @@ class PublicWebSocketService {
       };
 
       socket.emit('stats:users', stats);
+
+      const paymentStats = await getPaymentStats();
+      socket.emit('stats:payments_processed', {
+        totalPaymentsProcessed: paymentStats.totalPaymentsProcessed || 0,
+        timestamp: new Date().toISOString()
+      });
     } catch (error) {
       console.error('[PublicWS] Error sending stats:', error);
     }
@@ -67,20 +74,31 @@ class PublicWebSocketService {
   // Broadcast stats to all connected clients (guests and authenticated)
   broadcastStats(stats) {
     if (!this.io) return;
-    
+
     console.log('[PublicWS] Broadcasting stats to all guests:', {
       totalUsers: stats.totalUsers,
       newUsersToday: stats.newUsersToday
     });
-    
+
     this.io.to(this.statsRoom).emit('stats:users', stats);
   }
 
   broadcastUserRegistered(userData) {
     if (!this.io) return;
-    
+
     console.log('[PublicWS] Broadcasting new user registration to guests');
     this.io.to(this.statsRoom).emit('user:registered', userData);
+  }
+
+  broadcastPaymentsProcessed(data) {
+    if (!this.io) return;
+
+    const payload = {
+      totalPaymentsProcessed: data?.totalPaymentsProcessed || 0,
+      timestamp: data?.timestamp || new Date().toISOString()
+    };
+
+    this.io.to(this.statsRoom).emit('stats:payments_processed', payload);
   }
 }
 

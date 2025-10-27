@@ -8,6 +8,7 @@ const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
+const { incrementPaymentStats } = require('../utils/paymentStats');
 const authMiddleware = require('../middleware/auth.middleware');
 const tierService = require('../services/tierService');
 const TIER_CONFIG = require('../config/tierConfig');
@@ -392,6 +393,12 @@ router.post('/', authMiddleware, async (req, res) => {
         }
       }
 
+      try {
+        await incrementPaymentStats();
+      } catch (statsError) {
+        console.error('[Order] Failed to increment payment stats:', statsError);
+      }
+
       res.json({
         success: true,
         data: {
@@ -717,17 +724,23 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
           read: false
         });
 
-        if (tierUpdateResult && tierUpdateResult.changed) {
-          global.webSocketService.emitUserUpdate(seller, {
-            tier: tierUpdateResult.newTier,
-            totalSales: tierUpdateResult.stats.totalSales
-          });
-        }
+      if (tierUpdateResult && tierUpdateResult.changed) {
+        global.webSocketService.emitUserUpdate(seller, {
+          tier: tierUpdateResult.newTier,
+          totalSales: tierUpdateResult.stats.totalSales
+        });
       }
+    }
 
-      res.json({
-        success: true,
-        data: {
+    try {
+      await incrementPaymentStats();
+    } catch (statsError) {
+      console.error('[Order] Failed to increment payment stats:', statsError);
+    }
+
+    res.json({
+      success: true,
+      data: {
           _id: order._id.toString(),
           id: order._id.toString(),
           title: order.title,

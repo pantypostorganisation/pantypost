@@ -61,6 +61,14 @@ export function usePublicWebSocket(options: PublicWebSocketOptions = {}) {
         }
       });
 
+      socketRef.current.on('stats:payments_processed', (data: any) => {
+        console.log('[PublicWS] Received payments processed update:', data);
+        const handlers = handlersRef.current.get('stats:payments_processed');
+        if (handlers) {
+          handlers.forEach(handler => handler(data));
+        }
+      });
+
       // Listen for new user registrations
       socketRef.current.on('user:registered', (data: any) => {
         console.log('[PublicWS] New user registered:', data);

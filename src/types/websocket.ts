@@ -64,7 +64,10 @@ export enum WebSocketEvent {
   
   // System events
   PING = 'ping',
-  PONG = 'pong'
+  PONG = 'pong',
+
+  // Stats events
+  STATS_PAYMENTS_PROCESSED = 'stats:payments_processed'
 }
 
 // Type for WebSocket event handlers
