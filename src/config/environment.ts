@@ -160,9 +160,12 @@ export const analyticsConfig = {
 } as const;
 
 // Error reporting configuration
+const rawErrorReportingEnabled = getEnvBool('NEXT_PUBLIC_ENABLE_ERROR_REPORTING', !isDevelopment());
+const sentryDsn = getEnvVar('NEXT_PUBLIC_SENTRY_DSN', '');
 export const errorReportingConfig = {
-  enabled: getEnvBool('NEXT_PUBLIC_ENABLE_ERROR_REPORTING', !isDevelopment()),
-  sentryDsn: getEnvVar('NEXT_PUBLIC_SENTRY_DSN', ''),
+  enabled: rawErrorReportingEnabled && Boolean(sentryDsn),
+  sentryDsn,
+  requested: rawErrorReportingEnabled,
 } as const;
 
 // Feature toggles - Combined old and new features
@@ -479,7 +482,7 @@ export function validateConfiguration(): { valid: boolean; errors: string[] } {
   }
 
   // Validate monitoring in production
-  if (isProduction() && errorReportingConfig.enabled && !errorReportingConfig.sentryDsn) {
+  if (isProduction() && errorReportingConfig.requested && !errorReportingConfig.sentryDsn) {
     errors.push('Sentry DSN is required when error reporting is enabled');
   }
 
