@@ -191,7 +191,7 @@ export default function PaymentsProcessedCounter({
     >
       <ShieldCheck className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
       <span className={textClasses}>
-        Total payments processed ($){' '}
+        Total payments processed{' '}
         <span className="relative inline-block">
           <motion.span
             className="font-bold"
