@@ -34,6 +34,21 @@ export const metadata: Metadata = {
   authors: [{ name: 'PantyPost' }],
   creator: 'PantyPost',
   publisher: 'PantyPost',
+  
+  // FAVICON CONFIGURATION - Using icon.png everywhere
+  icons: {
+    icon: [
+      { url: '/icon.png', type: 'image/png' },
+      { url: '/icon.png', type: 'image/png', sizes: '32x32' },
+      { url: '/icon.png', type: 'image/png', sizes: '16x16' },
+    ],
+    shortcut: '/icon.png',
+    apple: [
+      { url: '/icon.png' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192' },
+    ],
+  },
+  
   alternates: {
     canonical: '/',
     languages: {
@@ -42,7 +57,7 @@ export const metadata: Metadata = {
     },
   },
   
-  // CRITICAL: Enable indexing for production (CHANGED FROM noindex)
+  // CRITICAL: Enable indexing for production
   robots: {
     index: true,
     follow: true,
@@ -82,9 +97,9 @@ export const metadata: Metadata = {
     creator: '@pantypost',
   },
   
-  // Verification tags (add your codes after GSC setup)
+  // Verification tags
   verification: {
-    google: 'Gsm1a2UpYcIATRHoie3WTPlp416gBAxw2f5vqEPWNwY', // Google HTML tag verification code
+    google: 'Gsm1a2UpYcIATRHoie3WTPlp416gBAxw2f5vqEPWNwY',
   },
   
   // Additional meta tags
@@ -122,15 +137,15 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         
-        {/* Favicon - UPDATED to use favicon.png */}
-        <link rel="icon" href="/favicon.png" type="image/png" />
-        <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+        {/* Favicon - Using icon.png consistently */}
+        <link rel="icon" href="/icon.png" type="image/png" />
+        <link rel="shortcut icon" href="/icon.png" type="image/png" />
         
         {/* Age restriction meta tag */}
         <meta name="rating" content="adult" />
         <meta name="age" content="21" />
         
-        {/* Structured Data - Organization & WebSite */}
+        {/* Structured Data - Updated to use icon.png instead of logo.png */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -152,7 +167,7 @@ export default function RootLayout({
                 '@type': 'Organization',
                 name: 'PantyPost',
                 url: BASE_URL,
-                logo: `${BASE_URL}/logo.png`,
+                logo: `${BASE_URL}/icon.png`,  // CHANGED from logo.png to icon.png
                 sameAs: [
                   'https://twitter.com/pantypost',
                   'https://www.instagram.com/pantypost'
