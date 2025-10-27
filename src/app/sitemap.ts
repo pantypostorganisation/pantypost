@@ -73,13 +73,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${BASE_URL}/signup`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
-      priority: 0.6,
+      priority: 0.7,
     },
     {
       url: `${BASE_URL}/terms`,
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.5,
+    },
+    // ADD THESE BLOG PAGES
+    {
+      url: `${BASE_URL}/blog/how-to-buy-used-panties-online-guide`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/blog/how-to-sell-used-panties-online-guide`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly',
+      priority: 0.7,
     },
   ];
 
