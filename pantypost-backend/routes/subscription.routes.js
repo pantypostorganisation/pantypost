@@ -9,6 +9,7 @@ const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
+const { incrementPaymentStats } = require('../utils/paymentStats');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
@@ -238,6 +239,12 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       webSocketService.emitBalanceUpdate('platform', 'admin', adminPrev, adminWallet.balance, 'platform_fee');
       webSocketService.emitTransaction(paymentTransaction);
       webSocketService.emitTransaction(feeTransaction);
+
+      try {
+        await incrementPaymentStats(finalPrice);
+      } catch (statsError) {
+        console.error('[Subscription] Failed to increment payment stats:', statsError);
+      }
 
       res.json({
         success: true,

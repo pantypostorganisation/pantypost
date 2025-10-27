@@ -62,8 +62,9 @@ class PublicWebSocketService {
       socket.emit('stats:users', stats);
 
       const paymentStats = await getPaymentStats();
+      const total = Math.round(Number(paymentStats.totalPaymentsProcessed || 0) * 100) / 100;
       socket.emit('stats:payments_processed', {
-        totalPaymentsProcessed: paymentStats.totalPaymentsProcessed || 0,
+        totalPaymentsProcessed: total,
         timestamp: new Date().toISOString()
       });
     } catch (error) {
@@ -94,7 +95,7 @@ class PublicWebSocketService {
     if (!this.io) return;
 
     const payload = {
-      totalPaymentsProcessed: data?.totalPaymentsProcessed || 0,
+      totalPaymentsProcessed: Math.round(Number(data?.totalPaymentsProcessed || 0) * 100) / 100,
       timestamp: data?.timestamp || new Date().toISOString()
     };
 

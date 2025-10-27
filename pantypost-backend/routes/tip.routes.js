@@ -132,7 +132,7 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
       } catch (_) {}
 
       try {
-        await incrementPaymentStats();
+        await incrementPaymentStats(amount);
       } catch (statsError) {
         console.error('[Tip] Failed to increment payment stats:', statsError);
       }

@@ -394,7 +394,7 @@ router.post('/', authMiddleware, async (req, res) => {
       }
 
       try {
-        await incrementPaymentStats();
+        await incrementPaymentStats(actualPrice);
       } catch (statsError) {
         console.error('[Order] Failed to increment payment stats:', statsError);
       }
@@ -733,7 +733,7 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
     }
 
     try {
-      await incrementPaymentStats();
+      await incrementPaymentStats(actualPrice);
     } catch (statsError) {
       console.error('[Order] Failed to increment payment stats:', statsError);
     }

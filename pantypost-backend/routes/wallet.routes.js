@@ -8,7 +8,6 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const mongoose = require('mongoose');
-const { incrementPaymentStats } = require('../utils/paymentStats');
 
 // ============= HELPER FUNCTIONS FOR UNIFIED ADMIN WALLET =============
 
@@ -271,12 +270,6 @@ router.post('/deposit', authMiddleware, async (req, res) => {
       global.webSocketService.emitTransaction(transaction);
     }
     
-    try {
-      await incrementPaymentStats();
-    } catch (statsError) {
-      console.error('[Wallet] Failed to increment payment stats after deposit:', statsError);
-    }
-
     res.json({
       success: true,
       data: transaction
