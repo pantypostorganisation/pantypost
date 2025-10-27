@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useSpring, AnimatePresence } from 'framer-motion';
-import { ShieldDollar } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -189,7 +189,7 @@ export default function PaymentsProcessedCounter({
       transition={{ duration: 0.5 }}
       aria-label="Total payments processed"
     >
-      <ShieldDollar className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
+      <ShieldCheck className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
       <span className={textClasses}>
         Total payments processed ($){' '}
         <span className="relative inline-block">
