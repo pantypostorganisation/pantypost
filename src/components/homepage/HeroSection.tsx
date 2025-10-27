@@ -75,8 +75,8 @@ export default function HeroSection() {
             viewport={VIEWPORT_CONFIG}
             variants={containerVariants}
           >
-            {/* Dynamic counters */}
-            <div className="mb-3 flex items-center gap-4 justify-center md:justify-start">
+            {/* IMPROVED MOBILE LAYOUT: Stack counters vertically on mobile for better spacing */}
+            <div className="mb-4 md:mb-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4 justify-center md:justify-start">
               <PaymentsProcessedCounter compact className="" />
               <AnimatedUserCounter compact={true} />
             </div>

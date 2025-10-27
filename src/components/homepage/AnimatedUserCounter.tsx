@@ -225,15 +225,18 @@ export default function AnimatedUserCounter({
   const displayValue = isLoading && !hasInitialLoad ? 'Loading' : formattedCount || '0';
 
   if (compact) {
+    // IMPROVED MOBILE RESPONSIVE DESIGN
+    // Mobile: Smaller text and icon, tighter spacing
+    // Desktop: Keep original size
     return (
       <motion.div 
-        className={`flex items-center gap-2 relative ${className}`}
+        className={`flex items-center gap-1 sm:gap-2 relative ${className}`}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <CheckCircle className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
-        <span className="text-[#ff950e] font-semibold text-xs tracking-wider uppercase relative">
+        <CheckCircle className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
+        <span className="text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap">
           Trusted by{' '}
           <span className="relative inline-block">
             <motion.span 
@@ -251,14 +254,14 @@ export default function AnimatedUserCounter({
               {showUpdateAnimation && (
                 <motion.span
                   key={`inc-${animationKey}`}
-                  className="absolute left-1/2 -translate-x-1/2 text-green-400 text-xs font-bold uppercase tracking-wider whitespace-nowrap pointer-events-none"
+                  className="absolute left-1/2 -translate-x-1/2 text-green-400 text-[9px] sm:text-xs font-bold uppercase tracking-wider whitespace-nowrap pointer-events-none"
                   initial={{ 
                     opacity: 0, 
                     y: 0,
                   }}
                   animate={{ 
                     opacity: [0, 0.8, 1, 1, 0.8, 0],
-                    y: [0, -8, -12, -16, -20, -24],
+                    y: [0, -6, -10, -14, -18, -20],
                   }}
                   exit={{ 
                     opacity: 0,

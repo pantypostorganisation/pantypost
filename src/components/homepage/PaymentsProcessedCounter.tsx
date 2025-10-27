@@ -231,12 +231,24 @@ export default function PaymentsProcessedCounter({
     return `+${currency.replace('$', '')}`;
   }, [incrementAmount, formatCurrency]);
   
+  // IMPROVED MOBILE RESPONSIVE DESIGN
+  // Mobile: Smaller text and icon, tighter spacing
+  // Desktop: Keep original size
   const containerClasses = compact
-    ? `flex items-center gap-2 relative ${className}`
+    ? `flex items-center gap-1 sm:gap-2 relative ${className}`
     : `flex items-center gap-3 relative ${className}`;
+    
+  const iconClasses = compact
+    ? 'h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0'
+    : 'h-5 w-5 text-[#ff950e] animate-pulse-slow';
+    
   const textClasses = compact
-    ? 'text-[#ff950e] font-semibold text-xs tracking-wider uppercase relative'
+    ? 'text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap'
     : 'text-[#ff950e] font-semibold text-sm tracking-wider uppercase relative';
+    
+  const incrementClasses = compact
+    ? 'absolute left-1/2 -translate-x-1/2 text-green-400 text-[9px] sm:text-xs font-bold uppercase tracking-wider whitespace-nowrap pointer-events-none'
+    : 'absolute left-1/2 -translate-x-1/2 text-green-400 text-xs font-bold uppercase tracking-wider whitespace-nowrap pointer-events-none';
 
   return (
     <motion.div
@@ -246,7 +258,7 @@ export default function PaymentsProcessedCounter({
       transition={{ duration: 0.5 }}
       aria-label="Payments processed"
     >
-      <DollarSign className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
+      <DollarSign className={iconClasses} aria-hidden="true" />
       <span className={textClasses}>
         Payments processed{' '}
         <span className="relative inline-block">
@@ -265,11 +277,11 @@ export default function PaymentsProcessedCounter({
             {showUpdateAnimation && (
               <motion.span
                 key={`payments-inc-${animationKey}`}
-                className="absolute left-1/2 -translate-x-1/2 text-green-400 text-xs font-bold uppercase tracking-wider whitespace-nowrap pointer-events-none"
+                className={incrementClasses}
                 initial={{ opacity: 0, y: 0 }}
                 animate={{
                   opacity: [0, 0.8, 1, 1, 0.8, 0],
-                  y: [0, -8, -12, -16, -20, -24],
+                  y: [0, -6, -10, -14, -18, -20],
                 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 3, ease: 'easeOut', times: [0, 0.1, 0.2, 0.5, 0.8, 1] }}
