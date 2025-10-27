@@ -10,6 +10,7 @@ import { itemVariants, containerVariants, fadeInVariants, VIEWPORT_CONFIG } from
 import { HERO_CONTENT } from '@/utils/homepage-constants';
 import TrustBadges from './TrustBadges';
 import AnimatedUserCounter from './AnimatedUserCounter';
+import PaymentsProcessedCounter from './PaymentsProcessedCounter';
 
 // Lazy load FloatingParticles for better initial load
 import dynamic from 'next/dynamic';
@@ -74,11 +75,11 @@ export default function HeroSection() {
             viewport={VIEWPORT_CONFIG}
             variants={containerVariants}
           >
-            {/* Dynamic user counter */}
-            <AnimatedUserCounter 
-              className="mb-3" 
-              compact={true}
-            />
+            {/* Dynamic counters */}
+            <div className="mb-3 flex items-center gap-4 justify-center md:justify-start">
+              <PaymentsProcessedCounter compact className="" />
+              <AnimatedUserCounter compact={true} />
+            </div>
 
             <motion.h1
               className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-tight text-white mb-5 tracking-tighter"

@@ -152,6 +152,10 @@ export const API_ENDPOINTS = {
     RESPOND: '/requests/:id/respond',
     BY_USER: '/requests/user/:username',
   },
+
+  STATS: {
+    PAYMENTS_PROCESSED: '/stats/payments-processed',
+  },
 };
 
 // Request configuration from environment - INCREASED TIMEOUT

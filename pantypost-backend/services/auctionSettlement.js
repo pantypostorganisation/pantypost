@@ -5,6 +5,7 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const { incrementPaymentStats } = require('../utils/paymentStats');
 
 class AuctionSettlementService {
   /**
@@ -604,7 +605,13 @@ class AuctionSettlementService {
         });
       }
     }
-    
+
+    try {
+      await incrementPaymentStats();
+    } catch (statsError) {
+      console.error('[Auction] Failed to increment payment stats:', statsError);
+    }
+
     console.log(`[Auction] Successfully completed auction ${listing._id} - Order: ${order._id}`);
     
     return {

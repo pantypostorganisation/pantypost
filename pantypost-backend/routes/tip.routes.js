@@ -7,6 +7,7 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const { body, validationResult } = require('express-validator');
+const { incrementPaymentStats } = require('../utils/paymentStats');
 
 // ✅ Use the initialized singleton websocket service
 const webSocketService = require('../config/websocket');
@@ -129,6 +130,12 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
           prevRecipientBalance, recipientWallet.balance, 'tip_received'
         );
       } catch (_) {}
+
+      try {
+        await incrementPaymentStats();
+      } catch (statsError) {
+        console.error('[Tip] Failed to increment payment stats:', statsError);
+      }
 
       return res.json({
         success: true,
