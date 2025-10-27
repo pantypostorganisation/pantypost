@@ -1,15 +1,15 @@
 // src/app/page.tsx
 'use client';
 
-import { Suspense, useCallback, lazy } from 'react';
+import { Suspense, useCallback } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import BanCheck from '@/components/BanCheck';
 import HeroSection from '@/components/homepage/HeroSection';
 import TrustSignalsSection from '@/components/homepage/TrustSignalsSection';
 import CTASection from '@/components/homepage/CTASection';
 import Footer from '@/components/homepage/Footer';
-import Head from 'next/head';
 import dynamic from 'next/dynamic';
+import Script from 'next/script';
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
 
@@ -149,98 +149,95 @@ const SectionWrapper = ({
 };
 
 export default function Home() {
+  const homepageSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: 'Panty Post - Buy & Sell Used Panties Marketplace',
+    description:
+      'Discreet marketplace to buy and sell used panties with verified sellers and secure payments',
+    url: BASE_URL,
+    mainEntity: {
+      '@type': 'OnlineMarketplace',
+      name: 'PantyPost',
+      description: 'Anonymous marketplace for buying and selling used panties',
+      url: BASE_URL,
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: '4.8',
+        reviewCount: '10000',
+        bestRating: '5',
+        worstRating: '1',
+      },
+      potentialAction: [
+        {
+          '@type': 'BuyAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: `${BASE_URL}/browse`,
+            actionPlatform: [
+              'http://schema.org/DesktopWebPlatform',
+              'http://schema.org/MobileWebPlatform',
+            ],
+          },
+        },
+        {
+          '@type': 'SellAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: `${BASE_URL}/login`,
+            actionPlatform: [
+              'http://schema.org/DesktopWebPlatform',
+              'http://schema.org/MobileWebPlatform',
+            ],
+          },
+        },
+      ],
+    },
+  } as const;
+
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: [
+      {
+        '@type': 'Question',
+        name: 'What is PantyPost and how does it work?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text:
+            'PantyPost (also known as Panty Post) is a discreet marketplace that connects verified sellers with qualified buyers of used panties. Users can create an account, browse curated listings, and checkout securely with anonymous transactions.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'Is PantyPost the same as Panty Post?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text:
+            'Yes. PantyPost and Panty Post refer to the same privacy-first brand and marketplace for adult panty trading experiences.',
+        },
+      },
+      {
+        '@type': 'Question',
+        name: 'How does PantyPost keep buyers and sellers safe?',
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text:
+            'PantyPost protects its community with ID verification, automated moderation, and secure escrow-style payments that keep every transaction anonymous and compliant.',
+        },
+      },
+    ],
+  } as const;
+
   return (
     <>
       {/* SEO: Structured Data for Homepage */}
-      <Head>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'WebPage',
-              name: 'Panty Post - Buy & Sell Used Panties Marketplace',
-              description: 'Discreet marketplace to buy and sell used panties with verified sellers and secure payments',
-              url: BASE_URL,
-              mainEntity: {
-                '@type': 'OnlineMarketplace',
-                name: 'PantyPost',
-                description: 'Anonymous marketplace for buying and selling used panties',
-                url: BASE_URL,
-                aggregateRating: {
-                  '@type': 'AggregateRating',
-                  ratingValue: '4.8',
-                  reviewCount: '10000',
-                  bestRating: '5',
-                  worstRating: '1'
-                },
-                potentialAction: [
-                  {
-                    '@type': 'BuyAction',
-                    target: {
-                      '@type': 'EntryPoint',
-                      urlTemplate: `${BASE_URL}/browse`,
-                      actionPlatform: [
-                        'http://schema.org/DesktopWebPlatform',
-                        'http://schema.org/MobileWebPlatform'
-                      ]
-                    }
-                  },
-                  {
-                    '@type': 'SellAction',
-                    target: {
-                      '@type': 'EntryPoint',
-                      urlTemplate: `${BASE_URL}/login`,
-                      actionPlatform: [
-                        'http://schema.org/DesktopWebPlatform',
-                        'http://schema.org/MobileWebPlatform'
-                      ]
-                    }
-                  }
-                ]
-              }
-            })
-          }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'FAQPage',
-              mainEntity: [
-                {
-                  '@type': 'Question',
-                  name: 'What is PantyPost and how does it work?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text:
-                      'PantyPost (also known as Panty Post) is a discreet marketplace that connects verified sellers with qualified buyers of used panties. Users can create an account, browse curated listings, and checkout securely with anonymous transactions.'
-                  }
-                },
-                {
-                  '@type': 'Question',
-                  name: 'Is PantyPost the same as Panty Post?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text:
-                      'Yes. PantyPost and Panty Post refer to the same privacy-first brand and marketplace for adult panty trading experiences.'
-                  }
-                },
-                {
-                  '@type': 'Question',
-                  name: 'How does PantyPost keep buyers and sellers safe?',
-                  acceptedAnswer: {
-                    '@type': 'Answer',
-                    text:
-                      'PantyPost protects its community with ID verification, automated moderation, and secure escrow-style payments that keep every transaction anonymous and compliant.'
-                  }
-                }
-              ]
-            })
-          }}
-        />
-      </Head>
+      <Script id="homepage-schema" type="application/ld+json" strategy="beforeInteractive">
+        {JSON.stringify(homepageSchema)}
+      </Script>
+      <Script id="homepage-faq-schema" type="application/ld+json" strategy="beforeInteractive">
+        {JSON.stringify(faqSchema)}
+      </Script>
 
       <BanCheck>
         {/* FIXED GRADIENT BACKGROUND - Static on screen, doesn't scroll */}
