@@ -24,7 +24,6 @@ export default function PaymentsProcessedCounter({
   const publicWebSocket = usePublicWebSocket({ autoConnect: !user });
 
   const [displayValue, setDisplayValue] = useState(0);
-  const [targetValue, setTargetValue] = useState(0);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
   const [incrementAmount, setIncrementAmount] = useState(0);
   const [animationKey, setAnimationKey] = useState(0);
@@ -50,6 +49,8 @@ export default function PaymentsProcessedCounter({
   // Smooth count-up animation with easing
   const animateValue = useCallback((from: number, to: number, duration: number = 1500) => {
     if (!mountedRef.current) return;
+    
+    console.log('[PaymentsProcessedCounter] Animating from', from, 'to', to);
     
     // Cancel any existing animation
     if (animationFrameRef.current) {
@@ -112,16 +113,21 @@ export default function PaymentsProcessedCounter({
     if (!Number.isFinite(total)) return;
 
     const normalizedTotal = Math.round(total * 100) / 100;
-    setTargetValue(normalizedTotal);
+    console.log('[PaymentsProcessedCounter] Applying new total:', normalizedTotal, 'isInitial:', isInitial);
     
     // For initial load, start from 0 and animate up
     if (isInitial && normalizedTotal > 0) {
-      animateValue(0, normalizedTotal, 2000); // 2 second initial animation
-    } else {
+      setDisplayValue(0); // Start from 0 immediately
+      // Small delay to ensure the component is mounted
+      setTimeout(() => {
+        animateValue(0, normalizedTotal, 2000); // 2 second initial animation
+      }, 100);
+    } else if (!isInitial) {
       // For updates, animate from current display value
-      const increment = normalizedTotal - lastTargetRef.current;
+      const currentDisplay = lastTargetRef.current || 0;
+      const increment = normalizedTotal - currentDisplay;
       if (Math.abs(increment) > 0.01) {
-        animateValue(displayValue, normalizedTotal, 1000); // 1 second for updates
+        animateValue(currentDisplay, normalizedTotal, 1000); // 1 second for updates
         if (increment > 0) {
           triggerAnimation(increment);
         }
@@ -130,11 +136,13 @@ export default function PaymentsProcessedCounter({
     
     lastTargetRef.current = normalizedTotal;
     paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalizedTotal });
-  }, [animateValue, displayValue, triggerAnimation]);
+  }, [animateValue, triggerAnimation]);
 
   const fetchStats = useCallback(async () => {
     try {
       const response = await paymentStatsService.getPaymentsProcessed();
+      console.log('[PaymentsProcessedCounter] Fetched stats:', response);
+      
       if (response.success && response.data && mountedRef.current) {
         const total = response.data.totalPaymentsProcessed ?? 0;
         applyNewTotal(total, !hasInitialLoad);
@@ -171,6 +179,8 @@ export default function PaymentsProcessedCounter({
 
   useEffect(() => {
     const handleUpdate = (data: any) => {
+      console.log('[PaymentsProcessedCounter] WebSocket update received:', data);
+      
       if (!mountedRef.current || isInitialFetchRef.current) {
         return;
       }
@@ -190,6 +200,7 @@ export default function PaymentsProcessedCounter({
       }
     };
 
+    // Small delay to ensure WebSocket is ready
     const timeout = setTimeout(subscribe, 250);
 
     return () => {
@@ -200,6 +211,7 @@ export default function PaymentsProcessedCounter({
     };
   }, [authenticatedWebSocket, publicWebSocket, user, applyNewTotal]);
 
+  // Fallback polling if WebSocket not available
   useEffect(() => {
     if (!authenticatedWebSocket && !publicWebSocket) {
       const interval = setInterval(() => {
@@ -212,7 +224,7 @@ export default function PaymentsProcessedCounter({
     return undefined;
   }, [authenticatedWebSocket, publicWebSocket, fetchStats]);
 
-  const formattedValue = isLoading && !hasInitialLoad ? 'Loading' : formatCurrency(displayValue);
+  const formattedValue = isLoading && !hasInitialLoad ? 'Loading...' : formatCurrency(displayValue);
   const formattedIncrement = useMemo(() => {
     if (incrementAmount <= 0) return '';
     const currency = formatCurrency(incrementAmount);
