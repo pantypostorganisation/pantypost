@@ -1,9 +1,20 @@
 // pantypost-backend/utils/paymentStats.js
 const PaymentStats = require('../models/PaymentStats');
 
+function normalizeAmount(amount) {
+  const numericAmount = Number(amount);
+  if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+    return 0;
+  }
+
+  return Math.round(numericAmount * 100) / 100;
+}
+
 function buildPayload(totalPaymentsProcessed) {
+  const normalizedTotal = Math.round(Number(totalPaymentsProcessed || 0) * 100) / 100;
+
   return {
-    totalPaymentsProcessed,
+    totalPaymentsProcessed: normalizedTotal,
     timestamp: new Date().toISOString(),
   };
 }
@@ -17,15 +28,17 @@ async function getPaymentStats() {
   return PaymentStats.create({ totalPaymentsProcessed: 0 });
 }
 
-async function incrementPaymentStats(amount = 1) {
-  if (amount <= 0) {
+async function incrementPaymentStats(amount = 0) {
+  const incrementAmount = normalizeAmount(amount);
+
+  if (incrementAmount <= 0) {
     return getPaymentStats();
   }
 
   const updated = await PaymentStats.findOneAndUpdate(
     {},
     {
-      $inc: { totalPaymentsProcessed: amount },
+      $inc: { totalPaymentsProcessed: incrementAmount },
       $set: { updatedAt: new Date() },
     },
     {

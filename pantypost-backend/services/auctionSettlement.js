@@ -607,7 +607,7 @@ class AuctionSettlementService {
     }
 
     try {
-      await incrementPaymentStats();
+      await incrementPaymentStats(winningBid);
     } catch (statsError) {
       console.error('[Auction] Failed to increment payment stats:', statsError);
     }

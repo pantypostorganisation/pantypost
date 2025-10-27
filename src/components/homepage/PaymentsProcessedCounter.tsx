@@ -2,9 +2,9 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
-import { CreditCard } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useSpring, AnimatePresence } from 'framer-motion';
+import { ShieldDollar } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -23,9 +23,9 @@ export default function PaymentsProcessedCounter({
   const authenticatedWebSocket = useWebSocket();
   const publicWebSocket = usePublicWebSocket({ autoConnect: !user });
 
-  const [formattedCount, setFormattedCount] = useState('0');
+  const [formattedCount, setFormattedCount] = useState('$0.00');
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
-  const [incrementAmount, setIncrementAmount] = useState(1);
+  const [incrementAmount, setIncrementAmount] = useState(0);
   const [animationKey, setAnimationKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
@@ -36,20 +36,28 @@ export default function PaymentsProcessedCounter({
     mass: 1,
   });
 
-  const displayCount = useTransform(springValue, (value) => Math.round(value));
-
   const mountedRef = useRef(false);
   const previousCountRef = useRef(0);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialFetchRef = useRef(true);
 
+  const formatCurrency = useCallback((value: number) => {
+    const normalized = Math.max(0, Math.round(Number(value || 0) * 100) / 100);
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(normalized);
+  }, []);
+
   useEffect(() => {
-    const unsubscribe = displayCount.on('change', (value) => {
-      setFormattedCount(value.toLocaleString());
+    const unsubscribe = springValue.on('change', (value) => {
+      setFormattedCount(formatCurrency(value));
     });
 
     return () => unsubscribe();
-  }, [displayCount]);
+  }, [springValue, formatCurrency]);
 
   const triggerAnimation = useCallback((increment: number) => {
     if (increment <= 0) return;
@@ -58,7 +66,7 @@ export default function PaymentsProcessedCounter({
       clearTimeout(animationTimeoutRef.current);
     }
 
-    setIncrementAmount(increment);
+    setIncrementAmount(Math.round(increment * 100) / 100);
     setShowUpdateAnimation(true);
     setAnimationKey((prev) => prev + 1);
 
@@ -72,9 +80,10 @@ export default function PaymentsProcessedCounter({
   const applyNewTotal = useCallback((total: number) => {
     if (!Number.isFinite(total)) return;
 
-    springValue.set(total);
-    previousCountRef.current = total;
-    paymentStatsService.updateCachedStats({ totalPaymentsProcessed: total });
+    const normalizedTotal = Math.round(total * 100) / 100;
+    springValue.set(normalizedTotal);
+    previousCountRef.current = normalizedTotal;
+    paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalizedTotal });
   }, [springValue]);
 
   const fetchStats = useCallback(async () => {
@@ -160,6 +169,11 @@ export default function PaymentsProcessedCounter({
   }, [authenticatedWebSocket, publicWebSocket, fetchStats]);
 
   const displayValue = isLoading && !hasInitialLoad ? 'Loading' : formattedCount;
+  const formattedIncrement = useMemo(() => {
+    if (incrementAmount <= 0) return '';
+    const currency = formatCurrency(incrementAmount);
+    return `+${currency.replace('$', '')}`;
+  }, [incrementAmount, formatCurrency]);
   const containerClasses = compact
     ? `flex items-center gap-2 relative ${className}`
     : `flex items-center gap-3 relative ${className}`;
@@ -173,11 +187,11 @@ export default function PaymentsProcessedCounter({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      aria-label="Payments processed count"
+      aria-label="Total payments processed"
     >
-      <CreditCard className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
+      <ShieldDollar className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
       <span className={textClasses}>
-        Payments processed{' '}
+        Total payments processed ($){' '}
         <span className="relative inline-block">
           <motion.span
             className="font-bold"
@@ -203,7 +217,7 @@ export default function PaymentsProcessedCounter({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 3, ease: 'easeOut', times: [0, 0.1, 0.2, 0.5, 0.8, 1] }}
               >
-                +{incrementAmount}
+                {formattedIncrement}
               </motion.span>
             )}
           </AnimatePresence>

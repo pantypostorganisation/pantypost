@@ -33,9 +33,13 @@ class PaymentStatsService {
       const response = await apiCall<PaymentStats>(API_ENDPOINTS.STATS.PAYMENTS_PROCESSED);
 
       if (response.success && response.data) {
-        this.cache = response.data;
+        const normalized = Math.round(Number(response.data.totalPaymentsProcessed || 0) * 100) / 100;
+        this.cache = {
+          ...response.data,
+          totalPaymentsProcessed: normalized,
+        };
         this.cacheTimestamp = now;
-        return { success: true, data: response.data };
+        return { success: true, data: this.cache };
       }
 
       return {
@@ -60,9 +64,14 @@ class PaymentStatsService {
   }
 
   updateCachedStats(partial: Partial<PaymentStats>) {
+    const hasTotal = partial.totalPaymentsProcessed !== undefined;
+    const normalizedTotal = hasTotal
+      ? Math.round(Number(partial.totalPaymentsProcessed || 0) * 100) / 100
+      : undefined;
+
     if (!this.cache) {
       this.cache = {
-        totalPaymentsProcessed: partial.totalPaymentsProcessed || 0,
+        totalPaymentsProcessed: normalizedTotal ?? 0,
         timestamp: partial.timestamp,
         updatedAt: partial.updatedAt,
       };
@@ -73,6 +82,9 @@ class PaymentStatsService {
     this.cache = {
       ...this.cache,
       ...partial,
+      totalPaymentsProcessed: hasTotal && normalizedTotal !== undefined
+        ? normalizedTotal
+        : this.cache.totalPaymentsProcessed,
     };
     this.cacheTimestamp = Date.now();
   }
@@ -82,7 +94,14 @@ class PaymentStatsService {
       return;
     }
 
-    this.cache.totalPaymentsProcessed += amount;
+    const normalizedAmount = Math.round(Number(amount) * 100) / 100;
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+      return;
+    }
+
+    this.cache.totalPaymentsProcessed = Math.round(
+      (this.cache.totalPaymentsProcessed + normalizedAmount) * 100
+    ) / 100;
     this.cacheTimestamp = Date.now();
   }
 

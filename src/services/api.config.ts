@@ -154,7 +154,7 @@ export const API_ENDPOINTS = {
   },
 
   STATS: {
-    PAYMENTS_PROCESSED: '/stats/payments-processed',
+    PAYMENTS_PROCESSED: '/stats/total-payments',
   },
 };
 
