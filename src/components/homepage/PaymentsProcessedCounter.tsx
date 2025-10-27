@@ -3,8 +3,8 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion, useSpring, AnimatePresence } from 'framer-motion';
-import { ShieldCheck } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { DollarSign } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -23,23 +23,19 @@ export default function PaymentsProcessedCounter({
   const authenticatedWebSocket = useWebSocket();
   const publicWebSocket = usePublicWebSocket({ autoConnect: !user });
 
-  const [formattedCount, setFormattedCount] = useState('$0.00');
+  const [displayValue, setDisplayValue] = useState(0);
+  const [targetValue, setTargetValue] = useState(0);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
   const [incrementAmount, setIncrementAmount] = useState(0);
   const [animationKey, setAnimationKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
 
-  const springValue = useSpring(0, {
-    stiffness: 65,
-    damping: 14,
-    mass: 1,
-  });
-
   const mountedRef = useRef(false);
-  const previousCountRef = useRef(0);
+  const animationFrameRef = useRef<number | null>(null);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isInitialFetchRef = useRef(true);
+  const lastTargetRef = useRef(0);
 
   const formatCurrency = useCallback((value: number) => {
     const normalized = Math.max(0, Math.round(Number(value || 0) * 100) / 100);
@@ -51,13 +47,48 @@ export default function PaymentsProcessedCounter({
     }).format(normalized);
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = springValue.on('change', (value) => {
-      setFormattedCount(formatCurrency(value));
-    });
+  // Smooth count-up animation with easing
+  const animateValue = useCallback((from: number, to: number, duration: number = 1500) => {
+    if (!mountedRef.current) return;
+    
+    // Cancel any existing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
 
-    return () => unsubscribe();
-  }, [springValue, formatCurrency]);
+    const startTime = Date.now();
+    const difference = to - from;
+
+    // Cubic ease-out function for smooth deceleration
+    const easeOutCubic = (t: number): number => {
+      return 1 - Math.pow(1 - t, 3);
+    };
+
+    const animate = () => {
+      if (!mountedRef.current) return;
+
+      const currentTime = Date.now();
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Apply easing function for smooth deceleration
+      const easedProgress = easeOutCubic(progress);
+      const currentValue = from + (difference * easedProgress);
+      
+      setDisplayValue(currentValue);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        // Ensure we end exactly at the target value
+        setDisplayValue(to);
+        animationFrameRef.current = null;
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+  }, []);
 
   const triggerAnimation = useCallback((increment: number) => {
     if (increment <= 0) return;
@@ -77,21 +108,36 @@ export default function PaymentsProcessedCounter({
     }, 3000);
   }, []);
 
-  const applyNewTotal = useCallback((total: number) => {
+  const applyNewTotal = useCallback((total: number, isInitial: boolean = false) => {
     if (!Number.isFinite(total)) return;
 
     const normalizedTotal = Math.round(total * 100) / 100;
-    springValue.set(normalizedTotal);
-    previousCountRef.current = normalizedTotal;
+    setTargetValue(normalizedTotal);
+    
+    // For initial load, start from 0 and animate up
+    if (isInitial && normalizedTotal > 0) {
+      animateValue(0, normalizedTotal, 2000); // 2 second initial animation
+    } else {
+      // For updates, animate from current display value
+      const increment = normalizedTotal - lastTargetRef.current;
+      if (Math.abs(increment) > 0.01) {
+        animateValue(displayValue, normalizedTotal, 1000); // 1 second for updates
+        if (increment > 0) {
+          triggerAnimation(increment);
+        }
+      }
+    }
+    
+    lastTargetRef.current = normalizedTotal;
     paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalizedTotal });
-  }, [springValue]);
+  }, [animateValue, displayValue, triggerAnimation]);
 
   const fetchStats = useCallback(async () => {
     try {
       const response = await paymentStatsService.getPaymentsProcessed();
       if (response.success && response.data && mountedRef.current) {
         const total = response.data.totalPaymentsProcessed ?? 0;
-        applyNewTotal(total);
+        applyNewTotal(total, !hasInitialLoad);
 
         if (!hasInitialLoad) {
           setHasInitialLoad(true);
@@ -114,6 +160,9 @@ export default function PaymentsProcessedCounter({
 
     return () => {
       mountedRef.current = false;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
       }
@@ -127,13 +176,8 @@ export default function PaymentsProcessedCounter({
       }
 
       const total = Number(data?.totalPaymentsProcessed);
-      if (Number.isFinite(total) && total !== previousCountRef.current) {
-        const increment = total - previousCountRef.current;
-        applyNewTotal(total);
-
-        if (increment > 0) {
-          triggerAnimation(increment);
-        }
+      if (Number.isFinite(total) && total !== lastTargetRef.current) {
+        applyNewTotal(total, false);
       }
     };
 
@@ -154,7 +198,7 @@ export default function PaymentsProcessedCounter({
         unsubscribe();
       }
     };
-  }, [authenticatedWebSocket, publicWebSocket, user, applyNewTotal, triggerAnimation]);
+  }, [authenticatedWebSocket, publicWebSocket, user, applyNewTotal]);
 
   useEffect(() => {
     if (!authenticatedWebSocket && !publicWebSocket) {
@@ -168,12 +212,13 @@ export default function PaymentsProcessedCounter({
     return undefined;
   }, [authenticatedWebSocket, publicWebSocket, fetchStats]);
 
-  const displayValue = isLoading && !hasInitialLoad ? 'Loading' : formattedCount;
+  const formattedValue = isLoading && !hasInitialLoad ? 'Loading' : formatCurrency(displayValue);
   const formattedIncrement = useMemo(() => {
     if (incrementAmount <= 0) return '';
     const currency = formatCurrency(incrementAmount);
     return `+${currency.replace('$', '')}`;
   }, [incrementAmount, formatCurrency]);
+  
   const containerClasses = compact
     ? `flex items-center gap-2 relative ${className}`
     : `flex items-center gap-3 relative ${className}`;
@@ -187,11 +232,11 @@ export default function PaymentsProcessedCounter({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      aria-label="Total payments processed"
+      aria-label="Payments processed"
     >
-      <ShieldCheck className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
+      <DollarSign className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
       <span className={textClasses}>
-        Total payments processed{' '}
+        Payments processed{' '}
         <span className="relative inline-block">
           <motion.span
             className="font-bold"
@@ -201,7 +246,7 @@ export default function PaymentsProcessedCounter({
             } : {}}
             transition={{ duration: 0.5 }}
           >
-            {displayValue}
+            {formattedValue}
           </motion.span>
 
           <AnimatePresence mode="wait">
