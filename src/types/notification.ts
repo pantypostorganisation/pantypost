@@ -7,7 +7,7 @@ export interface Notification {
   type: 'sale' | 'bid' | 'subscription' | 'tip' | 'order' | 'auction_end' | 'message' | 'system';
   title: string;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
   read: boolean;
   cleared: boolean;
   deleted?: boolean;
@@ -20,8 +20,8 @@ export interface Notification {
 
 export interface NotificationResponse {
   success: boolean;
-  data?: Notification | Notification[] | any;
-  error?: any;
+  data?: Notification | Notification[] | Record<string, unknown>;
+  error?: unknown;
 }
 
 export interface NotificationPaginationResponse {
@@ -35,5 +35,5 @@ export interface NotificationPaginationResponse {
       totalPages: number;
     };
   };
-  error?: any;
+  error?: unknown;
 }

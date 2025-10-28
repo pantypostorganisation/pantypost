@@ -42,7 +42,7 @@ export interface MessageThread {
   updatedAt: string;
   blockedBy?: string[];
   metadata?: {
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 

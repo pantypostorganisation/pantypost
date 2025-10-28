@@ -275,10 +275,10 @@ export function getRateLimiter(): ActionRateLimiter {
  * Rate limit decorator for functions
  */
 export function rateLimit(action: string, config: RateLimitConfig) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (target: Record<string, unknown>, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
-    descriptor.value = async function (...args: any[]) {
+    descriptor.value = async function (...args: unknown[]) {
       const limiter = getRateLimiter();
       const result = limiter.check(action, config);
 

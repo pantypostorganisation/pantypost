@@ -3,17 +3,15 @@
 
 import { Listing } from '@/context/ListingContext';
 
+type PriceableListing = Pick<Listing, 'price' | 'markedUpPrice' | 'auction'>;
+
 /**
  * Get the total amount a buyer needs to pay for a listing
  * This is the SINGLE SOURCE OF TRUTH used by both:
  * - Pre-purchase balance checks
  * - Actual wallet debits in WalletContext
  */
-export function getBuyerDebitAmount(listing: { 
-  markedUpPrice?: number; 
-  price: number;
-  auction?: any;
-}): number {
+export function getBuyerDebitAmount(listing: PriceableListing): number {
   // For auctions, we don't use this function (handled separately)
   if (listing.auction) {
     return 0;
@@ -53,8 +51,8 @@ export function getAuctionPlatformFee(winningBid: number): number {
  * Check if buyer has sufficient balance for a purchase
  */
 export function hasSufficientBalance(
-  buyerBalance: number, 
-  listing: { markedUpPrice?: number; price: number; auction?: any }
+  buyerBalance: number,
+  listing: PriceableListing
 ): boolean {
   const required = getBuyerDebitAmount(listing);
   return buyerBalance >= required;
@@ -65,7 +63,7 @@ export function hasSufficientBalance(
  */
 export function getAmountNeeded(
   buyerBalance: number,
-  listing: { markedUpPrice?: number; price: number; auction?: any }
+  listing: PriceableListing
 ): number {
   const required = getBuyerDebitAmount(listing);
   const needed = required - buyerBalance;

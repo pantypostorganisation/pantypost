@@ -1,6 +1,7 @@
 // src/types/browse.ts
 
-import { Listing, AuctionSettings } from '@/context/ListingContext';
+import { Listing } from '@/context/ListingContext';
+import type { User } from '@/context/AuthContext';
 
 export interface SellerProfile {
   bio: string | null;
@@ -42,7 +43,7 @@ export interface DisplayPrice {
 
 // Component Props
 export interface BrowseHeaderProps {
-  user: any;
+  user: User | null;
   filteredListingsCount: number;
   filter: FilterOptions['filter'];
   categoryCounts: CategoryCounts;
@@ -72,7 +73,7 @@ export interface ListingCardProps {
   onMouseLeave: () => void;
   onClick: () => void;
   onQuickView: (e: React.MouseEvent) => void;
-  user: any;
+  user: User | null;
   isSubscribed: boolean;
   displayPrice: DisplayPrice;
   forceUpdateTimer: number;
@@ -86,7 +87,7 @@ export interface ListingGridProps {
   onListingLeave: () => void;
   onListingClick: (listingId: string, isLocked: boolean) => void;
   onQuickView: (e: React.MouseEvent, listingId: string) => void;
-  user: any;
+  user: User | null;
   isSubscribed: (username: string, seller: string) => boolean;
   getDisplayPrice: (listing: Listing) => DisplayPrice;
   forceUpdateTimer: number;

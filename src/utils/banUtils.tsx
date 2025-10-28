@@ -1,12 +1,13 @@
 // src/utils/banUtils.tsx
-import { 
-  AlertTriangle, 
-  MessageSquare, 
-  AlertCircle, 
-  UserCheck, 
-  Info 
+import type { ComponentType, SVGProps } from 'react';
+import {
+  AlertTriangle,
+  MessageSquare,
+  AlertCircle,
+  UserCheck,
+  Info
 } from 'lucide-react';
-import { BanEntry, BanReason } from '@/types/ban';
+import { BanEntry } from '@/types/ban';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export const getBanReasonDisplay = (reason: string, customReason?: string) => {
@@ -14,7 +15,7 @@ export const getBanReasonDisplay = (reason: string, customReason?: string) => {
     return 'Unknown Reason';
   }
 
-  const reasonMap: Record<string, { label: string, icon: any, color: string }> = {
+  const reasonMap: Record<string, { label: string; icon: ComponentType<SVGProps<SVGSVGElement>>; color: string }> = {
     harassment: { label: 'Harassment', icon: AlertTriangle, color: 'text-red-400' },
     spam: { label: 'Spam', icon: MessageSquare, color: 'text-yellow-400' },
     inappropriate_content: { label: 'Inappropriate Content', icon: AlertCircle, color: 'text-orange-400' },
@@ -39,14 +40,19 @@ export const getBanReasonDisplay = (reason: string, customReason?: string) => {
   );
 };
 
-export const isValidBan = (ban: any): ban is BanEntry => {
-  return ban && 
-         typeof ban === 'object' && 
-         ban.id && 
-         ban.username && 
-         typeof ban.username === 'string' &&
-         ban.banType &&
-         ban.reason &&
-         ban.startTime &&
-         typeof ban.bannedBy === 'string'; // Changed to check type instead of truthiness
+export const isValidBan = (ban: unknown): ban is BanEntry => {
+  if (typeof ban !== 'object' || ban === null) {
+    return false;
+  }
+
+  const candidate = ban as Record<string, unknown>;
+
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.username === 'string' &&
+    typeof candidate.banType === 'string' &&
+    typeof candidate.reason === 'string' &&
+    typeof candidate.startTime === 'string' &&
+    typeof candidate.bannedBy === 'string'
+  );
 };

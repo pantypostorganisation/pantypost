@@ -1,5 +1,7 @@
 // src/types/login.ts
 
+import type { ComponentType, SVGProps } from 'react';
+
 export interface LoginState {
   username: string;
   password: string;  // ADDED PASSWORD
@@ -14,7 +16,7 @@ export interface LoginState {
 export interface RoleOption {
   key: string;
   label: string;
-  icon: any;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   description: string;
 }
 
@@ -84,4 +86,4 @@ export interface LoginFooterProps {
   step: number;
 }
 
-export interface TrustIndicatorsProps {}
+export type TrustIndicatorsProps = Record<string, never>;

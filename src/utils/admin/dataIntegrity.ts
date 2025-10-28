@@ -18,6 +18,16 @@ interface DataRepairResult {
   failed: string[];
 }
 
+interface AdminAction extends Record<string, unknown> {
+  id?: string;
+  type?: string;
+  amount?: number;
+  targetUser?: string;
+  username?: string;
+  reason?: string;
+  date?: string;
+}
+
 /**
  * Utility for validating and repairing wallet data integrity
  */
@@ -87,17 +97,17 @@ export class DataIntegrityUtil {
       }
 
       // Validate admin actions
-      const adminActions = await storageService.getItem<any[]>('wallet_adminActions', []);
+      const adminActions = await storageService.getItem<AdminAction[]>('wallet_adminActions', []);
       if (!Array.isArray(adminActions)) {
         errors.push('Admin actions is not an array');
       } else {
         // Check for subscription revenue actions
-        const subscriptionActions = adminActions.filter(a => 
-          a.type === 'credit' && 
-          a.reason && 
-          a.reason.toLowerCase().includes('subscription')
+        const subscriptionActions = adminActions.filter(action =>
+          action.type === 'credit' &&
+          typeof action.reason === 'string' &&
+          action.reason.toLowerCase().includes('subscription')
         );
-        
+
         if (subscriptionActions.length === 0) {
           suggestions.push('No subscription revenue found - verify subscription tracking is working');
         }
@@ -150,7 +160,7 @@ export class DataIntegrityUtil {
     sellerBalances: Record<string, number>,
     adminBalance: number,
     orders: Order[],
-    adminActions: any[]
+    adminActions: AdminAction[]
   ): Promise<{ errors: string[]; warnings: string[]; suggestions: string[] }> {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -164,8 +174,8 @@ export class DataIntegrityUtil {
 
     // Calculate actual platform credits from admin actions
     const platformCredits = adminActions
-      .filter(a => a.type === 'credit' && a.targetUser === 'admin')
-      .reduce((sum, a) => sum + a.amount, 0);
+      .filter(action => action.type === 'credit' && action.targetUser === 'admin')
+      .reduce((sum, action) => sum + (typeof action.amount === 'number' ? action.amount : 0), 0);
 
     // Allow some tolerance for rounding
     if (Math.abs(expectedPlatformProfit - platformCredits) > 1) {
@@ -363,9 +373,9 @@ export class DataIntegrityUtil {
    */
   private static async normalizeAdminActions(): Promise<{ success: boolean }> {
     try {
-      const adminActions = await storageService.getItem<any[]>('wallet_adminActions', []);
-      
-      const normalized = adminActions.map(action => ({
+      const adminActions = await storageService.getItem<AdminAction[]>('wallet_adminActions', []);
+
+      const normalized: AdminAction[] = adminActions.map(action => ({
         ...action,
         targetUser: action.targetUser || action.username,
         username: action.username || action.targetUser,

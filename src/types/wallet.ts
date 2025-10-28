@@ -251,7 +251,7 @@ export interface RiskFactor {
   description: string;
   severity: 'low' | 'medium' | 'high';
   score: number;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 export interface ComplianceCheck {
@@ -260,7 +260,7 @@ export interface ComplianceCheck {
   status: 'pending' | 'passed' | 'failed' | 'review';
   checkedAt: ISOTimestamp;
   expiresAt?: ISOTimestamp;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 // Reconciliation
@@ -399,7 +399,7 @@ export enum WalletErrorCode {
 export interface WalletError {
   code: WalletErrorCode;
   message: string;
-  details?: any;
+  details?: Record<string, unknown>;
   transactionId?: string;
   timestamp: ISOTimestamp;
 }
@@ -425,7 +425,7 @@ export interface CustomRequestPurchase {
   seller: string;
   amount: number;
   description: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 // Helper type guards

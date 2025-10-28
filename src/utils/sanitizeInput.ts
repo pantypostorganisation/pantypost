@@ -68,18 +68,18 @@ export function sanitizeUsername(username: string): string {
  * @param max - Maximum allowed value (default: 999999)
  * @returns The sanitized number or 0 if invalid
  */
-export function sanitizeNumber(input: any, min: number = 0, max: number = 999999): number {
-  const num = parseFloat(input);
-  
-  if (isNaN(num) || !isFinite(num)) {
+export function sanitizeNumber(input: unknown, min: number = 0, max: number = 999999): number {
+  const raw = typeof input === 'number' ? input : Number.parseFloat(String(input));
+
+  if (!Number.isFinite(raw)) {
     return min;
   }
-  
-  if (num < min) return min;
-  if (num > max) return max;
-  
+
+  if (raw < min) return min;
+  if (raw > max) return max;
+
   // Round to 2 decimal places for currency
-  return Math.round(num * 100) / 100;
+  return Math.round(raw * 100) / 100;
 }
 
 /**
@@ -128,32 +128,32 @@ export function sanitizeTags(tags: string[]): string[] {
  * @param obj - Object to sanitize
  * @returns Sanitized object
  */
-export function sanitizeObject(obj: any): any {
+export function sanitizeObject<T>(obj: T): T {
   if (obj === null || obj === undefined) {
     return obj;
   }
 
   if (typeof obj === 'string') {
-    return sanitizeString(obj);
+    return sanitizeString(obj) as unknown as T;
   }
 
   if (typeof obj === 'number') {
-    return sanitizeNumber(obj);
+    return sanitizeNumber(obj) as unknown as T;
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item));
+    return obj.map(item => sanitizeObject(item)) as unknown as T;
   }
 
   if (typeof obj === 'object') {
-    const sanitized: any = {};
+    const sanitized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
       const sanitizedKey = sanitizeString(key);
       if (sanitizedKey) {
         sanitized[sanitizedKey] = sanitizeObject(value);
       }
     }
-    return sanitized;
+    return sanitized as unknown as T;
   }
 
   return obj;

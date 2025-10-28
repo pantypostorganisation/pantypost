@@ -73,7 +73,7 @@ export interface UserActivity {
   userId: string;
   type: 'login' | 'profile_update' | 'listing_created' | 'order_placed' | 'message_sent';
   timestamp: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
 }
@@ -186,7 +186,7 @@ export interface UserError {
   code: UserErrorCode;
   message: string;
   field?: string;
-  details?: any;
+  details?: unknown;
 }
 
 // Validation schemas
