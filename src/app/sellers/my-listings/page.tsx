@@ -81,7 +81,7 @@ function MyListingsContent() {
     <main className="relative min-h-screen overflow-hidden bg-black text-white py-12 sm:py-16">
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <section className="mb-12 overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-10 backdrop-blur-xl">
+        <section className="mb-12 overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-10">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
             <div className="max-w-2xl space-y-5">
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-white/70">
@@ -105,11 +105,11 @@ function MyListingsContent() {
                     <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
                   </div>
                 </div>
-                <div className="rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-400/15 via-emerald-500/10 to-transparent p-4">
+                <div className="rounded-2xl border border-emerald-400/30 bg-black/40 p-4">
                   <p className="text-xs uppercase tracking-wider text-white/70">Available Slots</p>
                   <div className="mt-2 text-3xl font-semibold text-emerald-200">{remainingSlots}</div>
                 </div>
-                <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-500/20 via-purple-700/10 to-transparent p-4">
+                <div className="rounded-2xl border border-purple-500/30 bg-black/40 p-4">
                   <p className="text-xs uppercase tracking-wider text-white/70">Auctions Running</p>
                   <div className="mt-2 flex items-baseline gap-2">
                     <span className="text-3xl font-semibold text-purple-200">{auctionCount ?? 0}</span>
@@ -124,7 +124,7 @@ function MyListingsContent() {
                 <p className="text-sm text-white/60">Launch something new</p>
                 <button
                   onClick={() => setShowForm(true)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00] px-5 py-3 text-base font-semibold text-black shadow-lg transition-all duration-300 hover:scale-[1.03] hover:shadow-orange-400/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ff950e] px-5 py-3 text-base font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                   disabled={atLimit}
                   style={atLimit ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
                   aria-label="Create New Listing"
@@ -145,19 +145,19 @@ function MyListingsContent() {
           <div className="space-y-8 lg:col-span-2">
             {/* Stats */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="group overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 shadow-[0_20px_60px_-35px_rgba(255,255,255,0.45)] transition hover:border-white/20 hover:bg-white/10">
+              <div className="group overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-6">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-wider text-white/60">Standard</p>
                     <p className="mt-4 text-4xl font-bold text-white">{standardCount ?? 0}</p>
                   </div>
-                  <div className="rounded-full bg-white/5 p-3 text-white/60 transition group-hover:bg-[#ff950e]/20 group-hover:text-[#ff950e]">
+                  <div className="rounded-full bg-white/5 p-3 text-white/60">
                     <Sparkles className="h-6 w-6" />
                   </div>
                 </div>
                 <p className="mt-5 text-xs text-white/50">Keep your storefront fresh with rotating standard listings.</p>
               </div>
-              <div className="group overflow-hidden rounded-2xl border border-[#ff950e]/40 bg-gradient-to-br from-[#ff950e]/15 via-[#ff6a00]/10 to-transparent p-6 shadow-[0_20px_60px_-25px_rgba(255,149,14,0.45)] transition hover:scale-[1.01]">
+              <div className="group overflow-hidden rounded-2xl border border-[#ff950e]/40 bg-black/40 p-6">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-wider text-white/70">Premium</p>
@@ -169,7 +169,7 @@ function MyListingsContent() {
                 </div>
                 <p className="mt-5 text-xs text-white/60">Reward your subscribers with exclusive premium-only releases.</p>
               </div>
-              <div className="group overflow-hidden rounded-2xl border border-purple-500/40 bg-gradient-to-br from-purple-500/20 via-purple-700/15 to-transparent p-6 shadow-[0_20px_60px_-25px_rgba(124,58,237,0.45)] transition hover:scale-[1.01]">
+              <div className="group overflow-hidden rounded-2xl border border-purple-500/40 bg-black/40 p-6">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-wider text-white/70">Auctions</p>
@@ -207,7 +207,7 @@ function MyListingsContent() {
 
             {/* Create Listing CTA */}
             {(showForm || editingState.isEditing) && (
-              <div className="rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8 backdrop-blur">
+              <div className="rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8">
                 <ListingForm
                   formState={formState}
                   isEditing={editingState.isEditing}
@@ -228,7 +228,7 @@ function MyListingsContent() {
             )}
 
             {/* Active Listings */}
-            <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8 backdrop-blur">
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-white">Your Active Listings</h2>
@@ -239,7 +239,7 @@ function MyListingsContent() {
                   {totalListings} live
                 </div>
               </div>
-              <div className="mt-6 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+              <div className="mt-6 h-px w-full bg-white/10" />
               {(myListings?.length ?? 0) === 0 ? (
                 <div className="rounded-2xl border border-dashed border-white/15 bg-black/40 py-10 text-center text-white/60">
                   <p className="text-lg font-medium text-white/70">You haven't created any listings yet.</p>
@@ -265,7 +265,7 @@ function MyListingsContent() {
           {/* Right: verification banner + tips */}
           <div className="space-y-8">
             {!isVerified && (
-              <div className="overflow-hidden rounded-3xl border border-yellow-500/30 bg-black/60 p-6 sm:p-8 text-center backdrop-blur">
+              <div className="overflow-hidden rounded-3xl border border-yellow-500/30 bg-black/60 p-6 sm:p-8 text-center">
                 <div className="flex flex-col items-center gap-4">
                   <div className="rounded-2xl bg-yellow-500/20 p-3">
                     <ShieldCheck className="h-6 w-6 text-yellow-200" />
@@ -294,7 +294,7 @@ function MyListingsContent() {
                 <Link
                   href="/sellers/verify"
                   aria-label="Verify My Account"
-                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition hover:-translate-y-[2px] focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
                   <ShieldCheck className="h-5 w-5" />
                   Verify my account
@@ -303,7 +303,7 @@ function MyListingsContent() {
             )}
 
             {/* Auction Tips */}
-            <div className="overflow-hidden rounded-3xl border border-purple-500/40 bg-black/60 p-6 sm:p-8 backdrop-blur">
+            <div className="overflow-hidden rounded-3xl border border-purple-500/40 bg-black/60 p-6 sm:p-8">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
                 <Gavel className="h-6 w-6 text-purple-200" />
                 Auction Tips
@@ -335,7 +335,7 @@ function MyListingsContent() {
             </div>
 
             {/* Premium Tips */}
-            <div className="overflow-hidden rounded-3xl border border-[#ff950e]/40 bg-black/60 p-6 sm:p-8 backdrop-blur">
+            <div className="overflow-hidden rounded-3xl border border-[#ff950e]/40 bg-black/60 p-6 sm:p-8">
               <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
                 <Crown className="h-6 w-6 text-[#ffb347]" />
                 Premium Seller Tips
@@ -344,7 +344,7 @@ function MyListingsContent() {
               <ul className="mt-6 space-y-4 text-sm text-white/80">
                 {PREMIUM_TIPS.map((tip, index) => (
                   <li key={index} className="flex items-start gap-3">
-                    <span className="mt-[6px] inline-flex h-2.5 w-8 flex-shrink-0 rounded-full bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00]" />
+                    <span className="mt-[6px] inline-flex h-2.5 w-8 flex-shrink-0 rounded-full bg-[#ff950e]" />
                     <span>{tip}</span>
                   </li>
                 ))}
