@@ -58,7 +58,7 @@ interface ToastContextType {
     messages: {
       loading: string;
       success: string | ((data: T) => string);
-      error: string | ((error: any) => string);
+      error: string | ((error: unknown) => string);
     }
   ) => Promise<T>;
 }
@@ -290,7 +290,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       messages: {
         loading: string;
         success: string | ((data: T) => string);
-        error: string | ((error: any) => string);
+        error: string | ((error: unknown) => string);
       }
     ): Promise<T> => {
       const id = loading(messages.loading);
@@ -308,14 +308,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         });
 
         return result;
-      } catch (err: any) {
+      } catch (err: unknown) {
         const errorMsg =
           typeof messages.error === 'function' ? messages.error(err) : messages.error;
 
         updateToast(id, {
           type: 'error',
           title: errorMsg,
-          message: err?.message ? String(err.message).slice(0, 200) : undefined,
+          message:
+            typeof err === 'object' && err && 'message' in err
+              ? String((err as { message?: unknown }).message ?? '').slice(0, 200)
+              : undefined,
           duration: DEFAULT_DURATIONS.error,
           persistent: false,
         });
@@ -458,14 +461,24 @@ export function useToast() {
  * Imperative helper to show an API error toast (safe outside React components).
  * If the ToastProvider hasn't mounted yet, this will no-op.
  */
-export function toastApiError(error: any, fallbackMessage = 'An error occurred') {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+
+export function toastApiError(error: unknown, fallbackMessage = 'An error occurred') {
   if (!externalToastAPI) return;
 
   let message = fallbackMessage;
-  if (error?.response?.data?.error?.message) {
-    message = String(error.response.data.error.message);
-  } else if (error?.message) {
-    message = String(error.message);
+  if (isRecord(error)) {
+    const response = isRecord(error.response) ? error.response : null;
+    const data = response && isRecord(response.data) ? response.data : null;
+    const nestedError = data && isRecord(data.error) ? data.error : null;
+    if (nestedError && typeof nestedError.message === 'string') {
+      message = nestedError.message;
+    } else if (typeof error.message === 'string') {
+      message = error.message;
+    }
+  } else if (typeof error === 'string') {
+    message = error;
   }
 
   externalToastAPI.error('Error', message);

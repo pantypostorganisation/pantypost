@@ -1,58 +1,50 @@
 // src/context/MessageContext.tsx
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+  useRef,
+} from 'react';
 import { sanitizeStrict, sanitizeUsername } from '@/utils/security/sanitization';
 import { v4 as uuidv4 } from 'uuid';
 import { messagesService } from '@/services';
-import type { MessageThread as ServiceMessageThread } from '@/services/messages.service';
+import type {
+  MessageThread as ServiceMessageThread,
+  Message as ServiceMessage,
+  ThreadsResponse,
+  UserProfile,
+  MessageNotification as ServiceMessageNotification,
+} from '@/services/messages.service';
 import { messageSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
+import type {
+  Message as MessageType,
+  MessageNotification,
+  ReportLog,
+} from '@/types/message';
+import type { ApiResponse } from '@/services/api.config';
 
 // Types
-type Message = {
-  id?: string;
-  sender: string;
-  receiver: string;
-  content: string;
-  date: string;
-  isRead?: boolean;
-  read?: boolean;
-  type?: 'normal' | 'customRequest' | 'image' | 'tip';
-  meta?: {
-    id?: string;
-    title?: string;
-    price?: number;
-    tags?: string[];
-    message?: string;
-    imageUrl?: string;
-    tipAmount?: number;
-  };
-  threadId?: string;
-  _optimisticId?: string;
-};
-
-type MessageThread = { [otherParty: string]: Message[] };
+type ContextMessage = MessageType & { threadId?: string; _optimisticId?: string };
+type MessageThread = Record<string, ContextMessage[]>;
 
 type ThreadInfo = {
   unreadCount: number;
-  lastMessage: Message | null;
+  lastMessage: ContextMessage | null;
   otherParty: string;
-};
-
-type MessageNotification = {
-  buyer: string;
-  messageCount: number;
-  lastMessage: string;
-  timestamp: string;
 };
 
 type MessageOptions = {
   type?: 'normal' | 'customRequest' | 'image' | 'tip';
-  meta?: Message['meta'];
+  meta?: ContextMessage['meta'];
   _optimisticId?: string;
 };
 
@@ -63,8 +55,8 @@ type SellerProfile = {
 };
 
 type MessageContextType = {
-  messages: { [conversationKey: string]: Message[] };
-  sellerProfiles: { [username: string]: SellerProfile };
+  messages: Record<string, ContextMessage[]>;
+  sellerProfiles: Record<string, SellerProfile>;
   isLoading: boolean;
   isInitialized: boolean;
   sendMessage: (sender: string, receiver: string, content: string, options?: MessageOptions) => Promise<void>;
@@ -74,10 +66,9 @@ type MessageContextType = {
     content: string,
     title: string,
     price: number,
-    tags: string[],
-    listingId: string
+    tags: string[]
   ) => void;
-  getMessagesForUsers: (userA: string, userB: string) => Message[];
+  getMessagesForUsers: (userA: string, userB: string) => ContextMessage[];
   getThreadsForUser: (username: string, role?: 'buyer' | 'seller') => MessageThread;
   getThreadInfo: (username: string, otherParty: string) => ThreadInfo;
   getAllThreadsInfo: (username: string, role?: 'buyer' | 'seller') => { [otherParty: string]: ThreadInfo };
@@ -89,10 +80,10 @@ type MessageContextType = {
   isBlocked: (blocker: string, blockee: string) => boolean;
   hasReported: (reporter: string, reportee: string) => boolean;
   getReportCount: () => number;
-  blockedUsers: { [user: string]: string[] };
-  reportedUsers: { [user: string]: string[] };
-  reportLogs: any[];
-  messageNotifications: { [seller: string]: MessageNotification[] };
+  blockedUsers: Record<string, string[]>;
+  reportedUsers: Record<string, string[]>;
+  reportLogs: ReportLog[];
+  messageNotifications: Record<string, MessageNotification[]>;
   clearMessageNotifications: (seller: string, buyer: string) => void;
   refreshMessages: () => Promise<void>;
 };
@@ -111,24 +102,42 @@ const customRequestMetaSchema = z.object({
 
 const CLIP = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
 
+const normalizeSellerProfile = (profile: UserProfile): SellerProfile => ({
+  profilePic: profile.profilePic ?? null,
+  isVerified: profile.isVerified ?? false,
+});
+
+const mapThreadMessages = (messages: ServiceMessage[], threadId: string): ContextMessage[] =>
+  messages.map((message) => ({
+    ...message,
+    threadId: message.threadId ?? threadId,
+  }));
+
 export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [messages, setMessages] = useState<{ [conversationKey: string]: Message[] }>({});
-  const [sellerProfiles, setSellerProfiles] = useState<{ [username: string]: SellerProfile }>({});
-  const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
-  const [reportedUsers, setReportedUsers] = useState<{ [user: string]: string[] }>({});
-  const [reportLogs, setReportLogs] = useState<any[]>([]);
-  const [messageNotifications, setMessageNotifications] = useState<{ [seller: string]: MessageNotification[] }>({});
+  const [messages, setMessages] = useState<Record<string, ContextMessage[]>>({});
+  const [sellerProfiles, setSellerProfiles] = useState<Record<string, SellerProfile>>({});
+  const [blockedUsers, setBlockedUsers] = useState<Record<string, string[]>>({});
+  const [reportedUsers, setReportedUsers] = useState<Record<string, string[]>>({});
+  const [reportLogs, setReportLogs] = useState<ReportLog[]>([]);
+  const [messageNotifications, setMessageNotifications] = useState<Record<string, MessageNotification[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [updateTrigger, setUpdateTrigger] = useState(0);
 
-  const wsContext = useWebSocket ? useWebSocket() : null;
-  const { subscribe, isConnected } = wsContext || { subscribe: null, isConnected: false };
+  const wsContext = useWebSocket();
+  const subscribe = wsContext?.subscribe;
+  const connectionState = wsContext?.connectionState;
 
   const processedMessageIds = useRef<Set<string>>(new Set());
   const optimisticMessageMap = useRef<Map<string, string>>(new Map());
   const subscriptionsRef = useRef<(() => void)[]>([]);
   const rateLimiter = useRef(getRateLimiter()).current;
+
+  type MessageReadEvent = { threadId: string; messageIds: string[] };
+  type MessageNewEvent = ServiceMessage & {
+    threadId?: string;
+    createdAt?: string;
+    _optimisticId?: string;
+  };
 
   // Initialize service
   useEffect(() => {
@@ -148,7 +157,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         setIsLoading(true);
         console.log('[MessageContext] Loading initial data...');
 
-        const [threadsResponse, blockedResponse, notificationsResponse] = await Promise.all([
+        const [threadsResponse, blockedResponse, notificationsResponse]: [
+          ThreadsResponse,
+          ApiResponse<Record<string, string[]>>,
+          ApiResponse<ServiceMessageNotification[]>
+        ] = await Promise.all([
           messagesService.getThreads(''),
           messagesService.getBlockedUsers(),
           messagesService.getMessageNotifications('')
@@ -156,29 +169,20 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         // Process threads and profiles - UPDATED to use backend field names directly
         if (threadsResponse.success && threadsResponse.data) {
-          const processedMessages: { [key: string]: Message[] } = {};
-          const profiles: { [username: string]: SellerProfile } = {};
+          const processedMessages: Record<string, ContextMessage[]> = {};
+          const profiles: Record<string, SellerProfile> = {};
 
-          // Check if profiles exist in the response
-          if ((threadsResponse as any).profiles) {
-            console.log('[MessageContext] Found profiles object:', (threadsResponse as any).profiles);
-            
-            Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
+          if (threadsResponse.profiles) {
+            Object.entries(threadsResponse.profiles).forEach(([username, profile]) => {
               const key = sanitizeUsername(username) || username;
-              
-              // UPDATED: Use backend field names directly without transformation
-              profiles[key] = {
-                profilePic: profile.profilePic || null,
-                isVerified: profile.isVerified || false
-              };
-              
-              console.log(`[MessageContext] Stored profile for ${key}:`, profiles[key]);
+              const normalizedProfile = normalizeSellerProfile(profile);
+              profiles[key] = normalizedProfile;
             });
           }
 
           threadsResponse.data.forEach((thread: ServiceMessageThread) => {
             if (thread.messages && thread.messages.length > 0) {
-              processedMessages[thread.id] = thread.messages;
+              processedMessages[thread.id] = mapThreadMessages(thread.messages, thread.id);
             }
           });
 
@@ -196,18 +200,22 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         // Set notifications
         if (notificationsResponse.success && notificationsResponse.data) {
-          const notifs: { [seller: string]: MessageNotification[] } = {};
-          notificationsResponse.data.forEach((notif: any) => {
-            const seller = notif.seller || notif.recipient;
-            if (seller) {
-              if (!notifs[seller]) notifs[seller] = [];
-              notifs[seller].push({
-                buyer: notif.buyer || notif.sender,
-                messageCount: notif.messageCount || 1,
-                lastMessage: notif.lastMessage || notif.message || '',
-                timestamp: notif.timestamp || notif.createdAt || new Date().toISOString()
-              });
+          const notifs: Record<string, MessageNotification[]> = {};
+          notificationsResponse.data.forEach((notif) => {
+            const seller = sanitizeUsername(notif.seller || notif.recipient || '') || notif.seller || notif.recipient;
+            const buyer = sanitizeUsername(notif.buyer || notif.sender || '') || notif.buyer || notif.sender;
+            if (!seller || !buyer) {
+              return;
             }
+
+            const entry: MessageNotification = {
+              buyer,
+              messageCount: notif.messageCount ?? 1,
+              lastMessage: sanitizeStrict(notif.lastMessage || notif.message || ''),
+              timestamp: notif.timestamp || notif.createdAt || new Date().toISOString(),
+            };
+
+            notifs[seller] = [...(notifs[seller] ?? []), entry];
           });
           setMessageNotifications(notifs);
         }
@@ -240,7 +248,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       return;
     }
 
-    const unsubscribeNewMessage = subscribe('message:new' as WebSocketEvent, (data: any) => {
+    const unsubscribeNewMessage = subscribe<MessageNewEvent>('message:new' as WebSocketEvent, (data) => {
       if (!data || !data.sender || !data.receiver) return;
 
       const conversationKey = getConversationKey(data.sender, data.receiver);
@@ -303,7 +311,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         return { ...prev, [conversationKey]: [...existing, newMessage] };
       });
 
-      setUpdateTrigger((n) => n + 1);
 
       if (data.type !== 'customRequest') {
         const preview = CLIP(safeContent, 50);
@@ -335,7 +342,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
     });
 
-    const unsubscribeRead = subscribe('message:read' as WebSocketEvent, (data: any) => {
+    const unsubscribeRead = subscribe<MessageReadEvent>('message:read' as WebSocketEvent, (data) => {
       if (!data || !data.threadId || !Array.isArray(data.messageIds)) return;
 
       setMessages((prev) => {
@@ -355,7 +362,6 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('message:read', { detail: data }));
       }
-      setUpdateTrigger((n) => n + 1);
     });
 
     subscriptionsRef.current = [unsubscribeNewMessage, unsubscribeRead];
@@ -363,7 +369,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       subscriptionsRef.current.forEach((unsub) => unsub());
       subscriptionsRef.current = [];
     };
-  }, [subscribe, isConnected]);
+  }, [subscribe, connectionState]);
 
   // All actions now use the API service
   const sendMessage = useCallback(
@@ -457,7 +463,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   );
 
   const sendCustomRequest = useCallback(
-    (buyer: string, seller: string, content: string, title: string, price: number, tags: string[], listingId: string) => {
+    (buyer: string, seller: string, content: string, title: string, price: number, tags: string[]) => {
       const validation = customRequestMetaSchema.safeParse({ title, price, message: content });
       if (!validation.success) {
         console.error('Invalid custom request:', validation.error);
@@ -478,11 +484,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   );
 
   const getMessagesForUsers = useCallback(
-    (userA: string, userB: string): Message[] => {
+    (userA: string, userB: string): ContextMessage[] => {
       const conversationKey = getConversationKey(userA, userB);
       return messages[conversationKey] || [];
     },
-    [messages, updateTrigger]
+    [messages]
   );
 
   const getThreadsForUser = useCallback(
@@ -501,7 +507,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       });
       return threads;
     },
-    [messages, updateTrigger]
+    [messages]
   );
 
   const getThreadInfo = useCallback(
@@ -512,7 +518,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       const lastMessage = threadMessages.length > 0 ? threadMessages[threadMessages.length - 1] : null;
       return { unreadCount, lastMessage, otherParty };
     },
-    [messages, updateTrigger]
+    [messages]
   );
 
   const getAllThreadsInfo = useCallback(
@@ -548,12 +554,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
 
         clearMessageNotifications(userA, userB);
-        setUpdateTrigger((n) => n + 1);
       }
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
-  }, []);
+  }, [clearMessageNotifications]);
 
   const clearMessageNotifications = useCallback((seller: string, buyer: string) => {
     setMessageNotifications((prev) => {
@@ -689,34 +694,26 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       const threadsResponse = await messagesService.getThreads('');
       console.log('[MessageContext] Full threads response:', JSON.stringify(threadsResponse));
       if (threadsResponse.success && threadsResponse.data) {
-        const processedMessages: { [key: string]: Message[] } = {};
-        const profiles: { [username: string]: SellerProfile } = {};
+        const processedMessages: Record<string, ContextMessage[]> = {};
+        const profiles: Record<string, SellerProfile> = {};
 
-        if ((threadsResponse as any).profiles) {
-          console.log('[MessageContext] Found profiles object:', (threadsResponse as any).profiles);
-          
-          Object.entries((threadsResponse as any).profiles).forEach(([username, profile]: [string, any]) => {
+        if (threadsResponse.profiles) {
+          Object.entries(threadsResponse.profiles).forEach(([username, profile]) => {
             const key = sanitizeUsername(username) || username;
-            
+
             // UPDATED: Use backend field names directly without transformation
-            profiles[key] = {
-              profilePic: profile.profilePic || null,
-              isVerified: profile.isVerified || false
-            };
-            
-            console.log(`[MessageContext] Refreshed profile for ${key}:`, profiles[key]);
+            profiles[key] = normalizeSellerProfile(profile);
           });
         }
 
         threadsResponse.data.forEach((thread: ServiceMessageThread) => {
           if (thread.messages && thread.messages.length > 0) {
-            processedMessages[thread.id] = thread.messages;
+            processedMessages[thread.id] = mapThreadMessages(thread.messages, thread.id);
           }
         });
 
         setMessages(processedMessages);
         setSellerProfiles(profiles);
-        setUpdateTrigger((n) => n + 1);
       }
     } catch (error) {
       console.error('[MessageContext] Error refreshing messages:', error);
