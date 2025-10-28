@@ -36,99 +36,33 @@ export const useNotifications = () => {
 };
 
 // ---------- helpers ----------
-type NotificationData = Record<string, unknown> | unknown[];
+const getId = (n: Partial<Notification> | any) => n?._id || n?.id || undefined;
 
-type RawNotification = Partial<Notification> & {
-  notificationId?: string;
-  data?: unknown;
-  priority?: Notification['priority'] | string | null;
-  createdAt?: string;
+const sanitizeDataPayload = (val: any) => {
+  if (!val || typeof val !== 'object') return val;
+  const out: any = Array.isArray(val) ? [] : {};
+  Object.entries(val).forEach(([k, v]) => {
+    if (typeof v === 'string') out[k] = sanitizeStrict(v);
+    else out[k] = v;
+  });
+  return out;
 };
 
-const NOTIFICATION_TYPES: ReadonlySet<Notification['type']> = new Set([
-  'sale',
-  'bid',
-  'subscription',
-  'tip',
-  'order',
-  'auction_end',
-  'message',
-  'system',
-]);
-
-const NOTIFICATION_PRIORITIES: ReadonlySet<NonNullable<Notification['priority']>> = new Set([
-  'low',
-  'normal',
-  'high',
-]);
-
-const getId = (notification: RawNotification): string | undefined => {
-  if (typeof notification.notificationId === 'string') return notification.notificationId;
-  if (typeof notification._id === 'string') return notification._id;
-  if (typeof notification.id === 'string') return notification.id;
-  return undefined;
-};
-
-const sanitizeDataPayload = (value: unknown): NotificationData | undefined => {
-  if (!value || typeof value !== 'object') {
-    return undefined;
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((item) => (typeof item === 'string' ? sanitizeStrict(item) : item));
-  }
-
-  return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>(
-    (acc, [key, entry]) => {
-      acc[key] = typeof entry === 'string' ? sanitizeStrict(entry) : entry;
-      return acc;
-    },
-    {}
-  );
-};
-
-const normalizeNotificationType = (value: string | undefined): Notification['type'] => {
-  if (value && NOTIFICATION_TYPES.has(value as Notification['type'])) {
-    return value as Notification['type'];
-  }
-  return 'system';
-};
-
-const normalizeNotificationPriority = (
-  value: string | null | undefined
-): NonNullable<Notification['priority']> => {
-  if (value && NOTIFICATION_PRIORITIES.has(value as NonNullable<Notification['priority']>)) {
-    return value as NonNullable<Notification['priority']>;
-  }
-  return 'normal';
-};
-
-const sanitizeNotification = (notification: RawNotification, fallbackRecipient?: string): Notification => {
-  const id = getId(notification) ?? `notification_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const recipient = sanitizeUsername(notification.recipient) || fallbackRecipient || '';
-  const type = normalizeNotificationType(
-    typeof notification.type === 'string' ? sanitizeStrict(notification.type) : undefined
-  );
-
+const sanitizeNotification = (n: any, fallbackRecipient?: string): Notification => {
+  const id = getId(n);
   return {
     id,
-    _id: notification._id ?? id,
-    recipient,
-    type,
-    title: notification.title ? sanitizeStrict(notification.title) : 'Notification',
-    message: notification.message ? sanitizeStrict(notification.message) : '',
-    data: sanitizeDataPayload(notification.data),
-    read: Boolean(notification.read),
-    cleared: Boolean(notification.cleared),
-    deleted: Boolean(notification.deleted),
-    priority: normalizeNotificationPriority(
-      typeof notification.priority === 'string' ? sanitizeStrict(notification.priority) : notification.priority ?? 'normal'
-    ),
-    relatedId: notification.relatedId ? sanitizeStrict(notification.relatedId) : undefined,
-    relatedType: notification.relatedType ?? undefined,
-    createdAt: typeof notification.createdAt === 'string' ? notification.createdAt : new Date().toISOString(),
-    updatedAt: notification.updatedAt,
-  };
+    _id: id,
+    recipient: sanitizeUsername(n?.recipient) || fallbackRecipient || '',
+    type: typeof n?.type === 'string' ? sanitizeStrict(n.type) : 'system',
+    title: n?.title ? sanitizeStrict(n.title) : 'Notification',
+    message: n?.message ? sanitizeStrict(n.message) : '',
+    data: sanitizeDataPayload(n?.data),
+    read: !!n?.read,
+    cleared: !!n?.cleared,
+    priority: (typeof n?.priority === 'string' ? sanitizeStrict(n.priority) : 'normal') as any,
+    createdAt: typeof n?.createdAt === 'string' ? n.createdAt : new Date().toISOString(),
+  } as Notification;
 };
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -163,8 +97,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       ]);
 
       if (isMountedRef.current && activeRes.success && Array.isArray(activeRes.data)) {
-        const sanitizedActive = activeRes.data.map((notification) =>
-          sanitizeNotification(notification, user.username)
+        const sanitizedActive = activeRes.data.map((n: any) =>
+          sanitizeNotification(n, user.username)
         );
         setActiveNotifications(sanitizedActive);
         setUnreadCount(sanitizedActive.filter((n) => !n.read).length);
@@ -175,8 +109,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }
 
       if (isMountedRef.current && clearedRes.success && Array.isArray(clearedRes.data)) {
-        const sanitizedCleared = clearedRes.data.map((notification) =>
-          sanitizeNotification(notification, user.username)
+        const sanitizedCleared = clearedRes.data.map((n: any) =>
+          sanitizeNotification(n, user.username)
         );
         setClearedNotifications(sanitizedCleared);
       }
@@ -213,8 +147,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const unsubs: Array<() => void> = [];
 
     unsubs.push(
-      subscribe<RawNotification | null>('notification:new' as WebSocketEvent, (data) => {
-        if (!isMountedRef.current || !data) return;
+      subscribe('notification:new' as WebSocketEvent, (data: any) => {
+        if (!isMountedRef.current) return;
 
         const rawId = getId(data);
         if (rawId && processedNotificationIds.current.has(rawId)) {
@@ -240,8 +174,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 
     unsubs.push(
-      subscribe<RawNotification | null>('notification:cleared' as WebSocketEvent, (data) => {
-        const id = data ? getId(data) : undefined;
+      subscribe('notification:cleared' as WebSocketEvent, (data: any) => {
+        const id = getId(data?.notificationId ? { id: data.notificationId } : data);
         if (!id) return;
 
         setActiveNotifications((prev) => {
@@ -269,8 +203,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 
     unsubs.push(
-      subscribe<RawNotification | null>('notification:restored' as WebSocketEvent, (data) => {
-        const id = data ? getId(data) : undefined;
+      subscribe('notification:restored' as WebSocketEvent, (data: any) => {
+        const id = getId(data?.notificationId ? { id: data.notificationId } : data);
         if (!id) return;
 
         setClearedNotifications((prev) => {
@@ -288,8 +222,8 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     );
 
     unsubs.push(
-      subscribe<RawNotification | null>('notification:deleted' as WebSocketEvent, (data) => {
-        const id = data ? getId(data) : undefined;
+      subscribe('notification:deleted' as WebSocketEvent, (data: any) => {
+        const id = getId(data?.notificationId ? { id: data.notificationId } : data);
         if (!id) return;
         setClearedNotifications((prev) => prev.filter((n) => getId(n) !== id));
       })
@@ -416,18 +350,17 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const addLocalNotification = useCallback(
     (message: string, type: string = 'system') => {
       if (!user) return;
-      const candidateType = /^[a-z0-9_\-]+$/i.test(type) ? type : 'system';
-      const safeType = normalizeNotificationType(candidateType);
+      const safeType = /^[a-z0-9_\-]+$/i.test(type) ? type : 'system';
       const n: Notification = {
         id: `temp_${Date.now()}`,
         recipient: sanitizeUsername(user.username) || user.username,
-        type: safeType,
+        type: safeType as any,
         title: 'Notification',
         message: sanitizeStrict(message),
         read: false,
         cleared: false,
         createdAt: new Date().toISOString(),
-        priority: 'normal',
+        priority: 'normal' as any,
       };
       setActiveNotifications((prev) => [n, ...prev]);
       setUnreadCount((c) => c + 1);
