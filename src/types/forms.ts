@@ -14,7 +14,7 @@ export interface FieldState<T = string> {
 }
 
 // Form state
-export interface FormState<T extends Record<string, unknown>> {
+export interface FormState<T extends Record<string, any>> {
   values: T;
   errors: Partial<Record<keyof T, string>>;
   touched: Partial<Record<keyof T, boolean>>;
@@ -26,22 +26,22 @@ export interface FormState<T extends Record<string, unknown>> {
 }
 
 // Validation rule
-export type ValidationRule<T = unknown> = {
-  validate: (value: T, formValues?: Record<string, unknown>) => boolean | Promise<boolean>;
+export type ValidationRule<T = any> = {
+  validate: (value: T, formValues?: any) => boolean | Promise<boolean>;
   message: string | ((value: T) => string);
 };
 
 // Field config
-export interface FieldConfig<T = unknown> {
+export interface FieldConfig<T = any> {
   name: string;
   defaultValue?: T;
   rules?: ValidationRule<T>[];
-  transform?: (value: unknown) => T;
+  transform?: (value: any) => T;
   format?: (value: T) => string;
 }
 
 // Form config
-export interface FormConfig<T extends Record<string, unknown>> {
+export interface FormConfig<T extends Record<string, any>> {
   fields: {
     [K in keyof T]: FieldConfig<T[K]>;
   };
@@ -52,7 +52,7 @@ export interface FormConfig<T extends Record<string, unknown>> {
 }
 
 // Form handlers
-export interface FormHandlers<T extends Record<string, unknown>> {
+export interface FormHandlers<T extends Record<string, any>> {
   handleChange: <K extends keyof T>(field: K, value: T[K]) => void;
   handleBlur: (field: keyof T) => void;
   handleSubmit: (e?: React.FormEvent) => Promise<void>;
@@ -66,7 +66,7 @@ export interface FormHandlers<T extends Record<string, unknown>> {
 
 // Common validation rules
 export const ValidationRules = {
-  required: (message = 'This field is required'): ValidationRule<unknown> => ({
+  required: (message = 'This field is required'): ValidationRule => ({
     validate: (value) => {
       if (typeof value === 'string') return value.trim().length > 0;
       if (Array.isArray(value)) return value.length > 0;
@@ -106,7 +106,7 @@ export const ValidationRules = {
   }),
 
   custom: <T>(
-    validate: (value: T, formValues?: Record<string, unknown>) => boolean | Promise<boolean>,
+    validate: (value: T, formValues?: any) => boolean | Promise<boolean>,
     message: string
   ): ValidationRule<T> => ({
     validate,
@@ -131,7 +131,7 @@ export interface FormFieldProps<T = string> {
 }
 
 // Form submission result
-export interface FormSubmitResult<T = unknown> {
+export interface FormSubmitResult<T = any> {
   success: boolean;
   data?: T;
   errors?: Record<string, string>;

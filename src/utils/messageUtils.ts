@@ -14,7 +14,7 @@ export interface Message {
   isTip?: boolean;
   tipAmount?: number;
   isCustomRequest?: boolean;
-  requestData?: Record<string, unknown>;
+  requestData?: any;
   messageKey?: string;
   meta?: {
     id?: string;
@@ -44,7 +44,7 @@ export interface CustomRequest {
 }
 
 // Process messages to handle custom requests correctly
-export function getLatestCustomRequestMessages(messages: Message[], _requests: CustomRequest[]): Message[] {
+export function getLatestCustomRequestMessages(messages: Message[], requests: CustomRequest[]): Message[] {
   const seen = new Set<string>();
   const result: Message[] = [];
 

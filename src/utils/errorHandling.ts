@@ -5,9 +5,6 @@ import { useCallback, useRef, useState } from 'react';
 import { useToast } from '@/context/ToastContext';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null;
-
 // Error types
 export enum ErrorType {
   NETWORK = 'NETWORK',
@@ -35,7 +32,7 @@ export class AppError extends Error {
     public type: ErrorType = ErrorType.UNKNOWN,
     public severity: ErrorSeverity = ErrorSeverity.MEDIUM,
     public code?: string,
-    public details?: unknown,
+    public details?: any,
     public retryable: boolean = true
   ) {
     super(message);
@@ -44,17 +41,9 @@ export class AppError extends Error {
 }
 
 // Error mapping utility
-export function mapErrorToAppError(error: unknown): AppError {
-  if (error instanceof AppError) {
-    return error;
-  }
-
-  const errorRecord = isRecord(error) ? error : {};
-  const code = typeof errorRecord.code === 'string' ? errorRecord.code : undefined;
-  const messageText = typeof errorRecord.message === 'string' ? errorRecord.message : undefined;
-
+export function mapErrorToAppError(error: any): AppError {
   // Network errors
-  if (code === 'ECONNABORTED' || messageText?.toLowerCase().includes('network')) {
+  if (error.code === 'ECONNABORTED' || error.message?.includes('network')) {
     return new AppError(
       'Network connection failed',
       ErrorType.NETWORK,
@@ -65,7 +54,7 @@ export function mapErrorToAppError(error: unknown): AppError {
   }
 
   // Timeout errors
-  if (code === 'ETIMEDOUT' || messageText?.toLowerCase().includes('timeout')) {
+  if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
     return new AppError(
       'Request timed out',
       ErrorType.TIMEOUT,
@@ -76,17 +65,14 @@ export function mapErrorToAppError(error: unknown): AppError {
   }
 
   // API Response errors
-  const response = isRecord(errorRecord.response) ? errorRecord.response : undefined;
-  if (response && typeof response.status === 'number') {
-    const status = response.status;
-    const data = 'data' in response ? (response as { data?: unknown }).data : undefined;
-    const dataRecord = isRecord(data) ? data : undefined;
-    const dataMessage = typeof dataRecord?.message === 'string' ? dataRecord.message : undefined;
+  if (error.response) {
+    const status = error.response.status;
+    const data = error.response.data;
 
     switch (status) {
       case 400:
         return new AppError(
-          dataMessage || 'Invalid request',
+          data?.message || 'Invalid request',
           ErrorType.VALIDATION,
           ErrorSeverity.LOW,
           'VALIDATION_ERROR',
@@ -139,7 +125,7 @@ export function mapErrorToAppError(error: unknown): AppError {
 
       default:
         return new AppError(
-          dataMessage || 'An error occurred',
+          data?.message || 'An error occurred',
           ErrorType.UNKNOWN,
           ErrorSeverity.MEDIUM,
           `HTTP_${status}`,
@@ -150,7 +136,7 @@ export function mapErrorToAppError(error: unknown): AppError {
 
   // Default error
   return new AppError(
-    messageText || 'An unexpected error occurred',
+    error.message || 'An unexpected error occurred',
     ErrorType.UNKNOWN,
     ErrorSeverity.MEDIUM,
     'UNKNOWN_ERROR',
@@ -279,13 +265,13 @@ export class CircuitBreaker {
 // Hook for error handling
 export function useErrorHandler() {
   const toast = useToast();
-  const { isOnline } = useNetworkStatus();
+  const { isOnline, retryFailedRequest } = useNetworkStatus();
   const [errors, setErrors] = useState<Map<string, AppError>>(new Map());
   const circuitBreakers = useRef<Map<string, CircuitBreaker>>(new Map());
 
   // Handle error with appropriate UI feedback
   const handleError = useCallback((
-    error: unknown,
+    error: any,
     options: {
       showToast?: boolean;
       fallbackMessage?: string;

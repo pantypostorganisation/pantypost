@@ -33,7 +33,7 @@ export interface BanHistoryEntry {
   details: string;
   timestamp: string;
   adminUsername: string;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, any>;
 }
 
 export interface AppealReview {

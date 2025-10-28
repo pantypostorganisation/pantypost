@@ -1,7 +1,5 @@
 // src/types/type-utils.ts
 
-import type React from 'react';
-
 /**
  * Utility types for common patterns
  */
@@ -27,9 +25,7 @@ export type OptionalKeys<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>
 
 // Function types
 export type AsyncFunction<T = void> = () => Promise<T>;
-export type AsyncFunctionWithArgs<TArgs extends unknown[], TReturn = void> = (
-  ...args: TArgs
-) => Promise<TReturn>;
+export type AsyncFunctionWithArgs<TArgs extends any[], TReturn = void> = (...args: TArgs) => Promise<TReturn>;
 
 // Event handler types
 export type ChangeHandler<T = string> = (value: T) => void;
@@ -39,15 +35,15 @@ export type ClickHandler = React.MouseEventHandler<HTMLElement>;
 export type KeyHandler = React.KeyboardEventHandler<HTMLElement>;
 
 // Component prop types
-export type PropsWithClassName<P = Record<string, unknown>> = P & {
+export type PropsWithClassName<P = {}> = P & {
   className?: string;
 };
 
-export type PropsWithChildren<P = Record<string, unknown>> = P & {
+export type PropsWithChildren<P = {}> = P & {
   children?: React.ReactNode;
 };
 
-export type PropsWithRef<P = Record<string, unknown>, T = HTMLElement> = P & {
+export type PropsWithRef<P = {}, T = HTMLElement> = P & {
   ref?: React.Ref<T>;
 };
 
@@ -89,7 +85,7 @@ export interface SortState<T = string> {
 }
 
 // Filter state
-export interface FilterState<T = Record<string, unknown>> {
+export interface FilterState<T = Record<string, any>> {
   filters: T;
   isActive: boolean;
 }

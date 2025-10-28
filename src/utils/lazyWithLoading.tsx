@@ -1,6 +1,6 @@
 // src/utils/lazyWithLoading.tsx
 import dynamic from 'next/dynamic';
-import type { ComponentType } from 'react';
+import { ComponentType } from 'react';
 
 // Loading skeleton component
 export const LoadingSkeleton = () => (
@@ -13,8 +13,8 @@ export const LoadingSkeleton = () => (
 );
 
 // Generic lazy loading wrapper
-export function lazyWithLoading<TProps extends Record<string, unknown>>(
-  importFunc: () => Promise<{ default: ComponentType<TProps> }>,
+export function lazyWithLoading<T extends ComponentType<any>>(
+  importFunc: () => Promise<{ default: T }>,
   LoadingComponent?: ComponentType
 ) {
   return dynamic(importFunc, {

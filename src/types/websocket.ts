@@ -71,12 +71,12 @@ export enum WebSocketEvent {
 }
 
 // Type for WebSocket event handlers
-export type WebSocketHandler<T = unknown> = (data: T) => void;
+export type WebSocketHandler<T = any> = (data: T) => void;
 
 // WebSocket options
 export interface WebSocketOptions {
   url: string;
-  auth?: Record<string, unknown>;
+  auth?: Record<string, any>;
   autoConnect?: boolean;
   reconnect?: boolean;
   reconnectAttempts?: number;
@@ -91,7 +91,7 @@ export interface WebSocketError {
 }
 
 // WebSocket message structure
-export interface WebSocketMessage<T = unknown> {
+export interface WebSocketMessage<T = any> {
   event: WebSocketEvent;
   data: T;
   timestamp?: number;
@@ -124,7 +124,7 @@ export interface RealtimeNotification {
   type: 'message' | 'order' | 'wallet' | 'system';
   title: string;
   body: string;
-  data?: Record<string, unknown>;
+  data?: any;
   read: boolean;
   createdAt: string;
 }
@@ -133,7 +133,7 @@ export interface RealtimeNotification {
 export interface OrderUpdateData {
   orderId: string;
   status?: string;
-  updates?: Record<string, unknown>;
+  updates?: Record<string, any>;
   timestamp?: number;
 }
 
@@ -158,7 +158,7 @@ export interface AuctionBidData {
 export interface ListingUpdateData {
   listingId: string;
   title?: string;
-  updates?: Record<string, unknown>;
+  updates?: Record<string, any>;
   soldTo?: string;
   price?: number;
   timestamp?: number;

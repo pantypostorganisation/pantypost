@@ -17,6 +17,7 @@ import {
 import { User } from '@/context/AuthContext';
 import { Listing } from '@/context/ListingContext';
 import { Order } from '@/context/WalletContext';
+import { Result } from './type-utils';
 
 // Basic type guards
 export const isString = (value: unknown): value is string => {
@@ -122,7 +123,7 @@ export const isCommonVerificationStatus = (value: unknown): value is CommonVerif
 // Entity guards
 export const isUser = (value: unknown): value is User => {
   if (!isObject(value)) return false;
-  const user = value as Record<string, unknown>;
+  const user = value as any;
   return (
     isString(user.id) &&
     isString(user.username) &&
@@ -136,7 +137,7 @@ export const isUser = (value: unknown): value is User => {
 
 export const isListing = (value: unknown): value is Listing => {
   if (!isObject(value)) return false;
-  const listing = value as Record<string, unknown>;
+  const listing = value as any;
   return (
     isString(listing.id) &&
     isString(listing.title) &&
@@ -151,7 +152,7 @@ export const isListing = (value: unknown): value is Listing => {
 
 export const isOrder = (value: unknown): value is Order => {
   if (!isObject(value)) return false;
-  const order = value as Record<string, unknown>;
+  const order = value as any;
   return (
     isString(order.id) &&
     isString(order.title) &&
@@ -204,20 +205,16 @@ export const hasRequiredFields = <T extends Record<string, unknown>>(
 
 // API Response guards
 export const isApiError = (error: unknown): error is { message: string; code?: string } => {
-  return (
-    isObject(error) &&
-    'message' in error &&
-    isString((error as { message?: unknown }).message)
-  );
+  return isObject(error) && isString((error as any).message);
 };
 
 export const isApiResponse = <T>(
   response: unknown,
   dataGuard?: (data: unknown) => data is T
-): response is { success: boolean; data?: T; error?: unknown } => {
+): response is { success: boolean; data?: T; error?: any } => {
   if (!isObject(response)) return false;
-  const res = response as Record<string, unknown>;
-  if (!('success' in res) || !isBoolean(res.success)) return false;
+  const res = response as any;
+  if (!isBoolean(res.success)) return false;
   if (res.success && dataGuard && !dataGuard(res.data)) return false;
   return true;
 };

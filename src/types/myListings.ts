@@ -1,8 +1,6 @@
 // src/types/myListings.ts
 
 import { Listing } from '@/context/ListingContext';
-import type { ComponentType, SVGProps } from 'react';
-import type { Order } from './order';
 
 export interface ListingFormState {
   title: string;
@@ -39,7 +37,7 @@ export interface ListingDraft {
 export interface StatsCardProps {
   title: string;
   count: number;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  icon: React.ComponentType<any>;
   iconColor: string;
   borderColor: string;
 }
@@ -83,7 +81,7 @@ export interface VerificationBannerProps {
 
 export interface TipsCardProps {
   title: string;
-  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  icon: React.ComponentType<any>;
   iconColor: string;
   borderColor: string;
   tips: string[];
@@ -92,7 +90,7 @@ export interface TipsCardProps {
 }
 
 export interface RecentSalesProps {
-  orders: Order[];
+  orders: any[];
 }
 
 export interface DraftListProps {

@@ -309,23 +309,23 @@ export function sanitizeStringArray(
  * Sanitizes object keys and values recursively
  * Prevents prototype pollution attacks
  */
-export function sanitizeObject<T extends Record<string, unknown>>(
+export function sanitizeObject<T extends Record<string, any>>(
   obj: T,
   options: {
     maxDepth?: number;
     allowedKeys?: string[];
     keySanitizer?: (key: string) => string;
-    valueSanitizer?: (value: unknown) => unknown;
+    valueSanitizer?: (value: any) => any;
   } = {}
 ): Partial<T> {
   const {
     maxDepth = 5,
     allowedKeys,
     keySanitizer = sanitizeStrict,
-    valueSanitizer = (v: unknown) => (typeof v === 'string' ? sanitizeStrict(v) : v),
+    valueSanitizer = (v) => (typeof v === 'string' ? sanitizeStrict(v) : v),
   } = options;
   
-  function sanitizeRecursive(input: unknown, depth: number): unknown {
+  function sanitizeRecursive(input: any, depth: number): any {
     if (depth > maxDepth) {
       return null;
     }
@@ -347,11 +347,11 @@ export function sanitizeObject<T extends Record<string, unknown>>(
     }
     
     if (typeof input === 'object') {
-      const sanitized: Record<string, unknown> = {};
+      const sanitized: any = {};
       
       for (const [key, value] of Object.entries(input)) {
         // Skip prototype properties
-        if (!Object.prototype.hasOwnProperty.call(input, key)) continue;
+        if (!input.hasOwnProperty(key)) continue;
         
         // Skip dangerous keys
         if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
@@ -375,7 +375,7 @@ export function sanitizeObject<T extends Record<string, unknown>>(
     return null;
   }
   
-  return sanitizeRecursive(obj, 0) as Partial<T>;
+  return sanitizeRecursive(obj, 0);
 }
 
 /**

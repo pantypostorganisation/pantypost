@@ -1,6 +1,7 @@
 // src/types/browseDetail.ts
 
 import { Listing } from '@/context/ListingContext';
+import { DeliveryAddress } from '@/components/AddressConfirmationModal';
 
 export interface SellerProfile {
   bio?: string | null;
@@ -134,13 +135,13 @@ export interface PurchaseSectionProps {
 export interface SellerProfileProps {
   seller: string;
   sellerProfile: SellerProfile;
-  sellerTierInfo: ListingWithDetails['sellerTierInfo'];
+  sellerTierInfo: any;
   sellerAverageRating: number | null | undefined;
   sellerReviewCount: number;
   isVerified: boolean;
 }
 
-export type TrustBadgesProps = Record<string, never>;
+export interface TrustBadgesProps {}
 
 export interface BidHistoryModalProps {
   show: boolean;

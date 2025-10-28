@@ -1,6 +1,5 @@
 // src/utils/myListingsUtils.ts
 
-import type { Listing } from '@/context/ListingContext';
 import { ListingFormState } from '@/types/myListings';
 
 export const INITIAL_FORM_STATE: ListingFormState = {
@@ -120,7 +119,7 @@ export const parseTags = (tagsString: string): string[] => {
  * @param listing - Listing object
  * @returns Type label string
  */
-export const getListingTypeLabel = (listing: Pick<Listing, 'auction' | 'isPremium'>): string => {
+export const getListingTypeLabel = (listing: any): string => {
   if (listing.auction) return 'Auction';
   if (listing.isPremium) return 'Premium';
   return 'Standard';
@@ -131,7 +130,7 @@ export const getListingTypeLabel = (listing: Pick<Listing, 'auction' | 'isPremiu
  * @param listing - Listing object
  * @returns Color class string
  */
-export const getListingTypeColor = (listing: Pick<Listing, 'auction' | 'isPremium'>): string => {
+export const getListingTypeColor = (listing: any): string => {
   if (listing.auction) return 'text-purple-500 border-purple-500';
   if (listing.isPremium) return 'text-yellow-500 border-yellow-500';
   return 'text-green-500 border-green-500';

@@ -1,7 +1,6 @@
 // src/types/dashboard.ts
 
-import type { ReactNode } from 'react';
-import type { Listing } from '@/context/ListingContext';
+import { ReactNode } from 'react';
 
 export interface SubscriptionInfo {
   seller: string;
@@ -50,7 +49,7 @@ export interface StatsGridProps {
   stats: DashboardStats;
 }
 
-export type QuickActionsProps = Record<string, never>;
+export interface QuickActionsProps {}
 
 export interface RecentActivityProps {
   activities: RecentActivity[];
@@ -61,5 +60,5 @@ export interface SubscribedSellersProps {
 }
 
 export interface FeaturedListingsProps {
-  listings: Listing[];
+  listings: any[]; // You can replace with proper Listing type
 }
