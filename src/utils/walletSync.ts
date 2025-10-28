@@ -1,7 +1,25 @@
 ﻿// src/utils/walletSync.ts
 
 import { storageService } from '@/services/storage.service';
-import { WebSocketEvent } from '@/types/websocket';
+
+type SellerBalanceEntry = number | SellerBalanceObject;
+
+interface SellerBalanceObject extends Record<string, unknown> {
+  balance?: number;
+}
+
+const isSellerBalanceObject = (value: unknown): value is SellerBalanceObject =>
+  typeof value === 'object' && value !== null && 'balance' in value;
+
+const toNumericBalance = (entry: unknown): number => {
+  if (typeof entry === 'number' && Number.isFinite(entry)) {
+    return entry;
+  }
+  if (isSellerBalanceObject(entry) && typeof entry.balance === 'number' && Number.isFinite(entry.balance)) {
+    return entry.balance;
+  }
+  return 0;
+};
 
 /**
  * Force sync wallet balances between enhanced service and WalletContext
@@ -36,8 +54,8 @@ export async function forceSyncWalletBalance(username: string): Promise<void> {
       console.log('[ForceSync] Dispatched storage event');
       
       // Also trigger global balance update
-      if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
-        (window as any).__pantypost_balance_context.forceUpdate();
+      if (typeof window !== 'undefined' && window.__pantypost_balance_context?.forceUpdate) {
+        window.__pantypost_balance_context.forceUpdate();
       }
     }
   } catch (error) {
@@ -78,8 +96,8 @@ export async function enhancedWalletSync(
     }));
     
     // Trigger global update
-    if (typeof window !== 'undefined' && (window as any).__pantypost_balance_context?.forceUpdate) {
-      (window as any).__pantypost_balance_context.forceUpdate();
+    if (typeof window !== 'undefined' && window.__pantypost_balance_context?.forceUpdate) {
+      window.__pantypost_balance_context.forceUpdate();
     }
     
     // Emit custom event for immediate local updates
@@ -128,29 +146,18 @@ export async function syncAllWalletData(): Promise<void> {
     }
     
     // Sync seller balances - FIXED to handle both number and object formats
-    const sellerBalances = await storageService.getItem<Record<string, any>>('wallet_sellers', {});
+    const sellerBalances = await storageService.getItem<Record<string, SellerBalanceEntry>>('wallet_sellers', {});
+    const normalizedSellerBalances: Record<string, number> = {};
+
     for (const [username, data] of Object.entries(sellerBalances)) {
-      let balance = 0;
-      
-      // Handle both number and object formats
-      if (typeof data === 'number' && !isNaN(data)) {
-        balance = data;
-      } else if (data && typeof data === 'object' && 'balance' in data) {
-        const objBalance = data.balance;
-        if (typeof objBalance === 'number' && !isNaN(objBalance)) {
-          balance = objBalance;
-        }
-      }
-      
+      const balance = toNumericBalance(data);
       const balanceInCents = Math.round(balance * 100);
       await storageService.setItem(`wallet_seller_${username}`, balanceInCents);
-      
-      // Also fix the collective storage to be a number
-      sellerBalances[username] = balance;
+      normalizedSellerBalances[username] = balance;
     }
-    
+
     // Save the fixed seller balances back
-    await storageService.setItem('wallet_sellers', sellerBalances);
+    await storageService.setItem('wallet_sellers', normalizedSellerBalances);
     
     console.log('[SyncAll] Full sync completed');
   } catch (error) {
@@ -214,20 +221,9 @@ export class WalletBalanceListener {
       }
       
       // Check seller balances - FIXED to handle both number and object formats
-      const sellers = JSON.parse(localStorage.getItem('wallet_sellers') || '{}');
+      const sellers = JSON.parse(localStorage.getItem('wallet_sellers') || '{}') as Record<string, unknown>;
       for (const [username, data] of Object.entries(sellers)) {
-        let balance = 0;
-        
-        // Handle both number and object formats
-        if (typeof data === 'number' && !isNaN(data)) {
-          balance = data;
-        } else if (data && typeof data === 'object' && 'balance' in (data as any)) {
-          const objBalance = (data as any).balance;
-          if (typeof objBalance === 'number' && !isNaN(objBalance)) {
-            balance = objBalance;
-          }
-        }
-        
+        const balance = toNumericBalance(data);
         const key = `seller_${username}`;
         const currentBalance = this.currentBalances.get(key);
         if (currentBalance !== balance) {
@@ -299,9 +295,20 @@ export function getWalletBalanceListener(): WalletBalanceListener {
   return balanceListenerInstance;
 }
 
+declare global {
+  interface Window {
+    __pantypost_balance_context?: {
+      forceUpdate?: () => void;
+    };
+    forceSyncWalletBalance?: typeof forceSyncWalletBalance;
+    enhancedWalletSync?: typeof enhancedWalletSync;
+    syncAllWalletData?: typeof syncAllWalletData;
+  }
+}
+
 // Add to window for easy testing
 if (typeof window !== 'undefined') {
-  (window as any).forceSyncWalletBalance = forceSyncWalletBalance;
-  (window as any).enhancedWalletSync = enhancedWalletSync;
-  (window as any).syncAllWalletData = syncAllWalletData;
+  window.forceSyncWalletBalance = forceSyncWalletBalance;
+  window.enhancedWalletSync = enhancedWalletSync;
+  window.syncAllWalletData = syncAllWalletData;
 }

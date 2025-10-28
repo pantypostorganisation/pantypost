@@ -4,15 +4,6 @@ import { API_BASE_URL, buildApiUrl } from '@/services/api.config';
 
 // Cloudinary configuration (kept for future use if needed)
 const CLOUD_NAME = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || '';
-const UPLOAD_PRESET = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || '';
-
-// Check if Cloudinary is properly configured
-const isCloudinaryConfigured = () => {
-  return CLOUD_NAME && 
-         UPLOAD_PRESET && 
-         CLOUD_NAME !== 'your_cloud_name' && 
-         UPLOAD_PRESET !== 'your_upload_preset';
-};
 
 // Types
 export interface CloudinaryUploadResult {
@@ -131,7 +122,7 @@ export const uploadToCloudinary = async (
     let data;
     try {
       data = JSON.parse(responseText);
-    } catch (e) {
+    } catch {
       console.error('[Upload] Failed to parse response:', responseText);
       throw new Error('Invalid response from server');
     }
@@ -287,12 +278,22 @@ export const uploadMultipleToCloudinary = async (
       
       // Convert response to CloudinaryUploadResult array
       const results: CloudinaryUploadResult[] = [];
-      const uploadedFiles = data.data.files || [];
-      
-      uploadedFiles.forEach((fileData: any, index: number) => {
+      type UploadedFileResponse = {
+        url: string;
+        filename?: string;
+        size?: number;
+        width?: number;
+        height?: number;
+      } & Record<string, unknown>;
+
+      const uploadedFiles: UploadedFileResponse[] = Array.isArray(data.data.files)
+        ? data.data.files
+        : [];
+
+      uploadedFiles.forEach((fileData, index: number) => {
         let finalUrl = fileData.url;
         if (!finalUrl.startsWith('http')) {
-          finalUrl = finalUrl.startsWith('/') 
+          finalUrl = finalUrl.startsWith('/')
             ? `${API_BASE_URL}${finalUrl}`
             : `${API_BASE_URL}/${finalUrl}`;
         }
@@ -430,7 +431,7 @@ export const batchDeleteFromCloudinary = async (
  * @param url - Image URL
  * @returns Promise indicating success
  */
-export const deleteImageByUrl = async (url: string): Promise<CloudinaryDeleteResult> => {
+export const deleteImageByUrl = async (_url: string): Promise<CloudinaryDeleteResult> => {
   // Backend handles deletion
   return {
     result: 'ok',
@@ -489,7 +490,7 @@ export const generateOptimizedUrl = (
   if (url.includes('cloudinary.com')) {
     const { width, height, quality = 'auto', format = 'auto', blur } = options;
     
-    let transformations = [`q_${quality}`, `f_${format}`];
+    const transformations = [`q_${quality}`, `f_${format}`];
     
     if (width) transformations.push(`w_${width}`);
     if (height) transformations.push(`h_${height}`);

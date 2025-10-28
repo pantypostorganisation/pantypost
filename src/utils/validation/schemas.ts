@@ -498,9 +498,11 @@ export function validateField<T>(
   value: unknown
 ): string | undefined {
   try {
-    const fieldSchema = (schema as any).shape[fieldName];
-    if (fieldSchema) {
-      fieldSchema.parse(value);
+    if (schema instanceof z.ZodObject) {
+      const fieldSchema = schema.shape[fieldName as keyof typeof schema.shape];
+      if (fieldSchema) {
+        (fieldSchema as z.ZodTypeAny).parse(value);
+      }
     }
     return undefined;
   } catch (error) {

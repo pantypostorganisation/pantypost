@@ -81,7 +81,7 @@ export interface Listing {
   featured?: boolean;
   verified?: boolean;
   nsfw?: boolean;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CustomRequestPurchase {
@@ -90,7 +90,7 @@ export interface CustomRequestPurchase {
   seller: string;
   amount: number;
   description: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DepositLog {

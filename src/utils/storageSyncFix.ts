@@ -1,6 +1,7 @@
 // src/utils/storageSyncFix.ts
 import { storageService } from '@/services/storage.service';
 import { ordersService } from '@/services/orders.service';
+import type { Order } from '@/types/wallet';
 
 /**
  * Force synchronize all wallet-related localStorage data
@@ -14,7 +15,7 @@ export async function forceWalletStorageSync(): Promise<void> {
   
   // Force read current data
   const buyers = await storageService.getItem<Record<string, number>>('wallet_buyers', {});
-  const orders = await storageService.getItem<any[]>('wallet_orders', []);
+  const orders = await storageService.getItem<Order[]>('wallet_orders', []);
   
   // Re-write to trigger storage events
   await storageService.setItem('wallet_buyers', buyers);
@@ -55,7 +56,7 @@ export async function atomicRefundOperation(
       console.log('[AtomicRefund] Refund amount is 0, fetching from orders...');
       
       // Get all orders
-      const orders = await storageService.getItem<any[]>('wallet_orders', []);
+      const orders = await storageService.getItem<Order[]>('wallet_orders', []);
       
       // Find the pending auction order for this listing and bidder
       const pendingOrder = orders.find(order => 
@@ -85,7 +86,7 @@ export async function atomicRefundOperation(
     
     // 1. Get current data
     const buyers = await storageService.getItem<Record<string, number>>('wallet_buyers', {});
-    const orders = await storageService.getItem<any[]>('wallet_orders', []);
+    const orders = await storageService.getItem<Order[]>('wallet_orders', []);
     
     // 2. Update buyer balance - ONLY for the specific bidder
     const currentBalance = roundCurrency(buyers[bidder] || 0);
