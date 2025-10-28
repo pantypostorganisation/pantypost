@@ -31,13 +31,14 @@ import type {
   CustomRequestPurchase,
   DepositLog,
 } from "@/types/order";
+import type { Transaction, WalletBalance } from "@/types/wallet";
 
 // Re-export types for backward compatibility
 export type { Order, DeliveryAddress, Listing, CustomRequestPurchase, DepositLog };
 
 // Debug mode helper
 const DEBUG_MODE = process.env.NEXT_PUBLIC_DEBUG === "true";
-const debugLog = (...args: any[]) => {
+const debugLog = (...args: unknown[]) => {
   if (DEBUG_MODE) {
     console.log("[WalletContext]", ...args);
   }
@@ -61,7 +62,66 @@ type AdminAction = {
   reason: string;
   date: string;
   role?: "buyer" | "seller";
-  metadata?: any;
+  metadata?: Record<string, unknown>;
+};
+
+type DeduplicationEvent = {
+  [key: string]: unknown;
+  username?: string;
+  balance?: number;
+  newBalance?: number;
+  timestamp?: number;
+  id?: string;
+  transactionId?: string;
+  from?: string;
+  to?: string;
+  amount?: number;
+  buyer?: string;
+  seller?: string;
+};
+
+type WalletAnalytics = {
+  adminBalance: number;
+  orderHistory: Order[];
+  depositLogs: DepositLog[];
+  sellerWithdrawals: Withdrawal[];
+  adminWithdrawals: Withdrawal[];
+  adminActions: AdminAction[];
+  wallet: Record<string, number>;
+  users: Record<string, { role: 'buyer' | 'seller' | 'admin' }>;
+  summary?: unknown;
+};
+
+type RawAdminAction = {
+  _id?: string;
+  id?: string;
+  type: AdminAction['type'];
+  amount: number;
+  reason: string;
+  date: string;
+  adminUser?: string;
+  metadata?: (AdminAction['metadata'] & {
+    seller?: string;
+    username?: string;
+    role?: 'buyer' | 'seller';
+  }) | null;
+};
+
+type WalletBalanceEvent = DeduplicationEvent & {
+  role?: 'buyer' | 'seller' | 'admin';
+  data?: { balance?: number } | null;
+};
+
+type WalletTransactionEvent = DeduplicationEvent & {
+  from?: string;
+  to?: string;
+  amount?: number;
+};
+
+type OrderCreatedEvent = DeduplicationEvent & {
+  order?: Order;
+  buyer?: string;
+  seller?: string;
 };
 
 // Validation schemas for wallet operations
@@ -101,16 +161,41 @@ class DeduplicationManager {
     }, 10000); // Cleanup every 10 seconds
   }
 
-  isDuplicate(eventType: string, data: any): boolean {
+  isDuplicate(eventType: string, data: DeduplicationEvent): boolean {
     // Create composite key based on event type
     let key: string;
 
     if (eventType === "balance_update") {
-      key = `${eventType}_${data.username}_${data.balance || data.newBalance}_${data.timestamp || Date.now()}`;
+      const username = typeof data.username === "string" ? data.username : "unknown";
+      const balanceValue =
+        typeof data.balance === "number"
+          ? data.balance
+          : typeof data.newBalance === "number"
+          ? data.newBalance
+          : 0;
+      const timestamp = typeof data.timestamp === "number" ? data.timestamp : Date.now();
+      key = `${eventType}_${username}_${balanceValue}_${timestamp}`;
     } else if (eventType === "transaction") {
-      key = `${eventType}_${data.id || data.transactionId}_${data.from}_${data.to}_${data.amount}`;
+      const transactionId =
+        typeof data.id === "string"
+          ? data.id
+          : typeof data.transactionId === "string"
+          ? data.transactionId
+          : "unknown";
+      const from = typeof data.from === "string" ? data.from : "unknown";
+      const to = typeof data.to === "string" ? data.to : "unknown";
+      const amount = typeof data.amount === "number" ? data.amount : 0;
+      key = `${eventType}_${transactionId}_${from}_${to}_${amount}`;
     } else if (eventType === "order_created") {
-      key = `${eventType}_${data.id || data._id}_${data.buyer}_${data.seller}`;
+      const orderId =
+        typeof data.id === "string"
+          ? data.id
+          : typeof data._id === "string"
+          ? data._id
+          : "unknown";
+      const buyer = typeof data.buyer === "string" ? data.buyer : "unknown";
+      const seller = typeof data.seller === "string" ? data.seller : "unknown";
+      key = `${eventType}_${orderId}_${buyer}_${seller}`;
     } else {
       key = `${eventType}_${JSON.stringify(data)}`;
     }
@@ -164,35 +249,6 @@ class ThrottleManager {
 }
 
 // Transaction lock manager for preventing race conditions
-class TransactionLockManager {
-  private locks: Map<string, Promise<any>> = new Map();
-
-  async acquireLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
-    const existingLock = this.locks.get(key);
-    if (existingLock) {
-      await existingLock;
-    }
-
-    let result: T;
-    const lockPromise = operation()
-      .then((res) => {
-        result = res;
-        return res;
-      })
-      .finally(() => {
-        this.locks.delete(key);
-      });
-
-    this.locks.set(key, lockPromise);
-    await lockPromise;
-    return result!;
-  }
-
-  isLocked(key: string): boolean {
-    return this.locks.has(key);
-  }
-}
-
 type WalletContextType = {
   // Loading state
   isLoading: boolean;
@@ -277,13 +333,13 @@ type WalletContextType = {
 
   // Enhanced features
   checkSuspiciousActivity: (username: string) => Promise<{ suspicious: boolean; reasons: string[] }>;
-  reconcileBalance: (username: string, role: "buyer" | "seller" | "admin") => Promise<any>;
-  getTransactionHistory: (username?: string, limit?: number) => Promise<any[]>;
+  reconcileBalance: (username: string, role: "buyer" | "seller" | "admin") => Promise<WalletBalance | null>;
+  getTransactionHistory: (username?: string, limit?: number) => Promise<Transaction[]>;
 
   // Admin-specific methods
   refreshAdminData: () => Promise<void>;
-  getPlatformTransactions: (limit?: number, page?: number) => Promise<any[]>;
-  getAnalyticsData: (timeFilter?: string) => Promise<any>;
+  getPlatformTransactions: (limit?: number, page?: number) => Promise<Transaction[]>;
+  getAnalyticsData: (timeFilter?: string) => Promise<WalletAnalytics | null>;
 
   // Data management
   reloadData: () => Promise<void>;
@@ -321,7 +377,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Refs
   const initializingRef = useRef(false);
   const rateLimiter = useRef(getRateLimiter());
-  const transactionLock = useRef(new TransactionLockManager());
   const deduplicationManager = useRef(new DeduplicationManager(30000));
   const throttleManager = useRef(new ThrottleManager());
 
@@ -401,7 +456,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (isAdminUser(username)) {
           debugLog("Admin user detected, fetching unified platform wallet");
 
-          const response = await apiClient.get<any>("/wallet/admin-platform-balance");
+          const response = await apiClient.get<{ balance: number }>("/wallet/admin-platform-balance");
 
           if (response.success && response.data) {
             const balance = response.data.balance || 0;
@@ -414,7 +469,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
 
         // For regular users, fetch their individual wallet
-        const response = await apiClient.get<any>(`/wallet/balance/${username}`);
+        const response = await apiClient.get<{ balance: number }>(`/wallet/balance/${username}`);
 
         debugLog("Balance response:", response);
 
@@ -438,7 +493,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     async (username: string) => {
       try {
         debugLog("Fetching orders for:", username);
-        const response = await apiClient.get<any>(`/orders?buyer=${username}`);
+        const response = await apiClient.get<Order[]>(`/orders?buyer=${username}`);
         debugLog("Orders response:", response);
 
         if (response.success && response.data) {
@@ -460,7 +515,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         // For admin users, fetch platform transactions
         const queryUsername = isAdminUser(username) ? "platform" : username;
 
-        const response = await apiClient.get<any>(`/wallet/transactions/${queryUsername}`);
+        const response = await apiClient.get<Transaction[]>(`/wallet/transactions/${queryUsername}`);
         debugLog("Transactions response:", response);
       } catch (error) {
         console.error("[WalletContext] Failed to fetch transaction history:", error);
@@ -493,7 +548,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log("[Wallet] Admin requesting unified platform wallet balance...");
-      const response = await apiClient.get<any>("/wallet/admin-platform-balance");
+      const response = await apiClient.get<{ balance: number }>("/wallet/admin-platform-balance");
       debugLog("Unified platform balance response:", response);
 
       if (response.success && response.data) {
@@ -537,18 +592,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       debugLog("Fetching admin actions...");
       lastAdminActionsFetch.current = now;
 
-      const response = await apiClient.get<any>("/admin/actions?limit=100");
+      const response = await apiClient.get<RawAdminAction[]>("/admin/actions?limit=100");
       debugLog("Admin actions response:", response);
 
       if (response.success && response.data) {
-        const normalizedActions = response.data.map((action: any) => ({
+        const normalizedActions: AdminAction[] = response.data.map((action) => ({
           id: action._id || action.id,
           _id: action._id || action.id,
           type: action.type,
           amount: action.amount,
           reason: action.reason,
           date: action.date,
-          metadata: action.metadata || {},
+          metadata: action.metadata ?? {},
           targetUser: action.metadata?.seller || action.metadata?.username,
           username: action.metadata?.seller || action.metadata?.username,
           adminUser: action.adminUser || "platform",
@@ -567,7 +622,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // WebSocket handlers
   const handleWalletBalanceUpdate = useCallback(
-    (data: any) => {
+    (data: WalletBalanceEvent) => {
       debugLog("Received wallet:balance_update:", data);
 
       if (deduplicationManager.current.isDuplicate("balance_update", data)) {
@@ -649,7 +704,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
 
   const handlePlatformBalanceUpdate = useCallback(
-    (data: any) => {
+    (data: WalletBalanceEvent) => {
       debugLog("Received platform:balance_update:", data);
 
       if (deduplicationManager.current.isDuplicate("platform_balance", data)) {
@@ -689,7 +744,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
 
   const handleOrderCreated = useCallback(
-    (data: any) => {
+    (data: OrderCreatedEvent) => {
       debugLog("Received order:created event:", data);
 
       if (deduplicationManager.current.isDuplicate("order_created", data)) {
@@ -697,9 +752,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const order = data.order || data;
+      const orderPayload = data.order ?? (data as Partial<Order>);
 
-      if (user && (order.buyer === user.username || order.seller === user.username)) {
+      if (
+        user &&
+        (orderPayload?.buyer === user.username || orderPayload?.seller === user.username)
+      ) {
         debugLog("[WalletContext] New order for current user, refreshing orders");
         fetchOrderHistory(user.username);
       }
@@ -708,7 +766,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
 
   const handleWalletTransaction = useCallback(
-    async (data: any) => {
+    async (data: WalletTransactionEvent) => {
       debugLog("Received wallet:transaction:", data);
 
       if (deduplicationManager.current.isDuplicate("transaction", data)) {
@@ -846,7 +904,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const senderBalance = buyerBalances[validatedFrom] || 0;
         if (senderBalance < validatedAmount) return false;
 
-        const response = await apiClient.post<any>("/tips/send", {
+        const response = await apiClient.post<unknown>("/tips/send", {
           amount: validatedAmount,
           recipientUsername: validatedTo,
           message: message ? sanitizeStrict(message) : undefined,
@@ -895,7 +953,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Platform transactions (admin)
   const getPlatformTransactions = useCallback(
-    async (limit: number = 100, page: number = 1): Promise<any[]> => {
+    async (limit: number = 100, page: number = 1): Promise<Transaction[]> => {
       if (!user || (user.role !== "admin" && !isAdminUser(user.username))) {
         debugLog("Not admin user, skipping platform transactions fetch");
         return [];
@@ -903,7 +961,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       try {
         debugLog("Fetching platform transactions...");
-        const response = await apiClient.get<any>(`/wallet/platform-transactions?limit=${limit}&page=${page}`);
+        const response = await apiClient.get<Transaction[]>(
+          `/wallet/platform-transactions?limit=${limit}&page=${page}`
+        );
         debugLog("Platform transactions response:", response);
 
         if (response.success && response.data) {
@@ -922,7 +982,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Admin analytics
   const fetchAdminAnalytics = useCallback(
-    async (timeFilter: string = "all"): Promise<any> => {
+    async (timeFilter: string = "all"): Promise<WalletAnalytics | null> => {
       if (!user || (user.role !== "admin" && !isAdminUser(user.username))) {
         debugLog("Not admin user, skipping analytics fetch");
         return null;
@@ -930,7 +990,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
       try {
         debugLog("Fetching admin analytics data with filter:", timeFilter);
-        const response = await apiClient.get<any>(`/wallet/admin/analytics?timeFilter=${timeFilter}`);
+      const response = await apiClient.get<WalletAnalytics>(
+        `/wallet/admin/analytics?timeFilter=${timeFilter}`
+      );
         debugLog("Admin analytics response:", response);
 
         if (response.success && response.data) {
@@ -1241,7 +1303,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           },
         };
 
-        const response = await apiClient.post<any>("/orders", orderPayload);
+        const response = await apiClient.post<unknown>("/orders", orderPayload);
         debugLog("Order creation response:", response);
 
         if (response.success && response.data) {
@@ -1306,7 +1368,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           deliveryAddress: undefined,
         };
 
-        const response = await apiClient.post<any>("/orders/custom-request", orderRequest);
+        const response = await apiClient.post<unknown>("/orders/custom-request", orderRequest);
         debugLog("Custom request order response:", response);
 
         if (response.success && response.data) {
@@ -1369,7 +1431,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const validatedUsername = validateUsername(username);
         const validatedAmount = validateTransactionAmount(amount);
 
-        const response = await apiClient.post<any>("/wallet/deposit", {
+        const response = await apiClient.post<unknown>("/wallet/deposit", {
           amount: validatedAmount,
           method,
           notes,
@@ -1478,7 +1540,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const validatedUsername = validateUsername(username);
         const validatedAmount = validateTransactionAmount(amount);
 
-        const response = await apiClient.post<any>("/wallet/withdraw", {
+        const response = await apiClient.post<unknown>("/wallet/withdraw", {
           username: validatedUsername,
           amount: validatedAmount,
           accountDetails: {
@@ -1535,7 +1597,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const validatedAmount = validateTransactionAmount(amount);
         const sanitizedReason = sanitizeStrict(reason);
 
-        const response = await apiClient.post<any>("/wallet/admin-actions", {
+        const response = await apiClient.post<unknown>("/wallet/admin-actions", {
           action: "credit",
           username: validatedUsername,
           amount: validatedAmount,
@@ -1601,7 +1663,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const validatedAmount = validateTransactionAmount(amount);
         const sanitizedReason = sanitizeStrict(reason);
 
-        const response = await apiClient.post<any>("/wallet/admin-actions", {
+        const response = await apiClient.post<unknown>("/wallet/admin-actions", {
           action: "debit",
           username: validatedUsername,
           amount: validatedAmount,
@@ -1655,7 +1717,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Transactions for a user
   const getTransactionHistory = useCallback(
-    async (username?: string, limit?: number) => {
+    async (username?: string, limit?: number): Promise<Transaction[]> => {
       try {
         const targetUsername = username || user?.username;
         if (!targetUsername) {
@@ -1667,7 +1729,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const endpoint = `/wallet/transactions/${queryUsername}${limit ? `?limit=${limit}` : ""}`;
         debugLog("Fetching transaction history:", endpoint);
 
-        const response = await apiClient.get<any>(endpoint);
+        const response = await apiClient.get<Transaction[]>(endpoint);
         debugLog("Transaction history response:", response);
 
         if (response.success && response.data) {
@@ -1707,7 +1769,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       try {
         debugLog("Processing subscription via API:", { buyer, seller, amount });
 
-        const response = await apiClient.post<any>("/subscriptions/subscribe", {
+        const response = await apiClient.post<unknown>("/subscriptions/subscribe", {
           seller,
           price: amount,
         });
@@ -1736,7 +1798,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       try {
         debugLog("Processing unsubscribe via API:", { buyer, seller });
 
-        const response = await apiClient.post<any>("/subscriptions/unsubscribe", {
+        const response = await apiClient.post<unknown>("/subscriptions/unsubscribe", {
           seller,
         });
 
@@ -1769,7 +1831,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       try {
         debugLog("Processing admin withdrawal from unified platform wallet");
 
-        const response = await apiClient.post<any>("/wallet/admin-withdraw", {
+        const response = await apiClient.post<unknown>("/wallet/admin-withdraw", {
           amount,
           accountDetails: {
             accountNumber: "****9999",
@@ -1809,7 +1871,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       try {
         debugLog("Updating order address:", orderId);
 
-        const response = await apiClient.post<any>(`/orders/${orderId}/address`, {
+        const response = await apiClient.post<unknown>(`/orders/${orderId}/address`, {
           deliveryAddress: address,
         });
 
@@ -1835,7 +1897,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       try {
         debugLog("Updating shipping status:", orderId, status);
 
-        const response = await apiClient.post<any>(`/orders/${orderId}/shipping`, {
+        const response = await apiClient.post<unknown>(`/orders/${orderId}/shipping`, {
           shippingStatus: status,
         });
 
