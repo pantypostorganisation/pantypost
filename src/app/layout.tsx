@@ -35,17 +35,25 @@ export const metadata: Metadata = {
   creator: 'PantyPost',
   publisher: 'PantyPost',
   
-  // FAVICON CONFIGURATION - Using icon.png everywhere
+  // FAVICON CONFIGURATION - Next.js will automatically use src/app/icon.png
+  // We explicitly define these to ensure consistency across all browsers
   icons: {
     icon: [
       { url: '/icon.png', type: 'image/png' },
+      { url: '/icon.png', type: 'image/png', sizes: '72x72' },
       { url: '/icon.png', type: 'image/png', sizes: '32x32' },
       { url: '/icon.png', type: 'image/png', sizes: '16x16' },
     ],
     shortcut: '/icon.png',
     apple: [
-      { url: '/icon.png' },
+      { url: '/icon.png', sizes: '72x72' },
       { url: '/icons/icon-192x192.png', sizes: '192x192' },
+    ],
+    other: [
+      {
+        rel: 'icon',
+        url: '/icon.png',
+      },
     ],
   },
   
@@ -137,15 +145,16 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         
-        {/* Favicon - Using icon.png consistently */}
-        <link rel="icon" href="/icon.png" type="image/png" />
-        <link rel="shortcut icon" href="/icon.png" type="image/png" />
+        {/* Force favicon refresh with cache busting - IMPORTANT! */}
+        <link rel="icon" href="/icon.png?v=2" type="image/png" />
+        <link rel="shortcut icon" href="/icon.png?v=2" type="image/png" />
+        <link rel="apple-touch-icon" href="/icon.png?v=2" />
         
         {/* Age restriction meta tag */}
         <meta name="rating" content="adult" />
         <meta name="age" content="21" />
         
-        {/* Structured Data - Updated to use icon.png instead of logo.png */}
+        {/* Structured Data */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -167,7 +176,7 @@ export default function RootLayout({
                 '@type': 'Organization',
                 name: 'PantyPost',
                 url: BASE_URL,
-                logo: `${BASE_URL}/icon.png`,  // CHANGED from logo.png to icon.png
+                logo: `${BASE_URL}/logo.png`,
                 sameAs: [
                   'https://twitter.com/pantypost',
                   'https://www.instagram.com/pantypost'
