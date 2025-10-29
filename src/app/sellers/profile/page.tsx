@@ -1,9 +1,7 @@
 // src/app/sellers/profile/page.tsx
 'use client';
 
-import { useMemo, useRef } from 'react';
-import Link from 'next/link';
-import { Camera, MessageSquare, Package, Sparkles, Trophy, Wallet } from 'lucide-react';
+import { useRef } from 'react';
 import BanCheck from '@/components/BanCheck';
 import RequireAuth from '@/components/RequireAuth';
 import ProfileInfoCard from '@/components/seller-settings/ProfileInfoCard';
@@ -62,105 +60,11 @@ export default function SellerProfileSettingsPage() {
   const tierProgress = getTierProgress();
   const nextTier = sellerTierInfo ? getNextTier(sellerTierInfo.tier) : 'Tease';
 
-  const stats = useMemo(
-    () => [
-      {
-        label: 'Total sales',
-        value: new Intl.NumberFormat().format(userStats?.totalSales ?? 0),
-        description: 'Lifetime orders completed through your shop.',
-        icon: Package
-      },
-      {
-        label: 'Revenue earned',
-        value: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(
-          Number(userStats?.totalRevenue ?? 0)
-        ),
-        description: 'Gross revenue before fees and payouts.',
-        icon: Wallet
-      },
-      {
-        label: 'Next seller tier',
-        value: nextTier,
-        description: 'Unlock new perks as you grow your audience.',
-        icon: Trophy
-      }
-    ],
-    [nextTier, userStats?.totalRevenue, userStats?.totalSales]
-  );
-
-  const quickActions = useMemo(
-    () => [
-      {
-        href: '/sellers/my-listings',
-        label: 'Manage listings',
-        icon: Sparkles
-      },
-      {
-        href: '/sellers/messages',
-        label: 'Open inbox',
-        icon: MessageSquare
-      },
-      {
-        href: '/sellers/verify',
-        label: 'Get verified',
-        icon: Camera
-      }
-    ],
-    []
-  );
-
   return (
     <BanCheck>
       <RequireAuth role="seller">
         <main className="min-h-screen bg-gradient-to-b from-black via-[#0f0a06] to-black text-white py-12 px-4">
           <div className="max-w-6xl mx-auto space-y-12">
-            <section className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#1f120f] via-black to-[#0b0b0b] p-8">
-              <div className="relative grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="flex flex-col gap-4">
-                  <span className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-1 text-sm font-medium text-[#ff950e] w-fit">
-                    <Sparkles className="h-4 w-4" />
-                    Seller hub
-                  </span>
-                  <h1 className="text-3xl sm:text-4xl font-semibold text-white">Craft a profile buyers can&apos;t ignore</h1>
-                  <p className="text-base text-gray-300 max-w-xl">
-                    Keep your storefront looking sharp, update your subscription pricing, and curate a gallery that
-                    showcases your personal brand. Every edit helps you convert more curious buyers into loyal fans.
-                  </p>
-
-                  <div className="flex flex-wrap gap-3 pt-2">
-                    {quickActions.map((action) => (
-                      <Link
-                        key={action.href}
-                        href={action.href}
-                        className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:border-[#ff950e]/60 hover:bg-[#ff950e]/10"
-                      >
-                        <action.icon className="h-4 w-4 text-[#ff950e] transition group-hover:scale-110" />
-                        {action.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
-                  {stats.map(({ label, value, description, icon: Icon }) => (
-                    <div
-                      key={label}
-                      className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur"
-                    >
-                      <div className="relative flex flex-col gap-3">
-                        <div className="flex items-center gap-2 text-sm text-gray-400">
-                          <Icon className="h-4 w-4 text-[#ff950e]" />
-                          {label}
-                        </div>
-                        <p className="text-2xl font-semibold text-white">{value}</p>
-                        <p className="text-xs text-gray-400 leading-relaxed">{description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
               {/* Left column - Profile info and tier progress */}
               <div className="xl:col-span-1 space-y-8">
