@@ -311,7 +311,7 @@ export default function ThreadsSidebar({
   }, [buyerRequests]);
   
   return (
-    <div className="flex h-full flex-col bg-[#1a1a1a] border-r border-gray-800">
+    <div className="flex h-full min-h-0 flex-col bg-[#1a1a1a] border-r border-gray-800">
       {/* Header */}
       <div className="flex-none p-4 border-b border-gray-800">
         <h2 className="text-xl font-bold text-white mb-4">Messages</h2>
