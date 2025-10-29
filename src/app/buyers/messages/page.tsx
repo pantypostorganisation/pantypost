@@ -210,102 +210,102 @@ export default function BuyerMessagesPage() {
   const showConversation = !isMobile || !!activeThread;
 
   const innerWrap = isMobile
-    ? 'flex h-full w-full min-h-0 overflow-hidden bg-[#121212]'
-    : 'mx-auto flex h-full w-full min-h-0 max-w-6xl overflow-hidden rounded-lg shadow-lg bg-[#121212]';
+    ? 'flex h-full w-full flex-1 min-h-0 overflow-hidden bg-[#121212]'
+    : 'mx-auto flex h-full w-full flex-1 min-h-0 max-w-6xl overflow-hidden rounded-lg shadow-lg bg-[#121212]';
 
   const sidebarWrap = `${showSidebar ? 'flex' : 'hidden'} ${
     isMobile ? 'w-full' : 'w-[320px] border-r border-gray-800'
   } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 h-full overflow-hidden`;
 
-  const conversationWrap = `${showConversation ? 'flex' : 'hidden'} flex-1 flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden`;
+  const conversationWrap = `${
+    showConversation ? 'flex' : 'hidden'
+  } flex-1 min-w-0 flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden`;
 
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <div className="min-h-[100dvh] overflow-hidden overscroll-contain bg-black">
-          <main className="flex h-[calc(100dvh-64px)] w-full overscroll-contain">
-            <div className={innerWrap}>
-              <aside className={sidebarWrap}>
-                <ThreadsSidebar
-                  threads={threads}
-                  lastMessages={lastMessages}
-                  sellerProfiles={sellerProfiles}
-                  uiUnreadCounts={uiUnreadCounts}
-                  activeThread={activeThread}
-                  setActiveThread={setActiveThread}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  activeTab={activeTab}
-                  setActiveTab={setActiveTab}
-                  filterBy={filterBy}
-                  setFilterBy={setFilterBy}
-                  totalUnreadCount={totalUnreadCount}
-                  buyerRequests={buyerRequests}
-                  setObserverReadMessages={setObserverReadMessages}
-                />
-              </aside>
+        <main className="flex h-[100dvh] min-h-0 w-full overflow-hidden overscroll-contain bg-black p-0">
+          <div className={innerWrap}>
+            <aside className={sidebarWrap}>
+              <ThreadsSidebar
+                threads={threads}
+                lastMessages={lastMessages}
+                sellerProfiles={sellerProfiles}
+                uiUnreadCounts={uiUnreadCounts}
+                activeThread={activeThread}
+                setActiveThread={setActiveThread}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                filterBy={filterBy}
+                setFilterBy={setFilterBy}
+                totalUnreadCount={totalUnreadCount}
+                buyerRequests={buyerRequests}
+                setObserverReadMessages={setObserverReadMessages}
+              />
+            </aside>
 
-              <section className={conversationWrap}>
-                {activeThread ? (
-                  <ConversationView
-                    activeThread={activeThread}
-                    threads={threads}
-                    user={user}
-                    sellerProfiles={sellerProfiles}
-                    buyerRequests={buyerRequests}
-                    wallet={walletData}
-                    previewImage={previewImage}
-                    setPreviewImage={setPreviewImage}
-                    showEmojiPicker={showEmojiPicker}
-                    setShowEmojiPicker={setShowEmojiPicker}
-                    recentEmojis={recentEmojis}
-                    replyMessage={replyMessage}
-                    setReplyMessage={setReplyMessage}
-                    selectedImage={selectedImage}
-                    setSelectedImage={setSelectedImage}
-                    isImageLoading={isImageLoading}
-                    imageError={imageError}
-                    editRequestId={editRequestId}
-                    setEditRequestId={setEditRequestId}
-                    editPrice={numericEditPrice}
-                    setEditPrice={handleEditPriceChange}
-                    editTitle={editTitle}
-                    setEditTitle={setEditTitle}
-                    editTags={editTags}
-                    setEditTags={setEditTags}
-                    editMessage={editMessage}
-                    setEditMessage={setEditMessage}
-                    handleReply={handleReply}
-                    handleBlockToggle={handleBlockToggle}
-                    handleReport={handleReport}
-                    handleAccept={handleAccept}
-                    handleDecline={handleDecline}
-                    handleEditRequest={handleEditRequest}
-                    handleEditSubmit={handleEditSubmit}
-                    handlePayNow={handlePayNow}
-                    handleImageSelect={handleImageSelect}
-                    handleMessageVisible={handleMessageVisible}
-                    handleEmojiClick={handleEmojiClick}
-                    isUserBlocked={isUserBlocked(activeThread)}
-                    isUserReported={isUserReported(activeThread)}
-                    messagesEndRef={messagesEndRef}
-                    messagesContainerRef={messagesContainerRef}
-                    fileInputRef={fileInputRef}
-                    emojiPickerRef={emojiPickerRef}
-                    inputRef={inputRef}
-                    lastManualScrollTime={lastManualScrollTime}
-                    setShowCustomRequestModal={setShowCustomRequestModal}
-                    setShowTipModal={setShowTipModal}
-                    isMobile={isMobile}
-                    onBack={handleMobileBack}
-                  />
-                ) : (
-                  <EmptyState />
-                )}
-              </section>
-            </div>
-          </main>
-        </div>
+            <section className={conversationWrap}>
+              {activeThread ? (
+                <ConversationView
+                  activeThread={activeThread}
+                  threads={threads}
+                  user={user}
+                  sellerProfiles={sellerProfiles}
+                  buyerRequests={buyerRequests}
+                  wallet={walletData}
+                  previewImage={previewImage}
+                  setPreviewImage={setPreviewImage}
+                  showEmojiPicker={showEmojiPicker}
+                  setShowEmojiPicker={setShowEmojiPicker}
+                  recentEmojis={recentEmojis}
+                  replyMessage={replyMessage}
+                  setReplyMessage={setReplyMessage}
+                  selectedImage={selectedImage}
+                  setSelectedImage={setSelectedImage}
+                  isImageLoading={isImageLoading}
+                  imageError={imageError}
+                  editRequestId={editRequestId}
+                  setEditRequestId={setEditRequestId}
+                  editPrice={numericEditPrice}
+                  setEditPrice={handleEditPriceChange}
+                  editTitle={editTitle}
+                  setEditTitle={setEditTitle}
+                  editTags={editTags}
+                  setEditTags={setEditTags}
+                  editMessage={editMessage}
+                  setEditMessage={setEditMessage}
+                  handleReply={handleReply}
+                  handleBlockToggle={handleBlockToggle}
+                  handleReport={handleReport}
+                  handleAccept={handleAccept}
+                  handleDecline={handleDecline}
+                  handleEditRequest={handleEditRequest}
+                  handleEditSubmit={handleEditSubmit}
+                  handlePayNow={handlePayNow}
+                  handleImageSelect={handleImageSelect}
+                  handleMessageVisible={handleMessageVisible}
+                  handleEmojiClick={handleEmojiClick}
+                  isUserBlocked={isUserBlocked(activeThread)}
+                  isUserReported={isUserReported(activeThread)}
+                  messagesEndRef={messagesEndRef}
+                  messagesContainerRef={messagesContainerRef}
+                  fileInputRef={fileInputRef}
+                  emojiPickerRef={emojiPickerRef}
+                  inputRef={inputRef}
+                  lastManualScrollTime={lastManualScrollTime}
+                  setShowCustomRequestModal={setShowCustomRequestModal}
+                  setShowTipModal={setShowTipModal}
+                  isMobile={isMobile}
+                  onBack={handleMobileBack}
+                />
+              ) : (
+                <EmptyState />
+              )}
+            </section>
+          </div>
+        </main>
 
       {/* Modals */}
       {previewImage && (
