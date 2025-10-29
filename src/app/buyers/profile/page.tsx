@@ -326,14 +326,9 @@ export default function BuyerSelfProfilePage() {
   return (
     <BanCheck>
       <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-black via-neutral-950 to-black text-white">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute left-1/2 top-[-10%] h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[#ff950e]/12 blur-[120px] opacity-40" />
-          <div className="absolute bottom-[-20%] right-[-10%] h-[420px] w-[420px] rounded-full bg-[#ff5f1f]/12 blur-[150px]" />
-        </div>
 
         <div className="relative mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
           <div className="relative overflow-hidden rounded-3xl border border-neutral-800/80 bg-neutral-950/70 shadow-[0_0_50px_rgba(255,149,14,0.08)]">
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/12 via-transparent to-transparent opacity-60" />
             <div className="relative grid gap-10 p-6 sm:p-10 lg:grid-cols-[280px_1fr]">
               {loading ? (
                 <>
