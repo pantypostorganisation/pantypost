@@ -1,4 +1,4 @@
-// scripts/generate-icons.js
+// scripts/generate-icons.js 
 
 const sharp = require('sharp');
 const fs = require('fs').promises;
