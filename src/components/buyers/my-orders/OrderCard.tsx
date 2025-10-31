@@ -9,7 +9,7 @@ import OrderHeader from './OrderHeader';
 import OrderDetails from './OrderDetails';
 import ExpandedOrderContent from './ExpandedOrderContent';
 import { formatOrderDate, getOrderStyles, getShippingStatusBadge } from '@/utils/orderUtils';
-import { Calendar } from 'lucide-react';
+import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface OrderCardProps {
   order: Order;
@@ -48,73 +48,81 @@ export default function OrderCard({
 
   const fallbackOrder = order as { _id?: string };
   const orderId = order.id || fallbackOrder._id || `order-${Date.now()}`;
+  const displayOrderId = order.id || fallbackOrder._id || '';
   const needsAddress = order.wasAuction && !hasDeliveryAddress;
+  const statusBadge = getShippingStatusBadge(order.shippingStatus);
+
+  const typeLabel =
+    type === 'auction' ? 'Auction win' : type === 'custom' ? 'Custom request' : 'Direct purchase';
 
   return (
-    <div
-      className={`relative overflow-hidden rounded-xl border bg-black/25 transition-colors duration-300 ${
-        isExpanded ? 'bg-black/40' : 'hover:bg-black/35'
-      } ${styles.borderStyle}`}
+    <article
+      className={`rounded-2xl border border-neutral-800 bg-[var(--color-card)] p-4 shadow-lg transition-colors duration-200 hover:border-neutral-700 hover:shadow-xl sm:p-5 ${styles.borderStyle}`}
     >
-      {/* Action indicator */}
-      <div
-        className={`pointer-events-none absolute inset-x-0 top-0 h-0.5 ${
-          type === 'auction'
-            ? 'bg-purple-500'
-            : type === 'custom'
-              ? 'bg-sky-400'
-              : 'bg-[#ff950e]'
-        }`}
-      />
-
-      <div className="absolute right-4 top-1/2 z-20 flex -translate-y-1/2 flex-col items-end gap-4 text-right sm:gap-5">
-        <div className="flex flex-col items-end gap-2 text-right text-[10px] text-gray-400 sm:text-xs">
-          {getShippingStatusBadge(order.shippingStatus)}
-
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1">
-            <Calendar className="h-3.5 w-3.5 text-white/60" />
-            <span>{formatOrderDate(order.date)}</span>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 space-y-1">
+            <h3 className="text-base font-semibold leading-tight text-white line-clamp-2">
+              <SecureMessageDisplay content={order.title || 'Untitled order'} allowBasicFormatting={false} as="span" />
+            </h3>
+            <p className="text-xs font-mono text-neutral-500">
+              {displayOrderId ? `#${String(displayOrderId).slice(0, 10)}` : 'Pending order'}
+            </p>
           </div>
-        </div>
-
-        <div className="flex flex-col items-end text-right">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Total paid</span>
-          <span className="text-xl font-bold" style={{ color: styles.accentColor }}>
+          <span className="shrink-0 text-sm font-semibold" style={{ color: styles.accentColor }}>
             ${totalPaid}
           </span>
-          <span className="text-[10px] text-gray-500">Includes seller payout & platform fee</span>
         </div>
 
-        {/* Auction action badge */}
-        {order.wasAuction && needsAddress && (
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/50 bg-emerald-500/15 px-4 py-1.5 text-xs font-semibold text-emerald-200">
-            <span className="text-base">🏆</span>
-            <span>Confirm address</span>
+        <dl className="text-sm text-neutral-300 space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-neutral-400">Placed</dt>
+            <dd className="text-white">{formatOrderDate(order.date)}</dd>
+          </div>
+          {statusBadge && (
+            <div className="flex items-center justify-between gap-2">
+              <dt className="text-neutral-400">Status</dt>
+              <dd className="flex justify-end">{statusBadge}</dd>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-neutral-400">Type</dt>
+            <dd className="font-medium" style={{ color: styles.accentColor }}>
+              {typeLabel}
+            </dd>
+          </div>
+        </dl>
+
+        {needsAddress && (
+          <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-200">
+            🏆 Confirm delivery address for this win
+          </div>
+        )}
+
+        <div className="flex flex-col gap-4">
+          <OrderHeader order={order} type={type} styles={styles} />
+
+          <OrderDetails
+            order={order}
+            type={type}
+            hasDeliveryAddress={hasDeliveryAddress}
+            isExpanded={isExpanded}
+            onOpenAddressModal={onOpenAddressModal}
+            onToggleExpanded={() => onToggleExpanded(orderId)}
+          />
+        </div>
+
+        {isExpanded && (
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+            <ExpandedOrderContent
+              order={order}
+              type={type}
+              sellerProfilePic={sellerProfilePic}
+              isSellerVerified={isSellerVerified}
+            />
           </div>
         )}
       </div>
-
-      <div className="relative z-10 p-4 sm:p-5">
-        <OrderHeader order={order} type={type} styles={styles} />
-
-        <OrderDetails
-          order={order}
-          type={type}
-          hasDeliveryAddress={hasDeliveryAddress}
-          isExpanded={isExpanded}
-          onOpenAddressModal={onOpenAddressModal}
-          onToggleExpanded={() => onToggleExpanded(orderId)}
-        />
-      </div>
-
-      {isExpanded && (
-        <ExpandedOrderContent
-          order={order}
-          type={type}
-          sellerProfilePic={sellerProfilePic}
-          isSellerVerified={isSellerVerified}
-        />
-      )}
-    </div>
+    </article>
   );
 }
