@@ -63,7 +63,7 @@ export default function OrderCard({
   const fallbackOrder = order as { _id?: string };
   const orderId = order.id || fallbackOrder._id || `order-${Date.now()}`;
   const displayOrderId = order.id || fallbackOrder._id || '';
-  const needsAddress = order.wasAuction && !hasDeliveryAddress;
+  const needsAddress = !hasDeliveryAddress && (order.wasAuction || type === 'direct');
 
   const typeLabel =
     type === 'auction' ? 'Auction win' : type === 'custom' ? 'Custom request' : 'Direct purchase';
