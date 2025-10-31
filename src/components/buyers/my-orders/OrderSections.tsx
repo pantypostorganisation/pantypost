@@ -1,7 +1,7 @@
 // src/components/buyers/my-orders/OrderSections.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { ShoppingBag, Settings, Gavel, Package } from 'lucide-react';
 import OrderCard from './OrderCard';
 import { Order } from '@/context/WalletContext';
@@ -15,16 +15,6 @@ interface OrderSectionsProps {
   onOpenAddressModal: (orderId: string) => void;
 }
 
-// Define the tab type with optional show property
-type TabConfig = {
-  readonly id: 'all' | 'purchases' | 'custom' | 'auctions';
-  readonly label: string;
-  readonly count: number;
-  readonly icon: React.ComponentType<any>;
-  readonly iconBg: string;
-  readonly show?: boolean;
-};
-
 export default function OrderSections({
   directOrders,
   customRequestOrders,
@@ -33,124 +23,67 @@ export default function OrderSections({
   onToggleExpanded,
   onOpenAddressModal,
 }: OrderSectionsProps) {
-  const [activeTab, setActiveTab] = useState<'all' | 'purchases' | 'custom' | 'auctions'>('all');
-  
-  const allOrders = [...directOrders, ...customRequestOrders, ...auctionOrders];
+  const totalOrders = directOrders.length + customRequestOrders.length + auctionOrders.length;
 
-  if (allOrders.length === 0) {
+  const sections: Array<{
+    id: 'direct' | 'custom' | 'auction';
+    title: string;
+    icon: React.ComponentType<any>;
+    orders: Order[];
+  }> = [
+    { id: 'direct', title: 'Direct purchases', icon: ShoppingBag, orders: directOrders },
+    { id: 'custom', title: 'Custom requests', icon: Settings, orders: customRequestOrders },
+    { id: 'auction', title: 'Auction wins', icon: Gavel, orders: auctionOrders },
+  ];
+
+  if (totalOrders === 0) {
     return (
-      <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-white/10 bg-black/40 p-12 text-center text-gray-400">
-        <Package className="h-16 w-16 text-white/20" />
-        <h3 className="text-2xl font-semibold text-white/80">No orders yet</h3>
-        <p className="max-w-md text-sm text-gray-500">
-          Your direct purchases, custom requests, and auction wins will appear here once you start shopping.
-        </p>
+      <div className="rounded-xl border border-neutral-800 bg-[var(--color-card)] p-8 text-center text-neutral-400">
+        <div className="mx-auto flex max-w-sm flex-col items-center gap-4">
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900/60">
+            <Package className="h-5 w-5" />
+          </span>
+          <p className="text-sm">No orders yet.</p>
+        </div>
       </div>
     );
   }
 
-  const shouldShowOrder = (type: 'direct' | 'custom' | 'auction') => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'purchases' && type === 'direct') return true;
-    if (activeTab === 'custom' && type === 'custom') return true;
-    if (activeTab === 'auctions' && type === 'auction') return true;
-    return false;
-  };
-
-  const tabConfig: TabConfig[] = [
-    { id: 'all', label: 'All orders', count: allOrders.length, icon: ShoppingBag, iconBg: 'bg-[#ff950e]/15 text-[#ffb469]' },
-    { id: 'purchases', label: 'Direct', count: directOrders.length, icon: Package, show: directOrders.length > 0, iconBg: 'bg-emerald-500/15 text-emerald-300' },
-    { id: 'custom', label: 'Custom', count: customRequestOrders.length, icon: Settings, show: customRequestOrders.length > 0, iconBg: 'bg-sky-500/15 text-sky-300' },
-    { id: 'auctions', label: 'Auctions', count: auctionOrders.length, icon: Gavel, show: auctionOrders.length > 0, iconBg: 'bg-purple-500/15 text-purple-300' },
-  ];
-
-  const activeTabConfig = tabConfig.find((tab) => tab.id === activeTab);
-
   return (
-    <div className="space-y-6">
-      {/* Enhanced Tab Navigation */}
-      <div className="space-y-4">
-        <div className="rounded-3xl border border-white/10 bg-black/40 p-2">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {tabConfig.map((tab) => {
-              if (tab.show === false) return null;
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+    <div className="space-y-10">
+      {sections.map(({ id, title, icon: Icon, orders }) => (
+        <section key={id} className="mb-10 last:mb-0">
+          <h2 className="mb-4 flex items-center gap-3 text-xl font-semibold text-white">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-800 bg-neutral-900">
+              <Icon className="h-4 w-4" />
+            </span>
+            <span className="flex-1 truncate">{title}</span>
+            <span className="text-sm font-medium text-neutral-400">{orders.length}</span>
+          </h2>
 
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`group relative flex items-center gap-3 rounded-2xl px-4 py-3 text-left transition-colors duration-200 ${
-                    isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                  }`}
-                >
-                  <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${tab.iconBg} transition-transform duration-200 group-hover:scale-105`}>
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="flex flex-1 items-center justify-between gap-2">
-                    <span className="text-sm font-semibold capitalize">{tab.label}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        isActive ? 'bg-black/30 text-white' : 'bg-white/10 text-gray-400'
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/5 bg-black/30 px-4 py-3 text-xs text-gray-400">
-          <span>
-            Showing{' '}
-            <span className="font-semibold text-white">{activeTabConfig?.count ?? allOrders.length}</span>{' '}
-            order{(activeTabConfig?.count ?? allOrders.length) === 1 ? '' : 's'}
-          </span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-widest text-gray-300">
-            Sorted by most recent
-          </span>
-        </div>
-      </div>
-
-      {/* Orders List with improved spacing */}
-      <div className="space-y-4">
-        {shouldShowOrder('direct') && directOrders.map((order) => (
-          <OrderCard
-            key={`${order.id}-${order.date}`}
-            order={order}
-            type="direct"
-            isExpanded={expandedOrder === order.id}
-            onToggleExpanded={onToggleExpanded}
-            onOpenAddressModal={onOpenAddressModal}
-          />
-        ))}
-
-        {shouldShowOrder('custom') && customRequestOrders.map((order) => (
-          <OrderCard
-            key={`${order.id}-${order.date}`}
-            order={order}
-            type="custom"
-            isExpanded={expandedOrder === order.id}
-            onToggleExpanded={onToggleExpanded}
-            onOpenAddressModal={onOpenAddressModal}
-          />
-        ))}
-
-        {shouldShowOrder('auction') && auctionOrders.map((order) => (
-          <OrderCard
-            key={`${order.id}-${order.date}`}
-            order={order}
-            type="auction"
-            isExpanded={expandedOrder === order.id}
-            onToggleExpanded={onToggleExpanded}
-            onOpenAddressModal={onOpenAddressModal}
-          />
-        ))}
-      </div>
+          {orders.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {orders.map((order) => (
+                <OrderCard
+                  key={`${order.id}-${order.date}`}
+                  order={order}
+                  type={id}
+                  isExpanded={expandedOrder === order.id}
+                  onToggleExpanded={onToggleExpanded}
+                  onOpenAddressModal={onOpenAddressModal}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-neutral-800 bg-[var(--color-card)] p-6 text-neutral-400">
+              <div className="flex items-center gap-3">
+                <Package className="h-4 w-4" />
+                <span>No orders yet.</span>
+              </div>
+            </div>
+          )}
+        </section>
+      ))}
     </div>
   );
 }

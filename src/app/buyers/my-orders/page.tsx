@@ -88,23 +88,28 @@ function MyOrdersContent() {
   };
 
   return (
-    <main className="min-h-screen bg-[#020202]">
-      <div className="px-4 py-12 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-8">
+    <main className="min-h-screen w-full bg-[var(--color-background)]">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-white">My Orders</h1>
+          <p className="mt-1 text-sm text-neutral-400">Direct purchases, custom requests, and auctions</p>
+        </header>
+
+        <div className="space-y-8">
           {/* Page Header */}
-          <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 sm:p-8 lg:p-12">
+          <section className="rounded-2xl border border-neutral-800 bg-[var(--color-card)] p-6 shadow-lg sm:p-8">
             <OrdersHeader />
           </section>
 
           {/* Stats */}
-          <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 lg:p-8">
+          <section className="rounded-2xl border border-neutral-800 bg-[var(--color-card)] p-6 shadow-lg sm:p-8">
             <OrderStats stats={safeStats} />
           </section>
 
           {/* Orders */}
-          <section className="rounded-3xl border border-white/10 bg-white/[0.02] p-4 sm:p-6 lg:p-8">
+          <section className="rounded-2xl border border-neutral-800 bg-[var(--color-card)] p-6 shadow-lg sm:p-8">
             {safeUserOrders.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-white/15 bg-black/40 p-10">
+              <div className="rounded-2xl border border-dashed border-neutral-800/60 bg-neutral-900/40 p-10">
                 <EmptyOrdersState />
               </div>
             ) : (
