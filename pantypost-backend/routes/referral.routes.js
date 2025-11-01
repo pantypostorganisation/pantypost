@@ -26,11 +26,11 @@ router.get('/code', authMiddleware, async (req, res) => {
       });
     }
 
-    // Get referral code for user (may be null if not created)
-    const referralCode = await ReferralCode.getForUser(req.user.username);
+    // Find existing referral code for user
+    const referralCode = await ReferralCode.findOne({ username: req.user.username });
 
     if (!referralCode || !referralCode.code) {
-      // User has no code yet
+      // User has no code yet - return empty state
       return res.json({
         success: true,
         data: {
@@ -67,7 +67,7 @@ router.get('/code', authMiddleware, async (req, res) => {
 // POST /api/referral/code - Create or update custom referral code
 router.post('/code', authMiddleware, async (req, res) => {
   try {
-    // Only sellers can update referral codes
+    // Only sellers can create referral codes
     if (req.user.role !== 'seller') {
       return res.status(403).json({
         success: false,
@@ -86,8 +86,8 @@ router.post('/code', authMiddleware, async (req, res) => {
       });
     }
 
-    // Check if code is available
-    const existingCode = await ReferralCode.findByCode(sanitizedCode);
+    // Check if code is already taken by someone else
+    const existingCode = await ReferralCode.findOne({ code: sanitizedCode });
     if (existingCode && existingCode.username !== req.user.username) {
       return res.status(400).json({
         success: false,
@@ -95,14 +95,32 @@ router.post('/code', authMiddleware, async (req, res) => {
       });
     }
 
-    // Create or update code for user
-    const referralCode = await ReferralCode.createForUser(req.user.username, sanitizedCode);
+    // Find or create referral code entry for this user
+    let referralCode = await ReferralCode.findOne({ username: req.user.username });
+    
+    if (referralCode) {
+      // Update existing entry
+      referralCode.code = sanitizedCode;
+      referralCode.status = 'active';
+      referralCode.updatedAt = new Date();
+      await referralCode.save();
+    } else {
+      // Create new entry
+      referralCode = new ReferralCode({
+        username: req.user.username,
+        code: sanitizedCode,
+        status: 'active'
+      });
+      await referralCode.save();
+    }
 
     // Update user's referralCode field
     await User.findOneAndUpdate(
       { username: req.user.username },
       { referralCode: sanitizedCode }
     );
+
+    console.log(`[Referral] Code created/updated for ${req.user.username}: ${sanitizedCode}`);
 
     res.json({
       success: true,
@@ -132,10 +150,10 @@ router.delete('/code', authMiddleware, async (req, res) => {
       });
     }
 
-    // Find and update the referral code (set code to null but keep the record)
+    // Find the referral code
     const referralCode = await ReferralCode.findOne({ username: req.user.username });
     
-    if (!referralCode) {
+    if (!referralCode || !referralCode.code) {
       return res.json({
         success: true,
         message: 'No referral code to remove'
@@ -143,8 +161,9 @@ router.delete('/code', authMiddleware, async (req, res) => {
     }
 
     // Clear the code but keep the record for statistics
-    referralCode.code = undefined;
+    referralCode.code = null;
     referralCode.status = 'inactive';
+    referralCode.updatedAt = new Date();
     await referralCode.save();
 
     // Update user's referralCode field
@@ -152,6 +171,8 @@ router.delete('/code', authMiddleware, async (req, res) => {
       { username: req.user.username },
       { referralCode: null }
     );
+
+    console.log(`[Referral] Code removed for ${req.user.username}`);
 
     res.json({
       success: true,
@@ -250,7 +271,9 @@ router.get('/stats', authMiddleware, async (req, res) => {
           code: referralCode.code,
           referralUrl: referralCode.referralUrl,
           clickCount: referralCode.clickCount,
-          conversionRate: referralCode.conversionRate
+          conversionRate: referralCode.conversionRate,
+          usageCount: referralCode.usageCount,
+          status: referralCode.status
         } : null,
         recentCommissions: recentCommissions.map(c => ({
           id: c._id,
