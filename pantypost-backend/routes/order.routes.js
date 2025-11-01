@@ -8,6 +8,7 @@ const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
+const Referral = require('../models/Referral'); // Added for referral system
 const { incrementPaymentStats } = require('../utils/paymentStats');
 const authMiddleware = require('../middleware/auth.middleware');
 const tierService = require('../services/tierService');
@@ -252,6 +253,141 @@ router.post('/', authMiddleware, async (req, res) => {
       });
 
       await order.save();
+
+      // ============= REFERRAL COMMISSION PROCESSING =============
+      try {
+        // Check if the seller who made the sale was referred by someone
+        const activeReferral = await Referral.findActiveReferral(seller);
+        
+        if (activeReferral && activeReferral.isActive) {
+          // Calculate 5% commission from seller's earnings (not from total order)
+          const commissionAmount = Math.round(sellerEarnings * 0.05 * 100) / 100;
+          
+          if (commissionAmount > 0) {
+            console.log(`[Order] Processing referral commission: ${activeReferral.referrer} earns $${commissionAmount} from ${seller}'s sale`);
+            
+            // Adjust seller's earnings (deduct commission)
+            const adjustedSellerEarnings = Math.round((sellerEarnings - commissionAmount) * 100) / 100;
+            
+            // Deduct commission from seller's wallet
+            sellerWallet.balance = Math.round((sellerWallet.balance - commissionAmount) * 100) / 100;
+            await sellerWallet.save();
+            
+            // Credit referrer's wallet
+            let referrerWallet = await Wallet.findOne({ username: activeReferral.referrer });
+            if (!referrerWallet) {
+              // Create wallet if it doesn't exist
+              const referrerUser = await User.findOne({ username: activeReferral.referrer });
+              if (referrerUser) {
+                referrerWallet = new Wallet({ 
+                  username: activeReferral.referrer, 
+                  role: referrerUser.role, 
+                  balance: 0 
+                });
+                await referrerWallet.save();
+              }
+            }
+            
+            if (referrerWallet) {
+              const previousReferrerBalance = referrerWallet.balance;
+              referrerWallet.balance = Math.round((referrerWallet.balance + commissionAmount) * 100) / 100;
+              await referrerWallet.save();
+              
+              // Record the commission in the Referral model
+              await activeReferral.recordCommission(commissionAmount, order._id.toString());
+              
+              // Add commission info to order (add these fields to Order model if needed)
+              order.referralCommission = commissionAmount;
+              order.referrer = activeReferral.referrer;
+              order.adjustedSellerEarnings = adjustedSellerEarnings;
+              await order.save();
+              
+              // Create commission transaction for tracking
+              const commissionTransaction = new Transaction({
+                type: 'referral_commission',
+                amount: commissionAmount,
+                from: seller,
+                to: activeReferral.referrer,
+                fromRole: 'seller',
+                toRole: 'seller',
+                description: `Referral commission (5%) for sale: ${order.title}`,
+                status: 'completed',
+                completedAt: new Date(),
+                metadata: {
+                  orderId: order._id.toString(),
+                  orderTitle: order.title,
+                  referralId: activeReferral._id.toString(),
+                  commissionRate: 0.05,
+                  originalSellerEarnings: sellerEarnings,
+                  adjustedSellerEarnings: adjustedSellerEarnings,
+                  buyer: buyer,
+                  seller: seller
+                }
+              });
+              await commissionTransaction.save();
+              
+              // Update referrer's User stats
+              await User.findOneAndUpdate(
+                { username: activeReferral.referrer },
+                {
+                  $inc: {
+                    referralEarnings: commissionAmount,
+                    referralCount: 1
+                  }
+                }
+              );
+              
+              // Create notification for referrer
+              const referrerNotification = new Notification({
+                recipient: activeReferral.referrer,
+                type: 'referral_commission',
+                title: '💰 Referral Commission Earned!',
+                message: `You earned $${commissionAmount.toFixed(2)} from ${seller}'s sale of "${order.title}"`,
+                link: '/sellers/profile',
+                priority: 'normal',
+                metadata: {
+                  amount: commissionAmount,
+                  seller: seller,
+                  orderId: order._id.toString(),
+                  orderTitle: order.title
+                }
+              });
+              await referrerNotification.save();
+              
+              // WebSocket notification for referrer
+              if (global.webSocketService) {
+                global.webSocketService.emitToUser(activeReferral.referrer, 'notification:new', {
+                  id: referrerNotification._id,
+                  type: referrerNotification.type,
+                  title: referrerNotification.title,
+                  message: referrerNotification.message,
+                  link: referrerNotification.link,
+                  createdAt: referrerNotification.createdAt
+                });
+                
+                // Emit balance update for referrer
+                global.webSocketService.emitBalanceUpdate(
+                  activeReferral.referrer, 
+                  'seller', 
+                  previousReferrerBalance, 
+                  referrerWallet.balance, 
+                  'referral_commission'
+                );
+                
+                // Emit the commission transaction
+                global.webSocketService.emitTransaction(commissionTransaction.toObject());
+              }
+              
+              console.log(`[Order] Referral commission processed successfully: ${activeReferral.referrer} earned $${commissionAmount}`);
+            }
+          }
+        }
+      } catch (referralError) {
+        // Don't fail the entire order if referral processing fails
+        console.error('[Order] Referral commission processing error:', referralError);
+        // Could notify admins here about the failure
+      }
+      // ============= END REFERRAL COMMISSION PROCESSING =============
 
       // CRITICAL: Create the sale notification ONCE using the standardized method
       // This creates the notification with the proper emoji format: 💰🛍️ New sale: ...
@@ -582,6 +718,143 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
       });
 
       await order.save();
+
+      // ============= REFERRAL COMMISSION PROCESSING FOR CUSTOM REQUESTS =============
+      try {
+        // Check if the seller who made the sale was referred by someone
+        const activeReferral = await Referral.findActiveReferral(seller);
+        
+        if (activeReferral && activeReferral.isActive) {
+          // Calculate 5% commission from seller's earnings (not from total order)
+          const commissionAmount = Math.round(sellerEarnings * 0.05 * 100) / 100;
+          
+          if (commissionAmount > 0) {
+            console.log(`[Order] Processing referral commission for custom request: ${activeReferral.referrer} earns $${commissionAmount} from ${seller}'s sale`);
+            
+            // Adjust seller's earnings (deduct commission)
+            const adjustedSellerEarnings = Math.round((sellerEarnings - commissionAmount) * 100) / 100;
+            
+            // Deduct commission from seller's wallet
+            sellerWallet.balance = Math.round((sellerWallet.balance - commissionAmount) * 100) / 100;
+            await sellerWallet.save();
+            
+            // Credit referrer's wallet
+            let referrerWallet = await Wallet.findOne({ username: activeReferral.referrer });
+            if (!referrerWallet) {
+              // Create wallet if it doesn't exist
+              const referrerUser = await User.findOne({ username: activeReferral.referrer });
+              if (referrerUser) {
+                referrerWallet = new Wallet({ 
+                  username: activeReferral.referrer, 
+                  role: referrerUser.role, 
+                  balance: 0 
+                });
+                await referrerWallet.save();
+              }
+            }
+            
+            if (referrerWallet) {
+              const previousReferrerBalance = referrerWallet.balance;
+              referrerWallet.balance = Math.round((referrerWallet.balance + commissionAmount) * 100) / 100;
+              await referrerWallet.save();
+              
+              // Record the commission in the Referral model
+              await activeReferral.recordCommission(commissionAmount, order._id.toString());
+              
+              // Add commission info to order
+              order.referralCommission = commissionAmount;
+              order.referrer = activeReferral.referrer;
+              order.adjustedSellerEarnings = adjustedSellerEarnings;
+              await order.save();
+              
+              // Create commission transaction for tracking
+              const commissionTransaction = new Transaction({
+                type: 'referral_commission',
+                amount: commissionAmount,
+                from: seller,
+                to: activeReferral.referrer,
+                fromRole: 'seller',
+                toRole: 'seller',
+                description: `Referral commission (5%) for custom request: ${order.title}`,
+                status: 'completed',
+                completedAt: new Date(),
+                metadata: {
+                  orderId: order._id.toString(),
+                  orderTitle: order.title,
+                  referralId: activeReferral._id.toString(),
+                  commissionRate: 0.05,
+                  originalSellerEarnings: sellerEarnings,
+                  adjustedSellerEarnings: adjustedSellerEarnings,
+                  buyer: buyer,
+                  seller: seller,
+                  isCustomRequest: true
+                }
+              });
+              await commissionTransaction.save();
+              
+              // Update referrer's User stats
+              await User.findOneAndUpdate(
+                { username: activeReferral.referrer },
+                {
+                  $inc: {
+                    referralEarnings: commissionAmount,
+                    referralCount: 1
+                  }
+                }
+              );
+              
+              // Create notification for referrer
+              const referrerNotification = new Notification({
+                recipient: activeReferral.referrer,
+                type: 'referral_commission',
+                title: '💰 Referral Commission Earned!',
+                message: `You earned $${commissionAmount.toFixed(2)} from ${seller}'s custom request sale: "${order.title}"`,
+                link: '/sellers/profile',
+                priority: 'normal',
+                metadata: {
+                  amount: commissionAmount,
+                  seller: seller,
+                  orderId: order._id.toString(),
+                  orderTitle: order.title,
+                  isCustomRequest: true
+                }
+              });
+              await referrerNotification.save();
+              
+              // WebSocket notification for referrer
+              if (global.webSocketService) {
+                global.webSocketService.emitToUser(activeReferral.referrer, 'notification:new', {
+                  id: referrerNotification._id,
+                  type: referrerNotification.type,
+                  title: referrerNotification.title,
+                  message: referrerNotification.message,
+                  link: referrerNotification.link,
+                  createdAt: referrerNotification.createdAt
+                });
+                
+                // Emit balance update for referrer
+                global.webSocketService.emitBalanceUpdate(
+                  activeReferral.referrer, 
+                  'seller', 
+                  previousReferrerBalance, 
+                  referrerWallet.balance, 
+                  'referral_commission'
+                );
+                
+                // Emit the commission transaction
+                global.webSocketService.emitTransaction(commissionTransaction.toObject());
+              }
+              
+              console.log(`[Order] Referral commission for custom request processed successfully: ${activeReferral.referrer} earned $${commissionAmount}`);
+            }
+          }
+        }
+      } catch (referralError) {
+        // Don't fail the entire order if referral processing fails
+        console.error('[Order] Referral commission processing error for custom request:', referralError);
+        // Could notify admins here about the failure
+      }
+      // ============= END REFERRAL COMMISSION PROCESSING =============
 
       // Use the new helper for custom request paid notification
       await Notification.createCustomRequestPaidNotification(seller, buyer, {

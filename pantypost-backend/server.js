@@ -48,6 +48,7 @@ const analyticsRoutes = require('./routes/analytics.routes');
 const statsRoutes = require('./routes/stats.routes');
 // NEW
 const profileBuyerRoutes = require('./routes/profilebuyer.routes');
+const referralRoutes = require('./routes/referral.routes');
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -100,7 +101,8 @@ app.get('/api/health', (req, res) => {
       bans: true,
       analytics: true,
       auctions: true,
-      storage: true
+      storage: true,
+      referrals: true
     },
   });
 });
@@ -128,6 +130,9 @@ app.use('/api/stats', statsRoutes);
 
 // NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
 app.use('/api/profilebuyer', profileBuyerRoutes);
+
+// NEW: referral system routes
+app.use('/api/referral', referralRoutes);
 
 // ---------------------- Storage API Routes ----------------------
 app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
@@ -1158,6 +1163,7 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Auctions:      /api/auctions/*');
   console.log('  - Storage:       /api/storage/*');
   console.log('  - ProfileBuyer:  /api/profilebuyer');
+  console.log('  - Referral:      /api/referral/*');
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
 });

@@ -48,7 +48,7 @@ function signToken(user) {
 
 // ============= AUTH ROUTES =============
 
-// POST /api/auth/signup - UPDATED WITH EMAIL VERIFICATION AND WEBSOCKET EVENTS
+// POST /api/auth/signup - UPDATED WITH EMAIL VERIFICATION, WEBSOCKET EVENTS, AND REFERRAL TRACKING
 router.post('/signup', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -117,7 +117,95 @@ router.post('/signup', async (req, res) => {
       emailVerified: false, // NEW: Start with unverified email
       emailVerifiedAt: null
     });
+
+    // ============= REFERRAL TRACKING =============
+    // Check if user was referred
+    const { referralCode } = req.body;
+    let referrerUsername = null;
+    
+    if (referralCode && role === 'seller') {
+      try {
+        const ReferralCode = require('../models/ReferralCode');
+        const { Referral } = require('../models/Referral');
+        
+        // Find the referral code
+        const codeDoc = await ReferralCode.findByCode(referralCode);
+        
+        if (codeDoc && codeDoc.status === 'active') {
+          // Don't allow self-referral
+          if (codeDoc.username !== username) {
+            referrerUsername = codeDoc.username;
+            
+            // Add referral info to user
+            newUser.referredBy = referrerUsername;
+            newUser.referralCode = codeDoc.code;
+            newUser.referredAt = new Date();
+            
+            console.log(`[Auth] User ${username} referred by ${referrerUsername} with code ${codeDoc.code}`);
+          }
+        }
+      } catch (referralError) {
+        console.error('[Auth] Referral code processing error:', referralError);
+        // Don't fail signup if referral processing fails
+      }
+    }
+    
     await newUser.save();
+    
+    // Create referral relationship after user is saved
+    if (referrerUsername && role === 'seller') {
+      try {
+        const ReferralCode = require('../models/ReferralCode');
+        const { Referral } = require('../models/Referral');
+        
+        const codeDoc = await ReferralCode.findByCode(referralCode);
+        if (codeDoc) {
+          // Create referral relationship
+          const referral = new Referral({
+            referrer: referrerUsername,
+            referredSeller: username,
+            referralCode: codeDoc.code,
+            referredEmail: email,
+            signupIp: req.ip,
+            metadata: {
+              signupSource: req.body.signupSource || 'direct',
+              userAgent: req.headers['user-agent']
+            }
+          });
+          await referral.save();
+          
+          // Track the signup
+          await codeDoc.trackSignup(username);
+          
+          // Update referrer's stats
+          await User.findOneAndUpdate(
+            { username: referrerUsername },
+            { $inc: { referralCount: 1 } }
+          );
+          
+          // Create notification for referrer
+          const Notification = require('../models/Notification');
+          await Notification.create({
+            recipient: referrerUsername,
+            type: 'referral_signup',
+            title: '🎉 New Referral Signup!',
+            message: `${username} has joined using your referral code!`,
+            link: '/sellers/profile',
+            priority: 'normal',
+            metadata: {
+              referredUser: username,
+              referralCode: codeDoc.code
+            }
+          });
+          
+          console.log(`[Auth] Referral relationship created: ${referrerUsername} -> ${username}`);
+        }
+      } catch (referralError) {
+        console.error('[Auth] Failed to create referral relationship:', referralError);
+        // Don't fail signup if referral creation fails
+      }
+    }
+    // ============= END REFERRAL TRACKING =============
 
     // Create email verification record
     const verificationToken = EmailVerification.generateToken();

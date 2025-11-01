@@ -179,6 +179,21 @@ const orderSchema = new mongoose.Schema({
   sellerEarnings: {
     type: Number,
     default: function() {
+      // Check if there's a referral commission
+      if (this.referralCommission && this.referralCommission > 0) {
+        // Seller gets base amount minus platform fee minus referral commission
+        if (this.wasAuction) {
+          const sellerFee = Math.round(this.price * 0.2 * 100) / 100;
+          const baseEarnings = Math.round((this.price - sellerFee) * 100) / 100;
+          return Math.round((baseEarnings - this.referralCommission) * 100) / 100;
+        }
+        // Regular: 90% to seller minus referral commission
+        const sellerFee = Math.round(this.price * 0.1 * 100) / 100;
+        const baseEarnings = Math.round((this.price - sellerFee) * 100) / 100;
+        return Math.round((baseEarnings - this.referralCommission) * 100) / 100;
+      }
+      
+      // Original calculation if no referral
       if (this.wasAuction) {
         // Auctions: 80% to seller (after 20% fee)
         const sellerFee = Math.round(this.price * 0.2 * 100) / 100;
@@ -204,6 +219,21 @@ const orderSchema = new mongoose.Schema({
     default: false
   },
   originalRequestId: String,
+  
+  // REFERRAL FIELDS
+  referralCommission: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  referrer: {
+    type: String,
+    ref: 'User'
+  },
+  adjustedSellerEarnings: {
+    type: Number,
+    min: 0
+  },
   
   // 🔧 ENHANCED TRANSACTION REFERENCES
   paymentTransactionId: {

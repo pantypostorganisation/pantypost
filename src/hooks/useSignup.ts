@@ -41,6 +41,7 @@ export const useSignup = () => {
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [rateLimitMessage, setRateLimitMessage] = useState<string>();
   const [passwordWarning, setPasswordWarning] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState<string>('');
 
   // Initialize CSRF token
   useEffect(() => {
@@ -50,9 +51,19 @@ export const useSignup = () => {
     }
   }, [csrfManager]);
 
-  // Set mounted state
+  // Set mounted state and check for referral code in URL
   useEffect(() => {
     setState(prev => ({ ...prev, mounted: true }));
+    
+    // Check for referral code in URL parameters
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refCode = urlParams.get('ref') || urlParams.get('referral');
+      if (refCode) {
+        setReferralCode(refCode);
+        console.log('[Signup] Referral code detected:', refCode);
+      }
+    }
   }, []);
   
   // Redirect if already logged in
@@ -153,8 +164,13 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, [field]: sanitizedValue }));
   }, []);
 
-  // UPDATED: Handle signup submission with email verification flow
-  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
+  // Function to update referral code
+  const updateReferralCode = useCallback((code: string) => {
+    setReferralCode(code);
+  }, []);
+
+  // UPDATED: Handle signup submission with email verification flow and referral code support
+  const handleSubmit = async (e: React.FormEvent, customReferralCode?: string): Promise<void> => {
     e.preventDefault();
     
     // Clear rate limit messages
@@ -222,13 +238,33 @@ export const useSignup = () => {
     try {
       console.log('[Signup] Making signup request via apiClient');
       
-      // Use apiClient which properly handles URL construction
-      const response = await apiClient.post('/auth/signup', {
+      // Determine which referral code to use (custom parameter takes precedence)
+      const finalReferralCode = customReferralCode || referralCode;
+      
+      // Build signup data object
+      const signupData: any = {
         username: state.username,
         email: state.email,
         password: state.password,
         role: state.role
+      };
+      
+      // Include referral code if provided and user is signing up as seller
+      if (finalReferralCode && state.role === 'seller') {
+        signupData.referralCode = finalReferralCode;
+        console.log('[Signup] Including referral code for seller signup');
+      }
+      
+      console.log('[Signup] Signup data:', { 
+        username: signupData.username,
+        email: signupData.email,
+        role: signupData.role,
+        hasReferralCode: !!signupData.referralCode,
+        referralCode: signupData.referralCode ? '[PRESENT]' : undefined
       });
+      
+      // Use apiClient which properly handles URL construction
+      const response = await apiClient.post('/auth/signup', signupData);
       
       console.log('[Signup] Response:', { success: response.success });
       
@@ -246,15 +282,26 @@ export const useSignup = () => {
           errors: {}
         }));
         
+        // Clear referral code after successful signup
+        setReferralCode('');
+        
         // Check if email verification is required
         if (response.data.requiresVerification) {
           console.log('[Signup] Email verification required, redirecting to pending page...');
           
-          // Redirect to email verification pending page with email and username
+          // Include referral success info if applicable
           const params = new URLSearchParams({
             email: encodeURIComponent(response.data.email),
             username: encodeURIComponent(response.data.username)
           });
+          
+          // Add referral success flag if referral was applied
+          if (response.data.referralApplied) {
+            params.append('referralSuccess', 'true');
+            if (response.data.referrerUsername) {
+              params.append('referrer', encodeURIComponent(response.data.referrerUsername));
+            }
+          }
           
           router.push(`/verify-email-pending?${params.toString()}`);
         } else {
@@ -265,15 +312,37 @@ export const useSignup = () => {
       } else {
         // Handle API error response
         const errorMessage = response.error?.message || 'Registration failed. Please try again.';
-        setState(prev => ({
-          ...prev,
-          errors: { 
-            ...prev.errors, 
-            form: errorMessage,
-            // If the error has a field, set that specific field error
-            ...(response.error?.field && { [response.error.field]: errorMessage })
-          }
-        }));
+        
+        // Handle specific referral code errors
+        if (response.error?.code === 'INVALID_REFERRAL_CODE') {
+          setState(prev => ({
+            ...prev,
+            errors: { 
+              ...prev.errors, 
+              form: 'Invalid or expired referral code. You can still sign up without it.',
+              referralCode: 'This referral code is invalid or has expired'
+            }
+          }));
+        } else if (response.error?.code === 'REFERRAL_CODE_MAXED') {
+          setState(prev => ({
+            ...prev,
+            errors: { 
+              ...prev.errors, 
+              form: 'This referral code has reached its maximum usage limit.',
+              referralCode: 'This referral code has been used the maximum number of times'
+            }
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            errors: { 
+              ...prev.errors, 
+              form: errorMessage,
+              // If the error has a field, set that specific field error
+              ...(response.error?.field && { [response.error.field]: errorMessage })
+            }
+          }));
+        }
       }
     } catch (error: any) {
       console.error('Signup error:', error);
@@ -292,6 +361,13 @@ export const useSignup = () => {
     }
   };
 
+  // Validate referral code format (optional utility function)
+  const validateReferralCode = useCallback((code: string): boolean => {
+    // Basic validation - alphanumeric and hyphens, 6-20 characters
+    const referralCodePattern = /^[A-Za-z0-9-]{6,20}$/;
+    return referralCodePattern.test(code);
+  }, []);
+
   return {
     // State
     ...state,
@@ -302,9 +378,14 @@ export const useSignup = () => {
     csrfToken,
     passwordWarning,
     
+    // Referral state
+    referralCode,
+    
     // Actions
     updateField,
     handleSubmit,
+    updateReferralCode,
+    validateReferralCode,
     
     // Navigation
     router
