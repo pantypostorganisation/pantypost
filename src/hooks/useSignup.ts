@@ -61,7 +61,7 @@ export const useSignup = () => {
       const refCode = urlParams.get('ref') || urlParams.get('referral');
       if (refCode) {
         setReferralCode(refCode);
-        console.log('[Signup] Referral code detected:', refCode);
+        console.log('[useSignup] Referral code detected from URL:', refCode);
       }
     }
   }, []);
@@ -236,7 +236,7 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, isSubmitting: true, errors: {} }));
     
     try {
-      console.log('[Signup] Making signup request via apiClient');
+      console.log('[useSignup] Making signup request via apiClient');
       
       // Determine which referral code to use (custom parameter takes precedence)
       const finalReferralCode = customReferralCode || referralCode;
@@ -251,25 +251,31 @@ export const useSignup = () => {
       
       // Include referral code if provided and user is signing up as seller
       if (finalReferralCode && state.role === 'seller') {
-        signupData.referralCode = finalReferralCode;
-        console.log('[Signup] Including referral code for seller signup');
+        // CRITICAL FIX: Sanitize and uppercase the referral code
+        signupData.referralCode = finalReferralCode.trim().toUpperCase();
+        console.log('[useSignup] Including referral code for seller signup:', signupData.referralCode);
       }
       
-      console.log('[Signup] Signup data:', { 
+      console.log('[useSignup] Signup request payload:', { 
         username: signupData.username,
         email: signupData.email,
         role: signupData.role,
         hasReferralCode: !!signupData.referralCode,
-        referralCode: signupData.referralCode ? '[PRESENT]' : undefined
+        referralCodeLength: signupData.referralCode ? signupData.referralCode.length : 0
       });
       
       // Use apiClient which properly handles URL construction
       const response = await apiClient.post('/auth/signup', signupData);
       
-      console.log('[Signup] Response:', { success: response.success });
+      console.log('[useSignup] Response received:', { 
+        success: response.success,
+        hasData: !!response.data,
+        requiresVerification: response.data?.requiresVerification,
+        referralApplied: response.data?.referralApplied
+      });
       
       if (response.success && response.data) {
-        console.log('[Signup] Success! Account created.');
+        console.log('[useSignup] ✅ Account created successfully');
         
         // Clear rate limit on success
         resetSignupLimit(state.email);
@@ -287,31 +293,35 @@ export const useSignup = () => {
         
         // Check if email verification is required
         if (response.data.requiresVerification) {
-          console.log('[Signup] Email verification required, redirecting to pending page...');
+          console.log('[useSignup] Email verification required, redirecting to pending page...');
           
-          // Include referral success info if applicable
+          // Build redirect URL with parameters
           const params = new URLSearchParams({
             email: encodeURIComponent(response.data.email),
             username: encodeURIComponent(response.data.username)
           });
           
-          // Add referral success flag if referral was applied
+          // Add referral success info if applicable
           if (response.data.referralApplied) {
             params.append('referralSuccess', 'true');
+            console.log('[useSignup] ✅ Referral was successfully applied!');
             if (response.data.referrerUsername) {
               params.append('referrer', encodeURIComponent(response.data.referrerUsername));
+              console.log('[useSignup] Referrer:', response.data.referrerUsername);
             }
           }
           
           router.push(`/verify-email-pending?${params.toString()}`);
         } else {
           // This shouldn't happen with the new flow, but handle it just in case
-          console.log('[Signup] No verification required (unexpected), redirecting to browse...');
+          console.log('[useSignup] No verification required (unexpected), redirecting to browse...');
           router.push('/browse');
         }
       } else {
         // Handle API error response
         const errorMessage = response.error?.message || 'Registration failed. Please try again.';
+        
+        console.error('[useSignup] ❌ Signup failed:', errorMessage);
         
         // Handle specific referral code errors
         if (response.error?.code === 'INVALID_REFERRAL_CODE') {
@@ -345,7 +355,7 @@ export const useSignup = () => {
         }
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('[useSignup] ❌ Signup error:', error);
       
       // Handle network or unexpected errors
       const errorMessage = error.message?.includes('Network') 
@@ -363,8 +373,8 @@ export const useSignup = () => {
 
   // Validate referral code format (optional utility function)
   const validateReferralCode = useCallback((code: string): boolean => {
-    // Basic validation - alphanumeric and hyphens, 6-20 characters
-    const referralCodePattern = /^[A-Za-z0-9-]{6,20}$/;
+    // Basic validation - alphanumeric and hyphens, 3-20 characters
+    const referralCodePattern = /^[A-Za-z0-9-]{3,20}$/;
     return referralCodePattern.test(code);
   }, []);
 

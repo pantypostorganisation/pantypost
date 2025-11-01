@@ -48,7 +48,7 @@ function signToken(user) {
 
 // ============= AUTH ROUTES =============
 
-// POST /api/auth/signup - UPDATED WITH EMAIL VERIFICATION, WEBSOCKET EVENTS, AND REFERRAL TRACKING
+// POST /api/auth/signup - FIXED REFERRAL CODE HANDLING
 router.post('/signup', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -112,96 +112,141 @@ router.post('/signup', async (req, res) => {
       password,
       role,
       tier: role === 'seller' ? 'Tease' : undefined,
-      isOnline: false, // Don't mark as online until email is verified
+      isOnline: false,
       lastActive: new Date(),
-      emailVerified: false, // NEW: Start with unverified email
+      emailVerified: false,
       emailVerifiedAt: null
     });
 
-    // ============= REFERRAL TRACKING =============
-    // Check if user was referred
-    const { referralCode } = req.body;
+    // ============= REFERRAL TRACKING - FIXED =============
     let referrerUsername = null;
+    let referralCodeUsed = null;
+    
+    // CRITICAL FIX: Check for referralCode in request body
+    const referralCode = raw.referralCode || raw.referral_code || raw.code;
+    
+    console.log('[Auth] Signup request:', {
+      username,
+      role,
+      hasReferralCode: !!referralCode,
+      referralCode: referralCode ? referralCode : 'none'
+    });
     
     if (referralCode && role === 'seller') {
       try {
         const ReferralCode = require('../models/ReferralCode');
         const { Referral } = require('../models/Referral');
         
-        // Find the referral code
-        const codeDoc = await ReferralCode.findByCode(referralCode);
+        // CRITICAL FIX: Sanitize and uppercase the code before lookup
+        const sanitizedCode = String(referralCode).trim().toUpperCase();
+        
+        console.log('[Auth] Looking up referral code:', sanitizedCode);
+        
+        // Find the referral code - FIXED to use uppercase comparison
+        const codeDoc = await ReferralCode.findOne({
+          code: sanitizedCode,
+          status: 'active'
+        });
+        
+        console.log('[Auth] Referral code lookup result:', {
+          found: !!codeDoc,
+          owner: codeDoc ? codeDoc.username : 'none',
+          status: codeDoc ? codeDoc.status : 'none'
+        });
         
         if (codeDoc && codeDoc.status === 'active') {
-          // Don't allow self-referral
-          if (codeDoc.username !== username) {
+          // Check for self-referral
+          if (codeDoc.username === username) {
+            console.log('[Auth] Self-referral attempt blocked:', username);
+          } else {
+            // Valid referral code found
             referrerUsername = codeDoc.username;
+            referralCodeUsed = codeDoc.code;
             
             // Add referral info to user
             newUser.referredBy = referrerUsername;
-            newUser.referralCode = codeDoc.code;
+            newUser.referralCode = referralCodeUsed;
             newUser.referredAt = new Date();
             
-            console.log(`[Auth] User ${username} referred by ${referrerUsername} with code ${codeDoc.code}`);
+            console.log('[Auth] ✅ Referral code accepted:', {
+              code: referralCodeUsed,
+              referrer: referrerUsername,
+              newUser: username
+            });
           }
+        } else {
+          console.log('[Auth] ❌ Invalid or inactive referral code:', sanitizedCode);
         }
       } catch (referralError) {
-        console.error('[Auth] Referral code processing error:', referralError);
+        console.error('[Auth] ⚠️ Referral code processing error:', referralError);
         // Don't fail signup if referral processing fails
       }
+    } else if (referralCode && role !== 'seller') {
+      console.log('[Auth] ⚠️ Referral code ignored - user is not a seller');
     }
     
+    // Save the new user
     await newUser.save();
+    console.log('[Auth] ✅ User created:', username);
     
-    // Create referral relationship after user is saved
-    if (referrerUsername && role === 'seller') {
+    // Create referral relationship AFTER user is saved
+    if (referrerUsername && referralCodeUsed && role === 'seller') {
       try {
         const ReferralCode = require('../models/ReferralCode');
         const { Referral } = require('../models/Referral');
         
-        const codeDoc = await ReferralCode.findByCode(referralCode);
+        // Create referral relationship
+        const referral = new Referral({
+          referrer: referrerUsername,
+          referredSeller: username,
+          referralCode: referralCodeUsed,
+          referredEmail: email,
+          signupIp: req.ip,
+          metadata: {
+            signupSource: req.body.signupSource || 'direct',
+            userAgent: req.headers['user-agent']
+          }
+        });
+        await referral.save();
+        
+        console.log('[Auth] ✅ Referral relationship created:', {
+          referrer: referrerUsername,
+          referred: username
+        });
+        
+        // Track the signup in referral code
+        const codeDoc = await ReferralCode.findOne({ code: referralCodeUsed });
         if (codeDoc) {
-          // Create referral relationship
-          const referral = new Referral({
-            referrer: referrerUsername,
-            referredSeller: username,
-            referralCode: codeDoc.code,
-            referredEmail: email,
-            signupIp: req.ip,
-            metadata: {
-              signupSource: req.body.signupSource || 'direct',
-              userAgent: req.headers['user-agent']
-            }
-          });
-          await referral.save();
-          
-          // Track the signup
           await codeDoc.trackSignup(username);
-          
-          // Update referrer's stats
-          await User.findOneAndUpdate(
-            { username: referrerUsername },
-            { $inc: { referralCount: 1 } }
-          );
-          
-          // Create notification for referrer
-          const Notification = require('../models/Notification');
-          await Notification.create({
-            recipient: referrerUsername,
-            type: 'referral_signup',
-            title: '🎉 New Referral Signup!',
-            message: `${username} has joined using your referral code!`,
-            link: '/sellers/profile',
-            priority: 'normal',
-            metadata: {
-              referredUser: username,
-              referralCode: codeDoc.code
-            }
-          });
-          
-          console.log(`[Auth] Referral relationship created: ${referrerUsername} -> ${username}`);
+          console.log('[Auth] ✅ Referral code usage tracked');
         }
+        
+        // Update referrer's stats
+        await User.findOneAndUpdate(
+          { username: referrerUsername },
+          { $inc: { referralCount: 1 } }
+        );
+        
+        console.log('[Auth] ✅ Referrer stats updated');
+        
+        // Create notification for referrer
+        const Notification = require('../models/Notification');
+        await Notification.create({
+          recipient: referrerUsername,
+          type: 'referral_signup',
+          title: '🎉 New Referral Signup!',
+          message: `${username} has joined using your referral code!`,
+          link: '/sellers/profile',
+          priority: 'normal',
+          metadata: {
+            referredUser: username,
+            referralCode: referralCodeUsed
+          }
+        });
+        
+        console.log('[Auth] ✅ Referrer notification created');
       } catch (referralError) {
-        console.error('[Auth] Failed to create referral relationship:', referralError);
+        console.error('[Auth] ❌ Failed to create referral relationship:', referralError);
         // Don't fail signup if referral creation fails
       }
     }
@@ -233,13 +278,10 @@ router.post('/signup', async (req, res) => {
       console.log(`✅ Verification email sent to ${newUser.email}`);
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
-      // Continue even if email fails in development
     }
 
     // ========== WEBSOCKET INTEGRATION FOR USER STATS ==========
-    // Emit new user registration event to authenticated users
     if (webSocketService && webSocketService.io) {
-      // Emit to all connected authenticated clients about new user
       webSocketService.io.emit('user:registered', {
         userId: newUser._id.toString(),
         username: newUser.username,
@@ -247,7 +289,6 @@ router.post('/signup', async (req, res) => {
         timestamp: new Date().toISOString()
       });
 
-      // Calculate and broadcast updated user statistics
       try {
         const [totalUsers, newUsersToday] = await Promise.all([
           User.countDocuments(),
@@ -274,17 +315,13 @@ router.post('/signup', async (req, res) => {
         };
 
         webSocketService.io.emit('stats:users', statsData);
-        
-        console.log(`📊 Broadcasted user stats to authenticated users - Total: ${totalUsers}, New today: ${newUsersToday}`);
+        console.log(`📊 Broadcasted user stats - Total: ${totalUsers}`);
       } catch (statsError) {
         console.error('Failed to broadcast user stats:', statsError);
       }
     }
 
-    // ========== PUBLIC WEBSOCKET INTEGRATION FOR GUESTS ==========
-    // Also broadcast to public WebSocket for guest users
     if (publicWebSocketService) {
-      // Emit to all guest users
       publicWebSocketService.broadcastUserRegistered({
         userId: newUser._id.toString(),
         username: newUser.username,
@@ -292,7 +329,6 @@ router.post('/signup', async (req, res) => {
         timestamp: new Date().toISOString()
       });
       
-      // Send updated stats to guests
       try {
         const [totalUsers, newUsersToday] = await Promise.all([
           User.countDocuments(),
@@ -317,23 +353,30 @@ router.post('/signup', async (req, res) => {
           newUsersToday,
           timestamp: new Date().toISOString()
         });
-        
-        console.log(`📡 Broadcasted user stats to guest users - Total: ${totalUsers}, New today: ${newUsersToday}`);
       } catch (statsError) {
         console.error('Failed to broadcast stats to public:', statsError);
       }
     }
     // ========== END WEBSOCKET INTEGRATION ==========
 
-    // Don't create a session token yet - user needs to verify email first
+    // Build response with referral info if applicable
+    const responseData = {
+      message: 'Account created successfully! Please check your email to verify your account.',
+      email: newUser.email,
+      username: newUser.username,
+      requiresVerification: true
+    };
+
+    // Add referral success info if referral was used
+    if (referrerUsername && referralCodeUsed) {
+      responseData.referralApplied = true;
+      responseData.referrerUsername = referrerUsername;
+      responseData.referralCode = referralCodeUsed;
+    }
+
     res.json({
       success: true,
-      data: {
-        message: 'Account created successfully! Please check your email to verify your account.',
-        email: newUser.email,
-        username: newUser.username,
-        requiresVerification: true
-      }
+      data: responseData
     });
   } catch (error) {
     console.error('[Auth] Signup error:', error);
@@ -364,7 +407,6 @@ router.post('/verify-email', async (req, res) => {
     
     let verification;
     
-    // Try to find by token first
     if (token) {
       const hashedToken = EmailVerification.hashToken(token);
       verification = await EmailVerification.findOne({ 
@@ -373,12 +415,11 @@ router.post('/verify-email', async (req, res) => {
       });
     }
     
-    // If not found by token, try by code
     if (!verification && code) {
       verification = await EmailVerification.findOne({
         verificationCode: code.trim(),
         verified: false
-      }).sort({ createdAt: -1 }); // Get most recent
+      }).sort({ createdAt: -1 });
     }
     
     if (!verification) {
@@ -391,7 +432,6 @@ router.post('/verify-email', async (req, res) => {
       });
     }
     
-    // Check if expired
     if (!verification.isValid()) {
       return res.status(400).json({
         success: false,
@@ -404,10 +444,8 @@ router.post('/verify-email', async (req, res) => {
       });
     }
     
-    // Mark as verified
     await verification.markAsVerified();
     
-    // Update user
     const user = await User.findById(verification.userId);
     if (!user) {
       return res.status(404).json({
@@ -420,11 +458,8 @@ router.post('/verify-email', async (req, res) => {
     }
     
     await user.markEmailAsVerified();
-    
-    // Clean up old verifications for this user
     await EmailVerification.cleanupOldVerifications(user._id);
     
-    // Send success email
     try {
       await sendEmail({
         to: user.email,
@@ -434,7 +469,6 @@ router.post('/verify-email', async (req, res) => {
       console.error('Failed to send verification success email:', emailError);
     }
     
-    // ========== OPTIONAL: Broadcast updated verified user count ==========
     if (webSocketService && webSocketService.io) {
       try {
         const verifiedSellers = await User.countDocuments({ role: 'seller', isVerified: true });
@@ -447,7 +481,6 @@ router.post('/verify-email', async (req, res) => {
       }
     }
     
-    // Also broadcast to public WebSocket
     if (publicWebSocketService) {
       try {
         const verifiedSellers = await User.countDocuments({ role: 'seller', isVerified: true });
@@ -459,9 +492,7 @@ router.post('/verify-email', async (req, res) => {
         console.error('Failed to broadcast verified seller stats to public:', statsError);
       }
     }
-    // ========== END OPTIONAL BROADCAST ==========
     
-    // Now create a session token since email is verified
     const authToken = signToken(user);
     
     res.json({
@@ -491,7 +522,7 @@ router.post('/verify-email', async (req, res) => {
   }
 });
 
-// POST /api/auth/resend-verification - NEW ENDPOINT
+// POST /api/auth/resend-verification
 router.post('/resend-verification', async (req, res) => {
   try {
     const { email, username } = req.body;
@@ -506,7 +537,6 @@ router.post('/resend-verification', async (req, res) => {
       });
     }
     
-    // Find user
     let user;
     if (email) {
       user = await User.findOne({ email: cleanEmail(email) });
@@ -515,14 +545,12 @@ router.post('/resend-verification', async (req, res) => {
     }
     
     if (!user) {
-      // Don't reveal if user exists
       return res.json({
         success: true,
         message: 'If that account exists and is unverified, we\'ve sent a new verification email.'
       });
     }
     
-    // Check if already verified
     if (user.emailVerified) {
       return res.status(400).json({
         success: false,
@@ -533,10 +561,8 @@ router.post('/resend-verification', async (req, res) => {
       });
     }
     
-    // Delete old verification records
     await EmailVerification.deleteMany({ userId: user._id });
     
-    // Create new verification
     const verificationToken = EmailVerification.generateToken();
     const verificationCode = EmailVerification.generateVerificationCode();
     
@@ -547,11 +573,10 @@ router.post('/resend-verification', async (req, res) => {
       token: EmailVerification.hashToken(verificationToken),
       verificationCode,
       verificationType: 'signup',
-      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
     });
     await emailVerification.save();
     
-    // Send verification email
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
     
     try {
@@ -608,7 +633,6 @@ router.post('/login', async (req, res) => {
 
     const user = await User.findOne({ username });
     if (!user) {
-      // Be helpful but secure
       return res.status(401).json({ 
         success: false, 
         error: { 
@@ -618,7 +642,6 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // NEW: Check for pending password reset - UPDATED
     const pendingReset = await PasswordReset.findOne({
       email: user.email,
       used: false,
@@ -628,27 +651,22 @@ router.post('/login', async (req, res) => {
     if (pendingReset) {
       console.log(`[Auth] Pending password reset detected for ${username}`);
       
-      // Auto-resend the password reset email
       try {
-        // Delete old reset request
         await PasswordReset.deleteMany({ email: user.email });
         
-        // Generate new reset token and code
         const resetToken = PasswordReset.generateToken();
         const hashedToken = PasswordReset.hashToken(resetToken);
         const verificationCode = PasswordReset.generateVerificationCode();
         
-        // Save new reset request
         const passwordReset = new PasswordReset({ 
           email: user.email, 
           username: user.username, 
           token: hashedToken, 
           verificationCode,
-          expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000)
         });
         await passwordReset.save();
         
-        // Send email - UPDATED to pass email as third parameter
         await sendEmail({ 
           to: user.email, 
           ...emailTemplates.passwordResetCode(user.username, verificationCode, user.email) 
@@ -659,7 +677,6 @@ router.post('/login', async (req, res) => {
         console.error('Failed to auto-send password reset email:', resetError);
       }
       
-      // Return special error to trigger redirect to password reset flow
       return res.status(403).json({
         success: false,
         error: {
@@ -674,7 +691,6 @@ router.post('/login', async (req, res) => {
 
     const passwordMatches = await user.comparePassword(password);
     if (!passwordMatches) {
-      // Be specific and helpful
       return res.status(401).json({ 
         success: false, 
         error: { 
@@ -684,15 +700,10 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Check email verification status (except for admins)
-    // SILENT REDIRECT: Return special response with user data but no error message
     if (user.role !== 'admin' && !user.emailVerified) {
-      // AUTO-RESEND verification email when user tries to login
       try {
-        // Delete old verification records
         await EmailVerification.deleteMany({ userId: user._id });
         
-        // Create new verification
         const verificationToken = EmailVerification.generateToken();
         const verificationCode = EmailVerification.generateVerificationCode();
         
@@ -703,11 +714,10 @@ router.post('/login', async (req, res) => {
           token: EmailVerification.hashToken(verificationToken),
           verificationCode,
           verificationType: 'signup',
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
         });
         await emailVerification.save();
         
-        // Send verification email
         const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
         
         await sendEmail({
@@ -720,12 +730,11 @@ router.post('/login', async (req, res) => {
         console.error('Failed to auto-send verification email:', emailError);
       }
       
-      // MODIFIED: Return success=false but with special flag for silent redirect
       return res.status(403).json({
         success: false,
         error: {
           code: 'EMAIL_VERIFICATION_REQUIRED',
-          message: '', // EMPTY MESSAGE - frontend will handle redirect silently
+          message: '',
           requiresVerification: true,
           email: user.email,
           username: user.username
@@ -733,7 +742,6 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // ===== ROLE ENFORCEMENT WITH FRIENDLY MESSAGES =====
     if (role) {
       if (user.role === 'admin' && role !== 'admin') {
         return res.status(403).json({
@@ -765,7 +773,6 @@ router.post('/login', async (req, res) => {
         });
       }
     }
-    // =======================================
 
     user.isOnline = true;
     user.lastActive = new Date();
@@ -833,7 +840,7 @@ router.post('/logout', authMiddleware, async (req, res) => {
   }
 });
 
-// GET /api/auth/me - UPDATED TO INCLUDE EMAIL VERIFICATION STATUS
+// GET /api/auth/me
 router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
@@ -877,7 +884,7 @@ router.get('/me', authMiddleware, async (req, res) => {
         role: user.role,
         email: user.email,
         isVerified: user.isVerified || false,
-        emailVerified: user.emailVerified || false, // Include email verification status
+        emailVerified: user.emailVerified || false,
         tier: user.tier || 'Tease',
         tierInfo,
         subscriberCount: user.subscriberCount || 0,
@@ -1036,7 +1043,6 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
     }
 
     dbUser.role = 'admin';
-    // Admin accounts are automatically email verified
     dbUser.emailVerified = true;
     dbUser.emailVerifiedAt = new Date();
     await dbUser.save();
@@ -1063,9 +1069,7 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
   }
 });
 
-// ===== Password reset routes - FIXED =====
-
-// POST /api/auth/forgot-password - Now accepts username OR email - UPDATED
+// POST /api/auth/forgot-password
 router.post('/forgot-password', async (req, res) => {
   try {
     const { emailOrUsername } = req.body || {};
@@ -1083,18 +1087,14 @@ router.post('/forgot-password', async (req, res) => {
     const input = emailOrUsername.trim();
     let user = null;
     
-    // Check if input looks like an email
     if (input.includes('@')) {
-      // Try to find by email
       if (isValidEmail(input)) {
         user = await User.findOne({ email: cleanEmail(input) });
       }
     } else {
-      // Try to find by username
       user = await User.findOne({ username: input });
     }
     
-    // Always return success to avoid revealing if account exists
     if (!user) {
       return res.json({ 
         success: true, 
@@ -1103,25 +1103,21 @@ router.post('/forgot-password', async (req, res) => {
       });
     }
     
-    // Delete any existing reset requests for this user
     await PasswordReset.deleteMany({ email: user.email });
     
-    // Generate new reset token and code
     const resetToken = PasswordReset.generateToken();
     const hashedToken = PasswordReset.hashToken(resetToken);
     const verificationCode = PasswordReset.generateVerificationCode();
     
-    // Save reset request
     const passwordReset = new PasswordReset({ 
       email: user.email, 
       username: user.username, 
       token: hashedToken, 
       verificationCode,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000)
     });
     await passwordReset.save();
     
-    // Send email - UPDATED to pass email as third parameter
     try {
       await sendEmail({ 
         to: user.email, 
@@ -1129,14 +1125,13 @@ router.post('/forgot-password', async (req, res) => {
       });
     } catch (emailError) {
       console.error('Failed to send password reset email:', emailError);
-      // Don't reveal email errors to user
     }
     
     res.json({ 
       success: true, 
       message: 'If that account exists, we\'ve sent you a verification code. Check your inbox!',
       data: { 
-        email: user.email, // Return the actual email for the frontend to store
+        email: user.email,
         expiresIn: 900 
       }
     });
@@ -1152,7 +1147,7 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
-// POST /api/auth/verify-reset-code - Verify the 6-digit code
+// POST /api/auth/verify-reset-code
 router.post('/verify-reset-code', async (req, res) => {
   try {
     const { email, code } = req.body || {};
@@ -1167,14 +1162,12 @@ router.post('/verify-reset-code', async (req, res) => {
       });
     }
     
-    // Find the reset request
     const resetRequest = await PasswordReset.findOne({ 
       email: cleanEmail(email), 
       verificationCode: code.trim() 
     });
     
     if (!resetRequest) {
-      // Check if there's any request for this email to handle attempts
       const anyRequest = await PasswordReset.findOne({ email: cleanEmail(email) });
       if (anyRequest && anyRequest.isValid()) {
         const maxAttempts = await anyRequest.incrementAttempts();
@@ -1197,7 +1190,6 @@ router.post('/verify-reset-code', async (req, res) => {
       });
     }
     
-    // Check if the request is valid
     if (!resetRequest.isValid()) {
       return res.status(400).json({ 
         success: false, 
@@ -1210,13 +1202,12 @@ router.post('/verify-reset-code', async (req, res) => {
       });
     }
     
-    // Code is valid!
     res.json({ 
       success: true, 
       data: { 
         valid: true, 
         message: 'Perfect! Your code is verified. You can now set a new password.',
-        token: resetRequest.token // Send token for the final step
+        token: resetRequest.token
       }
     });
   } catch (error) {
@@ -1231,7 +1222,7 @@ router.post('/verify-reset-code', async (req, res) => {
   }
 });
 
-// POST /api/auth/reset-password - Final step to reset password
+// POST /api/auth/reset-password
 router.post('/reset-password', async (req, res) => {
   try {
     const { email, code, newPassword } = req.body || {};
@@ -1256,7 +1247,6 @@ router.post('/reset-password', async (req, res) => {
       });
     }
     
-    // Find and validate the reset request
     const resetRequest = await PasswordReset.findOne({ 
       email: cleanEmail(email), 
       verificationCode: code.trim() 
@@ -1272,7 +1262,6 @@ router.post('/reset-password', async (req, res) => {
       });
     }
     
-    // Find the user
     const user = await User.findOne({ email: resetRequest.email });
     if (!user) {
       return res.status(404).json({ 
@@ -1284,15 +1273,12 @@ router.post('/reset-password', async (req, res) => {
       });
     }
     
-    // Update the password
     user.password = newPassword;
     await user.save();
     
-    // Mark the reset request as used
     resetRequest.used = true;
     await resetRequest.save();
     
-    // Send confirmation email
     try {
       await sendEmail({ 
         to: user.email, 
@@ -1300,7 +1286,6 @@ router.post('/reset-password', async (req, res) => {
       });
     } catch (emailError) {
       console.error('Failed to send confirmation email:', emailError);
-      // Don't fail the request if email fails
     }
     
     res.json({ 
