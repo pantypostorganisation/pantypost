@@ -19,36 +19,8 @@ import { z } from 'zod';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { formatCurrency } from '@/utils/url';
 import { useRouter } from 'next/navigation';
-
-// Define types for referral data
-interface ReferralCode {
-  code: string | null; // Code can be null
-  conversionRate: number;
-  createdAt: string;
-  usedCount: number;
-  active: boolean;
-}
-
-interface ActiveReferral {
-  username: string;
-  earnings: number;
-  joinedAt: string;
-  lastPurchase?: string;
-}
-
-interface ReferralStats {
-  totalReferrals: number;
-  totalEarnings: number;
-  monthlyEarnings: number;
-  pendingEarnings: number;
-  activeReferrals: ActiveReferral[];
-  conversionRate: number;
-}
-
-interface ReferralData {
-  code: ReferralCode;
-  stats: ReferralStats;
-}
+import { referralService, ReferralStats, ReferralCode } from '@/services/referral.service';
+import { useToast } from '@/context/ToastContext';
 
 // Props validation schema
 const PropsSchema = z.object({
@@ -58,90 +30,59 @@ const PropsSchema = z.object({
 
 interface ReferralSectionProps extends z.infer<typeof PropsSchema> {}
 
-// Mock referral service for now - replace with actual API calls
-const referralService = {
-  getReferralStats: async (): Promise<{ success: boolean; data?: ReferralData }> => {
-    // Simulated API call - replace with actual implementation
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({
-          success: true,
-          data: {
-            code: {
-              code: 'PANTY' + Math.random().toString(36).substring(2, 7).toUpperCase(),
-              conversionRate: 12.5,
-              createdAt: new Date().toISOString(),
-              usedCount: 23,
-              active: true
-            },
-            stats: {
-              totalReferrals: 23,
-              totalEarnings: 1250.00,
-              monthlyEarnings: 450.00,
-              pendingEarnings: 125.00,
-              activeReferrals: [
-                { username: 'buyer123', earnings: 125.50, joinedAt: '2024-01-15' },
-                { username: 'shopper456', earnings: 89.25, joinedAt: '2024-01-20' },
-                { username: 'customer789', earnings: 234.75, joinedAt: '2024-01-25' }
-              ],
-              conversionRate: 12.5
-            }
-          }
-        });
-      }, 500);
-    });
-  },
-
-  copyReferralLink: async (code: string | null): Promise<boolean> => {
-    if (!code) return false;
-    const url = `${window.location.origin}/signup?ref=${code}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-
-  formatReferralUrl: (code: string | null): string => {
-    if (!code) return '';
-    return `${window.location.origin}/signup?ref=${code}`;
-  }
-};
-
 export default function ReferralSection(rawProps: ReferralSectionProps) {
   const parsed = PropsSchema.safeParse(rawProps);
   const { className = '', onViewDetails } = parsed.success ? parsed.data : { className: '', onViewDetails: undefined };
   
-  const [stats, setStats] = useState<ReferralData | null>(null);
+  const [stats, setStats] = useState<ReferralStats | null>(null);
+  const [referralCode, setReferralCode] = useState<ReferralCode | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const router = useRouter();
+  const { success: showSuccess, error: showError } = useToast();
 
   useEffect(() => {
-    loadReferralStats();
+    loadReferralData();
   }, []);
 
-  const loadReferralStats = async () => {
+  const loadReferralData = async () => {
     try {
-      const response = await referralService.getReferralStats();
-      if (response.success && response.data) {
-        setStats(response.data);
+      setLoading(true);
+      
+      // Load both stats and code
+      const [statsResponse, codeResponse] = await Promise.all([
+        referralService.getReferralStats(),
+        referralService.getMyReferralCode()
+      ]);
+
+      if (statsResponse.success && statsResponse.data) {
+        setStats(statsResponse.data);
+      }
+      
+      if (codeResponse.success && codeResponse.data) {
+        setReferralCode(codeResponse.data);
       }
     } catch (error) {
-      console.error('Error loading referral stats:', error);
+      console.error('Error loading referral data:', error);
+      showError('Failed to load referral information');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCopyCode = async () => {
-    if (!stats?.code?.code) return;
+    if (!referralCode?.code) {
+      showError('No referral code available');
+      return;
+    }
     
-    const success = await referralService.copyReferralLink(stats.code.code);
+    const success = await referralService.copyReferralLink(referralCode.code);
     if (success) {
       setCopied(true);
+      showSuccess('Referral link copied to clipboard!');
       setTimeout(() => setCopied(false), 3000);
+    } else {
+      showError('Failed to copy link');
     }
   };
 
@@ -149,7 +90,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
     if (onViewDetails) {
       onViewDetails();
     } else {
-      router.push('/sellers/referrals');
+      router.push('/sellers/subscribers?tab=referrals');
     }
   };
 
@@ -207,16 +148,16 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
           <p className="text-xs text-gray-400 mt-1">Total Earnings</p>
         </div>
 
-        {/* Monthly Earnings Card */}
+        {/* Monthly Earnings Card - Note: API doesn't return this, showing total */}
         <div className="bg-black/40 rounded-2xl border border-white/5 p-5">
           <div className="flex items-center justify-between mb-2">
             <TrendingUp className="w-5 h-5 text-[#ff950e]/60" />
-            <span className="text-xs text-blue-400 font-medium">This Month</span>
+            <span className="text-xs text-blue-400 font-medium">Total</span>
           </div>
           <p className="text-2xl font-bold text-white">
-            {formatCurrency(stats?.stats.monthlyEarnings || 0)}
+            {formatCurrency(stats?.stats.totalEarnings || 0)}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Monthly Earnings</p>
+          <p className="text-xs text-gray-400 mt-1">Earnings</p>
         </div>
 
         {/* Total Referrals Card */}
@@ -231,28 +172,28 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
           <p className="text-xs text-gray-400 mt-1">Referrals</p>
         </div>
 
-        {/* Conversion Rate Card */}
+        {/* Total Sales Card */}
         <div className="bg-black/40 rounded-2xl border border-white/5 p-5">
           <div className="flex items-center justify-between mb-2">
             <Target className="w-5 h-5 text-[#ff950e]/60" />
-            <span className="text-xs text-[#ff950e] font-medium">Rate</span>
+            <span className="text-xs text-[#ff950e] font-medium">Sales</span>
           </div>
           <p className="text-2xl font-bold text-white">
-            {stats?.code?.conversionRate.toFixed(1) || 0}%
+            {stats?.stats.totalSales || 0}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Conversion</p>
+          <p className="text-xs text-gray-400 mt-1">Total Sales</p>
         </div>
       </div>
 
       {/* Referral Code Section */}
-      {stats?.code && stats.code.code && (
+      {referralCode && referralCode.code && (
         <div className="bg-gradient-to-r from-[#ff950e]/5 to-[#ff6b00]/5 rounded-2xl border border-[#ff950e]/20 p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Link2 className="w-5 h-5 text-[#ff950e]" />
               <p className="text-sm font-medium text-gray-300">Your Referral Code</p>
             </div>
-            {stats.code.active && (
+            {referralCode.status === 'active' && (
               <span className="px-2 py-1 bg-green-500/10 text-green-400 text-xs rounded-full font-medium">
                 Active
               </span>
@@ -262,10 +203,10 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             <div className="flex-1">
               <p className="text-3xl font-mono font-bold text-[#ff950e] mb-2">
-                {sanitizeStrict(stats.code.code)}
+                {sanitizeStrict(referralCode.code)}
               </p>
               <p className="text-xs text-gray-500">
-                {referralService.formatReferralUrl(stats.code.code)}
+                {referralService.formatReferralUrl(referralCode.code)}
               </p>
             </div>
             <button
@@ -295,12 +236,12 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
           <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/5">
             <div className="text-center">
               <p className="text-xs text-gray-400">Times Used</p>
-              <p className="text-lg font-semibold text-white">{stats.code.usedCount}</p>
+              <p className="text-lg font-semibold text-white">{referralCode.usageCount || 0}</p>
             </div>
             <div className="text-center">
-              <p className="text-xs text-gray-400">Pending Earnings</p>
+              <p className="text-xs text-gray-400">Conversion Rate</p>
               <p className="text-lg font-semibold text-green-400">
-                {formatCurrency(stats.stats.pendingEarnings || 0)}
+                {referralCode.conversionRate?.toFixed(1) || 0}%
               </p>
             </div>
           </div>
@@ -308,7 +249,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
       )}
 
       {/* Show message if no code */}
-      {stats?.code && !stats.code.code && (
+      {referralCode && !referralCode.code && (
         <div className="bg-gradient-to-r from-[#ff950e]/5 to-[#ff6b00]/5 rounded-2xl border border-[#ff950e]/20 p-6 mb-8 text-center">
           <p className="text-gray-400 mb-2">You haven't created a referral code yet</p>
           <button
@@ -322,7 +263,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
       )}
 
       {/* Recent Referrals Preview */}
-      {stats && stats.stats.activeReferrals.length > 0 && (
+      {stats && stats.stats.activeReferrals && stats.stats.activeReferrals.length > 0 && (
         <div className="bg-black/40 rounded-2xl border border-white/5 p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
@@ -346,7 +287,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
                   <div>
                     <span className="text-sm text-white">{sanitizeStrict(referral.username)}</span>
                     <p className="text-xs text-gray-500">
-                      Joined {new Date(referral.joinedAt).toLocaleDateString()}
+                      Joined {new Date(referral.joinedDate).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
@@ -354,7 +295,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
                   <span className="text-sm font-semibold text-green-400">
                     +{formatCurrency(referral.earnings)}
                   </span>
-                  <p className="text-xs text-gray-500">earned</p>
+                  <p className="text-xs text-gray-500">{referral.sales} sales</p>
                 </div>
               </div>
             ))}
@@ -363,7 +304,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
       )}
 
       {/* Call to Action for New Users */}
-      {(!stats || stats.stats.totalReferrals === 0) && (
+      {(!stats || !stats.stats || stats.stats.totalReferrals === 0) && (
         <div className="mt-6 p-6 bg-gradient-to-r from-[#ff950e]/10 to-[#ff8c00]/10 rounded-2xl border border-[#ff950e]/20">
           <div className="flex items-start gap-4">
             <div className="p-2 bg-[#ff950e]/20 rounded-lg">
