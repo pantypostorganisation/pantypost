@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation';
 
 // Define types for referral data
 interface ReferralCode {
-  code: string;
+  code: string | null; // Code can be null
   conversionRate: number;
   createdAt: string;
   usedCount: number;
@@ -92,7 +92,8 @@ const referralService = {
     });
   },
 
-  copyReferralLink: async (code: string): Promise<boolean> => {
+  copyReferralLink: async (code: string | null): Promise<boolean> => {
+    if (!code) return false;
     const url = `${window.location.origin}/signup?ref=${code}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -102,7 +103,8 @@ const referralService = {
     }
   },
 
-  formatReferralUrl: (code: string): string => {
+  formatReferralUrl: (code: string | null): string => {
+    if (!code) return '';
     return `${window.location.origin}/signup?ref=${code}`;
   }
 };
@@ -134,7 +136,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
   };
 
   const handleCopyCode = async () => {
-    if (!stats?.code) return;
+    if (!stats?.code?.code) return;
     
     const success = await referralService.copyReferralLink(stats.code.code);
     if (success) {
@@ -243,7 +245,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
       </div>
 
       {/* Referral Code Section */}
-      {stats?.code && (
+      {stats?.code && stats.code.code && (
         <div className="bg-gradient-to-r from-[#ff950e]/5 to-[#ff6b00]/5 rounded-2xl border border-[#ff950e]/20 p-6 mb-8">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -302,6 +304,20 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
               </p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Show message if no code */}
+      {stats?.code && !stats.code.code && (
+        <div className="bg-gradient-to-r from-[#ff950e]/5 to-[#ff6b00]/5 rounded-2xl border border-[#ff950e]/20 p-6 mb-8 text-center">
+          <p className="text-gray-400 mb-2">You haven't created a referral code yet</p>
+          <button
+            onClick={handleViewDetails}
+            className="px-6 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff8c00] transition-colors font-medium"
+            type="button"
+          >
+            Create Referral Code
+          </button>
         </div>
       )}
 

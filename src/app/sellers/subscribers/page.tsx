@@ -202,7 +202,7 @@ export default function SellerAnalyticsPage() {
       }
       if (referralCodeRes.success && referralCodeRes.data) {
         setReferralCode(referralCodeRes.data);
-        setNewCode(referralCodeRes.data.code);
+        setNewCode(referralCodeRes.data.code || '');
       }
     } catch (err) {
       console.error('Error fetching analytics:', err);
@@ -276,14 +276,13 @@ export default function SellerAnalyticsPage() {
     }
   };
 
-  const handleCopyCode = async (codeType: 'custom' | 'auto') => {
-    if (!referralCode) return;
+  const handleCopyCode = async () => {
+    if (!referralCode?.code) return;
     
-    const codeToCopy = codeType === 'custom' ? referralCode.code : referralCode.autoCode;
-    const copySuccess = await referralService.copyReferralLink(codeToCopy);
+    const copySuccess = await referralService.copyReferralLink(referralCode.code);
     
     if (copySuccess) {
-      setCopiedCode(codeToCopy);
+      setCopiedCode(referralCode.code);
       success('Referral link copied to clipboard!');
       setTimeout(() => setCopiedCode(null), 3000);
     } else {
@@ -292,7 +291,7 @@ export default function SellerAnalyticsPage() {
   };
 
   const handleShare = (platform: 'twitter' | 'facebook' | 'whatsapp') => {
-    if (!referralCode) return;
+    if (!referralCode?.code) return;
     
     const shareData = referralService.generateShareText(referralCode.code);
     let url = '';
@@ -970,168 +969,159 @@ export default function SellerAnalyticsPage() {
                 </div>
 
                 {/* Referral Code Section */}
-                <div className="bg-gray-900 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Your Referral Code</h3>
-                    {!editingCode && (
-                      <button
-                        onClick={() => setEditingCode(true)}
-                        className="text-sm text-[#ff6b00] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        Edit Code
-                      </button>
-                    )}
-                  </div>
-
-                  <AnimatePresence mode="wait">
-                    {editingCode ? (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="space-y-4"
-                      >
-                        <div>
-                          <label className="block text-sm text-gray-400 mb-2">
-                            Custom Referral Code (3+ characters)
-                          </label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={newCode}
-                              onChange={(e) => {
-                                setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''));
-                                setCodeError('');
-                              }}
-                              maxLength={20}
-                              className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff6b00]"
-                              placeholder="Enter custom code"
-                            />
-                            <button
-                              onClick={handleUpdateCode}
-                              disabled={saving}
-                              className="px-4 py-2 bg-[#ff6b00] text-white rounded-lg hover:bg-[#ff8c00] transition-colors disabled:opacity-50"
-                            >
-                              {saving ? (
-                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                              ) : (
-                                <Check className="w-5 h-5" />
-                              )}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingCode(false);
-                                setNewCode(referralCode?.code || '');
-                                setCodeError('');
-                              }}
-                              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                            >
-                              <X className="w-5 h-5" />
-                            </button>
-                          </div>
-                          {codeError && (
-                            <p className="text-red-400 text-sm mt-1">{codeError}</p>
-                          )}
-                        </div>
-                      </motion.div>
-                    ) : (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="space-y-4"
-                      >
-                        {/* Custom Code */}
-                        <div>
-                          <label className="block text-sm text-gray-400 mb-2">
-                            Custom Code
-                          </label>
-                          <div className="flex gap-2">
-                            <div className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg">
-                              <span className="text-xl font-mono font-bold text-[#ff6b00]">
-                                {referralCode?.code}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => handleCopyCode('custom')}
-                              className={`px-4 py-2 rounded-lg transition-colors ${
-                                copiedCode === referralCode?.code
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-gray-700 text-white hover:bg-gray-600'
-                              }`}
-                            >
-                              {copiedCode === referralCode?.code ? (
-                                <Check className="w-5 h-5" />
-                              ) : (
-                                <Copy className="w-5 h-5" />
-                              )}
-                            </button>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {referralService.formatReferralUrl(referralCode?.code || '')}
-                          </p>
-                        </div>
-
-                        {/* Auto-generated Code */}
-                        <div>
-                          <label className="block text-sm text-gray-400 mb-2">
-                            Auto-generated Code (Backup)
-                          </label>
-                          <div className="flex gap-2">
-                            <div className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg">
-                              <span className="text-sm font-mono text-gray-400">
-                                {referralCode?.autoCode}
-                              </span>
-                            </div>
-                            <button
-                              onClick={() => handleCopyCode('auto')}
-                              className={`px-4 py-2 rounded-lg transition-colors ${
-                                copiedCode === referralCode?.autoCode
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-gray-700 text-white hover:bg-gray-600'
-                              }`}
-                            >
-                              {copiedCode === referralCode?.autoCode ? (
-                                <Check className="w-5 h-5" />
-                              ) : (
-                                <Copy className="w-5 h-5" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  {/* Share Buttons */}
-                  <div className="mt-6 pt-6 border-t border-gray-800">
-                    <p className="text-sm text-gray-400 mb-3">Share your referral link</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleShare('twitter')}
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
-                      >
-                        <Share2 className="w-4 h-4" />
-                        Twitter
-                      </button>
-                      <button
-                        onClick={() => handleShare('facebook')}
-                        className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors flex items-center gap-2"
-                      >
-                        <Share2 className="w-4 h-4" />
-                        Facebook
-                      </button>
-                      <button
-                        onClick={() => handleShare('whatsapp')}
-                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
-                      >
-                        <Share2 className="w-4 h-4" />
-                        WhatsApp
-                      </button>
+                {referralCode && (
+                  <div className="bg-gray-900 rounded-lg p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Your Referral Code</h3>
+                      {!editingCode && referralCode.code && (
+                        <button
+                          onClick={() => setEditingCode(true)}
+                          className="text-sm text-[#ff6b00] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                          Edit Code
+                        </button>
+                      )}
                     </div>
+
+                    <AnimatePresence mode="wait">
+                      {editingCode ? (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="space-y-4"
+                        >
+                          <div>
+                            <label className="block text-sm text-gray-400 mb-2">
+                              Custom Referral Code (3+ characters)
+                            </label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={newCode}
+                                onChange={(e) => {
+                                  setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''));
+                                  setCodeError('');
+                                }}
+                                maxLength={20}
+                                className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff6b00]"
+                                placeholder="Enter custom code"
+                              />
+                              <button
+                                onClick={handleUpdateCode}
+                                disabled={saving}
+                                className="px-4 py-2 bg-[#ff6b00] text-white rounded-lg hover:bg-[#ff8c00] transition-colors disabled:opacity-50"
+                              >
+                                {saving ? (
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                                ) : (
+                                  <Check className="w-5 h-5" />
+                                )}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingCode(false);
+                                  setNewCode(referralCode?.code || '');
+                                  setCodeError('');
+                                }}
+                                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                              >
+                                <X className="w-5 h-5" />
+                              </button>
+                            </div>
+                            {codeError && (
+                              <p className="text-red-400 text-sm mt-1">{codeError}</p>
+                            )}
+                          </div>
+                        </motion.div>
+                      ) : referralCode.code ? (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="space-y-4"
+                        >
+                          {/* Custom Code */}
+                          <div>
+                            <label className="block text-sm text-gray-400 mb-2">
+                              Your Code
+                            </label>
+                            <div className="flex gap-2">
+                              <div className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg">
+                                <span className="text-xl font-mono font-bold text-[#ff6b00]">
+                                  {referralCode.code}
+                                </span>
+                              </div>
+                              <button
+                                onClick={handleCopyCode}
+                                className={`px-4 py-2 rounded-lg transition-colors ${
+                                  copiedCode === referralCode.code
+                                    ? 'bg-green-500 text-white'
+                                    : 'bg-gray-700 text-white hover:bg-gray-600'
+                                }`}
+                              >
+                                {copiedCode === referralCode.code ? (
+                                  <Check className="w-5 h-5" />
+                                ) : (
+                                  <Copy className="w-5 h-5" />
+                                )}
+                              </button>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {referralService.formatReferralUrl(referralCode.code)}
+                            </p>
+                          </div>
+                        </motion.div>
+                      ) : (
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="text-center py-8"
+                        >
+                          <p className="text-gray-400 mb-4">You haven't created a referral code yet</p>
+                          <button
+                            onClick={() => setEditingCode(true)}
+                            className="px-6 py-3 bg-[#ff6b00] text-white rounded-lg hover:bg-[#ff8c00] transition-colors"
+                          >
+                            Create Referral Code
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Share Buttons */}
+                    {referralCode.code && (
+                      <div className="mt-6 pt-6 border-t border-gray-800">
+                        <p className="text-sm text-gray-400 mb-3">Share your referral link</p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleShare('twitter')}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            Twitter
+                          </button>
+                          <button
+                            onClick={() => handleShare('facebook')}
+                            className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors flex items-center gap-2"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            Facebook
+                          </button>
+                          <button
+                            onClick={() => handleShare('whatsapp')}
+                            className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                          >
+                            <Share2 className="w-4 h-4" />
+                            WhatsApp
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
 
                 {/* Recent Referrals */}
                 {referralStats && referralStats.stats.activeReferrals.length > 0 && (

@@ -5,7 +5,6 @@ const { Referral, ReferralCommission } = require('../models/Referral');
 const ReferralCode = require('../models/ReferralCode');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth.middleware');
-const { ERROR_CODES } = require('../utils/constants');
 
 // ============= HELPER FUNCTIONS =============
 
@@ -27,16 +26,29 @@ router.get('/code', authMiddleware, async (req, res) => {
       });
     }
 
-    // Get or create referral code for user
-    const referralCode = await ReferralCode.getOrCreateForUser(req.user.username);
+    // Get referral code for user (may be null if not created)
+    const referralCode = await ReferralCode.getForUser(req.user.username);
+
+    if (!referralCode || !referralCode.code) {
+      // User has no code yet
+      return res.json({
+        success: true,
+        data: {
+          code: null,
+          referralUrl: null,
+          usageCount: 0,
+          clickCount: 0,
+          conversionRate: 0,
+          status: 'not_created'
+        }
+      });
+    }
 
     res.json({
       success: true,
       data: {
         code: referralCode.code,
-        autoCode: referralCode.autoCode,
         referralUrl: referralCode.referralUrl,
-        autoReferralUrl: referralCode.autoReferralUrl,
         usageCount: referralCode.usageCount,
         clickCount: referralCode.clickCount,
         conversionRate: referralCode.conversionRate,
@@ -52,14 +64,14 @@ router.get('/code', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/referral/code - Update custom referral code
+// POST /api/referral/code - Create or update custom referral code
 router.post('/code', authMiddleware, async (req, res) => {
   try {
     // Only sellers can update referral codes
     if (req.user.role !== 'seller') {
       return res.status(403).json({
         success: false,
-        error: 'Only sellers can update referral codes'
+        error: 'Only sellers can create referral codes'
       });
     }
 
@@ -75,55 +87,81 @@ router.post('/code', authMiddleware, async (req, res) => {
     }
 
     // Check if code is available
-    const isAvailable = await ReferralCode.isCodeAvailable(sanitizedCode);
-    if (!isAvailable) {
-      // Check if it's their own code
-      const existingCode = await ReferralCode.findOne({ username: req.user.username });
-      if (existingCode && existingCode.code === sanitizedCode) {
-        return res.json({
-          success: true,
-          data: {
-            code: existingCode.code,
-            message: 'This is already your code'
-          }
-        });
-      }
-
+    const existingCode = await ReferralCode.findByCode(sanitizedCode);
+    if (existingCode && existingCode.username !== req.user.username) {
       return res.status(400).json({
         success: false,
-        error: 'This referral code is unavailable. Please try another.'
+        error: 'This referral code is already taken. Please try another.'
       });
     }
 
-    // Get or create user's referral code
-    let referralCode = await ReferralCode.findOne({ username: req.user.username });
-    
-    if (!referralCode) {
-      const autoCode = await ReferralCode.generateUniqueAutoCode();
-      referralCode = new ReferralCode({
-        username: req.user.username,
-        code: sanitizedCode,
-        autoCode
-      });
-    } else {
-      referralCode.code = sanitizedCode;
-    }
+    // Create or update code for user
+    const referralCode = await ReferralCode.createForUser(req.user.username, sanitizedCode);
 
-    await referralCode.save();
+    // Update user's referralCode field
+    await User.findOneAndUpdate(
+      { username: req.user.username },
+      { referralCode: sanitizedCode }
+    );
 
     res.json({
       success: true,
       data: {
         code: referralCode.code,
         referralUrl: referralCode.referralUrl,
-        message: 'Referral code updated successfully'
+        message: 'Referral code created successfully'
       }
     });
   } catch (error) {
     console.error('[Referral] Error updating code:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to update referral code'
+      error: error.message || 'Failed to create referral code'
+    });
+  }
+});
+
+// DELETE /api/referral/code - Remove referral code
+router.delete('/code', authMiddleware, async (req, res) => {
+  try {
+    // Only sellers can delete their referral codes
+    if (req.user.role !== 'seller') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only sellers can manage referral codes'
+      });
+    }
+
+    // Find and update the referral code (set code to null but keep the record)
+    const referralCode = await ReferralCode.findOne({ username: req.user.username });
+    
+    if (!referralCode) {
+      return res.json({
+        success: true,
+        message: 'No referral code to remove'
+      });
+    }
+
+    // Clear the code but keep the record for statistics
+    referralCode.code = undefined;
+    referralCode.status = 'inactive';
+    await referralCode.save();
+
+    // Update user's referralCode field
+    await User.findOneAndUpdate(
+      { username: req.user.username },
+      { referralCode: null }
+    );
+
+    res.json({
+      success: true,
+      message: 'Referral code removed successfully'
+    });
+  } catch (error) {
+    console.error('[Referral] Error removing code:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to remove referral code'
     });
   }
 });
@@ -208,9 +246,8 @@ router.get('/stats', authMiddleware, async (req, res) => {
       success: true,
       data: {
         stats,
-        code: referralCode ? {
+        code: referralCode && referralCode.code ? {
           code: referralCode.code,
-          autoCode: referralCode.autoCode,
           referralUrl: referralCode.referralUrl,
           clickCount: referralCode.clickCount,
           conversionRate: referralCode.conversionRate

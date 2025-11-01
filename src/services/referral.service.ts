@@ -7,10 +7,8 @@ import { z } from 'zod';
 // ==================== TYPES ====================
 
 export interface ReferralCode {
-  code: string;
-  autoCode: string;
-  referralUrl: string;
-  autoReferralUrl: string;
+  code: string | null; // Code can be null if not created yet
+  referralUrl: string | null;
   usageCount: number;
   clickCount: number;
   conversionRate: number;
@@ -108,7 +106,7 @@ class ReferralService {
   }
 
   /**
-   * Update custom referral code
+   * Create or update custom referral code
    */
   async updateReferralCode(code: string): Promise<ApiResponse<{ code: string; referralUrl: string; message: string }>> {
     try {
@@ -130,6 +128,23 @@ class ReferralService {
       return {
         success: false,
         error: { message: 'Failed to update referral code' }
+      };
+    }
+  }
+
+  /**
+   * Delete referral code
+   */
+  async deleteReferralCode(): Promise<ApiResponse<{ message: string }>> {
+    try {
+      return await apiCall('/referral/code', {
+        method: 'DELETE'
+      });
+    } catch (error) {
+      console.error('[ReferralService] Delete code error:', error);
+      return {
+        success: false,
+        error: { message: 'Failed to delete referral code' }
       };
     }
   }
@@ -233,7 +248,8 @@ class ReferralService {
   /**
    * Format referral URL for display
    */
-  formatReferralUrl(code: string): string {
+  formatReferralUrl(code: string | null): string {
+    if (!code) return '';
     const baseUrl = window.location.origin;
     return `${baseUrl}/signup/${code}`;
   }
@@ -241,7 +257,8 @@ class ReferralService {
   /**
    * Copy referral link to clipboard
    */
-  async copyReferralLink(code: string): Promise<boolean> {
+  async copyReferralLink(code: string | null): Promise<boolean> {
+    if (!code) return false;
     try {
       const url = this.formatReferralUrl(code);
       await navigator.clipboard.writeText(url);
@@ -255,12 +272,21 @@ class ReferralService {
   /**
    * Generate share text for social media
    */
-  generateShareText(code: string): {
+  generateShareText(code: string | null): {
     twitter: string;
     facebook: string;
     whatsapp: string;
     email: { subject: string; body: string };
   } {
+    if (!code) {
+      return {
+        twitter: '',
+        facebook: '',
+        whatsapp: '',
+        email: { subject: '', body: '' }
+      };
+    }
+
     const url = this.formatReferralUrl(code);
     const text = `Join PantyPost using my referral code ${code} and start earning today!`;
     

@@ -1,6 +1,5 @@
 // pantypost-backend/models/ReferralCode.js
 const mongoose = require('mongoose');
-const crypto = require('crypto');
 
 // Create referral code schema
 const referralCodeSchema = new mongoose.Schema({
@@ -13,23 +12,15 @@ const referralCodeSchema = new mongoose.Schema({
     index: true
   },
   
-  // The custom code (min 3 chars, case-insensitive)
+  // The custom code (optional - seller must create one)
   code: {
     type: String,
-    required: true,
+    sparse: true, // Sparse index allows null values while maintaining uniqueness for non-null values
     unique: true,
     index: true,
     uppercase: true, // Always store in uppercase
     minlength: 3,
     maxlength: 20
-  },
-  
-  // Auto-generated code as fallback
-  autoCode: {
-    type: String,
-    required: true,
-    unique: true,
-    index: true
   },
   
   // Track usage
@@ -84,16 +75,11 @@ const referralCodeSchema = new mongoose.Schema({
   }
 });
 
-// Pre-save middleware to ensure uppercase and generate auto code
+// Pre-save middleware to ensure uppercase
 referralCodeSchema.pre('save', async function(next) {
-  // Ensure code is uppercase
+  // Ensure code is uppercase if it exists
   if (this.code) {
     this.code = this.code.toUpperCase();
-  }
-  
-  // Generate auto code if not present
-  if (!this.autoCode) {
-    this.autoCode = await this.constructor.generateUniqueAutoCode();
   }
   
   // Update timestamp
@@ -102,16 +88,11 @@ referralCodeSchema.pre('save', async function(next) {
   next();
 });
 
-// Virtual for getting the referral URL
+// Virtual for getting the referral URL (only if code exists)
 referralCodeSchema.virtual('referralUrl').get(function() {
+  if (!this.code) return null;
   const baseUrl = process.env.FRONTEND_URL || 'https://pantypost.com';
   return `${baseUrl}/signup/${this.code}`;
-});
-
-// Virtual for getting the auto-generated URL
-referralCodeSchema.virtual('autoReferralUrl').get(function() {
-  const baseUrl = process.env.FRONTEND_URL || 'https://pantypost.com';
-  return `${baseUrl}/signup/${this.autoCode}`;
 });
 
 // Method to track a click
@@ -125,7 +106,6 @@ referralCodeSchema.methods.trackClick = async function(metadata = {}) {
   
   await this.save();
   
-  // Could log analytics here
   console.log(`[ReferralCode] Click tracked for code: ${this.code}`, metadata);
 };
 
@@ -162,73 +142,34 @@ referralCodeSchema.statics.isCodeAvailable = async function(code) {
   
   const upperCode = code.toUpperCase();
   
-  // Check if code exists (both custom and auto codes)
-  const existing = await this.findOne({
-    $or: [
-      { code: upperCode },
-      { autoCode: upperCode }
-    ]
-  });
+  // Check if code exists
+  const existing = await this.findOne({ code: upperCode });
   
   return !existing;
 };
 
-// Static method to generate unique auto code
-referralCodeSchema.statics.generateUniqueAutoCode = async function() {
-  let code;
-  let attempts = 0;
-  const maxAttempts = 10;
-  
-  do {
-    // Generate 8-character alphanumeric code
-    code = crypto.randomBytes(4).toString('hex').toUpperCase();
-    attempts++;
-    
-    if (attempts >= maxAttempts) {
-      // Fallback to timestamp-based code
-      code = 'R' + Date.now().toString(36).toUpperCase();
-      break;
-    }
-  } while (!(await this.isCodeAvailable(code)));
-  
-  return code;
-};
-
-// Static method to find by code (checks both custom and auto)
+// Static method to find by code
 referralCodeSchema.statics.findByCode = async function(code) {
   if (!code) return null;
   
   const upperCode = code.toUpperCase();
   
   return await this.findOne({
-    $or: [
-      { code: upperCode },
-      { autoCode: upperCode }
-    ],
+    code: upperCode,
     status: 'active'
   });
 };
 
-// Static method to get or create code for user
+// Static method to get or create placeholder for user (without code)
 referralCodeSchema.statics.getOrCreateForUser = async function(username) {
   let referralCode = await this.findOne({ username });
   
   if (!referralCode) {
-    // Generate auto code
-    const autoCode = await this.generateUniqueAutoCode();
-    
-    // Try to use first 3 letters of username as custom code
-    let customCode = username.substring(0, 3).toUpperCase();
-    
-    // If too short or not available, use auto code as custom too
-    if (customCode.length < 3 || !(await this.isCodeAvailable(customCode))) {
-      customCode = autoCode;
-    }
-    
+    // Create entry without a code - user must set one manually
     referralCode = new this({
       username,
-      code: customCode,
-      autoCode
+      code: null, // No code initially
+      status: 'inactive' // Inactive until they create a code
     });
     
     await referralCode.save();

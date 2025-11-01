@@ -7,6 +7,7 @@ import RequireAuth from '@/components/RequireAuth';
 import ProfileInfoCard from '@/components/seller-settings/ProfileInfoCard';
 import TierProgressCard from '@/components/seller-settings/TierProgressCard';
 import GalleryManager from '@/components/seller-settings/GalleryManager';
+import ReferralSection from '@/components/seller-settings/ReferralSection';
 import TierDetailsModal from '@/components/seller-settings/modals/TierDetailsModal';
 import SaveButton from '@/components/seller-settings/utils/SaveButton';
 import TierDisplaySection from '@/components/seller-settings/TierDisplaySection';
@@ -94,7 +95,7 @@ export default function SellerProfileSettingsPage() {
                     <SaveButton
                       onClick={handleSave}
                       showSuccess={saveSuccess}
-                      showError={saveError} // Now correctly passing string | undefined
+                      showError={saveError}
                       isLoading={isSaving}
                     />
                   </div>
@@ -127,6 +128,9 @@ export default function SellerProfileSettingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* Referral Section - NEW */}
+            <ReferralSection />
 
             {/* Tier Progress & Display Section */}
             {sellerTierInfo && (
