@@ -102,7 +102,7 @@ export function MetaTags(rawProps: MetaTagsProps) {
   return (
     <Head>
       {/* Basic Meta Tags */}
-      <title>{safeTitle ? `${safeTitle} | PantyPost` : 'PantyPost'}</title>
+      <title>{safeTitle ? `${safeTitle} | Panty Post` : 'Panty Post'}</title>
       {safeDesc && <meta name="description" content={safeDesc} />}
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
@@ -113,7 +113,7 @@ export function MetaTags(rawProps: MetaTagsProps) {
       <meta property="og:type" content={props.type || 'website'} />
       {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
       {ogImageAbs && <meta property="og:image" content={ogImageAbs} />}
-      <meta property="og:site_name" content="PantyPost" />
+      <meta property="og:site_name" content="Panty Post" />
 
       {/* Twitter Card Tags */}
       <meta name="twitter:card" content="summary_large_image" />

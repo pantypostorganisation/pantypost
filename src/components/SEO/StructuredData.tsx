@@ -75,7 +75,7 @@ export function ProductStructuredData({
       availability: `https://schema.org/${availability}`,
       seller: {
         '@type': 'Organization',
-        name: 'PantyPost',
+        name: 'Panty Post',
       },
       ...(baseUrl && { url: baseUrl }),
     },
@@ -108,7 +108,7 @@ export function OrganizationStructuredData() {
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'PantyPost',
+    name: 'Panty Post',
     ...(baseUrl && { url: baseUrl }),
     ...(logoAbs && { logo: logoAbs }),
     description: 'Premium marketplace for intimate apparel',
