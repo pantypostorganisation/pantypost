@@ -78,7 +78,7 @@ export const metadata: Metadata = {
     },
   },
   
-  // Open Graph
+  // Open Graph - UPDATED to use googlesearchimage.png
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -88,20 +88,20 @@ export const metadata: Metadata = {
     description: 'Safe, anonymous platform to buy and sell used panties. Verified sellers, secure transactions, complete privacy. 21+ only.',
     images: [
       {
-        url: `${BASE_URL}/og-image.png`,
-        width: 1200,
-        height: 630,
+        url: `${BASE_URL}/googlesearchimage.png`,
+        width: 512,
+        height: 512,
         alt: 'PantyPost - Premium Used Panties Marketplace',
       },
     ],
   },
   
-  // Twitter Card
+  // Twitter Card - UPDATED to use googlesearchimage.png
   twitter: {
     card: 'summary_large_image',
     title: 'Panty Post - Buy & Sell Used Panties Anonymously',
     description: 'Discreet marketplace for used panties. Verified sellers, secure payments, complete privacy.',
-    images: [`${BASE_URL}/og-image.png`],
+    images: [`${BASE_URL}/googlesearchimage.png`],
     creator: '@pantypost',
   },
   
@@ -154,7 +154,7 @@ export default function RootLayout({
         <meta name="rating" content="adult" />
         <meta name="age" content="21" />
         
-        {/* Structured Data */}
+        {/* Structured Data - UPDATED to use googlesearchimage.png */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -176,7 +176,7 @@ export default function RootLayout({
                 '@type': 'Organization',
                 name: 'PantyPost',
                 url: BASE_URL,
-                logo: `${BASE_URL}/logo.png`,
+                logo: `${BASE_URL}/googlesearchimage.png`,
                 sameAs: [
                   'https://twitter.com/pantypost',
                   'https://www.instagram.com/pantypost'
