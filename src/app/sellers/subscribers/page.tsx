@@ -7,6 +7,7 @@ import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import SellerRevenueChart from '@/components/analytics/SellerRevenueChart';
 import { analyticsService } from '@/services/analytics.service';
+import { referralService, ReferralStats, ReferralCode } from '@/services/referral.service';
 import type {
   SellerOverview,
   RevenueData,
@@ -15,6 +16,10 @@ import type {
   PerformanceComparison
 } from '@/services/analytics.service';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/context/ToastContext';
+import { formatMoney } from '@/utils/format';
+import { Money } from '@/types/common';
 import { 
   BarChart3, 
   DollarSign, 
@@ -29,8 +34,23 @@ import {
   Clock,
   Star,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Copy,
+  Share2,
+  Edit2,
+  Check,
+  X,
+  ExternalLink,
+  Calendar,
+  Award
 } from 'lucide-react';
+
+// Helper function to format currency
+function formatCurrency(amount: number): string {
+  // Convert to cents for Money type, then format
+  const moneyAmount = Math.round(amount * 100) as Money;
+  return formatMoney(moneyAmount);
+}
 
 // Metric Card Component - matching admin wallet style
 function MetricCard({ 
@@ -56,14 +76,6 @@ function MetricCard({
   bgGradient: string;
   breakdown?: { label: string; value: number }[];
 }) {
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(Number.isFinite(amount) ? amount : 0);
-
   const formatValue = (val: number | string) => {
     if (typeof val === 'number') {
       return prefix + val.toLocaleString() + suffix;
@@ -128,21 +140,31 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function SellerAnalyticsPage() {
   const { user } = useAuth();
+  const { success, error } = useToast();
   const [loading, setLoading] = useState(true);
   const [isReloading, setIsReloading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [overview, setOverview] = useState<SellerOverview | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData | null>(null);
   const [subscriberData, setSubscriberData] = useState<SubscriberAnalytics | null>(null);
   const [productData, setProductData] = useState<ProductAnalytics | null>(null);
   const [comparison, setComparison] = useState<PerformanceComparison | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
-  const [activeTab, setActiveTab] = useState<'overview' | 'revenue' | 'products' | 'subscribers'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'revenue' | 'products' | 'subscribers' | 'referrals'>('overview');
+  
+  // Referral-specific state
+  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
+  const [referralCode, setReferralCode] = useState<ReferralCode | null>(null);
+  const [editingCode, setEditingCode] = useState(false);
+  const [newCode, setNewCode] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   // Fetch all analytics data
   const fetchAnalytics = async (showLoading = true, clearCache = false, skipReloadingReset = false) => {
     if (showLoading) setLoading(true);
-    setError(null);
+    setErrorMessage(null);
 
     try {
       // Clear cache if refresh is requested
@@ -150,12 +172,14 @@ export default function SellerAnalyticsPage() {
         analyticsService.clearCache();
       }
 
-      const [overviewRes, revenueRes, subscriberRes, productRes, comparisonRes] = await Promise.all([
+      const [overviewRes, revenueRes, subscriberRes, productRes, comparisonRes, referralStatsRes, referralCodeRes] = await Promise.all([
         analyticsService.getSellerOverview(),
         analyticsService.getRevenueData(selectedPeriod),
         analyticsService.getSubscriberAnalytics(),
         analyticsService.getProductAnalytics(),
-        analyticsService.getPerformanceComparison(30)
+        analyticsService.getPerformanceComparison(30),
+        referralService.getReferralStats(),
+        referralService.getMyReferralCode()
       ]);
 
       if (overviewRes.success && overviewRes.data) {
@@ -173,9 +197,16 @@ export default function SellerAnalyticsPage() {
       if (comparisonRes.success && comparisonRes.data) {
         setComparison(comparisonRes.data);
       }
+      if (referralStatsRes.success && referralStatsRes.data) {
+        setReferralStats(referralStatsRes.data);
+      }
+      if (referralCodeRes.success && referralCodeRes.data) {
+        setReferralCode(referralCodeRes.data);
+        setNewCode(referralCodeRes.data.code);
+      }
     } catch (err) {
       console.error('Error fetching analytics:', err);
-      setError('Failed to load analytics data');
+      setErrorMessage('Failed to load analytics data');
     } finally {
       setLoading(false);
       // Only reset isReloading if not skipped (for manual refresh handling)
@@ -209,6 +240,78 @@ export default function SellerAnalyticsPage() {
     }
     
     setIsReloading(false);
+  };
+
+  // Referral-specific functions
+  const handleUpdateCode = async () => {
+    if (!newCode || newCode.length < 3) {
+      setCodeError('Code must be at least 3 characters');
+      return;
+    }
+
+    if (!/^[A-Z0-9_-]+$/i.test(newCode)) {
+      setCodeError('Code can only contain letters, numbers, underscore, and hyphen');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setCodeError('');
+      
+      const response = await referralService.updateReferralCode(newCode);
+      
+      if (response.success && response.data) {
+        setReferralCode(prev => prev ? { ...prev, code: response.data!.code } : null);
+        setEditingCode(false);
+        success('Referral code updated successfully');
+        await fetchAnalytics(false, true, false); // Reload to get updated data
+      } else {
+        setCodeError(response.error?.message || 'This code is unavailable');
+      }
+    } catch (err) {
+      console.error('Error updating code:', err);
+      setCodeError('Failed to update code');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCopyCode = async (codeType: 'custom' | 'auto') => {
+    if (!referralCode) return;
+    
+    const codeToCopy = codeType === 'custom' ? referralCode.code : referralCode.autoCode;
+    const copySuccess = await referralService.copyReferralLink(codeToCopy);
+    
+    if (copySuccess) {
+      setCopiedCode(codeToCopy);
+      success('Referral link copied to clipboard!');
+      setTimeout(() => setCopiedCode(null), 3000);
+    } else {
+      error('Failed to copy link');
+    }
+  };
+
+  const handleShare = (platform: 'twitter' | 'facebook' | 'whatsapp') => {
+    if (!referralCode) return;
+    
+    const shareData = referralService.generateShareText(referralCode.code);
+    let url = '';
+    
+    switch (platform) {
+      case 'twitter':
+        url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareData.twitter)}`;
+        break;
+      case 'facebook':
+        url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareData.facebook)}`;
+        break;
+      case 'whatsapp':
+        url = `https://wa.me/?text=${encodeURIComponent(shareData.whatsapp)}`;
+        break;
+    }
+    
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
   };
 
   // Calculate tier bonus display
@@ -245,14 +348,14 @@ export default function SellerAnalyticsPage() {
     );
   }
 
-  if (error) {
+  if (errorMessage) {
     return (
       <BanCheck>
         <RequireAuth role="seller">
           <main className="min-h-screen bg-black p-6">
             <div className="max-w-7xl mx-auto">
               <div className="bg-red-500/20 border border-red-500/30 rounded-lg p-4">
-                <p className="text-red-400">{error}</p>
+                <p className="text-red-400">{errorMessage}</p>
               </div>
             </div>
           </main>
@@ -299,7 +402,7 @@ export default function SellerAnalyticsPage() {
             {/* Tab Navigation */}
             <div className="border-b border-gray-800 mb-8">
               <nav className="flex space-x-8 overflow-x-auto">
-                {['overview', 'revenue', 'products', 'subscribers'].map((tab) => (
+                {['overview', 'revenue', 'products', 'subscribers', 'referrals'].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab as any)}
@@ -797,6 +900,289 @@ export default function SellerAnalyticsPage() {
                       </table>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Referrals Tab - Integrated from ReferralDashboard */}
+            {activeTab === 'referrals' && (
+              <div className="space-y-6">
+                {/* Referral Header */}
+                <div className="bg-gray-900 rounded-lg p-6">
+                  <h2 className="text-2xl font-bold mb-2">Referral Program</h2>
+                  <p className="text-gray-400">
+                    Earn 5% commission on every sale made by sellers you refer - for life!
+                  </p>
+                </div>
+
+                {/* Referral Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-gray-900 rounded-lg p-6"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="p-2 bg-[#ff6b00]/10 rounded-lg">
+                        <DollarSign className="w-6 h-6 text-[#ff6b00]" />
+                      </div>
+                      <span className="text-xs text-green-400">Lifetime</span>
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {formatCurrency(referralStats?.stats.totalEarnings || 0)}
+                    </div>
+                    <p className="text-gray-400 text-sm mt-1">Total Earnings</p>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="bg-gray-900 rounded-lg p-6"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="p-2 bg-blue-500/10 rounded-lg">
+                        <Users className="w-6 h-6 text-blue-500" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {referralStats?.stats.totalReferrals || 0}
+                    </div>
+                    <p className="text-gray-400 text-sm mt-1">Active Referrals</p>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-gray-900 rounded-lg p-6"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="p-2 bg-green-500/10 rounded-lg">
+                        <TrendingUp className="w-6 h-6 text-green-500" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {referralCode?.conversionRate.toFixed(1) || 0}%
+                    </div>
+                    <p className="text-gray-400 text-sm mt-1">Conversion Rate</p>
+                  </motion.div>
+                </div>
+
+                {/* Referral Code Section */}
+                <div className="bg-gray-900 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold">Your Referral Code</h3>
+                    {!editingCode && (
+                      <button
+                        onClick={() => setEditingCode(true)}
+                        className="text-sm text-[#ff6b00] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Edit Code
+                      </button>
+                    )}
+                  </div>
+
+                  <AnimatePresence mode="wait">
+                    {editingCode ? (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="space-y-4"
+                      >
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-2">
+                            Custom Referral Code (3+ characters)
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={newCode}
+                              onChange={(e) => {
+                                setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''));
+                                setCodeError('');
+                              }}
+                              maxLength={20}
+                              className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff6b00]"
+                              placeholder="Enter custom code"
+                            />
+                            <button
+                              onClick={handleUpdateCode}
+                              disabled={saving}
+                              className="px-4 py-2 bg-[#ff6b00] text-white rounded-lg hover:bg-[#ff8c00] transition-colors disabled:opacity-50"
+                            >
+                              {saving ? (
+                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                              ) : (
+                                <Check className="w-5 h-5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingCode(false);
+                                setNewCode(referralCode?.code || '');
+                                setCodeError('');
+                              }}
+                              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
+                          </div>
+                          {codeError && (
+                            <p className="text-red-400 text-sm mt-1">{codeError}</p>
+                          )}
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="space-y-4"
+                      >
+                        {/* Custom Code */}
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-2">
+                            Custom Code
+                          </label>
+                          <div className="flex gap-2">
+                            <div className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg">
+                              <span className="text-xl font-mono font-bold text-[#ff6b00]">
+                                {referralCode?.code}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleCopyCode('custom')}
+                              className={`px-4 py-2 rounded-lg transition-colors ${
+                                copiedCode === referralCode?.code
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                              }`}
+                            >
+                              {copiedCode === referralCode?.code ? (
+                                <Check className="w-5 h-5" />
+                              ) : (
+                                <Copy className="w-5 h-5" />
+                              )}
+                            </button>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {referralService.formatReferralUrl(referralCode?.code || '')}
+                          </p>
+                        </div>
+
+                        {/* Auto-generated Code */}
+                        <div>
+                          <label className="block text-sm text-gray-400 mb-2">
+                            Auto-generated Code (Backup)
+                          </label>
+                          <div className="flex gap-2">
+                            <div className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg">
+                              <span className="text-sm font-mono text-gray-400">
+                                {referralCode?.autoCode}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => handleCopyCode('auto')}
+                              className={`px-4 py-2 rounded-lg transition-colors ${
+                                copiedCode === referralCode?.autoCode
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-gray-700 text-white hover:bg-gray-600'
+                              }`}
+                            >
+                              {copiedCode === referralCode?.autoCode ? (
+                                <Check className="w-5 h-5" />
+                              ) : (
+                                <Copy className="w-5 h-5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Share Buttons */}
+                  <div className="mt-6 pt-6 border-t border-gray-800">
+                    <p className="text-sm text-gray-400 mb-3">Share your referral link</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleShare('twitter')}
+                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Twitter
+                      </button>
+                      <button
+                        onClick={() => handleShare('facebook')}
+                        className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors flex items-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        Facebook
+                      </button>
+                      <button
+                        onClick={() => handleShare('whatsapp')}
+                        className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        WhatsApp
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Referrals */}
+                {referralStats && referralStats.stats.activeReferrals.length > 0 && (
+                  <div className="bg-gray-900 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold mb-4">Recent Referrals</h3>
+                    <div className="space-y-3">
+                      {referralStats.stats.activeReferrals.slice(0, 5).map((referral) => (
+                        <div
+                          key={referral.username}
+                          className="flex items-center justify-between p-3 bg-black/30 rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                              <Users className="w-5 h-5 text-gray-400" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{referral.username}</p>
+                              <p className="text-xs text-gray-400">
+                                Joined {new Date(referral.joinedDate).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-semibold text-green-400">
+                              {formatCurrency(referral.earnings)}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {referral.sales} sales
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Info Box */}
+                <div className="bg-gradient-to-r from-[#ff6b00]/10 to-[#ff8c00]/10 border border-[#ff6b00]/20 rounded-lg p-6">
+                  <div className="flex items-start gap-3">
+                    <Award className="w-6 h-6 text-[#ff6b00] mt-1 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-semibold mb-2">How the Referral Program Works</h4>
+                      <ul className="space-y-1 text-sm text-gray-300">
+                        <li>• Share your unique referral code with potential sellers</li>
+                        <li>• When they sign up using your code, they become your referral</li>
+                        <li>• Earn 5% commission on every sale they make - forever!</li>
+                        <li>• Commissions are automatically credited to your wallet</li>
+                        <li>• Track your earnings and referrals in real-time</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

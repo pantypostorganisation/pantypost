@@ -1,16 +1,13 @@
-// src/app/signup/[referralCode]/page.tsx - NEW FILE for referral code URLs
+// src/app/signup/[referralCode]/page.tsx - FIXED VERSION
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { referralService } from '@/services/referral.service';
-import SignupPageContent from '../SignupPageContent';
 
 export default function ReferralSignupPage() {
   const params = useParams();
   const router = useRouter();
-  const [referralCode, setReferralCode] = useState<string>('');
-  const [referrerInfo, setReferrerInfo] = useState<{ username: string; profilePic?: string } | null>(null);
   const [validating, setValidating] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,8 +28,8 @@ export default function ReferralSignupPage() {
       const response = await referralService.validateReferralCode(code);
       
       if (response.success && response.data?.valid) {
-        setReferralCode(response.data.code);
-        setReferrerInfo(response.data.referrer);
+        // Redirect to main signup page with referral code as URL param
+        router.push(`/signup?ref=${encodeURIComponent(code)}`);
       } else {
         setError('Invalid or expired referral code');
         setTimeout(() => {
@@ -72,10 +69,6 @@ export default function ReferralSignupPage() {
     );
   }
 
-  return (
-    <SignupPageContent 
-      initialReferralCode={referralCode}
-      referrerInfo={referrerInfo}
-    />
-  );
+  // This should not render as we redirect in validateReferralCode
+  return null;
 }
