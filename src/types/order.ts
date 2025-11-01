@@ -31,13 +31,14 @@ export interface Order {
   wasAuction?: boolean;
   finalBid?: number;
   deliveryAddress?: DeliveryAddress;
-  shippingStatus?: 'pending' | 'processing' | 'shipped' | 'pending-auction';
+  shippingStatus?: 'pending' | 'processing' | 'shipped' | 'delivered' | 'pending-auction';
   tierCreditAmount?: number;
   isCustomRequest?: boolean;
   originalRequestId?: string;
   listingId?: string;
   listingTitle?: string;
   quantity?: number;
+  notes?: string;
 }
 
 export interface Listing {
