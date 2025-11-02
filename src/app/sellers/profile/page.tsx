@@ -134,8 +134,8 @@ export default function SellerProfileSettingsPage() {
 
             {/* Tier Progress & Display Section */}
             {sellerTierInfo && (
-              <div className="grid grid-cols-1 gap-10 xl:grid-cols-[1.6fr_1fr]">
-                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur h-full">
+              <div className="flex flex-col gap-10">
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
                   <TierProgressCard
                     sellerTierInfo={sellerTierInfo}
                     userStats={userStats}
@@ -144,7 +144,7 @@ export default function SellerProfileSettingsPage() {
                     onTierClick={setSelectedTierDetails}
                   />
                 </div>
-                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur h-full">
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
                   <TierDisplaySection
                     sellerTierInfo={sellerTierInfo}
                     userStats={userStats}
