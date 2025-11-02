@@ -261,9 +261,27 @@ export default function SellerAnalyticsPage() {
       const response = await referralService.updateReferralCode(newCode);
       
       if (response.success && response.data) {
-        setReferralCode(prev => prev ? { ...prev, code: response.data!.code } : null);
+        setReferralCode(prev => {
+          if (prev) {
+            return {
+              ...prev,
+              code: response.data!.code,
+              referralUrl: response.data!.referralUrl ?? prev.referralUrl,
+              status: 'active'
+            };
+          }
+
+          return {
+            code: response.data!.code,
+            referralUrl: response.data!.referralUrl || null,
+            usageCount: 0,
+            clickCount: 0,
+            conversionRate: 0,
+            status: 'active'
+          };
+        });
         setEditingCode(false);
-        success('Referral code updated successfully');
+        success(response.data.message || 'Referral code updated successfully');
         await fetchAnalytics(false, true, false); // Reload to get updated data
       } else {
         setCodeError(response.error?.message || 'This code is unavailable');
