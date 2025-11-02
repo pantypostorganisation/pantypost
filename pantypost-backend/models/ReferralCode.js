@@ -49,7 +49,7 @@ const referralCodeSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['active', 'inactive', 'suspended'],
-    default: 'active'
+    default: 'inactive' // Changed from 'active' - inactive until they create a code
   },
   
   // Track creation and updates
