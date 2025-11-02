@@ -145,7 +145,7 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
         </div>
 
         {/* Tier Badges Row */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+        <div className="flex w-full flex-nowrap gap-4 overflow-x-auto pb-2 pr-2 sm:overflow-x-visible sm:pb-0 sm:pr-0">
           {(['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'] as TierLevel[]).map((tier) => {
             const isCurrentTier = currentTier === tier;
             const isSelected = selectedTierDetails === tier;
@@ -154,7 +154,7 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
               <button
                 key={tier}
                 onClick={() => onTierSelect(isSelected ? null : tier)}
-                className={`group relative flex items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all duration-300 ${
+                className={`group relative flex min-w-[220px] flex-shrink-0 items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all duration-300 ${
                   isCurrentTier
                     ? 'border-[#ff950e] bg-[#ff950e]/10 shadow-[0_12px_30px_-20px_rgba(255,149,14,0.8)]'
                     : isSelected
