@@ -139,12 +139,13 @@ referralCodeSchema.statics.isValidCodeFormat = function(code) {
 // Static method to check if code is available
 referralCodeSchema.statics.isCodeAvailable = async function(code) {
   if (!this.isValidCodeFormat(code)) return false;
-  
+
   const upperCode = code.toUpperCase();
-  
-  // Check if code exists
-  const existing = await this.findOne({ code: upperCode });
-  
+
+  // Check if code exists (case-insensitive)
+  const existing = await this.findOne({ code: upperCode })
+    .collation({ locale: 'en', strength: 2 });
+
   return !existing;
 };
 

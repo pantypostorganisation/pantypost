@@ -22,7 +22,7 @@ router.get('/code', authMiddleware, async (req, res) => {
     if (req.user.role !== 'seller') {
       return res.status(403).json({
         success: false,
-        error: 'Only sellers can have referral codes'
+        error: { message: 'Only sellers can have referral codes' }
       });
     }
 
@@ -59,7 +59,7 @@ router.get('/code', authMiddleware, async (req, res) => {
     console.error('[Referral] Error getting code:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to get referral code'
+      error: { message: error.message || 'Failed to get referral code' }
     });
   }
 });
@@ -71,7 +71,7 @@ router.post('/code', authMiddleware, async (req, res) => {
     if (req.user.role !== 'seller') {
       return res.status(403).json({
         success: false,
-        error: 'Only sellers can create referral codes'
+        error: { message: 'Only sellers can create referral codes' }
       });
     }
 
@@ -82,22 +82,28 @@ router.post('/code', authMiddleware, async (req, res) => {
     if (!ReferralCode.isValidCodeFormat(sanitizedCode)) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid code format. Must be 3-20 characters, alphanumeric, underscore, or hyphen only.'
+        error: {
+          message: 'Invalid code format. Must be 3-20 characters, alphanumeric, underscore, or hyphen only.'
+        }
       });
     }
 
-    // Check if code is already taken by someone else
-    const existingCode = await ReferralCode.findOne({ code: sanitizedCode });
+    // Check if code is already taken by someone else (case-insensitive)
+    const existingCode = await ReferralCode.findOne({ code: sanitizedCode })
+      .collation({ locale: 'en', strength: 2 });
     if (existingCode && existingCode.username !== req.user.username) {
       return res.status(400).json({
         success: false,
-        error: 'This referral code is already taken. Please try another.'
+        error: {
+          message: 'This referral code is already taken. Please try another.'
+        }
       });
     }
 
     // Find or create referral code entry for this user
     let referralCode = await ReferralCode.findOne({ username: req.user.username });
-    
+    const isNewCode = !referralCode || !referralCode.code;
+
     if (referralCode) {
       // Update existing entry
       referralCode.code = sanitizedCode;
@@ -127,14 +133,25 @@ router.post('/code', authMiddleware, async (req, res) => {
       data: {
         code: referralCode.code,
         referralUrl: referralCode.referralUrl,
-        message: 'Referral code created successfully'
+        message: isNewCode
+          ? 'Referral code created successfully'
+          : 'Referral code updated successfully'
       }
     });
   } catch (error) {
     console.error('[Referral] Error updating code:', error);
-    res.status(500).json({
+    let status = 500;
+    let message = error && error.message ? error.message : 'Failed to create referral code';
+
+    // Handle duplicate key errors explicitly
+    if (error && (error.code === 11000 || error.code === 'E11000')) {
+      status = 400;
+      message = 'This referral code is already taken. Please choose a different one.';
+    }
+
+    res.status(status).json({
       success: false,
-      error: error.message || 'Failed to create referral code'
+      error: { message }
     });
   }
 });
@@ -146,7 +163,7 @@ router.delete('/code', authMiddleware, async (req, res) => {
     if (req.user.role !== 'seller') {
       return res.status(403).json({
         success: false,
-        error: 'Only sellers can manage referral codes'
+        error: { message: 'Only sellers can manage referral codes' }
       });
     }
 
@@ -182,7 +199,7 @@ router.delete('/code', authMiddleware, async (req, res) => {
     console.error('[Referral] Error removing code:', error);
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to remove referral code'
+      error: { message: error.message || 'Failed to remove referral code' }
     });
   }
 });

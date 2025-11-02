@@ -666,10 +666,14 @@ class ApiClient {
         
         if (!response.ok) {
           console.error(`[ApiClient.call] API Error [${response.status}]:`, data.error || data);
-          
+
+          const normalizedError = typeof data.error === 'string'
+            ? { message: data.error }
+            : (data.error || { message: data.message || 'An error occurred', code: String(response.status) });
+
           return {
             success: false,
-            error: data.error || { message: data.message || 'An error occurred', code: String(response.status) },
+            error: normalizedError,
             meta: { requestId },
           };
         }
@@ -700,9 +704,13 @@ class ApiClient {
               },
             };
           } else {
+            const normalizedError = typeof data.error === 'string'
+              ? { message: data.error }
+              : (data.error || { message: 'Unknown error' });
+
             return {
               success: false,
-              error: data.error || { message: 'Unknown error' },
+              error: normalizedError,
               meta: { requestId },
             };
           }

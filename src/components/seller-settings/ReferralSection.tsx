@@ -97,10 +97,28 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
       const response = await referralService.updateReferralCode(newCode);
       
       if (response.success && response.data) {
-        // Update the referral code state with the new code
-        setReferralCode(prev => prev ? { ...prev, code: response.data!.code } : null);
+        // Update the referral code state with the new code information
+        setReferralCode(prev => {
+          if (prev) {
+            return {
+              ...prev,
+              code: response.data!.code,
+              referralUrl: response.data!.referralUrl ?? prev.referralUrl,
+              status: 'active',
+            };
+          }
+
+          return {
+            code: response.data!.code,
+            referralUrl: response.data!.referralUrl || null,
+            usageCount: 0,
+            clickCount: 0,
+            conversionRate: 0,
+            status: 'active',
+          };
+        });
         setEditingCode(false);
-        showSuccess('Referral code updated successfully');
+        showSuccess(response.data.message || 'Referral code updated successfully');
         // Reload data to get updated stats
         await loadReferralData();
       } else {
