@@ -341,11 +341,11 @@ function MyListingsContent() {
                 Premium Seller Tips
               </h2>
               <p className="mt-2 text-sm text-white/70">Elevate your premium catalog with subscriber-only experiences.</p>
-              <ul className="mt-6 space-y-4 text-sm text-white/80">
+              <ul className="mt-6 space-y-4 text-left text-sm text-white/80 sm:max-w-2xl sm:space-y-5 sm:mx-auto">
                 {PREMIUM_TIPS.map((tip, index) => (
                   <li key={index} className="flex items-start gap-3">
-                    <span className="mt-[6px] inline-flex h-2.5 w-8 flex-shrink-0 rounded-full bg-[#ff950e]" />
-                    <span>{tip}</span>
+                    <span className="mt-1 inline-flex h-2.5 w-2.5 flex-shrink-0 rounded-full bg-[#ff950e]" />
+                    <span className="flex-1 leading-relaxed">{tip}</span>
                   </li>
                 ))}
               </ul>
