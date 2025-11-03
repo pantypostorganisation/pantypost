@@ -10,17 +10,17 @@ export async function POST(req: NextRequest) {
     const amount = Number(body?.amount);
     const frontendOrderId =
       typeof body?.order_id === 'string' ? body.order_id : '';
-    const payCurrency = typeof body?.pay_currency === 'string'
-      ? body.pay_currency
-      : undefined;
+    const payCurrency =
+      typeof body?.pay_currency === 'string' ? body.pay_currency : undefined;
+    const description =
+      typeof body?.description === 'string'
+        ? body.description
+        : 'PantyPost wallet deposit';
 
     if (!amount || Number.isNaN(amount) || amount <= 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: 'Invalid amount. Send JSON like { "amount": 25 }',
-        },
-        { status: 200 } // <= never 500 for validation
+        { success: false, error: 'Invalid amount. Send { "amount": 25 }' },
+        { status: 200 }
       );
     }
 
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: 'NOWPAYMENTS_API_KEY is not set in the server env',
+          error: 'NOWPAYMENTS_API_KEY is not set on the server',
         },
         { status: 200 }
       );
@@ -39,26 +39,30 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') ||
       'https://pantypost.com';
 
+    // keep the nice order_id so webhook can parse username
     const orderId =
       frontendOrderId && frontendOrderId.length > 0
         ? frontendOrderId
         : `pp-deposit-${Date.now()}`;
 
-    // build payload exactly like in their doc
+    // build payload exactly like NOWPayments wants
     const payload: Record<string, unknown> = {
       price_amount: amount,
       price_currency: 'usd',
       order_id: orderId,
-      order_description: 'PantyPost wallet deposit',
+      order_description: description,
       ipn_callback_url: `${appUrl}/api/crypto/webhook`,
       success_url: `${appUrl}/wallet/buyer?deposit=success`,
       cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
     };
 
-    // only set pay_currency if you actually sent one
+    // only send pay_currency if we have it
     if (payCurrency) {
       payload['pay_currency'] = payCurrency;
     }
+
+    // 👇 DO NOT forward body.metadata — NOWPayments rejected it
+    // we can still use it in our webhook because we have order_id = pp-deposit-<username>-<ts>
 
     const res = await fetch(NOWPAYMENTS_ENDPOINT, {
       method: 'POST',
@@ -72,13 +76,12 @@ export async function POST(req: NextRequest) {
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      // 👇 this is the important part
+      console.error('[NOWPayments] create payment failed:', data);
       return NextResponse.json(
         {
           success: false,
-          error: data?.message || 'NOWPayments create-payment failed',
+          error: data?.message || 'NOWPayments create payment failed',
           details: data,
-          sent: payload,
         },
         { status: 200 }
       );
@@ -114,10 +117,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     console.error('[create-payment] unexpected error:', err);
     return NextResponse.json(
-      {
-        success: false,
-        error: err?.message || 'Unexpected error in create-payment',
-      },
+      { success: false, error: err?.message || 'Unexpected error' },
       { status: 200 }
     );
   }
