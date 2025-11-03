@@ -3,61 +3,66 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const NOWPAYMENTS_ENDPOINT = 'https://api.nowpayments.io/v1/payment';
 
-function getApiKey() {
-  const key = process.env.NOWPAYMENTS_API_KEY;
-  if (!key) {
-    throw new Error('NOWPAYMENTS_API_KEY is not set in .env.local');
-  }
-  return key;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
 
     const amount = Number(body?.amount);
-    const frontendOrderId = typeof body?.order_id === 'string' ? body.order_id : '';
-    const payCurrency = body?.pay_currency || 'usdttrc20';
+    const frontendOrderId =
+      typeof body?.order_id === 'string' ? body.order_id : '';
+    const payCurrency =
+      typeof body?.pay_currency === 'string' ? body.pay_currency : undefined;
     const description =
-      body?.description || 'PantyPost wallet deposit';
-    const metadata = body?.metadata && typeof body.metadata === 'object' ? body.metadata : undefined;
+      typeof body?.description === 'string'
+        ? body.description
+        : 'PantyPost wallet deposit';
 
     // basic validation
     if (!amount || Number.isNaN(amount) || amount <= 0) {
       return NextResponse.json(
-        { success: false, error: 'Invalid amount. Send JSON like { "amount": 25 }' },
-        { status: 400 }
+        { success: false, error: 'Invalid amount. Send { "amount": 25 }' },
+        { status: 200 }
       );
     }
 
-    const apiKey = getApiKey();
+    const apiKey = process.env.NOWPAYMENTS_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'NOWPAYMENTS_API_KEY is not set on the server',
+        },
+        { status: 200 }
+      );
+    }
 
-    // base URL for redirects + webhook (trim trailing slash)
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') ||
-      'http://localhost:3000';
+      'https://pantypost.com';
 
-    // we prefer the order_id from the frontend because we embed username in it
-    const orderId = frontendOrderId && frontendOrderId.length > 0
-      ? frontendOrderId
-      : `pp-deposit-${Date.now()}`;
+    // keep the nice order_id so webhook can parse username
+    const orderId =
+      frontendOrderId && frontendOrderId.length > 0
+        ? frontendOrderId
+        : `pp-deposit-${Date.now()}`;
 
+    // build payload exactly like NOWPayments wants
     const payload: Record<string, unknown> = {
       price_amount: amount,
       price_currency: 'usd',
-      pay_currency: payCurrency,
       order_id: orderId,
       order_description: description,
       ipn_callback_url: `${appUrl}/api/crypto/webhook`,
-      // send buyer back to wallet so we can show the success banner
       success_url: `${appUrl}/wallet/buyer?deposit=success`,
       cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
     };
 
-    // if the caller sent metadata (e.g. { username, intent: 'wallet_deposit' }), pass it through
-    if (metadata) {
-      (payload as any).metadata = metadata;
+    // only send pay_currency if we have it
+    if (payCurrency) {
+      payload['pay_currency'] = payCurrency;
     }
+
+    // IMPORTANT: do NOT forward body.metadata — NOWPayments rejects it
 
     const res = await fetch(NOWPAYMENTS_ENDPOINT, {
       method: 'POST',
@@ -68,21 +73,20 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(payload),
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
       console.error('[NOWPayments] create payment failed:', data);
       return NextResponse.json(
         {
           success: false,
-          error: 'NOWPayments create payment failed',
+          error: data?.message || 'NOWPayments create payment failed',
           details: data,
         },
-        { status: 500 }
+        { status: 200 }
       );
     }
 
-    // NOWPayments sometimes returns different URL keys. Try the usual ones.
     const paymentUrl =
       data?.invoice_url ||
       data?.payment_url ||
@@ -94,9 +98,9 @@ export async function POST(req: NextRequest) {
         {
           success: false,
           error: 'NOWPayments did not return a payment URL',
-          data,
+          details: data,
         },
-        { status: 500 }
+        { status: 200 }
       );
     }
 
@@ -106,16 +110,15 @@ export async function POST(req: NextRequest) {
         data: {
           payment_url: paymentUrl,
           payment_id: data.payment_id,
-          raw: data,
         },
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error('[create-payment] error', error);
+  } catch (err: any) {
+    console.error('[create-payment] unexpected error:', err);
     return NextResponse.json(
-      { success: false, error: error?.message || 'Internal server error' },
-      { status: 500 }
+      { success: false, error: err?.message || 'Unexpected error' },
+      { status: 200 }
     );
   }
 }

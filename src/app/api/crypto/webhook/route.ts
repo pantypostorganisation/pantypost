@@ -12,10 +12,10 @@ const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
 // simple in-memory idempotency store (payment_id -> timestamp)
 const processedPayments = new Map<string, number>();
-// how long we consider a payment_id "handled" (ms)
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours
 
 function verifySignature(rawBody: string, headerSig: string | null): boolean {
+  // if you didn't set the secret, optionally allow (dev env)
   if (!NOWPAYMENTS_IPN_SECRET) return true;
   if (!headerSig) return false;
 
@@ -33,15 +33,15 @@ function extractUsername(payload: any): string {
 
   if (orderId.startsWith('pp-deposit-')) {
     const parts = orderId.split('-');
+    // pp-deposit-USERNAME-<ts or whatever>
     if (parts.length >= 3) {
       return parts[2];
     }
   }
 
+  // fallback
   const email: string | undefined = payload?.customer_email;
-  if (email) {
-    return email;
-  }
+  if (email) return email;
 
   return 'buyer1';
 }
@@ -52,15 +52,13 @@ function isIdempotentHit(paymentId: string | undefined): boolean {
   const now = Date.now();
   const existing = processedPayments.get(paymentId);
 
-  // clean old entries
   if (existing && now - existing < IDEMPOTENCY_TTL_MS) {
     return true;
   }
 
-  // mark as seen
   processedPayments.set(paymentId, now);
 
-  // opportunistic cleanup to avoid unbounded growth
+  // opportunistic cleanup
   if (processedPayments.size > 500) {
     const cutoff = now - IDEMPOTENCY_TTL_MS;
     for (const [id, ts] of processedPayments.entries()) {
@@ -75,22 +73,9 @@ function isIdempotentHit(paymentId: string | undefined): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-<<<<<<< HEAD
-    const body = await req.json().catch(() => ({}));
-
-    const amount = Number(body?.amount);
-    const frontendOrderId =
-      typeof body?.order_id === 'string' ? body.order_id : '';
-    const payCurrency =
-      typeof body?.pay_currency === 'string' ? body.pay_currency : undefined;
-    const description =
-      typeof body?.description === 'string'
-        ? body.description
-        : 'PantyPost wallet deposit';
-=======
+    // must read raw text first
     const bodyText = await req.text();
     const headerSig = req.headers.get('x-nowpayments-sig');
->>>>>>> parent of 02b9e014 (Oggikinssss)
 
     const isValid = verifySignature(bodyText, headerSig);
     if (!isValid && !ALLOW_UNVERIFIED_IPN) {
@@ -100,13 +85,9 @@ export async function POST(req: NextRequest) {
     const payload = bodyText ? JSON.parse(bodyText) : {};
     const status: string | undefined = payload?.payment_status?.toLowerCase();
 
-    // NOWPayments can send a few statuses — we only care about money actually arrived
+    // only process completed ones
     if (status !== 'finished') {
       return NextResponse.json(
-<<<<<<< HEAD
-        { success: false, error: 'Invalid amount. Send { "amount": 25 }' },
-        { status: 200 }
-=======
         { ignored: true, reason: `status=${status}` },
         { status: 200 }
       );
@@ -117,7 +98,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Invalid amount from IPN' },
         { status: 400 }
->>>>>>> parent of 02b9e014 (Oggikinssss)
       );
     }
 
@@ -129,76 +109,19 @@ export async function POST(req: NextRequest) {
       payload?.invoice_id ||
       '';
 
-    // 🛡️ idempotency: if we saw this paymentId recently, don't credit again
+    // idempotency guard
     if (isIdempotentHit(paymentId)) {
-      // return 200 so NOWPayments stops retrying
       return NextResponse.json(
         {
-<<<<<<< HEAD
-          success: false,
-          error: 'NOWPAYMENTS_API_KEY is not set on the server',
-=======
           success: true,
           idempotent: true,
           message: 'Payment already processed',
->>>>>>> parent of 02b9e014 (Oggikinssss)
         },
         { status: 200 }
       );
     }
 
-<<<<<<< HEAD
-    const appUrl =
-      process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') ||
-      'https://pantypost.com';
-
-    // keep the nice order_id so webhook can parse username
-    const orderId =
-      frontendOrderId && frontendOrderId.length > 0
-        ? frontendOrderId
-        : `pp-deposit-${Date.now()}`;
-
-    // build payload exactly like NOWPayments wants
-    const payload: Record<string, unknown> = {
-      price_amount: amount,
-      price_currency: 'usd',
-      order_id: orderId,
-      order_description: description,
-      ipn_callback_url: `${appUrl}/api/crypto/webhook`,
-      success_url: `${appUrl}/wallet/buyer?deposit=success`,
-      cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
-    };
-
-    // only send pay_currency if we have it
-    if (payCurrency) {
-      payload['pay_currency'] = payCurrency;
-    }
-
-    // 👇 DO NOT forward body.metadata — NOWPayments rejected it
-    // we can still use it in our webhook because we have order_id = pp-deposit-<username>-<ts>
-
-    const res = await fetch(NOWPAYMENTS_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      console.error('[NOWPayments] create payment failed:', data);
-      return NextResponse.json(
-        {
-          success: false,
-          error: data?.message || 'NOWPayments create payment failed',
-          details: data,
-        },
-        { status: 200 }
-      );
-=======
+    // Call your internal API to credit the wallet
     const depositPayload = {
       username,
       amount: amountUSD,
@@ -212,10 +135,8 @@ export async function POST(req: NextRequest) {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
-
     if (INTERNAL_API_KEY) {
       headers['x-api-key'] = INTERNAL_API_KEY.trim();
->>>>>>> parent of 02b9e014 (Oggikinssss)
     }
 
     const depositRes = await fetch(
@@ -226,13 +147,6 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify(depositPayload),
       }
     );
-<<<<<<< HEAD
-  } catch (err: any) {
-    console.error('[create-payment] unexpected error:', err);
-    return NextResponse.json(
-      { success: false, error: err?.message || 'Unexpected error' },
-      { status: 200 }
-=======
 
     const depositData = await depositRes.json().catch(() => ({}));
 
@@ -253,7 +167,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
->>>>>>> parent of 02b9e014 (Oggikinssss)
     );
   }
 }
