@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
         ? body.description
         : 'PantyPost wallet deposit';
 
-    // basic validation
+    // Basic validation
     if (!amount || Number.isNaN(amount) || amount <= 0) {
       return NextResponse.json(
         { success: false, error: 'Invalid amount. Send { "amount": 25 }' },
@@ -40,30 +40,28 @@ export async function POST(req: NextRequest) {
       process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') ||
       'https://pantypost.com';
 
-    // keep the nice order_id so webhook can parse username
+    // Order ID is what ties the deposit to a username
     const orderId =
       frontendOrderId && frontendOrderId.length > 0
         ? frontendOrderId
         : `pp-deposit-${Date.now()}`;
 
-    // build payload exactly like NOWPayments wants
+    // Construct NOWPayments payload
     const payload: Record<string, unknown> = {
       price_amount: amount,
       price_currency: 'usd',
       order_id: orderId,
       order_description: description,
       ipn_callback_url: `${appUrl}/api/crypto/webhook`,
-      success_url: `${appUrl}/wallet/buyer?deposit=success`,
-      cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
+      success_url: `${appUrl}/wallet/buyer/?deposit=success`,
+      cancel_url: `${appUrl}/wallet/buyer/?deposit=cancelled`,
     };
 
-    // only send pay_currency if we have it
     if (payCurrency) {
       payload['pay_currency'] = payCurrency;
     }
 
-    // IMPORTANT: do NOT forward body.metadata — NOWPayments rejects it
-
+    // NOTE: Do not forward body.metadata — NOWPayments rejects it
     const res = await fetch(NOWPAYMENTS_ENDPOINT, {
       method: 'POST',
       headers: {

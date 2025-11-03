@@ -20,12 +20,24 @@ server {
 
     client_max_body_size 50m;
 
-    # Serve uploaded files directly - FIXED WITH FULL CORS
+    # ✅ Serve static files from /public (for logo, icons, etc.)
+    location ~* ^/(favicon\.ico|robots\.txt|manifest\.json|sw\.js|sitemap\.xml|logo\.png|.*\.(png|jpg|jpeg|svg|gif|webp|ico))$ {
+        root /var/www/pantypost/public;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+        add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
+        add_header Access-Control-Allow-Credentials "true" always;
+        try_files $uri =404;
+    }
+
+    # ✅ Uploaded files (with full CORS)
     location /uploads/ {
         alias /var/www/pantypost/uploads/;
         autoindex off;
-        
-        # Handle OPTIONS preflight for images
+
+        # Preflight handler
         if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin "https://pantypost.com" always;
             add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
@@ -36,23 +48,19 @@ server {
             add_header Content-Type "text/plain" always;
             return 204;
         }
-        
-        # CORS headers for actual image requests
+
+        # Actual requests
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
         add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
         add_header Access-Control-Allow-Credentials "true" always;
         add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
-        
-        # Cache headers
         expires 1y;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
-        
         try_files $uri =404;
     }
 
-    # Handle preflight OPTIONS requests for /api
+    # ✅ API route (proxy to Express)
     location /api {
-        # Handle OPTIONS (preflight) separately
         if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin "https://pantypost.com" always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
@@ -64,7 +72,6 @@ server {
             return 204;
         }
 
-        # Proxy to Express
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -72,14 +79,13 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # Add CORS headers to actual responses
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
         add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
         add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Request-ID" always;
         add_header Access-Control-Allow-Credentials "true" always;
     }
 
-    # WebSockets
+    # ✅ WebSockets
     location /socket.io {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
@@ -91,7 +97,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Public WebSocket
     location /public-ws {
         proxy_pass http://127.0.0.1:5000;
         proxy_http_version 1.1;
@@ -104,7 +109,7 @@ server {
         proxy_read_timeout 86400;
     }
 
-    # Root endpoint
+    # ✅ Root
     location = / {
         if ($request_method = OPTIONS) {
             add_header Access-Control-Allow-Origin "https://pantypost.com" always;
@@ -114,7 +119,7 @@ server {
             add_header Access-Control-Max-Age "86400" always;
             return 204;
         }
-        
+
         default_type application/json;
         add_header Access-Control-Allow-Origin "https://pantypost.com" always;
         add_header Access-Control-Allow-Credentials "true" always;
