@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 const NOWPAYMENTS_IPN_SECRET = process.env.NOWPAYMENTS_IPN_SECRET || '';
-// base API for your Express backend
 const APP_INTERNAL_API =
   process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') ||
   'https://api.pantypost.com/api';
@@ -11,8 +10,12 @@ const ALLOW_UNVERIFIED_IPN =
   process.env.ALLOW_UNVERIFIED_IPN === 'true' ? true : false;
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
+// simple in-memory idempotency store (payment_id -> timestamp)
+const processedPayments = new Map<string, number>();
+// how long we consider a payment_id "handled" (ms)
+const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 2; // 2 hours
+
 function verifySignature(rawBody: string, headerSig: string | null): boolean {
-  // if you haven't set the IPN secret, optionally allow it
   if (!NOWPAYMENTS_IPN_SECRET) return true;
   if (!headerSig) return false;
 
@@ -24,19 +27,17 @@ function verifySignature(rawBody: string, headerSig: string | null): boolean {
   return computed.toLowerCase() === headerSig.toLowerCase();
 }
 
-// pull username from order_id like pp-deposit-oakley-1730680800000
+// pull username from order_id like pp-deposit-oakley-1730680...
 function extractUsername(payload: any): string {
   const orderId: string = payload?.order_id || '';
 
   if (orderId.startsWith('pp-deposit-')) {
     const parts = orderId.split('-');
-    // ['pp', 'deposit', 'oakley', '1730680...']
     if (parts.length >= 3) {
       return parts[2];
     }
   }
 
-  // fallback — not ideal, but better than empty
   const email: string | undefined = payload?.customer_email;
   if (email) {
     return email;
@@ -45,9 +46,35 @@ function extractUsername(payload: any): string {
   return 'buyer1';
 }
 
+function isIdempotentHit(paymentId: string | undefined): boolean {
+  if (!paymentId) return false;
+
+  const now = Date.now();
+  const existing = processedPayments.get(paymentId);
+
+  // clean old entries
+  if (existing && now - existing < IDEMPOTENCY_TTL_MS) {
+    return true;
+  }
+
+  // mark as seen
+  processedPayments.set(paymentId, now);
+
+  // opportunistic cleanup to avoid unbounded growth
+  if (processedPayments.size > 500) {
+    const cutoff = now - IDEMPOTENCY_TTL_MS;
+    for (const [id, ts] of processedPayments.entries()) {
+      if (ts < cutoff) {
+        processedPayments.delete(id);
+      }
+    }
+  }
+
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // NOWPayments sends raw body, and we need raw for signature
     const bodyText = await req.text();
     const headerSig = req.headers.get('x-nowpayments-sig');
 
@@ -57,9 +84,9 @@ export async function POST(req: NextRequest) {
     }
 
     const payload = bodyText ? JSON.parse(bodyText) : {};
-
-    // we only care about finished / confirmed payments
     const status: string | undefined = payload?.payment_status?.toLowerCase();
+
+    // NOWPayments can send a few statuses — we only care about money actually arrived
     if (status !== 'finished') {
       return NextResponse.json(
         { ignored: true, reason: `status=${status}` },
@@ -67,7 +94,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // NOWPayments usually gives you the USD amount in price_amount
     const amountUSD = Number(payload?.price_amount || 0);
     if (!amountUSD || Number.isNaN(amountUSD)) {
       return NextResponse.json(
@@ -78,19 +104,31 @@ export async function POST(req: NextRequest) {
 
     const username = extractUsername(payload);
     const orderId = payload?.order_id || 'unknown';
-    const paymentId =
+    const paymentId: string =
       payload?.payment_id ||
       payload?.paymentId ||
       payload?.invoice_id ||
-      'nowp-unknown';
+      '';
 
-    // this is what we forward to Express
+    // 🛡️ idempotency: if we saw this paymentId recently, don't credit again
+    if (isIdempotentHit(paymentId)) {
+      // return 200 so NOWPayments stops retrying
+      return NextResponse.json(
+        {
+          success: true,
+          idempotent: true,
+          message: 'Payment already processed',
+        },
+        { status: 200 }
+      );
+    }
+
     const depositPayload = {
       username,
       amount: amountUSD,
       method: 'crypto',
       notes: `NOWPayments deposit (${orderId})`,
-      txId: paymentId,
+      txId: paymentId || orderId,
       orderId,
       source: 'nowpayments',
     };
@@ -99,7 +137,6 @@ export async function POST(req: NextRequest) {
       'Content-Type': 'application/json',
     };
 
-    // add internal key so Express /deposit/system accepts it
     if (INTERNAL_API_KEY) {
       headers['x-api-key'] = INTERNAL_API_KEY.trim();
     }
@@ -116,7 +153,6 @@ export async function POST(req: NextRequest) {
     const depositData = await depositRes.json().catch(() => ({}));
 
     if (!depositRes.ok || !depositData?.success) {
-      // you can return 200 to NOWPayments anyway, but log it
       console.error('[Webhook] Failed to credit wallet', depositData);
       return NextResponse.json(
         {
