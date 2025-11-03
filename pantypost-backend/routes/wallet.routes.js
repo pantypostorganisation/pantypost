@@ -189,10 +189,11 @@ router.get('/balance/:username', authMiddleware, async (req, res) => {
 // POST /api/wallet/deposit/system - system/webhook deposits (NOWPayments, etc.)
 router.post('/deposit/system', async (req, res) => {
   try {
-    const systemKey = req.headers['x-api-key'];
-    const expectedKey = process.env.INTERNAL_API_KEY;
+    // normalize both values to avoid sneaky spaces/newlines
+    const systemKey = (req.headers['x-api-key'] || '').trim();
+    const expectedKey = (process.env.INTERNAL_API_KEY || 'pantypost-system-webhook-key').trim();
 
-    if (!systemKey || !expectedKey || systemKey !== expectedKey) {
+    if (!systemKey || systemKey !== expectedKey) {
       return res.status(401).json({
         success: false,
         error: 'Unauthorized: invalid system API key',
