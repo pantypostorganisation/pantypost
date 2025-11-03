@@ -186,6 +186,108 @@ router.get('/balance/:username', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/wallet/deposit/system - system/webhook deposits (NOWPayments, etc.)
+router.post('/deposit/system', async (req, res) => {
+  try {
+    const systemKey = req.headers['x-api-key'];
+    const expectedKey = process.env.INTERNAL_API_KEY;
+
+    if (!systemKey || !expectedKey || systemKey !== expectedKey) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized: invalid system API key',
+      });
+    }
+
+    // Expected payload from your webhook handler
+    // You can tweak these names to match your /api/crypto/webhook Next.js route
+    const {
+      username,
+      amount,
+      method = 'crypto',
+      notes = 'NOWPayments deposit',
+      txId,            // NOWPayments payment_id or transaction hash
+      orderId,         // the pp-deposit-username-... string
+      source = 'nowpayments',
+    } = req.body;
+
+    // Basic validation
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ success: false, error: 'username is required' });
+    }
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Valid amount is required' });
+    }
+
+    // Find user to determine role
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Find or create wallet
+    let wallet = await Wallet.findOne({ username });
+    if (!wallet) {
+      wallet = new Wallet({
+        username,
+        role: user.role,
+        balance: 0,
+      });
+    }
+
+    const previousBalance = wallet.balance;
+
+    // Credit wallet
+    await wallet.deposit(numericAmount);
+
+    // Record transaction
+    const transaction = new Transaction({
+      type: 'deposit',
+      amount: numericAmount,
+      to: username,
+      toRole: user.role,
+      description: notes || 'Deposit via NOWPayments',
+      status: 'completed',
+      completedAt: new Date(),
+      metadata: {
+        source,
+        method,
+        txId,
+        orderId,
+      },
+    });
+    await transaction.save();
+
+    // Emit websocket updates so WalletContext sees it immediately
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
+        username,
+        user.role,
+        previousBalance,
+        wallet.balance,
+        'deposit'
+      );
+      global.webSocketService.emitTransaction(transaction);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        username,
+        newBalance: wallet.balance,
+        transactionId: transaction._id,
+      },
+    });
+  } catch (err) {
+    console.error('[Wallet] System deposit error:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
 // POST /api/wallet/deposit - Add money to wallet (buyers only)
 router.post('/deposit', authMiddleware, async (req, res) => {
   try {
