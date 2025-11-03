@@ -1,4 +1,4 @@
-// src/components/wallet/buyer/CryptoDepositSection.tsx
+// app/(whatever-your-segment-is)/wallet/components/CryptoDepositSection.tsx
 "use client";
 
 import React, { useState } from "react";
@@ -8,141 +8,72 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  ExternalLink,
-  Copy,
-  Info,
-  Shield,
-  CreditCard,
 } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
-import { useWallet } from "@/context/WalletContext";
 
-interface CryptoDepositSectionProps {
+type CryptoDepositSectionProps = {
+  username?: string;
   minAmount?: number;
-  maxAmount?: number;
-}
-
-interface ManualPaymentInfo {
-  payment_id: string;
-  pay_address: string;
-  pay_amount: number;
-  pay_currency: string;
-  instructions: string;
-}
+};
 
 export default function CryptoDepositSection({
+  username,
   minAmount = 10,
-  maxAmount = 10000,
 }: CryptoDepositSectionProps) {
-  const { user } = useAuth();
-  const { reloadData } = useWallet();
-  
-  const [amount, setAmount] = useState<string>("25");
+  const [amount, setAmount] = useState<string>(minAmount.toString());
   const [loading, setLoading] = useState(false);
   const [successUrl, setSuccessUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [manualPayment, setManualPayment] = useState<ManualPaymentInfo | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"auto" | "usdt">("auto");
 
-  // Quick amount buttons
-  const quickAmounts = [25, 50, 100, 250, 500, 1000];
-
-  // Validate amount
-  const validateAmount = (value: string): string | null => {
-    const num = Number(value);
-    if (isNaN(num) || num <= 0) {
-      return "Please enter a valid amount";
-    }
-    if (num < minAmount) {
-      return `Minimum deposit is $${minAmount}`;
-    }
-    if (num > maxAmount) {
-      return `Maximum deposit is $${maxAmount.toLocaleString()}`;
-    }
-    return null;
-  }
-
-  // Copy address to clipboard
-  const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
-
-  // Start crypto deposit
   const startCryptoDeposit = async () => {
     setError(null);
     setSuccessUrl(null);
-    setManualPayment(null);
 
-    const validationError = validateAmount(amount);
-    if (validationError) {
-      setError(validationError);
+    const numericAmount = Number(amount);
+    if (!numericAmount || Number.isNaN(numericAmount) || numericAmount <= 0) {
+      setError("Enter a valid deposit amount.");
       return;
     }
 
-    const numericAmount = Number(amount);
-    
     setLoading(true);
     try {
-      // Determine pay_currency based on selected method
-      const payCurrency = paymentMethod === "usdt" ? "usdttrc20" : undefined;
-      
-      // Generate order ID with username
-      const orderId = user?.username 
-        ? `pp-deposit-${user.username}-${Date.now()}`
-        : `pp-deposit-guest-${Date.now()}`;
-
-      // Call the API
+      // call YOUR Next.js route (the one that talks to NOWPayments)
       const res = await fetch("/api/crypto/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: numericAmount,
-          order_id: orderId,
-          pay_currency: payCurrency,
-          description: `Wallet deposit for ${user?.username || 'user'}`,
+          // keep your nice order_id so webhook can parse username
+          order_id: username ? `wallet-${username}-${Date.now()}` : undefined,
+          description: "PantyPost wallet deposit",
         }),
       });
 
       const data = await res.json().catch(() => ({} as any));
 
-      // Handle different response scenarios
-      if (data?.success && data?.data?.payment_url) {
-        // Success - got hosted checkout URL
-        setSuccessUrl(data.data.payment_url);
-        
-        // Open in new tab
-        if (typeof window !== "undefined") {
-          window.open(data.data.payment_url, "_blank", "noopener,noreferrer");
-        }
-        
-        // Reload wallet data after a delay (webhook might process payment)
-        setTimeout(() => {
-          reloadData();
-        }, 5000);
-        
-      } else if (data?.code === "NO_HOSTED_CHECKOUT" && data?.data) {
-        // Manual payment required
-        setManualPayment(data.data);
-        setError(null);
-        
-      } else {
-        // Error occurred
+      if (!data?.success) {
         setError(
-          data?.error || "Unable to create payment. Please try again."
+          data?.error ||
+            "Unable to start crypto payment. Please try again in a moment."
         );
+        return;
       }
-      
+
+      const url: string | undefined = data?.data?.payment_url;
+      if (!url) {
+        setError("Payment was created but no checkout URL was returned.");
+        return;
+      }
+
+      setSuccessUrl(url);
+
+      // best UX = open the real NOWPayments page in a new tab
+      if (typeof window !== "undefined") {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
     } catch (err: any) {
-      console.error("[CryptoDepositSection] Error:", err);
+      console.error("[CryptoDepositSection] start deposit failed:", err);
       setError(
-        "Network error. Please check your connection and try again."
+        err?.message || "Unexpected error starting crypto payment. Try again."
       );
     } finally {
       setLoading(false);
@@ -150,238 +81,101 @@ export default function CryptoDepositSection({
   };
 
   return (
-    <div className="rounded-2xl border border-gray-800 bg-[#111] p-6 sm:p-8 transition-all">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-          <Bitcoin className="h-6 w-6 text-[#ff950e]" />
+    <div className="rounded-2xl border border-slate-800/80 bg-slate-950/60 p-5 sm:p-6 shadow-[0_10px_40px_rgba(0,0,0,0.25)] backdrop-blur">
+      {/* header */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500/10 text-orange-400">
+          <Bitcoin size={20} />
         </div>
         <div>
-          <h2 className="text-xl font-semibold text-white sm:text-2xl">
-            Crypto Deposit
+          <h2 className="text-base sm:text-lg font-semibold text-white">
+            Crypto deposit
           </h2>
-          <p className="text-sm text-gray-400">
-            Secure payment via NOWPayments - BTC, ETH, USDT & more
+          <p className="text-xs sm:text-sm text-slate-400">
+            Pay with BTC / ETH / USDT via NOWPayments.
           </p>
         </div>
       </div>
 
-      {/* Security Badge */}
-      <div className="flex items-center gap-2 mb-6 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
-        <Shield className="h-4 w-4 text-green-400" />
-        <span className="text-xs text-green-300">
-          Secure & encrypted payment processing
-        </span>
-      </div>
-
-      <div className="space-y-6">
-        {/* Payment Method Selection */}
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-300">
-            Payment Method
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("auto")}
-              className={`flex items-center justify-center gap-2 rounded-xl border p-3 transition-all ${
-                paymentMethod === "auto"
-                  ? "border-[#ff950e] bg-[#ff950e]/10 text-[#ff950e]"
-                  : "border-gray-800 bg-[#0c0c0c] text-gray-400 hover:border-gray-700"
-              }`}
-            >
-              <CreditCard className="h-4 w-4" />
-              <span className="text-sm font-medium">Card / Multiple</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setPaymentMethod("usdt")}
-              className={`flex items-center justify-center gap-2 rounded-xl border p-3 transition-all ${
-                paymentMethod === "usdt"
-                  ? "border-[#ff950e] bg-[#ff950e]/10 text-[#ff950e]"
-                  : "border-gray-800 bg-[#0c0c0c] text-gray-400 hover:border-gray-700"
-              }`}
-            >
-              <Bitcoin className="h-4 w-4" />
-              <span className="text-sm font-medium">USDT (TRC-20)</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Amount Input */}
-        <div className="space-y-2">
-          <label className="flex items-center justify-between text-sm font-medium text-gray-300">
-            <span>Deposit Amount (USD)</span>
-            <span className="text-xs text-gray-500">
-              Min ${minAmount} • Max ${maxAmount.toLocaleString()}
-            </span>
-          </label>
-          <div className="flex rounded-xl border border-gray-800 bg-[#0c0c0c] focus-within:border-[#ff950e]/50 focus-within:ring-2 focus-within:ring-[#ff950e]/10">
-            <span className="flex items-center px-4 text-gray-400">$</span>
+      <div className="grid gap-4 sm:gap-5">
+        {/* amount input */}
+        <label className="flex flex-col gap-2">
+          <span className="text-xs sm:text-sm text-slate-200">
+            Amount (USD)
+          </span>
+          <div className="flex rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2.5 focus-within:border-orange-400/70 focus-within:ring-2 focus-within:ring-orange-500/10">
+            <span className="mr-2 mt-1 text-slate-400 text-sm">$</span>
             <input
               type="number"
               min={minAmount}
-              max={maxAmount}
               step="1"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="flex-1 bg-transparent py-3 pr-4 text-white outline-none placeholder:text-gray-600"
-              placeholder="0.00"
-              disabled={loading}
+              className="flex-1 bg-transparent outline-none text-white text-sm sm:text-base"
+              placeholder={minAmount.toString()}
             />
-          </div>
-        </div>
-
-        {/* Quick Amount Buttons */}
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          {quickAmounts.map((quickAmount) => (
             <button
-              key={quickAmount}
               type="button"
-              onClick={() => setAmount(quickAmount.toString())}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
-                amount === quickAmount.toString()
-                  ? "border-[#ff950e] bg-[#ff950e]/10 text-[#ff950e]"
-                  : "border-gray-800 bg-[#0c0c0c] text-gray-400 hover:border-gray-700"
-              }`}
-              disabled={loading}
+              onClick={() => setAmount(minAmount.toString())}
+              className="ml-2 rounded-md bg-slate-800/70 px-2 py-1 text-xs text-slate-200 hover:bg-slate-700"
             >
-              ${quickAmount}
+              Min
             </button>
-          ))}
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/30 p-4">
-            <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm text-red-300">{error}</p>
-              {error.includes("different payment method") && (
-                <p className="mt-2 text-xs text-red-300/80">
-                  Try switching between Card/Multiple and USDT options above.
-                </p>
-              )}
-            </div>
           </div>
-        )}
+          <p className="text-[11px] sm:text-xs text-slate-500">
+            Minimum deposit is ${minAmount}. We&apos;ll open a secure payment
+            page in a new tab.
+          </p>
+        </label>
 
-        {/* Success Message */}
-        {successUrl && (
-          <div className="flex items-start gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4">
-            <CheckCircle2 className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <p className="text-sm font-medium text-emerald-300">
-                Payment page opened successfully!
+        {/* error state */}
+        {error ? (
+          <div className="flex items-start gap-2 rounded-lg bg-red-500/5 border border-red-500/40 px-3 py-2">
+            <AlertCircle className="h-4 w-4 text-red-300 mt-0.5" />
+            <p className="text-xs text-red-100">{error}</p>
+          </div>
+        ) : null}
+
+        {/* success state */}
+        {successUrl ? (
+          <div className="flex items-start gap-2 rounded-lg bg-emerald-500/5 border border-emerald-500/40 px-3 py-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-300 mt-0.5" />
+            <div className="text-xs text-emerald-50">
+              <p>Payment created.</p>
+              <p className="mt-1">
+                If it didn&apos;t open automatically,{" "}
+                <a
+                  href={successUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  click here to open the payment
+                </a>
+                .
               </p>
-              <p className="text-xs text-emerald-300/80">
-                Complete your payment in the new tab. Your balance will update automatically.
-              </p>
-              <a
-                href={successUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 underline underline-offset-2"
-              >
-                Open payment page again
-                <ExternalLink className="h-3 w-3" />
-              </a>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {/* Manual Payment Instructions */}
-        {manualPayment && (
-          <div className="rounded-xl border border-[#ff950e]/30 bg-[#ff950e]/5 p-4 space-y-4">
-            <div className="flex items-start gap-2">
-              <Info className="h-5 w-5 text-[#ff950e] mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-[#ff950e]">
-                  Manual Transfer Required
-                </p>
-                <p className="mt-1 text-xs text-gray-400">
-                  Send the exact amount to the address below
-                </p>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <div className="rounded-lg bg-black/30 p-3">
-                <p className="text-xs text-gray-500 mb-1">Amount to Send</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-mono text-white">
-                    {manualPayment.pay_amount} {manualPayment.pay_currency}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(manualPayment.pay_amount.toString())}
-                    className="text-gray-400 hover:text-white transition-colors"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="rounded-lg bg-black/30 p-3">
-                <p className="text-xs text-gray-500 mb-1">Send to Address</p>
-                <div className="flex items-center gap-2">
-                  <p className="flex-1 text-xs font-mono text-white break-all">
-                    {manualPayment.pay_address}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(manualPayment.pay_address)}
-                    className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
-                  >
-                    {copied ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-400" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              
-              <div className="text-xs text-gray-400 space-y-1">
-                <p>• Payment ID: {manualPayment.payment_id}</p>
-                <p>• Your balance will update automatically after confirmation</p>
-                <p>• Network confirmations required: 1-3</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Submit Button */}
+        {/* action button */}
         <button
           onClick={startCryptoDeposit}
-          disabled={loading || !!successUrl}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff950e] px-6 py-3.5 text-sm font-semibold text-black transition-all hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={loading}
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-orange-500 px-4 text-sm font-medium text-slate-950 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-75"
         >
           {loading ? (
             <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Creating secure checkout...
-            </>
-          ) : successUrl ? (
-            <>
-              <CheckCircle2 className="h-4 w-4" />
-              Payment in progress
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Creating payment...
             </>
           ) : (
             <>
-              <Wallet className="h-4 w-4" />
-              Create Crypto Deposit
+              <Wallet className="mr-2 h-4 w-4" />
+              Deposit with crypto
             </>
           )}
         </button>
-
-        {/* Info Text */}
-        <div className="text-center text-xs text-gray-500">
-          <p>Secure payment processing by NOWPayments</p>
-          <p className="mt-1">
-            Support for 150+ cryptocurrencies • Instant conversion to USD
-          </p>
-        </div>
       </div>
     </div>
   );
