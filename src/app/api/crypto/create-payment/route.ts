@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 const NOWPAYMENTS_ENDPOINT = 'https://api.nowpayments.io/v1/payment';
-const NOWPAYMENTS_INVOICE_ENDPOINT = 'https://api.nowpayments.io/v1/invoice';
 
 // Helper to validate if a string is a valid URL
 function isValidUrl(string: string): boolean {
@@ -17,7 +16,6 @@ function isValidUrl(string: string): boolean {
 
 // Helper to extract username from order ID
 function extractUsernameFromOrderId(orderId: string): string {
-  // Format: pp-deposit-USERNAME-timestamp or wallet-USERNAME-timestamp
   const patterns = [
     /^pp-deposit-([^-]+)-\d+$/,
     /^wallet-([^-]+)-\d+$/,
@@ -31,7 +29,6 @@ function extractUsernameFromOrderId(orderId: string): string {
     }
   }
   
-  // Fallback to generic if can't extract
   return 'user';
 }
 
@@ -51,7 +48,6 @@ export async function POST(req: NextRequest) {
     // Validate input
     const amount = Number(body?.amount);
     const frontendOrderId = typeof body?.order_id === 'string' ? body.order_id : '';
-    const payCurrency = typeof body?.pay_currency === 'string' ? body.pay_currency : 'usdttrc20'; // Default to USDT-TRC20
     const description = typeof body?.description === 'string' 
       ? body.description 
       : 'PantyPost wallet deposit';
@@ -110,68 +106,19 @@ export async function POST(req: NextRequest) {
     const username = extractUsernameFromOrderId(frontendOrderId) || 'unknown';
     const orderId = frontendOrderId || `pp-deposit-${username}-${Date.now()}`;
     
-    console.log('[NOWPayments] Creating payment for:', {
+    console.log('[NOWPayments] Creating USDT-only payment for:', {
       username,
       amount,
       orderId,
-      payCurrency,
+      currency: 'usdttrc20',
     });
 
-    // First, try to create an invoice (preferred for hosted checkout)
-    try {
-      const invoicePayload = {
-        price_amount: amount,
-        price_currency: 'usd',
-        order_id: orderId,
-        order_description: description,
-        success_url: `${appUrl}/wallet/buyer?deposit=success&order=${orderId}`,
-        cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
-        ipn_callback_url: `${appUrl}/api/crypto/webhook`,
-        is_fixed_rate: true,
-        is_fee_paid_by_user: false,
-      };
-
-      const invoiceRes = await fetch(NOWPAYMENTS_INVOICE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(invoicePayload),
-      });
-
-      if (invoiceRes.ok) {
-        const invoiceData = await invoiceRes.json();
-        
-        // Check if we got a valid invoice URL
-        if (invoiceData.invoice_url && isValidUrl(invoiceData.invoice_url)) {
-          console.log('[NOWPayments] Invoice created successfully:', invoiceData.id);
-          
-          return NextResponse.json(
-            {
-              success: true,
-              data: {
-                payment_url: invoiceData.invoice_url,
-                payment_id: invoiceData.id,
-                invoice_id: invoiceData.id,
-                amount: amount,
-                order_id: orderId,
-                type: 'invoice',
-              },
-            },
-            { status: 200 }
-          );
-        }
-      }
-    } catch (invoiceError) {
-      console.error('[NOWPayments] Invoice creation failed, falling back to payment:', invoiceError);
-    }
-
-    // Fallback to regular payment endpoint
+    // IMPORTANT: Skip invoice API and go directly to payment API for USDT-only
+    // The invoice API doesn't strictly enforce pay_currency
     const paymentPayload: Record<string, unknown> = {
       price_amount: amount,
       price_currency: 'usd',
-      pay_currency: payCurrency,
+      pay_currency: 'usdttrc20',  // FORCE USDT TRC-20 ONLY
       order_id: orderId,
       order_description: description,
       ipn_callback_url: `${appUrl}/api/crypto/webhook`,
@@ -179,6 +126,8 @@ export async function POST(req: NextRequest) {
       cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
       is_fixed_rate: true,
       is_fee_paid_by_user: false,
+      // Additional parameters to enforce USDT only
+      fixed_rate: true,
     };
 
     const paymentRes = await fetch(NOWPAYMENTS_ENDPOINT, {
@@ -214,7 +163,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Extract payment URL - check multiple possible fields
+    // For USDT direct payments, we typically get a payment address
+    // Check if we got a payment URL or just an address
     let paymentUrl = null;
     const possibleUrlFields = [
       'invoice_url',
@@ -231,69 +181,67 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Check if we only got a payment address (not a hosted checkout URL)
+    // If we got a payment address (typical for USDT direct payments)
     if (!paymentUrl && paymentData.pay_address) {
-      console.log('[NOWPayments] No hosted checkout available, got payment address:', paymentData.pay_address);
+      console.log('[NOWPayments] USDT direct payment address:', paymentData.pay_address);
       
-      // Return structured response indicating manual payment is needed
+      // Return structured response for manual USDT payment
+      // This is actually the expected flow for USDT-only payments
       return NextResponse.json(
         {
-          success: false,
-          error: 'This payment method requires manual transfer. Hosted checkout is not available.',
-          code: 'NO_HOSTED_CHECKOUT',
+          success: true,
           data: {
             payment_id: paymentData.payment_id,
             pay_address: paymentData.pay_address,
             pay_amount: paymentData.pay_amount,
-            pay_currency: paymentData.pay_currency,
+            pay_currency: 'USDT (TRC-20)',
             payment_status: paymentData.payment_status,
             order_id: orderId,
             type: 'manual_payment',
-            instructions: `Please send exactly ${paymentData.pay_amount} ${paymentData.pay_currency} to address: ${paymentData.pay_address}`,
+            network: 'TRC-20',
+            instructions: `Please send exactly ${paymentData.pay_amount} USDT to the TRC-20 address provided`,
+            expiry_time: paymentData.expiry_estimate_date,
           },
         },
         { status: 200 }
       );
     }
 
-    // If we still don't have a valid payment URL, return error
-    if (!paymentUrl) {
-      console.error('[NOWPayments] No valid payment URL in response:', paymentData);
+    // If we somehow got a hosted checkout URL (unlikely for direct USDT)
+    if (paymentUrl) {
+      console.log('[NOWPayments] Got payment URL for USDT:', paymentUrl);
       
       return NextResponse.json(
         {
-          success: false,
-          error: 'Payment created but no checkout page available. Please try a different payment method.',
-          code: 'NO_CHECKOUT_URL',
-          details: {
+          success: true,
+          data: {
+            payment_url: paymentUrl,
             payment_id: paymentData.payment_id,
-            status: paymentData.payment_status,
+            amount: amount,
+            order_id: orderId,
+            type: 'hosted_checkout',
+            currency: 'USDT (TRC-20)',
+            warning: 'Only send USDT on TRC-20 network!',
           },
         },
         { status: 200 }
       );
     }
 
-    // Success - return the valid payment URL
-    console.log('[NOWPayments] Payment created successfully:', {
-      payment_id: paymentData.payment_id,
-      url: paymentUrl,
-      type: 'hosted_checkout',
-    });
-
+    // Fallback error
+    console.error('[NOWPayments] No payment method in response:', paymentData);
+    
     return NextResponse.json(
       {
-        success: true,
-        data: {
-          payment_url: paymentUrl,
+        success: false,
+        error: 'Unable to create USDT payment. Please try again.',
+        code: 'NO_PAYMENT_METHOD',
+        details: {
           payment_id: paymentData.payment_id,
-          amount: amount,
-          order_id: orderId,
-          type: 'hosted_checkout',
-          pay_currency: paymentData.pay_currency || payCurrency,
+          status: paymentData.payment_status,
         },
       },
-      { status: 200 }
+      { status: 500 }
     );
     
   } catch (err: any) {
