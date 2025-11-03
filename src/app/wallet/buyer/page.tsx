@@ -6,13 +6,15 @@ import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
 import BalanceCard from '@/components/wallet/buyer/BalanceCard';
-// Removed: TotalSpentCard import
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import EmptyState from '@/components/wallet/buyer/EmptyState';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+
+// 👉 new import
+import CryptoDepositSection from '@/components/wallet/buyer/CryptoDepositSection';
 
 // Inner component that uses the hooks after providers are ready
 function BuyerWalletContent() {
@@ -27,7 +29,6 @@ function BuyerWalletContent() {
     // Computed values
     buyerPurchases,
     recentPurchases,
-    // Removed: totalSpent (unused now)
 
     // Actions
     handleAddFunds,
@@ -48,18 +49,25 @@ function BuyerWalletContent() {
           </section>
 
           <section className="grid gap-6 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)]">
+            {/* left column */}
             <BalanceCard balance={balance} />
 
-            <AddFundsSection
-              amountToAdd={amountToAdd}
-              message={message}
-              messageType={messageType}
-              isLoading={isLoading}
-              onAmountChange={handleAmountChange}
-              onKeyPress={handleKeyPress}
-              onAddFunds={handleAddFunds}
-              onQuickAmountSelect={handleQuickAmountSelect}
-            />
+            {/* right column */}
+            <div className="flex flex-col gap-6">
+              <AddFundsSection
+                amountToAdd={amountToAdd}
+                message={message}
+                messageType={messageType}
+                isLoading={isLoading}
+                onAmountChange={handleAmountChange}
+                onKeyPress={handleKeyPress}
+                onAddFunds={handleAddFunds}
+                onQuickAmountSelect={handleQuickAmountSelect}
+              />
+
+              {/* new crypto deposit UI */}
+              <CryptoDepositSection />
+            </div>
           </section>
 
           {purchasesArray.length > 0 ? (
