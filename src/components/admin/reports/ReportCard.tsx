@@ -41,43 +41,43 @@ export default function ReportCard({
   // Get severity color and icon
   const getSeverityInfo = (severity: ReportCardProps['report']['severity']) => {
     if (!severity) {
-      return { 
-        color: 'text-gray-400 bg-gray-900/20', 
-        icon: Info, 
-        label: 'Unknown' 
+      return {
+        chipClasses: 'border border-zinc-700 bg-transparent text-zinc-400',
+        icon: Info,
+        label: 'Unknown'
       };
     }
-    
+
     switch (severity) {
-      case 'low': 
-        return { 
-          color: 'text-green-400 bg-green-900/20', 
-          icon: Activity, 
-          label: 'Low' 
+      case 'low':
+        return {
+          chipClasses: 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+          icon: Activity,
+          label: 'Low'
         };
-      case 'medium': 
-        return { 
-          color: 'text-yellow-400 bg-yellow-900/20', 
-          icon: AlertCircle, 
-          label: 'Medium' 
+      case 'medium':
+        return {
+          chipClasses: 'border border-yellow-500/30 bg-yellow-500/10 text-yellow-300',
+          icon: AlertCircle,
+          label: 'Medium'
         };
-      case 'high': 
-        return { 
-          color: 'text-orange-400 bg-orange-900/20', 
-          icon: AlertTriangle, 
-          label: 'High' 
+      case 'high':
+        return {
+          chipClasses: 'border border-orange-500/30 bg-orange-500/10 text-orange-300',
+          icon: AlertTriangle,
+          label: 'High'
         };
-      case 'critical': 
-        return { 
-          color: 'text-red-400 bg-red-900/20', 
-          icon: ShieldAlert, 
-          label: 'Critical' 
+      case 'critical':
+        return {
+          chipClasses: 'border border-red-500/40 bg-red-500/10 text-red-300',
+          icon: ShieldAlert,
+          label: 'Critical'
         };
-      default: 
-        return { 
-          color: 'text-gray-400 bg-gray-900/20', 
-          icon: Info, 
-          label: 'Unknown' 
+      default:
+        return {
+          chipClasses: 'border border-zinc-700 bg-transparent text-zinc-400',
+          icon: Info,
+          label: 'Unknown'
         };
     }
   };
@@ -103,142 +103,142 @@ export default function ReportCard({
   };
 
   return (
-    <div 
-      className={`bg-[#1a1a1a] border ${
-        report.severity === 'critical' ? 'border-red-800' : 
-        report.severity === 'high' ? 'border-orange-800' : 
-        'border-gray-800'
-      } rounded-lg overflow-hidden hover:border-gray-700 transition-all`}
-    >
-      {/* Report Header - Clickable */}
-      <div 
-        className="p-6 cursor-pointer"
-        onClick={onToggle}
-      >
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="flex items-center gap-2">
-                <User size={16} className="text-gray-400" />
-                <span className="font-semibold text-white">
-                  <SecureMessageDisplay 
+    <div className="rounded-2xl border border-zinc-900/70 bg-zinc-950/80 shadow-none">
+      <div className="flex flex-col gap-5 p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <button
+            type="button"
+            onClick={onToggle}
+            className="flex flex-1 flex-col gap-3 text-left transition-colors hover:text-white"
+          >
+            <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-300">
+              <span className="inline-flex items-center gap-2 text-base font-semibold text-white">
+                <User size={16} className="text-zinc-500" />
+                <span>
+                  <SecureMessageDisplay
                     content={report.reporter}
                     allowBasicFormatting={false}
                     className="inline"
                   />
                   {' → '}
-                  <SecureMessageDisplay 
+                  <SecureMessageDisplay
                     content={report.reportee}
                     allowBasicFormatting={false}
                     className="inline"
                   />
                 </span>
-              </div>
-              
-              {/* Status Badges */}
+              </span>
+
               {userBanInfo && (
-                <span className="px-2 py-1 bg-red-900/20 text-red-400 text-xs rounded font-medium">
-                  BANNED
+                <span className="inline-flex items-center rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-red-300">
+                  Banned
                 </span>
               )}
-              
-              {/* User Report History - Simple Count */}
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 bg-purple-900/20 text-purple-400 text-xs rounded font-medium flex items-center gap-1">
-                  <Users size={12} />
-                  {safeStats.totalReports} Total Reports
-                </span>
-                {safeStats.activeReports > 0 && (
-                  <span className="px-2 py-1 bg-red-900/20 text-red-400 text-xs rounded font-medium">
-                    {safeStats.activeReports} Active
-                  </span>
-                )}
-              </div>
-              
+
               {report.processed && (
-                <span className="px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded font-medium">
-                  PROCESSED
+                <span className="inline-flex items-center rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium uppercase tracking-wide text-emerald-300">
+                  Processed
                 </span>
               )}
             </div>
-            
-            <div className="flex items-center gap-4 text-sm text-gray-400">
-              <span>{new Date(report.date).toLocaleString()}</span>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${severityInfo.color}`}>
+
+            <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+              <div className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[0.7rem] ${severityInfo.chipClasses}`}>
                 <severityInfo.icon size={12} />
                 {severityInfo.label}
-              </span>
-              <span className="flex items-center gap-1">
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full border border-zinc-800 px-2.5 py-1 text-[0.7rem] text-zinc-400">
                 <CategoryIcon size={12} />
                 {report.category || 'uncategorized'}
               </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-zinc-800 px-2.5 py-1 text-[0.7rem] text-zinc-400">
+                <Activity size={12} />
+                {new Date(report.date).toLocaleString()}
+              </span>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            {/* Action Buttons - Only when not processed */}
+
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+              <span className="inline-flex items-center gap-1 rounded-full border border-zinc-800 px-2.5 py-1">
+                <Users size={12} />
+                {safeStats.totalReports} total reports
+              </span>
+              {safeStats.activeReports > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 px-2.5 py-1 text-red-300">
+                  {safeStats.activeReports} active
+                </span>
+              )}
+              {userBanInfo?.reason && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-red-500/40 px-2.5 py-1 text-red-300">
+                  <ShieldAlert size={12} />
+                  {userBanInfo.reason}
+                </span>
+              )}
+            </div>
+          </button>
+
+          <div className="flex flex-col items-stretch gap-3 md:items-end">
             {!report.processed && (
-              <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                {/* Custom Ban */}
+              <div className="flex flex-wrap justify-end gap-2">
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onBan();
                   }}
-                  className="px-3 py-1 bg-red-700 text-white text-sm rounded hover:bg-red-800 flex items-center transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-600/80 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-600"
                   disabled={!banContext}
                 >
-                  <Ban size={12} className="mr-1" />
-                  Custom Ban
+                  <Ban size={14} />
+                  Ban
                 </button>
-                
-                {/* Resolve without ban */}
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     onResolve();
                   }}
-                  className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center transition-colors"
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600/80 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-600"
                 >
-                  <CheckCircle size={12} className="mr-1" />
-                  Resolve (No Ban)
+                  <CheckCircle size={14} />
+                  Resolve
                 </button>
               </div>
             )}
-            
-            {/* Delete */}
+
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete();
               }}
-              className="px-3 py-1 bg-red-800 text-white text-sm rounded hover:bg-red-900 flex items-center transition-colors"
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-1.5 text-sm font-medium text-zinc-200 transition-colors hover:border-zinc-700 hover:text-white"
             >
-              <Trash2 size={12} className="mr-1" />
+              <Trash2 size={14} />
               Delete
             </button>
-            
-            {/* Expand/Collapse */}
-            <div className="flex items-center gap-2 text-gray-400">
-              <span className="text-sm">
-                {Array.isArray(report.messages) ? report.messages.length : 0} messages
-              </span>
-              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-            </div>
+
+            <button
+              type="button"
+              onClick={onToggle}
+              className="inline-flex items-center justify-end gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500 transition-colors hover:text-white"
+            >
+              <MessageSquare size={14} />
+              {Array.isArray(report.messages) ? report.messages.length : 0} messages
+              {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Expanded Content */}
-      {isExpanded && (
-        <ReportDetails
-          report={report}
-          userStats={userStats}
-          onUpdateSeverity={onUpdateSeverity}
-          onUpdateCategory={onUpdateCategory}
-          onUpdateAdminNotes={onUpdateAdminNotes}
-        />
-      )}
+        {isExpanded && (
+          <ReportDetails
+            report={report}
+            userStats={userStats}
+            onUpdateSeverity={onUpdateSeverity}
+            onUpdateCategory={onUpdateCategory}
+            onUpdateAdminNotes={onUpdateAdminNotes}
+          />
+        )}
+      </div>
     </div>
   );
 }

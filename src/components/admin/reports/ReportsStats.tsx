@@ -19,32 +19,26 @@ export default function ReportsStats({ reportStats }: ReportsStatsProps) {
     withBans: safeNumber(reportStats?.withBans),
   };
 
+  const cards: Array<{ label: string; value: number; className?: string }> = [
+    { label: 'Total Reports', value: totals.total },
+    { label: 'Pending', value: totals.unprocessed, className: 'text-[#ff950e]' },
+    { label: 'Critical', value: totals.critical, className: 'text-red-400' },
+    { label: 'Today', value: totals.today, className: 'text-zinc-200' },
+    { label: 'Processed', value: totals.processed, className: 'text-emerald-400' },
+    { label: 'Resulted in Bans', value: totals.withBans, className: 'text-rose-400' }
+  ];
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-white">{totals.total}</div>
-        <div className="text-xs text-gray-400">Total Reports</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-yellow-400">{totals.unprocessed}</div>
-        <div className="text-xs text-gray-400">Pending</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-red-400">{totals.critical}</div>
-        <div className="text-xs text-gray-400">Critical</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-blue-400">{totals.today}</div>
-        <div className="text-xs text-gray-400">Today</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-green-400">{totals.processed}</div>
-        <div className="text-xs text-gray-400">Processed</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-purple-400">{totals.withBans}</div>
-        <div className="text-xs text-gray-400">Resulted in Bans</div>
-      </div>
+    <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      {cards.map(({ label, value, className }) => (
+        <div
+          key={label}
+          className="rounded-xl border border-zinc-800/80 bg-zinc-950/80 px-4 py-3 text-left shadow-none"
+        >
+          <div className={`text-2xl font-semibold tracking-tight text-white ${className ?? ''}`.trim()}>{value}</div>
+          <div className="mt-1 text-xs font-medium uppercase tracking-wide text-zinc-500">{label}</div>
+        </div>
+      ))}
     </div>
   );
 }
