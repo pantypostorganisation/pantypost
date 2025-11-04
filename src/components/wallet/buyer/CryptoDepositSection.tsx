@@ -12,6 +12,7 @@ import {
   Copy,
   Info,
   Shield,
+  AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/context/WalletContext";
@@ -42,6 +43,7 @@ export default function CryptoDepositSection({
   const [error, setError] = useState<string | null>(null);
   const [manualPayment, setManualPayment] = useState<ManualPaymentInfo | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedAmount, setCopiedAmount] = useState(false);
 
   // Quick amount buttons
   const quickAmounts = [25, 50, 100, 250, 500, 1000];
@@ -62,11 +64,16 @@ export default function CryptoDepositSection({
   }
 
   // Copy address to clipboard
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, type: 'address' | 'amount' = 'address') => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      if (type === 'address') {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        setCopiedAmount(true);
+        setTimeout(() => setCopiedAmount(false), 2000);
+      }
     } catch (err) {
       console.error("Failed to copy:", err);
     }
@@ -274,34 +281,61 @@ export default function CryptoDepositSection({
                 </p>
               </div>
             </div>
+
+            {/* IMPORTANT: Exact Amount Warning */}
+            <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm text-yellow-400 font-medium">
+                    Send EXACTLY {manualPayment.pay_amount} USDT
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    • Include network fees in your wallet balance
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    • Sending less may cause payment to fail
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    • We accept payments within 0.1% of the required amount
+                  </p>
+                </div>
+              </div>
+            </div>
             
             <div className="space-y-3">
               <div className="rounded-lg bg-black/30 p-3">
-                <p className="text-xs text-gray-500 mb-1">Amount to Send</p>
+                <p className="text-xs text-gray-500 mb-1">Amount to Send (Click to Copy)</p>
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-mono text-white">
+                  <p className="text-sm font-mono text-white font-medium">
                     {manualPayment.pay_amount} USDT
                   </p>
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(manualPayment.pay_amount.toString())}
+                    onClick={() => copyToClipboard(manualPayment.pay_amount.toString(), 'amount')}
                     className="text-gray-400 hover:text-white transition-colors"
+                    title="Copy amount"
                   >
-                    <Copy className="h-4 w-4" />
+                    {copiedAmount ? (
+                      <CheckCircle2 className="h-4 w-4 text-green-400" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
               
               <div className="rounded-lg bg-black/30 p-3">
-                <p className="text-xs text-gray-500 mb-1">TRC-20 Address</p>
+                <p className="text-xs text-gray-500 mb-1">TRC-20 Address (Click to Copy)</p>
                 <div className="flex items-center gap-2">
                   <p className="flex-1 text-xs font-mono text-white break-all">
                     {manualPayment.pay_address}
                   </p>
                   <button
                     type="button"
-                    onClick={() => copyToClipboard(manualPayment.pay_address)}
+                    onClick={() => copyToClipboard(manualPayment.pay_address, 'address')}
                     className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
+                    title="Copy address"
                   >
                     {copied ? (
                       <CheckCircle2 className="h-4 w-4 text-green-400" />
@@ -315,8 +349,11 @@ export default function CryptoDepositSection({
               <div className="text-xs text-gray-400 space-y-1">
                 <p>• Payment ID: {manualPayment.payment_id}</p>
                 <p>• Network: TRC-20 (Tron Network)</p>
+                <p>• Payment expires in 20 minutes</p>
                 <p>• Your balance will update automatically after 1-3 confirmations</p>
-                <p className="text-yellow-400">⚠️ Only send USDT on TRC-20 network!</p>
+                <p className="text-yellow-400 font-medium">
+                  ⚠️ Only send USDT on TRC-20 network! Other tokens or networks will be lost!
+                </p>
               </div>
             </div>
           </div>
@@ -351,6 +388,9 @@ export default function CryptoDepositSection({
           <p>Secure USDT payment processing by NOWPayments</p>
           <p className="mt-1">
             TRC-20 Network • Low fees • Fast confirmations
+          </p>
+          <p className="mt-2 text-gray-600">
+            Payments within 0.1% of the required amount are automatically accepted
           </p>
         </div>
       </div>

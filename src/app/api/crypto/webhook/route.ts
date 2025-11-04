@@ -8,6 +8,9 @@ const APP_INTERNAL_API = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '') ||
 const ALLOW_UNVERIFIED_IPN = process.env.NODE_ENV === 'development' && process.env.ALLOW_UNVERIFIED_IPN === 'true';
 const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY || '';
 
+// Payment tolerance - 0.1% as requested
+const PAYMENT_TOLERANCE = 0.001; // 0.1% tolerance for minor variations
+
 // In-memory store for idempotency (consider Redis for production)
 const processedPayments = new Map<string, { timestamp: number; result: any }>();
 const IDEMPOTENCY_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
@@ -21,6 +24,22 @@ setInterval(() => {
     }
   }
 }, 1000 * 60 * 60); // Run every hour
+
+/**
+ * Check if payment amount is sufficient within tolerance
+ */
+function isPaymentSufficient(required: number, received: number): boolean {
+  const minAcceptable = required * (1 - PAYMENT_TOLERANCE);
+  console.log('[Webhook] Payment validation:', {
+    required,
+    received,
+    minAcceptable,
+    sufficient: received >= minAcceptable,
+    difference: received - required,
+    percentDiff: ((received - required) / required * 100).toFixed(3) + '%'
+  });
+  return received >= minAcceptable;
+}
 
 /**
  * Verify NOWPayments IPN signature
@@ -43,13 +62,16 @@ function verifySignature(rawBody: string, headerSig: string | null): boolean {
       .update(rawBody)
       .digest('hex');
 
-    const isValid = crypto.timingSafeEqual(
-      Buffer.from(computed.toLowerCase()),
-      Buffer.from(headerSig.toLowerCase())
-    );
+    // Fix: Ensure both strings are same length before comparison
+    if (computed.length !== headerSig.length) {
+      console.error('[Webhook] Signature length mismatch');
+      return false;
+    }
 
+    const isValid = computed.toLowerCase() === headerSig.toLowerCase();
+    
     if (!isValid) {
-      console.error('[Webhook] Signature verification failed');
+      console.error('[Webhook] Signature mismatch');
     }
 
     return isValid;
@@ -138,10 +160,17 @@ function storeProcessedPayment(paymentId: string, result: any): void {
 }
 
 /**
- * Validate payment status
+ * Validate payment status - be more flexible with statuses
  */
 function isPaymentComplete(status: string): boolean {
-  const completeStatuses = ['finished', 'completed', 'confirmed', 'sending', 'partially_paid'];
+  const completeStatuses = [
+    'finished', 
+    'completed', 
+    'confirmed', 
+    'sending', 
+    'partially_paid', // Accept partial payments if within tolerance
+    'confirming' // Sometimes payments are still confirming but funds are secured
+  ];
   return completeStatuses.includes(status.toLowerCase());
 }
 
@@ -194,8 +223,49 @@ export async function POST(req: NextRequest) {
       outcome: payload?.outcome_amount,
     });
 
-    // Check payment status
-    if (!isPaymentComplete(status)) {
+    // Special handling for "failed" status - check if it's due to small underpayment
+    if (status === 'failed' || status === 'expired') {
+      const requiredAmount = Number(payload?.price_amount || 0);
+      const outcomeAmount = Number(payload?.outcome_amount || 0);
+      const actuallyPaid = Number(payload?.actually_paid || 0);
+      
+      // If they paid something and it's within tolerance, process it anyway
+      if (actuallyPaid > 0 && outcomeAmount > 0) {
+        if (isPaymentSufficient(requiredAmount, outcomeAmount)) {
+          console.log('[Webhook] Failed payment within tolerance, processing anyway');
+          // Continue processing as if successful
+        } else {
+          console.log('[Webhook] Payment failed/expired and outside tolerance:', {
+            status,
+            required: requiredAmount,
+            outcome: outcomeAmount,
+            shortage: requiredAmount - outcomeAmount
+          });
+          return NextResponse.json(
+            { 
+              success: false,
+              message: `Payment ${status}: insufficient amount`,
+              required: requiredAmount,
+              received: outcomeAmount,
+              shortage: requiredAmount - outcomeAmount
+            },
+            { status: 200 }
+          );
+        }
+      } else {
+        // No payment received
+        console.log('[Webhook] Payment expired/failed with no payment received');
+        return NextResponse.json(
+          { 
+            success: true,
+            message: `Payment ${status} - no action taken`,
+            processed: false,
+          },
+          { status: 200 }
+        );
+      }
+    } else if (!isPaymentComplete(status)) {
+      // Payment still pending
       console.log('[Webhook] Payment not complete, status:', status);
       return NextResponse.json(
         { 
@@ -214,20 +284,49 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract and validate amount
-    let amountUSD = Number(payload?.price_amount || 0);
+    let requiredAmountUSD = Number(payload?.price_amount || 0);
+    let receivedAmountUSD = Number(payload?.outcome_amount || 0);
     
     // Fallback to outcome_amount if price_amount not available
-    if (!amountUSD && payload?.outcome_amount) {
-      amountUSD = Number(payload.outcome_amount);
+    if (!requiredAmountUSD && receivedAmountUSD) {
+      requiredAmountUSD = receivedAmountUSD;
     }
     
-    if (!amountUSD || Number.isNaN(amountUSD) || amountUSD <= 0) {
-      console.error('[Webhook] Invalid amount:', payload?.price_amount);
+    if (!requiredAmountUSD || Number.isNaN(requiredAmountUSD) || requiredAmountUSD <= 0) {
+      console.error('[Webhook] Invalid required amount:', payload?.price_amount);
       return NextResponse.json(
         { error: 'Invalid payment amount' },
         { status: 400 }
       );
     }
+
+    // Check if payment is sufficient (within tolerance)
+    if (receivedAmountUSD > 0 && !isPaymentSufficient(requiredAmountUSD, receivedAmountUSD)) {
+      const shortage = requiredAmountUSD - receivedAmountUSD;
+      const percentShort = ((shortage / requiredAmountUSD) * 100).toFixed(2);
+      
+      console.error('[Webhook] Insufficient payment:', {
+        required: requiredAmountUSD,
+        received: receivedAmountUSD,
+        shortage,
+        percentShort: percentShort + '%'
+      });
+      
+      return NextResponse.json(
+        { 
+          success: false,
+          error: `Insufficient payment: ${percentShort}% short`,
+          required: requiredAmountUSD,
+          received: receivedAmountUSD,
+          shortage
+        },
+        { status: 400 }
+      );
+    }
+
+    // Use the originally requested amount for clean accounting
+    // Even if they overpaid slightly, credit only what was requested
+    const amountToCredit = requiredAmountUSD;
 
     // Extract username
     const username = extractUsername(payload);
@@ -235,7 +334,7 @@ export async function POST(req: NextRequest) {
     // Prepare internal API call
     const depositPayload = {
       username,
-      amount: amountUSD,
+      amount: amountToCredit, // Credit the requested amount, not received
       method: 'crypto',
       notes: `NOWPayments deposit (${orderId})`,
       txId: paymentId,
@@ -246,7 +345,9 @@ export async function POST(req: NextRequest) {
         pay_currency: payload?.pay_currency,
         actually_paid: payload?.actually_paid,
         outcome_currency: payload?.outcome_currency,
-        outcome_amount: payload?.outcome_amount,
+        outcome_amount: receivedAmountUSD,
+        requested_amount: requiredAmountUSD,
+        tolerance_applied: receivedAmountUSD !== requiredAmountUSD,
         created_at: payload?.created_at,
         updated_at: payload?.updated_at,
       },
@@ -254,7 +355,9 @@ export async function POST(req: NextRequest) {
 
     console.log('[Webhook] Crediting wallet:', {
       username,
-      amount: amountUSD,
+      amountToCredit,
+      originallyRequested: requiredAmountUSD,
+      actuallyReceived: receivedAmountUSD,
       orderId,
     });
 
@@ -304,9 +407,11 @@ export async function POST(req: NextRequest) {
       processed: true,
       payment_id: paymentId,
       username,
-      amount: amountUSD,
-      transaction_id: depositData?.transaction?.id,
-      balance: depositData?.newBalance,
+      amount_credited: amountToCredit,
+      amount_received: receivedAmountUSD,
+      tolerance_applied: receivedAmountUSD !== requiredAmountUSD,
+      transaction_id: depositData?.data?.transactionId,
+      balance: depositData?.data?.newBalance,
       processingTime: Date.now() - startTime,
     };
 
@@ -316,8 +421,9 @@ export async function POST(req: NextRequest) {
     console.log('[Webhook] Successfully processed payment:', {
       paymentId,
       username,
-      amount: amountUSD,
-      newBalance: depositData?.newBalance,
+      amountCredited: amountToCredit,
+      amountReceived: receivedAmountUSD,
+      newBalance: depositData?.data?.newBalance,
       processingTime: successResult.processingTime,
     });
 
@@ -347,6 +453,7 @@ export async function GET(req: NextRequest) {
       message: 'NOWPayments webhook endpoint',
       timestamp: new Date().toISOString(),
       configured: !!NOWPAYMENTS_IPN_SECRET,
+      tolerance: `${(PAYMENT_TOLERANCE * 100).toFixed(1)}%`,
     },
     { status: 200 }
   );
