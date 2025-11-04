@@ -3,6 +3,13 @@
 
 import Link from 'next/link';
 import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
+import {
   Mail,
   Gift,
   DollarSign,
@@ -12,6 +19,7 @@ import {
   Star,
   AlertTriangle,
   Heart,
+  ChevronDown,
 } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -122,13 +130,78 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
     onToggleFavorite,
   } = parsed.success ? parsed.data : rawProps;
 
-  const showSubscribeButton = user?.role === 'buyer' && user.username !== username && !hasAccess;
-  const showUnsubscribeButton = user?.role === 'buyer' && user.username !== username && !!hasAccess;
+  const [subscriptionMenuOpen, setSubscriptionMenuOpen] = useState(false);
+  const subscriptionButtonRef = useRef<HTMLDivElement | null>(null);
+
+  const shouldShowSubscriptionButton = user?.role === 'buyer' && user.username !== username;
+  const isSubscribed = !!hasAccess;
+  const subscribeLabel =
+    typeof subscriptionPrice === 'number' && subscriptionPrice > 0
+      ? `Subscribe ($${subscriptionPrice.toFixed(2)}/mo)`
+      : 'Subscribe';
 
   const sanitizedUsername = sanitizeStrict(username);
 
   // Get user activity status using the hook
   const { activityStatus, loading: activityLoading } = useUserActivityStatus(username);
+
+  useEffect(() => {
+    if (!subscriptionMenuOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (subscriptionButtonRef.current && !subscriptionButtonRef.current.contains(event.target as Node)) {
+        setSubscriptionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [subscriptionMenuOpen]);
+
+  useEffect(() => {
+    if (!isSubscribed) {
+      setSubscriptionMenuOpen(false);
+    }
+  }, [isSubscribed]);
+
+  const handleSubscriptionClick = () => {
+    if (isSubscribed) {
+      if (subscriptionMenuOpen) {
+        setSubscriptionMenuOpen(false);
+      }
+      return;
+    }
+    onShowSubscribeModal();
+  };
+
+  const handleToggleMenu = (event?: ReactMouseEvent<HTMLElement>) => {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    if (isSubscribed) {
+      setSubscriptionMenuOpen(prev => !prev);
+    }
+  };
+
+  const handleArrowKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleToggleMenu();
+    }
+  };
+
+  const handleUnsubscribeClick = () => {
+    setSubscriptionMenuOpen(false);
+    onShowUnsubscribeModal();
+  };
 
   // Format the activity status for display
   const getActivityDisplay = () => {
@@ -299,27 +372,49 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
       </div>
 
       <div className="flex flex-wrap gap-3 justify-center w-full max-w-lg">
-        {showSubscribeButton && (
-          <button
-            onClick={onShowSubscribeModal}
-            className="flex items-center gap-2 bg-[#ff950e] text-black font-bold px-6 py-3 rounded-full shadow-lg hover:bg-[#e0850d] transition text-base"
-            type="button"
-          >
-            <DollarSign className="w-5 h-5" />
-            {typeof subscriptionPrice === 'number' && subscriptionPrice > 0
-              ? `Subscribe ($${subscriptionPrice.toFixed(2)}/mo)`
-              : 'Subscribe'}
-          </button>
-        )}
+        {shouldShowSubscriptionButton && (
+          <div className="relative" ref={subscriptionButtonRef}>
+            <button
+              type="button"
+              onClick={handleSubscriptionClick}
+              className={`group flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm sm:text-base font-semibold transition duration-150 shadow-[0_8px_20px_rgba(0,0,0,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+                isSubscribed
+                  ? 'bg-[#121212] border border-[#ff950e]/70 text-[#ff950e] hover:bg-[#1b1b1b]'
+                  : 'bg-[#151515] border border-[#ff950e] text-white hover:bg-[#1f1f1f]'
+              } hover:scale-[1.02]`}
+              aria-haspopup={isSubscribed ? 'menu' : undefined}
+              aria-expanded={isSubscribed ? subscriptionMenuOpen : undefined}
+            >
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-[#ff950e]" />
+              <span>{isSubscribed ? 'Subscribed' : subscribeLabel}</span>
+              {isSubscribed && (
+                <span
+                  className="ml-1 flex items-center rounded-lg bg-[#ff950e]/10 p-1 text-[#ff950e] transition duration-150 group-hover:bg-[#ff950e]/20"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Subscription options"
+                  aria-haspopup="menu"
+                  aria-expanded={subscriptionMenuOpen}
+                  onClick={handleToggleMenu}
+                  onKeyDown={handleArrowKeyDown}
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${subscriptionMenuOpen ? 'rotate-180' : ''}`} />
+                </span>
+              )}
+            </button>
 
-        {showUnsubscribeButton && (
-          <button
-            onClick={onShowUnsubscribeModal}
-            className="flex items-center gap-2 bg-gray-700 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-red-600 transition text-base"
-            type="button"
-          >
-            Unsubscribe
-          </button>
+            {isSubscribed && subscriptionMenuOpen && (
+              <div className="absolute right-0 mt-2 w-40 rounded-lg border border-gray-700 bg-[#111111] py-2 shadow-xl ring-1 ring-black/5">
+                <button
+                  type="button"
+                  onClick={handleUnsubscribeClick}
+                  className="flex w-full items-center justify-start px-4 py-2 text-sm font-medium text-white transition duration-150 hover:bg-[#1f1f1f] hover:text-[#ff950e]"
+                >
+                  Unsubscribe
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {user?.role === 'buyer' && user.username !== username && (
