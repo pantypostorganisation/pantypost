@@ -371,13 +371,13 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 justify-center w-full max-w-lg">
+      <div className="flex flex-wrap justify-center gap-4 w-full max-w-lg">
         {shouldShowSubscriptionButton && (
           <div className="relative" ref={subscriptionButtonRef}>
             <button
               type="button"
               onClick={handleSubscriptionClick}
-              className={`group flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm sm:text-base font-semibold transition duration-150 shadow-[0_8px_20px_rgba(0,0,0,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
+              className={`group flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm sm:text-base font-semibold transition-all duration-150 shadow-[0_8px_20px_rgba(0,0,0,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
                 isSubscribed
                   ? 'bg-[#121212] border border-[#ff950e]/70 text-[#ff950e] hover:bg-[#1b1b1b]'
                   : 'bg-[#151515] border border-[#ff950e] text-white hover:bg-[#1f1f1f]'
@@ -419,11 +419,11 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
 
         {user?.role === 'buyer' && user.username !== username && (
           <button
-            className="flex items-center gap-2 bg-gray-800 text-[#ff950e] font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
+            className="group flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm sm:text-base font-semibold transition-all duration-150 shadow-[0_8px_20px_rgba(0,0,0,0.35)] bg-[#0e0e0e] text-[#ff950e] hover:bg-[#050505] hover:shadow-[0_0_12px_rgba(255,149,14,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
             onClick={onShowTipModal}
             type="button"
           >
-            <Gift className="w-5 h-5" />
+            <Gift className="h-4 w-4 sm:h-5 sm:w-5 text-[#ff950e]" />
             Tip Seller
           </button>
         )}
@@ -431,9 +431,9 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
         {user?.role === 'buyer' && user.username !== username && (
           <Link
             href={`/buyers/messages?thread=${encodeURIComponent(username)}`}
-            className="flex items-center gap-2 bg-gray-800 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
+            className="group flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm sm:text-base font-semibold transition-all duration-150 shadow-[0_8px_20px_rgba(0,0,0,0.35)] bg-[#0e0e0e] text-[#ff950e] hover:bg-[#050505] hover:shadow-[0_0_12px_rgba(255,149,14,0.25)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
           >
-            <Mail className="w-5 h-5" />
+            <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-[#ff950e]" />
             Message
           </Link>
         )}
