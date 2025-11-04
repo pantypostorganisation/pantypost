@@ -249,13 +249,7 @@ export async function POST(req: NextRequest) {
       success_url: `${appUrl}/wallet/buyer?deposit=success&order=${orderId}`,
       cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
       is_fixed_rate: false,  // Use floating rate for fair pricing
-      is_fee_paid_by_user: false,
-      type: 'Standard',
-      case: 'payment',
-      metadata: {
-        original_amount: amount,
-        buffer_applied: RATE_BUFFER,
-      }
+      is_fee_paid_by_user: false
     };
 
     const paymentRes = await fetch(NOWPAYMENTS_ENDPOINT, {
