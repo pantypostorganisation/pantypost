@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
 const NOWPAYMENTS_ENDPOINT = 'https://api.nowpayments.io/v1/payment';
+const NOWPAYMENTS_ESTIMATE_ENDPOINT = 'https://api.nowpayments.io/v1/estimate';
+const RATE_BUFFER = 0.0025; // 0.25% buffer for rate fluctuations
 
 // Helper to validate if a string is a valid URL
 function isValidUrl(string: string): boolean {
@@ -41,6 +43,60 @@ function generateIdempotencyKey(orderId: string): string {
     .substring(0, 32);
 }
 
+// Check the exchange rate before creating payment
+async function checkExchangeRate(amount: number, apiKey: string): Promise<{
+  estimatedUsdt: number;
+  bufferedUsdt: number;
+  exchangeRate: number;
+  isReasonable: boolean;
+}> {
+  try {
+    const estimateUrl = `${NOWPAYMENTS_ESTIMATE_ENDPOINT}?amount=${amount}&currency_from=usd&currency_to=usdttrc20`;
+    
+    const response = await fetch(estimateUrl, {
+      method: 'GET',
+      headers: {
+        'x-api-key': apiKey,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to get rate estimate');
+    }
+
+    const data = await response.json();
+    const estimatedUsdt = parseFloat(data.estimated_amount);
+    
+    // Add 0.25% buffer to protect against rate changes
+    const bufferedUsdt = estimatedUsdt * (1 + RATE_BUFFER);
+    
+    const exchangeRate = amount / estimatedUsdt; // How many USD per USDT
+    
+    // Check if rate is reasonable (USDT should be 0.98-1.02 USD)
+    const isReasonable = exchangeRate >= 0.98 && exchangeRate <= 1.02;
+    
+    console.log('[NOWPayments] Rate check with buffer:', {
+      usdAmount: amount,
+      estimatedUsdt: estimatedUsdt.toFixed(6),
+      bufferedUsdt: bufferedUsdt.toFixed(6),
+      bufferAmount: (bufferedUsdt - estimatedUsdt).toFixed(6),
+      exchangeRate: exchangeRate.toFixed(4),
+      isReasonable,
+      percentDiff: ((Math.abs(1 - exchangeRate) * 100).toFixed(2)) + '%'
+    });
+
+    return {
+      estimatedUsdt,
+      bufferedUsdt,
+      exchangeRate,
+      isReasonable,
+    };
+  } catch (error) {
+    console.error('[NOWPayments] Rate check failed:', error);
+    throw error;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -51,6 +107,9 @@ export async function POST(req: NextRequest) {
     const description = typeof body?.description === 'string' 
       ? body.description 
       : 'PantyPost wallet deposit';
+    
+    // Check if this is just a rate check request
+    const isRateCheckOnly = body?.rateCheckOnly === true;
 
     // Input validation
     if (!amount || Number.isNaN(amount) || amount <= 0) {
@@ -100,6 +159,67 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // ALWAYS check the exchange rate first
+    let rateInfo;
+    try {
+      rateInfo = await checkExchangeRate(amount, apiKey);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unable to check exchange rates. Please try again.',
+          code: 'RATE_CHECK_FAILED',
+        },
+        { status: 500 }
+      );
+    }
+
+    // If rate is unreasonable, warn the user
+    if (!rateInfo.isReasonable) {
+      const percentOff = Math.abs((1 - rateInfo.exchangeRate) * 100).toFixed(1);
+      console.warn('[NOWPayments] Unreasonable exchange rate detected:', {
+        rate: rateInfo.exchangeRate,
+        percentOff: percentOff + '%'
+      });
+      
+      // Reject if rate is more than 5% off
+      if (parseFloat(percentOff) > 5) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Exchange rate is ${percentOff}% off market rate. Please try again later.`,
+            code: 'BAD_EXCHANGE_RATE',
+            details: {
+              expectedUsdt: amount,
+              actualUsdt: rateInfo.estimatedUsdt,
+              exchangeRate: rateInfo.exchangeRate,
+            }
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // If this is just a rate check, return the rate info with buffer
+    if (isRateCheckOnly) {
+      return NextResponse.json(
+        {
+          success: true,
+          data: {
+            usdAmount: amount,
+            usdtRequired: rateInfo.bufferedUsdt,  // Return buffered amount
+            usdtEstimated: rateInfo.estimatedUsdt, // Original estimate
+            buffer: `${(RATE_BUFFER * 100).toFixed(2)}%`,
+            exchangeRate: rateInfo.exchangeRate,
+            isReasonable: rateInfo.isReasonable,
+            percentDiff: ((Math.abs(1 - rateInfo.exchangeRate) * 100).toFixed(2)) + '%',
+            note: 'Amount includes 0.25% buffer for rate fluctuations'
+          }
+        },
+        { status: 200 }
+      );
+    }
+
     const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') || 'https://pantypost.com';
     
     // Generate order ID with username extraction capability
@@ -111,12 +231,16 @@ export async function POST(req: NextRequest) {
       amount,
       orderId,
       currency: 'usdttrc20',
+      estimatedUsdt: rateInfo.estimatedUsdt.toFixed(6),
+      bufferedUsdt: rateInfo.bufferedUsdt.toFixed(6),
     });
 
-    // IMPORTANT: Skip invoice API and go directly to payment API for USDT-only
-    // The invoice API doesn't strictly enforce pay_currency
+    // Create the payment with the BUFFERED amount to protect against rate changes
+    // We ask for slightly more USDT to ensure the USD value is covered
+    const adjustedUsdAmount = amount * (1 + RATE_BUFFER);
+    
     const paymentPayload: Record<string, unknown> = {
-      price_amount: amount,
+      price_amount: adjustedUsdAmount,  // Request slightly more to cover fluctuations
       price_currency: 'usd',
       pay_currency: 'usdttrc20',  // FORCE USDT TRC-20 ONLY
       order_id: orderId,
@@ -124,10 +248,14 @@ export async function POST(req: NextRequest) {
       ipn_callback_url: `${appUrl}/api/crypto/webhook`,
       success_url: `${appUrl}/wallet/buyer?deposit=success&order=${orderId}`,
       cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
-      is_fixed_rate: false,  // CHANGED TO FALSE for correct rates
+      is_fixed_rate: false,  // Use floating rate for fair pricing
       is_fee_paid_by_user: false,
-      type: 'Standard',  // ADD THIS
-      case: 'payment'   // ADD THIS
+      type: 'Standard',
+      case: 'payment',
+      metadata: {
+        original_amount: amount,
+        buffer_applied: RATE_BUFFER,
+      }
     };
 
     const paymentRes = await fetch(NOWPAYMENTS_ENDPOINT, {
@@ -163,6 +291,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Get the actual payment amount
+    const actualPayAmount = parseFloat(paymentData.pay_amount);
+    
+    // Log the difference for monitoring
+    console.log('[NOWPayments] Payment created with buffer:', {
+      originalEstimate: rateInfo.estimatedUsdt.toFixed(6),
+      bufferedEstimate: rateInfo.bufferedUsdt.toFixed(6),
+      actualPayAmount: actualPayAmount.toFixed(6),
+      difference: (actualPayAmount - rateInfo.estimatedUsdt).toFixed(6),
+      bufferUsed: ((actualPayAmount - rateInfo.estimatedUsdt) / rateInfo.estimatedUsdt * 100).toFixed(3) + '%'
+    });
+
     // For USDT direct payments, we typically get a payment address
     // Check if we got a payment URL or just an address
     let paymentUrl = null;
@@ -183,24 +323,31 @@ export async function POST(req: NextRequest) {
 
     // If we got a payment address (typical for USDT direct payments)
     if (!paymentUrl && paymentData.pay_address) {
-      console.log('[NOWPayments] USDT direct payment address:', paymentData.pay_address);
+      console.log('[NOWPayments] USDT direct payment created:', {
+        address: paymentData.pay_address,
+        amount: actualPayAmount,
+        originalUsdAmount: amount,
+        buffer: `${(RATE_BUFFER * 100).toFixed(2)}%`,
+      });
       
       // Return structured response for manual USDT payment
-      // This is actually the expected flow for USDT-only payments
       return NextResponse.json(
         {
           success: true,
           data: {
             payment_id: paymentData.payment_id,
             pay_address: paymentData.pay_address,
-            pay_amount: paymentData.pay_amount,
+            pay_amount: actualPayAmount,
             pay_currency: 'USDT (TRC-20)',
             payment_status: paymentData.payment_status,
             order_id: orderId,
             type: 'manual_payment',
             network: 'TRC-20',
-            instructions: `Please send exactly ${paymentData.pay_amount} USDT to the TRC-20 address provided`,
+            instructions: `Please send exactly ${actualPayAmount} USDT to the TRC-20 address provided`,
             expiry_time: paymentData.expiry_estimate_date,
+            exchange_rate: rateInfo.exchangeRate,
+            usd_amount: amount,  // Original amount user wanted to deposit
+            buffer_note: 'Amount includes 0.25% buffer for rate protection',
           },
         },
         { status: 200 }
@@ -217,11 +364,12 @@ export async function POST(req: NextRequest) {
           data: {
             payment_url: paymentUrl,
             payment_id: paymentData.payment_id,
-            amount: amount,
+            amount: amount,  // Original USD amount
             order_id: orderId,
             type: 'hosted_checkout',
             currency: 'USDT (TRC-20)',
             warning: 'Only send USDT on TRC-20 network!',
+            exchange_rate: rateInfo.exchangeRate,
           },
         },
         { status: 200 }
