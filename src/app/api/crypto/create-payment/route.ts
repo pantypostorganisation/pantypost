@@ -124,10 +124,10 @@ export async function POST(req: NextRequest) {
       ipn_callback_url: `${appUrl}/api/crypto/webhook`,
       success_url: `${appUrl}/wallet/buyer?deposit=success&order=${orderId}`,
       cancel_url: `${appUrl}/wallet/buyer?deposit=cancelled`,
-      is_fixed_rate: true,
+      is_fixed_rate: false,  // CHANGED TO FALSE for correct rates
       is_fee_paid_by_user: false,
-      // Additional parameters to enforce USDT only
-      fixed_rate: true,
+      type: 'Standard',  // ADD THIS
+      case: 'payment'   // ADD THIS
     };
 
     const paymentRes = await fetch(NOWPAYMENTS_ENDPOINT, {
