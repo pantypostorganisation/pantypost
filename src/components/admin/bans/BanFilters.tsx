@@ -28,17 +28,17 @@ export default function BanFilters({
   };
 
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-6">
-      <div className="flex flex-col lg:flex-row gap-4">
+    <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-950/80 p-4 md:p-5">
+      <div className="flex flex-col gap-4 lg:flex-row">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-3 text-gray-400 z-10" size={16} />
+          <Search className="absolute left-3 top-3 z-10 text-zinc-500" size={16} />
           <SecureInput
             type="text"
             placeholder="Search by username or reason..."
             value={filters.searchTerm}
             onChange={handleSearchChange}
-            className="w-full pl-10 pr-4 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] transition-all"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900 py-2 pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#ff950e] focus:outline-none focus:ring-0"
             maxLength={100}
             sanitize={true}
             sanitizer={sanitizeSearchQuery}
@@ -50,7 +50,7 @@ export default function BanFilters({
           <select
             value={filters.filterBy}
             onChange={(e) => onFiltersChange({ filterBy: e.target.value as any })}
-            className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-0"
           >
             <option value="all">All Types</option>
             <option value="temporary">Temporary</option>
@@ -63,17 +63,17 @@ export default function BanFilters({
           <select
             value={filters.sortBy}
             onChange={(e) => onFiltersChange({ sortBy: e.target.value as any })}
-            className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-0"
           >
             <option value="date">Sort by Date</option>
             <option value="username">Sort by Username</option>
             <option value="duration">Sort by Duration</option>
           </select>
           <button
-            onClick={() => onFiltersChange({ 
-              sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc' 
+            onClick={() => onFiltersChange({
+              sortOrder: filters.sortOrder === 'asc' ? 'desc' : 'asc'
             })}
-            className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white hover:bg-[#333] transition-colors"
+            className="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 transition-colors hover:bg-zinc-800"
           >
             {filters.sortOrder === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>

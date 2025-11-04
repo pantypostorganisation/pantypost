@@ -301,20 +301,22 @@ export default function BanManagementPage() {
   return (
     <RequireAuth role="admin">
       <div className="min-h-screen bg-black text-white">
-        <main className="p-8 max-w-7xl mx-auto">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-[#ff950e] flex items-center">
-                <Shield className="mr-3" />
+        <main className="mx-auto max-w-7xl px-6 py-8 sm:px-8">
+          <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-2">
+              <h1 className="flex items-center gap-3 text-3xl font-semibold text-white">
+                <span className="rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 p-1.5 text-[#ff950e]">
+                  <Shield size={24} />
+                </span>
                 Ban Management
               </h1>
-              <p className="text-gray-400 mt-1">Manage user bans and appeals</p>
+              <p className="text-sm text-zinc-400">Manage user bans and appeals</p>
             </div>
 
-            <div className="flex gap-3 flex-wrap">
+            <div className="flex w-full flex-col items-start gap-3 text-sm sm:flex-row sm:items-center sm:justify-end">
               <button
                 onClick={exportBanData}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
+                className="inline-flex items-center gap-2 rounded-lg border border-blue-500/50 bg-blue-500 px-4 py-2 font-medium text-black transition-colors hover:bg-blue-400"
               >
                 <Download size={16} />
                 Export Data
@@ -322,7 +324,7 @@ export default function BanManagementPage() {
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] flex items-center gap-2 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#ff950e]/60 bg-[#ff950e] px-4 py-2 font-medium text-black transition-colors hover:bg-[#e88800] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
                 Refresh
