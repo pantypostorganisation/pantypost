@@ -1000,13 +1000,13 @@ export default function Header(): React.ReactElement | null {
             <>
               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-purple-900/20 to-pink-900/20 rounded-lg border border-purple-500/30">
                 <Crown className="w-3.5 h-3.5 text-purple-400" />
-                <span className="text-[10px] font-bold text-purple-300">ADMIN</span>
+                <span className="text-[10px] font-bold text-purple-300">Admin Panel</span>
               </div>
 
               <div className="relative flex items-center">
                 <Link
                   href="/admin/reports"
-                  className="group flex items-center gap-1.5 bg-gradient-to-r from-red-900/20 to-orange-900/20 hover:from-red-900/30 hover:to-orange-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-red-500/30 hover:border-red-500/50 shadow-lg text-xs"
+                  className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
                 >
                   <Shield className="w-3.5 h-3.5 text-red-400" />
                   <span className="font-medium">Reports</span>
@@ -1020,7 +1020,7 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/admin/bans"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-red-900/20 hover:from-purple-900/30 hover:to-red-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
+                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
               >
                 <Ban className="w-3.5 h-3.5 text-purple-400" />
                 <span>Bans</span>
