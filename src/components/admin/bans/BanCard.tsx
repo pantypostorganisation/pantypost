@@ -20,29 +20,29 @@ const formatRemainingTime = (ban: BanEntry) => {
 
   if (ban.banType === 'permanent') {
     return (
-      <span className="flex items-center gap-1 text-red-400">
+      <span className="flex items-center gap-1 text-rose-400">
         <InfinityIcon size={14} /> Permanent
       </span>
     );
   }
 
   if (!ban.remainingHours || ban.remainingHours <= 0) {
-    return <span className="text-gray-500">Expired</span>;
+    return <span className="text-zinc-500">Expired</span>;
   }
 
   const hours = Number(ban.remainingHours);
   if (hours < 1) {
     const minutes = Math.ceil(hours * 60);
-    return <span className="text-yellow-400">{minutes}m remaining</span>;
+    return <span className="text-amber-300">{minutes}m remaining</span>;
   }
 
   if (hours < 24) {
-    return <span className="text-orange-400">{Math.ceil(hours)}h remaining</span>;
+    return <span className="text-amber-400">{Math.ceil(hours)}h remaining</span>;
   }
 
   const days = Math.floor(hours / 24);
   const remainingHours = Math.ceil(hours % 24);
-  return <span className="text-red-400">{days}d {remainingHours}h remaining</span>;
+  return <span className="text-orange-400">{days}d {remainingHours}h remaining</span>;
 };
 
 export default function BanCard({
@@ -59,95 +59,111 @@ export default function BanCard({
     : [];
   const hasEvidence = evidenceList.length > 0;
 
+  const reasonDisplay = getBanReasonDisplay(ban.reason, ban.customReason);
+  const normalizedReason = String(ban.reason || '').toLowerCase();
+  const normalizedCustomReason = String(ban.customReason || '').toLowerCase();
+  const severeReasonKeywords = [
+    'harassment',
+    'abuse',
+    'scam',
+    'scamming',
+    'fraud',
+    'payment_fraud',
+    'extortion',
+    'threat',
+    'dox',
+    'hate',
+  ];
+  const isSevereReason = severeReasonKeywords.some((keyword) =>
+    normalizedReason.includes(keyword) || normalizedCustomReason.includes(keyword)
+  );
+  const reasonTextClass = isSevereReason ? 'text-rose-400' : 'text-zinc-200';
+  const banTypeChipClass =
+    ban.banType === 'permanent'
+      ? 'border border-rose-500/40 bg-rose-500/10 text-rose-300'
+      : 'border border-amber-500/40 bg-amber-500/10 text-amber-300';
+
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors">
-      <div className="flex justify-between items-start">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
+    <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-6 transition-colors hover:border-zinc-700">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="flex-1 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
             <h3 className="text-lg font-semibold text-white">
               <SecureMessageDisplay content={ban.username} allowBasicFormatting={false} />
             </h3>
-            <span
-              className={`px-2 py-1 text-xs rounded font-medium ${
-                ban.banType === 'permanent'
-                  ? 'bg-red-900/20 text-red-400'
-                  : 'bg-orange-900/20 text-orange-400'
-              }`}
-            >
+            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium uppercase ${banTypeChipClass}`}>
               {ban.banType}
             </span>
             {ban.appealSubmitted && (
-              <span className="px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded font-medium">
+              <span className="inline-flex items-center rounded-full border border-indigo-500/40 bg-indigo-500/10 px-2.5 py-1 text-xs font-medium text-indigo-300">
                 Appeal {ban.appealStatus ?? 'Pending'}
               </span>
             )}
           </div>
 
-          <div className="text-sm text-gray-400 mb-2">
-            <span>Reason: </span>
-            <span className="text-gray-300">
-              {getBanReasonDisplay(ban.reason, ban.customReason)}
-            </span>
+          <div className="text-sm text-zinc-400">
+            <span className="font-medium text-zinc-500">Reason</span>
+            <span className={`ml-2 ${reasonTextClass}`}>{reasonDisplay}</span>
           </div>
 
-          <div className="text-sm text-gray-400">
-            <span>Duration: </span>
-            {formatRemainingTime(ban)}
+          <div className="text-sm text-zinc-400">
+            <span className="font-medium text-zinc-500">Duration</span>
+            <span className="ml-2">{formatRemainingTime(ban)}</span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-2 ml-4">
+        <div className="flex w-full flex-col gap-2 text-xs font-medium md:w-auto md:items-end">
           <button
             onClick={() => onToggleExpand(ban.id)}
-            className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 flex items-center transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-zinc-200 transition-all duration-150 hover:bg-zinc-800"
           >
-            <Eye size={12} className="mr-1" />
-            {isExpanded ? 'Less' : 'More'}
+            <Eye size={12} />
+            {isExpanded ? 'Hide' : 'Details'}
           </button>
 
           {ban.appealSubmitted && ban.appealStatus === 'pending' && (
             <button
               onClick={() => onReviewAppeal(ban)}
-              className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 flex items-center transition-colors"
+              className="inline-flex items-center gap-1 rounded-md border border-indigo-500/40 bg-zinc-900 px-3 py-1.5 text-indigo-300 transition-all duration-150 hover:bg-zinc-800"
             >
-              <MessageSquare size={12} className="mr-1" />
-              Review
+              <MessageSquare size={12} />
+              Review Appeal
             </button>
           )}
 
           <button
             onClick={() => onUnban(ban)}
-            className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 flex items-center transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-emerald-500/40 bg-zinc-900 px-3 py-1.5 text-emerald-400 transition-all duration-150 hover:bg-zinc-800"
           >
-            <UserCheck size={12} className="mr-1" />
+            <UserCheck size={12} />
             Unban
           </button>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="mt-4 pt-4 border-t border-gray-700">
-          <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="mt-4 border-t border-zinc-800/80 pt-4">
+          <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
             <div>
-              <span className="text-gray-400">Start Time:</span>
-              <div className="text-gray-300">{new Date(ban.startTime).toLocaleString()}</div>
+              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Start Time</span>
+              <div className="mt-1 text-zinc-200">{new Date(ban.startTime).toLocaleString()}</div>
             </div>
             <div>
-              <span className="text-gray-400">Banned By:</span>
-              <div className="text-gray-300">
+              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Banned By</span>
+              <div className="mt-1 text-zinc-400">
                 <SecureMessageDisplay content={ban.bannedBy ?? 'Unknown'} allowBasicFormatting={false} />
               </div>
             </div>
             {ban.endTime && (
               <div>
-                <span className="text-gray-400">End Time:</span>
-                <div className="text-gray-300">{new Date(ban.endTime).toLocaleString()}</div>
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">End Time</span>
+                <div className="mt-1 text-zinc-200">{new Date(ban.endTime).toLocaleString()}</div>
               </div>
             )}
             {ban.notes && (
-              <div className="col-span-2">
-                <span className="text-gray-400">Notes:</span>
-                <div className="text-gray-300 mt-1">
+              <div className="md:col-span-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">Notes</span>
+                <div className="mt-1 text-zinc-300">
                   <SecureMessageDisplay content={ban.notes} allowBasicFormatting={false} maxLength={500} />
                 </div>
               </div>
@@ -155,29 +171,29 @@ export default function BanCard({
           </div>
 
           {ban.appealSubmitted && (
-            <div className="mt-4 p-3 bg-blue-900/10 border border-blue-800 rounded">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm text-blue-400 font-medium">Appeal Submitted</div>
+            <div className="mt-4 rounded-lg border border-indigo-500/30 bg-indigo-500/5 p-4">
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm font-medium text-indigo-300">Appeal Submitted</div>
 
                 {hasEvidence && (
                   <button
                     onClick={() => onShowEvidence(evidenceList)}
-                    className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+                    className="inline-flex items-center gap-2 text-xs font-medium text-indigo-300 transition-colors hover:text-indigo-200"
                   >
-                    <span className="w-2 h-2 bg-blue-400 rounded"></span>
+                    <span className="h-2 w-2 rounded-full bg-indigo-300" />
                     {evidenceList.length} Evidence
                   </button>
                 )}
               </div>
 
-              <div className="text-sm text-gray-300">
+              <div className="text-sm text-zinc-200">
                 <SecureMessageDisplay
                   content={ban.appealText ?? 'No appeal text provided'}
                   allowBasicFormatting={false}
                   maxLength={500}
                 />
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="mt-2 text-xs text-zinc-500">
                 {ban.appealDate ? new Date(ban.appealDate).toLocaleString() : 'Unknown date'}
               </div>
             </div>
