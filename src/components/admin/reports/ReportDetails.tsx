@@ -90,83 +90,82 @@ export default function ReportDetails({
   }, [userStats]);
 
   return (
-    <div className="border-t border-gray-800 p-6 space-y-4 bg-[#0a0a0a]">
-      {/* User Report History - Simple Statistics */}
-      <div className="p-3 bg-purple-900/10 border border-purple-800 rounded-lg">
-        <div className="flex items-center gap-2 text-purple-400 mb-2">
+    <div className="border-t border-zinc-900/80 pt-5 text-sm text-zinc-300">
+      <div className="space-y-5">
+        {/* User Report History - Simple Statistics */}
+      <div className="rounded-2xl border border-zinc-900/80 bg-zinc-950/60 p-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[#ff950e]">
           <BarChart3 size={16} />
-          <span className="font-medium">Report Summary for {sanitizeStrict(report.reportee)}</span>
+          <span>Report summary for {sanitizeStrict(report.reportee)}</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div>
-            <span className="text-gray-400">Total Reports:</span>
-            <span className="text-white ml-2 font-medium">{stats.totalReports}</span>
+        <div className="grid grid-cols-1 gap-4 text-sm text-zinc-300 md:grid-cols-3">
+          <div className="space-y-1">
+            <span className="block text-xs uppercase tracking-wide text-zinc-500">Total Reports</span>
+            <span className="text-base font-semibold text-zinc-100">{stats.totalReports}</span>
           </div>
-          <div>
-            <span className="text-gray-400">Active Reports:</span>
-            <span className="text-red-400 ml-2 font-medium">{stats.activeReports}</span>
+          <div className="space-y-1">
+            <span className="block text-xs uppercase tracking-wide text-zinc-500">Active Reports</span>
+            <span className="text-base font-semibold text-red-300">{stats.activeReports}</span>
           </div>
-          <div>
-            <span className="text-gray-400">Processed Reports:</span>
-            <span className="text-green-400 ml-2 font-medium">{stats.processedReports}</span>
+          <div className="space-y-1">
+            <span className="block text-xs uppercase tracking-wide text-zinc-500">Processed Reports</span>
+            <span className="text-base font-semibold text-emerald-300">{stats.processedReports}</span>
           </div>
         </div>
 
         {userStats.isBanned && (
-          <div className="mt-3 p-2 bg-red-900/20 border border-red-800 rounded">
-            <div className="text-red-400 text-sm font-medium">Currently Banned</div>
-            <div className="text-gray-300 text-xs">
-              {remainingText}
-            </div>
+          <div className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+            <div className="font-medium">Currently banned</div>
+            <div className="text-xs text-red-200 opacity-80">{remainingText}</div>
           </div>
         )}
       </div>
 
       {/* Messages */}
       <div>
-        <div className="text-sm text-gray-400 mb-2 flex items-center gap-1">
+        <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
           <MessageSquare size={14} />
           Conversation ({report.messages?.length || 0} messages)
         </div>
-        <div className="bg-[#111] rounded-lg max-h-64 overflow-y-auto p-3 space-y-2">
+        <div className="max-h-64 space-y-2 overflow-y-auto rounded-2xl border border-zinc-900/80 bg-zinc-950/40 p-3">
           {report.messages && report.messages.length > 0 ? (
             report.messages.map((msg, idx) => (
               <div
                 key={`${msg.sender}-${msg.date}-${idx}`}
-                className={`p-2 rounded text-sm ${
+                className={`rounded-xl border px-3 py-2 text-sm ${
                   msg.sender === report.reporter
-                    ? 'bg-blue-900/20 text-blue-300'
-                    : 'bg-gray-800 text-gray-300'
+                    ? 'border-[#ff950e]/40 bg-[#ff950e]/10 text-[#ffb347]'
+                    : 'border-zinc-800 bg-zinc-900/60 text-zinc-100'
                 }`}
               >
-                <div className="font-semibold">{sanitizeStrict(msg.sender)}</div>
-                <div className="text-xs text-gray-500">
-                  {new Date(msg.date).toLocaleString()}
+                <div className="flex items-center justify-between text-xs text-zinc-400">
+                  <span className="font-medium text-zinc-200">{sanitizeStrict(msg.sender)}</span>
+                  <span>{new Date(msg.date).toLocaleString()}</span>
                 </div>
                 <SecureMessageDisplay
                   content={msg.content}
-                  className="mt-1"
+                  className="mt-2 text-sm"
                   allowBasicFormatting={false}
                   maxLength={500}
                 />
               </div>
             ))
           ) : (
-            <div className="text-gray-500 text-center py-4">No messages available</div>
+            <div className="py-6 text-center text-sm text-zinc-500">No messages available</div>
           )}
         </div>
       </div>
 
       {/* Severity and Category Controls */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <label htmlFor="severity-select" className="block text-sm font-medium text-gray-300 mb-1">Severity</label>
+          <label htmlFor="severity-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">Severity</label>
           <select
             id="severity-select"
             aria-label="Set report severity"
             value={SEVERITIES.includes((report.severity as any)) ? report.severity : 'medium'}
             onChange={(e) => handleSeverityChange(e.target.value)}
-            className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
           >
             {SEVERITIES.map(s => (
               <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>
@@ -175,13 +174,13 @@ export default function ReportDetails({
         </div>
 
         <div>
-          <label htmlFor="category-select" className="block text-sm font-medium text-gray-300 mb-1">Category</label>
+          <label htmlFor="category-select" className="mb-2 block text-xs font-medium uppercase tracking-wide text-zinc-500">Category</label>
           <select
             id="category-select"
             aria-label="Set report category"
             value={CATEGORIES.includes((report.category as any)) ? report.category : 'other'}
             onChange={(e) => handleCategoryChange(e.target.value)}
-            className="w-full px-3 py-2 bg-[#222] border border-gray-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
           >
             {CATEGORIES.map(c => (
               <option key={c} value={c}>
@@ -194,10 +193,10 @@ export default function ReportDetails({
 
       {/* Admin Notes */}
       <div>
-        <div className="flex items-center gap-2 mb-2">
-          <FileText size={14} className="text-gray-400" />
-          <span className="text-sm font-medium text-gray-300">Admin Notes</span>
-          <span className="text-xs text-gray-500">(Auto-saves)</span>
+        <div className="mb-2 flex items-center gap-2 text-sm text-zinc-300">
+          <FileText size={14} className="text-zinc-500" />
+          <span className="font-medium">Admin Notes</span>
+          <span className="text-xs text-zinc-500">(Auto-saves)</span>
         </div>
         <SecureTextarea
           value={adminNotes}
@@ -214,20 +213,21 @@ export default function ReportDetails({
 
       {/* Processed Info */}
       {report.processed && (
-        <div className="p-3 bg-gray-900 border border-gray-700 rounded-lg text-sm">
-          <div className="text-gray-400">
-            Processed by: <span className="text-white">{sanitizeStrict(report.processedBy || 'Unknown')}</span>
+        <div className="rounded-2xl border border-zinc-900/80 bg-zinc-950/60 p-4 text-sm text-zinc-300">
+          <div>
+            Processed by: <span className="font-medium text-zinc-100">{sanitizeStrict(report.processedBy || 'Unknown')}</span>
           </div>
           {report.processedAt && (
-            <div className="text-gray-400">
-              Processed at: <span className="text-white">{new Date(report.processedAt).toLocaleString()}</span>
+            <div className="mt-1">
+              Processed at: <span className="font-medium text-zinc-100">{new Date(report.processedAt).toLocaleString()}</span>
             </div>
           )}
           {report.banApplied && (
-            <div className="text-red-400 mt-1">Ban was applied</div>
+            <div className="mt-2 text-red-300">Ban was applied</div>
           )}
         </div>
       )}
+      </div>
     </div>
   );
 }
