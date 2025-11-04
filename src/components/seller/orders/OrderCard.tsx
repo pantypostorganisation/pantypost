@@ -45,23 +45,23 @@ export default function OrderCard({
   const isCustom = type === 'custom';
 
   let borderStyle = 'border-gray-700 hover:border-[#ff950e]/50';
-  let gradientStyle = 'from-gray-900/50 via-black/30 to-gray-800/50';
+  let backgroundStyle = 'bg-gray-900/60 hover:bg-gray-900/70';
   let badgeContent: React.ReactNode = null;
 
   if (isAuction) {
-    borderStyle = 'border-purple-500/30 hover:border-purple-400/50';
-    gradientStyle = 'from-purple-900/10 via-gray-900/50 to-blue-900/10';
+    borderStyle = 'border-purple-500/40 hover:border-purple-400/60';
+    backgroundStyle = 'bg-purple-950/40 hover:bg-purple-950/55';
     badgeContent = (
-      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-purple-500 to-purple-400 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg flex items-center">
+      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-purple-500 to-purple-400 text-white text-xs px-2 py-1 rounded-full font-bold flex items-center">
         <Gavel className="w-3 h-3 mr-1" />
         Auction
       </span>
     );
   } else if (isCustom) {
-    borderStyle = 'border-blue-500/30 hover:border-blue-400/50';
-    gradientStyle = 'from-blue-900/10 via-gray-900/50 to-cyan-900/10';
+    borderStyle = 'border-blue-500/40 hover:border-blue-400/60';
+    backgroundStyle = 'bg-blue-950/40 hover:bg-blue-950/55';
     badgeContent = (
-      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-cyan-400 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg flex items-center">
+      <span className="absolute -top-2 -right-2 bg-gradient-to-r from-blue-500 to-cyan-400 text-white text-xs px-2 py-1 rounded-full font-bold flex items-center">
         <Settings className="w-3 h-3 mr-1" />
         Custom
       </span>
@@ -75,7 +75,7 @@ export default function OrderCard({
   return (
     <li
       key={order.id + order.date}
-      className={`relative border rounded-2xl bg-gradient-to-br overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-300 ${gradientStyle} ${borderStyle}`}
+      className={`relative border rounded-2xl overflow-hidden transition-all duration-300 ${backgroundStyle} ${borderStyle}`}
     >
       {/* Order Header */}
       <div className="p-6">
@@ -86,7 +86,7 @@ export default function OrderCard({
               <img
                 src={order.imageUrl || '/default-image.jpg'}
                 alt={sanitizedTitle}
-                className="w-24 h-24 object-cover rounded-xl border-2 border-gray-600 shadow-lg"
+                className="w-24 h-24 object-cover rounded-xl border-2 border-gray-600"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = '/default-image.jpg';
                 }}
@@ -97,7 +97,7 @@ export default function OrderCard({
 
           {/* For custom requests, show badge without image */}
           {isCustom && badgeContent && (
-            <div className="relative w-24 h-24 bg-gradient-to-br from-blue-900/30 to-cyan-900/30 rounded-xl border-2 border-blue-500/30 flex items-center justify-center">
+            <div className="relative w-24 h-24 bg-blue-950/40 rounded-xl border-2 border-blue-500/30 flex items-center justify-center">
               <Settings className="w-8 h-8 text-blue-400" />
               {badgeContent}
             </div>

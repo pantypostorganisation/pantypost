@@ -45,10 +45,10 @@ export default function OrdersSection({
   }
 
   return (
-    <section className="space-y-6 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur-sm">
+    <section className="space-y-6 rounded-3xl border border-white/10 bg-gray-950/40 p-6">
       <div className="flex flex-col gap-4 border-b border-white/5 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center text-white">
-          <div className={`bg-gradient-to-r ${iconColor} mr-3 rounded-2xl p-3 shadow-lg`}>
+          <div className={`bg-gradient-to-r ${iconColor} mr-3 rounded-2xl p-3`}>
             <Icon className="h-6 w-6 text-white" />
           </div>
           <div>
