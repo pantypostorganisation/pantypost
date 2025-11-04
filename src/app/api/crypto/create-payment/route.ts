@@ -5,6 +5,7 @@ import crypto from 'crypto';
 const NOWPAYMENTS_ENDPOINT = 'https://api.nowpayments.io/v1/payment';
 const NOWPAYMENTS_ESTIMATE_ENDPOINT = 'https://api.nowpayments.io/v1/estimate';
 const RATE_BUFFER = 0.0025; // 0.25% buffer for rate fluctuations
+const NETWORK_FEE_USDT = 1.5; // TRC-20 network fee in USDT
 
 // Helper to validate if a string is a valid URL
 function isValidUrl(string: string): boolean {
@@ -47,6 +48,7 @@ function generateIdempotencyKey(orderId: string): string {
 async function checkExchangeRate(amount: number, apiKey: string): Promise<{
   estimatedUsdt: number;
   bufferedUsdt: number;
+  totalWithFees: number;
   exchangeRate: number;
   isReasonable: boolean;
 }> {
@@ -70,16 +72,20 @@ async function checkExchangeRate(amount: number, apiKey: string): Promise<{
     // Add 0.25% buffer to protect against rate changes
     const bufferedUsdt = estimatedUsdt * (1 + RATE_BUFFER);
     
+    // Add network fee on top
+    const totalWithFees = bufferedUsdt + NETWORK_FEE_USDT;
+    
     const exchangeRate = amount / estimatedUsdt; // How many USD per USDT
     
     // Check if rate is reasonable (USDT should be 0.98-1.02 USD)
     const isReasonable = exchangeRate >= 0.98 && exchangeRate <= 1.02;
     
-    console.log('[NOWPayments] Rate check with buffer:', {
+    console.log('[NOWPayments] Rate check with buffer and fees:', {
       usdAmount: amount,
       estimatedUsdt: estimatedUsdt.toFixed(6),
       bufferedUsdt: bufferedUsdt.toFixed(6),
-      bufferAmount: (bufferedUsdt - estimatedUsdt).toFixed(6),
+      networkFee: NETWORK_FEE_USDT,
+      totalWithFees: totalWithFees.toFixed(6),
       exchangeRate: exchangeRate.toFixed(4),
       isReasonable,
       percentDiff: ((Math.abs(1 - exchangeRate) * 100).toFixed(2)) + '%'
@@ -88,6 +94,7 @@ async function checkExchangeRate(amount: number, apiKey: string): Promise<{
     return {
       estimatedUsdt,
       bufferedUsdt,
+      totalWithFees,
       exchangeRate,
       isReasonable,
     };
@@ -200,20 +207,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If this is just a rate check, return the rate info with buffer
+    // If this is just a rate check, return the rate info with buffer and fees
     if (isRateCheckOnly) {
       return NextResponse.json(
         {
           success: true,
           data: {
             usdAmount: amount,
-            usdtRequired: rateInfo.bufferedUsdt,  // Return buffered amount
-            usdtEstimated: rateInfo.estimatedUsdt, // Original estimate
+            usdtRequired: rateInfo.totalWithFees,  // Total including fees
+            usdtBase: rateInfo.estimatedUsdt,      // Base amount
+            usdtBuffer: rateInfo.bufferedUsdt,     // With buffer
+            networkFee: NETWORK_FEE_USDT,
             buffer: `${(RATE_BUFFER * 100).toFixed(2)}%`,
             exchangeRate: rateInfo.exchangeRate,
             isReasonable: rateInfo.isReasonable,
             percentDiff: ((Math.abs(1 - rateInfo.exchangeRate) * 100).toFixed(2)) + '%',
-            note: 'Amount includes 0.25% buffer for rate fluctuations'
+            note: `Amount includes ${(RATE_BUFFER * 100).toFixed(2)}% buffer and ${NETWORK_FEE_USDT} USDT network fee`
           }
         },
         { status: 200 }
@@ -233,10 +242,11 @@ export async function POST(req: NextRequest) {
       currency: 'usdttrc20',
       estimatedUsdt: rateInfo.estimatedUsdt.toFixed(6),
       bufferedUsdt: rateInfo.bufferedUsdt.toFixed(6),
+      totalWithFees: rateInfo.totalWithFees.toFixed(6),
     });
 
     // Create the payment with the BUFFERED amount to protect against rate changes
-    // We ask for slightly more USDT to ensure the USD value is covered
+    // We ask for slightly more USD to cover fluctuations
     const adjustedUsdAmount = amount * (1 + RATE_BUFFER);
     
     const paymentPayload: Record<string, unknown> = {
@@ -285,16 +295,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get the actual payment amount
-    const actualPayAmount = parseFloat(paymentData.pay_amount);
+    // Get the actual payment amount and add network fee
+    const basePayAmount = parseFloat(paymentData.pay_amount);
+    const totalPayAmount = basePayAmount + NETWORK_FEE_USDT;
     
-    // Log the difference for monitoring
-    console.log('[NOWPayments] Payment created with buffer:', {
+    // Log the amounts for monitoring
+    console.log('[NOWPayments] Payment created with buffer and fees:', {
       originalEstimate: rateInfo.estimatedUsdt.toFixed(6),
       bufferedEstimate: rateInfo.bufferedUsdt.toFixed(6),
-      actualPayAmount: actualPayAmount.toFixed(6),
-      difference: (actualPayAmount - rateInfo.estimatedUsdt).toFixed(6),
-      bufferUsed: ((actualPayAmount - rateInfo.estimatedUsdt) / rateInfo.estimatedUsdt * 100).toFixed(3) + '%'
+      basePayAmount: basePayAmount.toFixed(6),
+      networkFee: NETWORK_FEE_USDT,
+      totalPayAmount: totalPayAmount.toFixed(6),
+      difference: (basePayAmount - rateInfo.estimatedUsdt).toFixed(6),
+      bufferUsed: ((basePayAmount - rateInfo.estimatedUsdt) / rateInfo.estimatedUsdt * 100).toFixed(3) + '%'
     });
 
     // For USDT direct payments, we typically get a payment address
@@ -319,29 +332,33 @@ export async function POST(req: NextRequest) {
     if (!paymentUrl && paymentData.pay_address) {
       console.log('[NOWPayments] USDT direct payment created:', {
         address: paymentData.pay_address,
-        amount: actualPayAmount,
+        baseAmount: basePayAmount,
+        totalWithFees: totalPayAmount,
         originalUsdAmount: amount,
         buffer: `${(RATE_BUFFER * 100).toFixed(2)}%`,
+        networkFee: NETWORK_FEE_USDT,
       });
       
-      // Return structured response for manual USDT payment
+      // Return structured response for manual USDT payment with INCREASED amount for fees
       return NextResponse.json(
         {
           success: true,
           data: {
             payment_id: paymentData.payment_id,
             pay_address: paymentData.pay_address,
-            pay_amount: actualPayAmount,
+            pay_amount: totalPayAmount,  // Show total including network fee
+            base_amount: basePayAmount,  // Original NOWPayments amount
+            network_fee: NETWORK_FEE_USDT,
             pay_currency: 'USDT (TRC-20)',
             payment_status: paymentData.payment_status,
             order_id: orderId,
             type: 'manual_payment',
             network: 'TRC-20',
-            instructions: `Please send exactly ${actualPayAmount} USDT to the TRC-20 address provided`,
+            instructions: `Please send exactly ${totalPayAmount.toFixed(6)} USDT to the TRC-20 address provided (includes network fee)`,
             expiry_time: paymentData.expiry_estimate_date,
             exchange_rate: rateInfo.exchangeRate,
             usd_amount: amount,  // Original amount user wanted to deposit
-            buffer_note: 'Amount includes 0.25% buffer for rate protection',
+            buffer_note: `Amount includes ${(RATE_BUFFER * 100).toFixed(2)}% buffer and ${NETWORK_FEE_USDT} USDT network fee`,
           },
         },
         { status: 200 }
@@ -359,11 +376,13 @@ export async function POST(req: NextRequest) {
             payment_url: paymentUrl,
             payment_id: paymentData.payment_id,
             amount: amount,  // Original USD amount
+            pay_amount: totalPayAmount,  // Total USDT including fees
             order_id: orderId,
             type: 'hosted_checkout',
             currency: 'USDT (TRC-20)',
             warning: 'Only send USDT on TRC-20 network!',
             exchange_rate: rateInfo.exchangeRate,
+            network_fee: NETWORK_FEE_USDT,
           },
         },
         { status: 200 }
