@@ -23,7 +23,7 @@ export default function BrowseHeader({
       )}
 
       {user?.role === 'admin' && (
-        <div className="bg-purple-900/20 border border-purple-700 text-purple-300 p-4 rounded-lg mb-6 max-w-3xl mx-auto">
+        <div className="bg-purple-900/20 border border-purple-700 text-purple-300 px-4 py-3 rounded-lg mb-6 mx-auto w-fit max-w-full">
           <p className="text-sm flex items-center gap-2">
             <Crown className="w-4 h-4" />
             Admins can browse for moderation and analytics, but cannot purchase or bid.
