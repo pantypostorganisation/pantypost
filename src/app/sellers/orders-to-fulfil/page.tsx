@@ -655,13 +655,6 @@ export default function OrdersToFulfilPage() {
                             >
                               Message buyer
                             </Link>
-                            <button
-                              type="button"
-                              onClick={() => handleOpenAddressModal(order.id)}
-                              className="inline-flex items-center gap-2 rounded-lg border border-[#ff950e]/40 bg-gradient-to-r from-[#ff950e]/80 to-[#ff6a00]/80 px-3 py-1.5 text-xs font-semibold text-black shadow-lg transition-all hover:from-[#ffb347] hover:to-[#ff950e]"
-                            >
-                              Add address
-                            </button>
                           </div>
                         </li>
                       ))}
