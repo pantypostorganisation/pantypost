@@ -765,52 +765,6 @@ function AdminWalletContent() {
             </div>
 
             <div className="space-y-6">
-              <div className="rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold text-white">Selection Insights</h2>
-                    <p className="text-sm text-gray-400">Quick snapshot of the account you're about to adjust.</p>
-                  </div>
-                  <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-gray-300">
-                    {selectedUser ? 'Live' : 'Awaiting selection'}
-                  </span>
-                </div>
-                {selectedUser ? (
-                  <div className="mt-6 space-y-4">
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm text-gray-400">Username</span>
-                      <span className="text-lg font-medium text-white">{selectedUser}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm text-gray-400">Role</span>
-                      <span className={`w-fit rounded-full border px-3 py-1 text-xs ${getRoleBadgeColor(selectedUserRole)}`}>
-                        {formatRole(selectedUserRole)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm text-gray-400">Current Balance</span>
-                      <span className={`text-2xl font-semibold ${getBalanceColor(selectedUserBalance)}`}>
-                        {formatCurrency(selectedUserBalance)}
-                      </span>
-                    </div>
-                    <div className="rounded-xl border border-white/5 bg-white/5 p-4">
-                      <p className="text-xs uppercase tracking-wide text-gray-400">Bulk Selection</p>
-                      <p className="mt-2 text-sm text-gray-300">{selectedUsers.length} accounts queued for batch actions.</p>
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff6b00] to-purple-500"
-                          style={{ width: `${Math.min((selectedUsers.length / Math.max(displayedUsers.length || 1, 1)) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-6 rounded-xl border border-dashed border-white/10 p-8 text-center text-gray-400">
-                    Choose a user from the table to preview their wallet metrics and begin an action.
-                  </div>
-                )}
-              </div>
-
               <div className="rounded-2xl border border-white/5 bg-black/40 p-1 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
                 <WalletActionPanel
                   selectedUser={selectedUser}
