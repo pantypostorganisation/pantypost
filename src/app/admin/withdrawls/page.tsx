@@ -22,8 +22,17 @@ import {
   ArrowDownRight,
   Info
 } from 'lucide-react';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
-import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
+import {
+  format,
+  startOfWeek,
+  endOfWeek,
+  addWeeks,
+  isWithinInterval,
+  parseISO,
+  startOfDay,
+  endOfDay
+} from 'date-fns';
+import { toZonedTime, fromZonedTime, formatInTimeZone } from '@/utils/timezone';
 
 interface Withdrawal {
   id: string;
@@ -87,19 +96,18 @@ export default function AdminWithdrawalsPage() {
   const getWeekBoundaries = useCallback((weekOffset: number = 0) => {
     const now = new Date();
     const cstNow = toZonedTime(now, TIMEZONE);
-    
+
     // Adjust for week offset
     const targetDate = weekOffset === 0 ? cstNow : addWeeks(cstNow, weekOffset);
-    
-    // Get Monday 00:00:00 CST
-    const weekStart = startOfWeek(targetDate, { weekStartsOn: 1 });
-    const weekStartCST = startOfDay(weekStart);
-    
-    // Get Sunday 23:59:59 CST
-    const weekEnd = endOfWeek(targetDate, { weekStartsOn: 1 });
-    const weekEndCST = endOfDay(weekEnd);
-    
-    return { weekStart: weekStartCST, weekEnd: weekEndCST };
+
+    // Calculate boundaries in the target timezone, then convert back to UTC
+    const weekStartInZone = startOfDay(startOfWeek(targetDate, { weekStartsOn: 1 }));
+    const weekEndInZone = endOfDay(endOfWeek(targetDate, { weekStartsOn: 1 }));
+
+    return {
+      weekStart: fromZonedTime(weekStartInZone, TIMEZONE),
+      weekEnd: fromZonedTime(weekEndInZone, TIMEZONE)
+    };
   }, []);
 
   // Fetch withdrawals from API
@@ -169,7 +177,7 @@ export default function AdminWithdrawalsPage() {
     
     // Filter withdrawals for the selected week
     const weekWithdrawals = withdrawals.filter(w => {
-      const withdrawalDate = toZonedTime(parseISO(w.createdAt), TIMEZONE);
+      const withdrawalDate = parseISO(w.createdAt);
       return isWithinInterval(withdrawalDate, { start: weekStart, end: weekEnd });
     });
     
@@ -228,7 +236,7 @@ export default function AdminWithdrawalsPage() {
     // Get previous week data for comparison
     const { weekStart: prevWeekStart, weekEnd: prevWeekEnd } = getWeekBoundaries(-1);
     const prevWeekWithdrawals = withdrawals.filter(w => {
-      const date = toZonedTime(parseISO(w.createdAt), TIMEZONE);
+      const date = parseISO(w.createdAt);
       return isWithinInterval(date, { start: prevWeekStart, end: prevWeekEnd });
     });
     const prevWeekTotal = prevWeekWithdrawals.reduce((sum, w) => sum + w.amount, 0);
