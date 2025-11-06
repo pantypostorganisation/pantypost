@@ -921,6 +921,107 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/wallet/admin/withdrawals - Get withdrawal requests with weekly filtering (NEW)
+router.get('/admin/withdrawals', authMiddleware, async (req, res) => {
+  try {
+    // Only admins can access
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+
+    const { weekStart, weekEnd, status, username } = req.query;
+    
+    // Build query for withdrawal transactions
+    const query = {
+      type: 'withdrawal',
+      fromRole: 'seller'
+    };
+    
+    // Add status filter if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    // Add username filter if provided
+    if (username) {
+      query.from = username;
+    }
+    
+    // Add date range filter if provided
+    if (weekStart || weekEnd) {
+      query.createdAt = {};
+      if (weekStart) {
+        query.createdAt.$gte = new Date(weekStart);
+      }
+      if (weekEnd) {
+        query.createdAt.$lte = new Date(weekEnd);
+      }
+    }
+    
+    // Get withdrawal transactions with user details
+    const withdrawals = await Transaction.find(query)
+      .sort({ createdAt: -1 })
+      .limit(500);
+    
+    // Get user details for each withdrawal
+    const usernames = [...new Set(withdrawals.map(w => w.from).filter(Boolean))];
+    const users = await User.find({ 
+      username: { $in: usernames } 
+    }).select('username email isVerified verificationStatus tier');
+    
+    // Create user lookup map
+    const userMap = {};
+    users.forEach(user => {
+      userMap[user.username] = {
+        email: user.email,
+        verified: user.isVerified || user.verificationStatus === 'verified',
+        tier: user.tier || 'Tease'
+      };
+    });
+    
+    // Format response with user details
+    const formattedWithdrawals = withdrawals.map(w => ({
+      id: w._id.toString(),
+      username: w.from,
+      amount: w.amount,
+      status: w.status,
+      createdAt: w.createdAt,
+      completedAt: w.completedAt,
+      metadata: w.metadata,
+      sellerDetails: userMap[w.from] || null
+    }));
+    
+    // Calculate summary statistics
+    const pendingWithdrawals = formattedWithdrawals.filter(w => w.status === 'pending');
+    const completedWithdrawals = formattedWithdrawals.filter(w => w.status === 'completed');
+    
+    const totalPending = pendingWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+    const totalCompleted = completedWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+    
+    res.json({
+      success: true,
+      data: formattedWithdrawals,
+      summary: {
+        totalWithdrawals: formattedWithdrawals.length,
+        pendingCount: pendingWithdrawals.length,
+        completedCount: completedWithdrawals.length,
+        totalPendingAmount: totalPending,
+        totalCompletedAmount: totalCompleted,
+        uniqueSellers: usernames.length
+      }
+    });
+  } catch (error) {
+    console.error('[Wallet] Error fetching withdrawals:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // ============= ADMIN ANALYTICS ROUTES =============
 
 // GET /api/wallet/admin/analytics - Complete analytics data for admin dashboard
@@ -1025,7 +1126,9 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
         role: user.role,
         verified: user.verified || false,
         verificationStatus: user.verificationStatus || 'unverified',
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        email: user.email,
+        tier: user.tier
       };
     });
 
@@ -1120,7 +1223,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
         status: deposit.status,
         transactionId: deposit._id.toString(),
         notes: deposit.metadata?.notes,
-        // NEW (non-breaking, fixes wrong “seller” label in UI)
+        // NEW (non-breaking, fixes wrong "seller" label in UI)
         role,                           // <— prefer this in UI
         actor: deposit.to,              // explicit actor username
         actorRole: role                 // explicit actor role
@@ -1188,7 +1291,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
       data: {
         adminBalance,
         orderHistory,
-        depositLogs, // now includes actor/role for correct “Buyer” label
+        depositLogs, // now includes actor/role for correct "Buyer" label
         sellerWithdrawals: sellerWithdrawalsByUser,
         adminWithdrawals: formattedAdminWithdrawals,
         adminActions: allAdminActions, // includes tier credits
