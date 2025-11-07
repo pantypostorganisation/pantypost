@@ -249,8 +249,9 @@ router.post('/', authMiddleware, async (req, res) => {
         console.log(`[Order] Deposited $${referralCommission} to referrer ${activeReferral.referrer}`);
       }
       
-      const netPlatformRevenue = totalPlatformRevenue - tierBonus;
-      await platformWallet.deposit(netPlatformRevenue);
+      // FIXED: Deposit the full totalPlatformRevenue without subtracting tierBonus
+      // The tier bonus was already deducted from seller earnings, so don't deduct it again
+      await platformWallet.deposit(totalPlatformRevenue);
 
       if (listingId) {
         const listing = await Listing.findById(listingId);
@@ -761,8 +762,8 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         console.log(`[Order] Custom request: Deposited $${referralCommission} to referrer ${activeReferral.referrer}`);
       }
       
-      const netPlatformRevenue = totalPlatformRevenue - tierBonus;
-      await platformWallet.deposit(netPlatformRevenue);
+      // FIXED: Deposit the full totalPlatformRevenue without subtracting tierBonus
+      await platformWallet.deposit(totalPlatformRevenue);
 
       const order = new Order({
         title,
