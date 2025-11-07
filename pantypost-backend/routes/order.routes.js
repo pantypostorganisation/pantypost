@@ -159,28 +159,38 @@ router.post('/', authMiddleware, async (req, res) => {
     const hasReferral = activeReferral && activeReferral.isActive;
     const referralCommissionRate = hasReferral ? activeReferral.commissionRate : 0;
 
-    // Calculate fees and commission based on BASE PRICE
-    const platformFee = TIER_CONFIG.calculatePlatformFee(actualPrice, sellerTier);
+    // FIXED CALCULATION:
+    // 1. Base platform fee is always 10% of base price (without tier consideration)
+    const basePlatformFee = Math.round((actualPrice * 0.10) * 100) / 100; // Always 10%
+    
+    // 2. Tier bonus comes from the platform's share
     const tierBonus = Math.round((actualPrice * tierInfo.bonusPercentage) * 100) / 100;
+    
+    // 3. Buyer markup fee (10% on top)
     const buyerMarkupFee = Math.round((actualMarkedUpPrice - actualPrice) * 100) / 100;
-    const totalPlatformRevenue = Math.round((platformFee + buyerMarkupFee) * 100) / 100;
+    
+    // 4. Total platform revenue BEFORE tier bonus
+    const totalPlatformRevenueBeforeBonus = Math.round((basePlatformFee + buyerMarkupFee) * 100) / 100;
+    
+    // 5. Platform keeps the revenue minus tier bonus
+    const totalPlatformRevenue = Math.round((totalPlatformRevenueBeforeBonus - tierBonus) * 100) / 100;
 
-    // FIXED: Calculate referral commission from BASE PRICE, not from earnings
+    // 6. Calculate referral commission from BASE PRICE (5% of base price)
     let referralCommission = 0;
     if (hasReferral) {
-      // 5% of the BASE PRICE, not of seller's earnings
       referralCommission = Math.round(actualPrice * referralCommissionRate * 100) / 100;
       console.log(`[Order] Referral detected - Commission: $${referralCommission} (${(referralCommissionRate * 100)}% of $${actualPrice}) to ${activeReferral.referrer}`);
     }
 
-    // Calculate seller earnings: base price - platform fee - referral commission + tier bonus
-    let baseSellerEarnings = actualPrice - platformFee;
-    let sellerEarnings = Math.round((baseSellerEarnings - referralCommission + tierBonus) * 100) / 100;
+    // 7. Calculate seller earnings:
+    // Base 90% + tier bonus - referral commission
+    const baseSellerEarnings = Math.round((actualPrice * 0.90) * 100) / 100; // Always 90%
+    const sellerEarnings = Math.round((baseSellerEarnings + tierBonus - referralCommission) * 100) / 100;
 
     console.log(`[Order] Payment breakdown:`, {
       basePrice: actualPrice,
       buyerPays: actualMarkedUpPrice,
-      platformFee: platformFee,
+      platformFee: basePlatformFee,
       tierBonus: tierBonus,
       referralCommission: referralCommission,
       sellerEarnings: sellerEarnings,
@@ -249,8 +259,7 @@ router.post('/', authMiddleware, async (req, res) => {
         console.log(`[Order] Deposited $${referralCommission} to referrer ${activeReferral.referrer}`);
       }
       
-      // FIXED: Deposit the full totalPlatformRevenue without subtracting tierBonus
-      // The tier bonus was already deducted from seller earnings, so don't deduct it again
+      // FIXED: Deposit the correct platform revenue (fees minus tier bonus)
       await platformWallet.deposit(totalPlatformRevenue);
 
       if (listingId) {
@@ -299,9 +308,9 @@ router.post('/', authMiddleware, async (req, res) => {
         shippingStatus: 'pending',
         paymentStatus: 'completed',
         paymentCompletedAt: new Date(),
-        platformFee: platformFee,
+        platformFee: basePlatformFee,
         buyerMarkupFee,
-        sellerPlatformFee: platformFee,
+        sellerPlatformFee: basePlatformFee,
         sellerEarnings,
         tierCreditAmount: tierBonus,
         sellerTier,
@@ -452,14 +461,15 @@ router.post('/', authMiddleware, async (req, res) => {
           listingId,
           listingTitle: title,
           buyerFee: buyerMarkupFee,
-          sellerFee: platformFee,
+          sellerFee: basePlatformFee,
           totalFee: totalPlatformRevenue,
           originalPrice: actualPrice,
           buyerPayment: actualMarkedUpPrice,
           seller,
           buyer,
           sellerTier,
-          tierAdjustedFee: platformFee
+          tierAdjustedFee: basePlatformFee,
+          tierBonus: tierBonus
         }
       });
       await feeTransaction.save();
@@ -676,28 +686,26 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
     const hasReferral = activeReferral && activeReferral.isActive;
     const referralCommissionRate = hasReferral ? activeReferral.commissionRate : 0;
 
-    // Calculate fees and commission based on BASE PRICE
-    const platformFee = TIER_CONFIG.calculatePlatformFee(actualPrice, sellerTier);
+    // FIXED CALCULATION (same as regular orders):
+    const basePlatformFee = Math.round((actualPrice * 0.10) * 100) / 100;
     const tierBonus = Math.round((actualPrice * tierInfo.bonusPercentage) * 100) / 100;
     const buyerMarkupFee = Math.round((actualMarkedUpPrice - actualPrice) * 100) / 100;
-    const totalPlatformRevenue = Math.round((platformFee + buyerMarkupFee) * 100) / 100;
+    const totalPlatformRevenueBeforeBonus = Math.round((basePlatformFee + buyerMarkupFee) * 100) / 100;
+    const totalPlatformRevenue = Math.round((totalPlatformRevenueBeforeBonus - tierBonus) * 100) / 100;
 
-    // FIXED: Calculate referral commission from BASE PRICE
     let referralCommission = 0;
     if (hasReferral) {
-      // 5% of the BASE PRICE
       referralCommission = Math.round(actualPrice * referralCommissionRate * 100) / 100;
       console.log(`[Order] Custom request referral detected - Commission: $${referralCommission} (${(referralCommissionRate * 100)}% of $${actualPrice}) to ${activeReferral.referrer}`);
     }
 
-    // Calculate seller earnings: base price - platform fee - referral commission + tier bonus
-    let baseSellerEarnings = actualPrice - platformFee;
-    let sellerEarnings = Math.round((baseSellerEarnings - referralCommission + tierBonus) * 100) / 100;
+    const baseSellerEarnings = Math.round((actualPrice * 0.90) * 100) / 100;
+    const sellerEarnings = Math.round((baseSellerEarnings + tierBonus - referralCommission) * 100) / 100;
 
     console.log(`[Order] Custom request payment breakdown:`, {
       basePrice: actualPrice,
       buyerPays: actualMarkedUpPrice,
-      platformFee: platformFee,
+      platformFee: basePlatformFee,
       tierBonus: tierBonus,
       referralCommission: referralCommission,
       sellerEarnings: sellerEarnings,
@@ -762,7 +770,7 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         console.log(`[Order] Custom request: Deposited $${referralCommission} to referrer ${activeReferral.referrer}`);
       }
       
-      // FIXED: Deposit the full totalPlatformRevenue without subtracting tierBonus
+      // FIXED: Deposit the correct platform revenue
       await platformWallet.deposit(totalPlatformRevenue);
 
       const order = new Order({
@@ -781,9 +789,9 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         shippingStatus: 'pending',
         paymentStatus: 'completed',
         paymentCompletedAt: new Date(),
-        platformFee: platformFee,
+        platformFee: basePlatformFee,
         buyerMarkupFee,
-        sellerPlatformFee: platformFee,
+        sellerPlatformFee: basePlatformFee,
         sellerEarnings,
         tierCreditAmount: tierBonus,
         sellerTier,
@@ -951,13 +959,14 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
           requestId,
           customRequest: true,
           buyerFee: buyerMarkupFee,
-          sellerFee: platformFee,
+          sellerFee: basePlatformFee,
           totalFee: totalPlatformRevenue,
           originalPrice: actualPrice,
           buyerPayment: actualMarkedUpPrice,
           seller,
           buyer,
-          sellerTier
+          sellerTier,
+          tierBonus: tierBonus
         }
       });
       await feeTransaction.save();
