@@ -40,7 +40,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'buyer' | 'seller' | 'admin' | null>(null);
   const [error, setError] = useState('');
-  const [errorData, setErrorData] = useState<any>(null); // NEW: Store structured error data
+  const [errorData, setErrorData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
@@ -104,15 +104,18 @@ export default function LoginPage() {
     }
   }, [isAuthReady, user, router]);
 
-  // Sync auth errors and loading state
+  // CRITICAL FIX: Sync auth errors and loading state properly
   useEffect(() => {
     if (authError) {
-      if (isDev) console.log('[Login] Auth error:', authError);
+      if (isDev) console.log('[Login] Auth error detected:', authError);
       setError(authError);
+      // CRITICAL: Always stop loading when there's an error
       setIsLoading(false);
     }
     
+    // CRITICAL: Sync loading state with auth loading
     if (!authLoading && isLoading) {
+      if (isDev) console.log('[Login] Auth loading stopped, stopping local loading');
       setIsLoading(false);
     }
   }, [authError, authLoading, isLoading]);
@@ -210,7 +213,7 @@ export default function LoginPage() {
   const handleLogin = useCallback(
     async (e?: React.FormEvent) => {
       if (isDev)
-        console.log('[Login] handleLogin', {
+        console.log('[Login] handleLogin called', {
           hasEvent: !!e,
           username,
           role,
@@ -229,59 +232,66 @@ export default function LoginPage() {
       if (!username.trim()) {
         setError('Please enter your username');
         setErrorData(null);
+        setIsLoading(false);
         return;
       }
       if (!password.trim()) {
         setError('Please enter your password');
         setErrorData(null);
+        setIsLoading(false);
         return;
       }
       if (!role) {
         setError('Please select a role');
         setErrorData(null);
+        setIsLoading(false);
         return;
       }
       if (!login || typeof login !== 'function') {
         if (isDev) console.error('[Login] login() unavailable');
         setError('Authentication system not ready. Please refresh the page.');
         setErrorData(null);
+        setIsLoading(false);
         return;
       }
 
+      // CRITICAL FIX: Set loading state and clear all errors before login attempt
       setIsLoading(true);
       setError('');
       setErrorData(null);
       clearError?.();
       
       try {
+        if (isDev) console.log('[Login] Calling login function...');
+        
         const success = await login(username.trim(), password, role, rememberMe);
         
         if (isDev) console.log('[Login] Login result:', success);
         
-        if (!success) {
+        // CRITICAL FIX: Handle both success and failure cases explicitly
+        if (success) {
+          // Login successful - loading will be cleared by redirect
+          if (isDev) console.log('[Login] Login successful');
+        } else {
+          // CRITICAL FIX: Login failed - stop loading and show error
+          if (isDev) console.log('[Login] Login failed');
+          
           setIsLoading(false);
           
-          // Check if auth error contains password reset pending info
+          // Use auth error if available, otherwise generic message
           if (authError) {
-            // Parse the auth error to check for password reset pending
-            if (authError.includes('password reset is pending') || 
-                authError.includes('verification code')) {
-              console.log('[Login] Password reset pending detected in authError');
-              setErrorData({
-                pendingPasswordReset: true,
-                email: username.includes('@') ? username : undefined,
-                username: username
-              });
-            }
             setError(authError);
           } else {
-            setError('Invalid username or password');
+            setError('Incorrect username or password. Please try again.');
           }
         }
       } catch (err: any) {
-        if (isDev) console.error('[Login] login() error:', err);
+        if (isDev) console.error('[Login] login() threw error:', err);
         
-        // CRITICAL FIX: Check if this is an email verification error
+        // CRITICAL FIX: Always stop loading on error
+        setIsLoading(false);
+        
+        // Handle email verification error - silent redirect
         if (err?.requiresVerification) {
           console.log('[Login] Email verification error caught:', {
             requiresVerification: err.requiresVerification,
@@ -290,17 +300,16 @@ export default function LoginPage() {
             message: err.message
           });
           
-          // Set the structured error data
           setErrorData({
             requiresVerification: true,
             email: err.email,
             username: err.username
           });
           
-          // Set the error message (empty for silent redirect)
           setError(err.message || '');
-        } else if (err?.pendingPasswordReset) {
-          // NEW: Handle password reset pending error
+        } 
+        // Handle password reset pending error
+        else if (err?.pendingPasswordReset) {
           console.log('[Login] Password reset pending error caught:', {
             pendingPasswordReset: err.pendingPasswordReset,
             email: err.email,
@@ -308,21 +317,20 @@ export default function LoginPage() {
             message: err.message
           });
           
-          // Set the structured error data
           setErrorData({
             pendingPasswordReset: true,
             email: err.email,
             username: err.username
           });
           
-          // Set the error message
           setError(err.message || 'Password reset pending');
-        } else {
-          // Regular error
-          setError(err?.message || 'An unexpected error occurred. Please try again.');
+        } 
+        // CRITICAL FIX: Handle all other errors properly
+        else {
+          const errorMessage = err?.message || 'An unexpected error occurred. Please try again.';
+          console.log('[Login] Setting error message:', errorMessage);
+          setError(errorMessage);
         }
-        
-        setIsLoading(false);
       }
     },
     [username, password, role, rememberMe, login, isRateLimited, authError, clearError]

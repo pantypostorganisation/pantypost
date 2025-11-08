@@ -525,7 +525,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = LoginPayloadSchema.safeParse({ username, password, role });
         if (!parsed.success) {
-          setError('Please enter a valid username and password.');
+          const errorMessage = 'Please enter a valid username and password.';
+          setError(errorMessage);
           setLoading(false);
           return false;
         }
@@ -545,7 +546,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[Auth] Login response:', {
           success: response.success,
           hasUser: !!response.data?.user,
-          error: response.error,
+          hasError: !!response.error,
+          errorCode: response.error?.code,
         });
 
         if (response.success && response.data) {
@@ -598,40 +600,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
           return true;
         } else {
+          // CRITICAL FIX: Handle all error cases properly
           const errorObj = response.error || (response as any);
           
-          // MODIFIED: Check for both email verification and password reset errors
+          // Check for email verification requirement
           if (errorObj.code === 'EMAIL_VERIFICATION_REQUIRED' || errorObj.requiresVerification) {
-            // Throw structured error for email verification WITHOUT setting error message
+            console.log('[Auth] Email verification required - throwing error for redirect');
+            setLoading(false);
+            
             const verificationError: any = new Error('EMAIL_VERIFICATION_REQUIRED');
             verificationError.requiresVerification = true;
             verificationError.email = errorObj.email;
             verificationError.username = errorObj.username;
+            verificationError.message = ''; // Empty message for silent redirect
             
-            console.log('[Auth] Email verification required - silent redirect:', verificationError);
-            
+            throw verificationError;
+          } 
+          
+          // Check for password reset pending
+          if (errorObj.code === 'PASSWORD_RESET_PENDING' || errorObj.pendingPasswordReset) {
+            console.log('[Auth] Password reset pending - throwing error for redirect');
             setLoading(false);
             
-            // Throw the error so the login page can catch it and redirect
-            throw verificationError;
-          } else if (errorObj.code === 'PASSWORD_RESET_PENDING' || errorObj.pendingPasswordReset) {
-            // NEW: Handle password reset pending error
             const resetError: any = new Error(errorObj.message || 'Password reset pending');
             resetError.pendingPasswordReset = true;
             resetError.email = errorObj.email;
             resetError.username = errorObj.username;
+            resetError.message = errorObj.message || 'A password reset is pending for this account.';
             
-            console.log('[Auth] Password reset pending - redirect to reset flow:', resetError);
-            
-            // Set the error message so it shows briefly before redirect
-            setError(errorObj.message || 'Password reset pending');
-            setLoading(false);
-            
-            // Throw the error so the login page can catch it
             throw resetError;
           }
           
-          const errorMessage = errorObj.message || 'Login failed';
+          // CRITICAL FIX: Handle regular login errors (wrong password, wrong username, etc.)
+          const errorMessage = errorObj.message || 'Login failed. Please check your credentials and try again.';
+          console.log('[Auth] Login failed with error:', errorMessage);
+          
           setError(errorMessage);
           setLoading(false);
           return false;
@@ -639,17 +642,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error: any) {
         console.error('[Auth] Login error:', error);
         
-        // If this is an email verification error, re-throw it for silent redirect
+        // If this is an email verification error, re-throw it for redirect
         if (error.requiresVerification) {
+          setLoading(false);
           throw error;
         }
         
-        // If this is a password reset error, re-throw it
+        // If this is a password reset error, re-throw it for redirect
         if (error.pendingPasswordReset) {
+          setLoading(false);
           throw error;
         }
         
-        setError('Network error. Please check your connection and try again.');
+        // CRITICAL FIX: For all other errors, set error message and stop loading
+        const errorMessage = error?.message || 'Network error. Please check your connection and try again.';
+        console.log('[Auth] Caught error, setting error message:', errorMessage);
+        
+        setError(errorMessage);
         setLoading(false);
         return false;
       }
