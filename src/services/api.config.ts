@@ -10,6 +10,23 @@ import { securityService } from './security.service';
 import { sanitizeUrl, sanitizeStrict } from '@/utils/security/sanitization';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
+// AUTH PUBLIC ENDPOINTS - Don't trigger logout on 401
+const AUTH_PUBLIC_ENDPOINTS = [
+  '/auth/login',
+  '/auth/signup',
+  '/auth/register',
+  '/auth/forgot-password',
+  '/auth/reset-password',
+  '/auth/verify-reset-code',
+];
+
+function isAuthPublicEndpoint(endpoint: string): boolean {
+  const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return AUTH_PUBLIC_ENDPOINTS.some((publicEndpoint) =>
+    normalizedEndpoint.startsWith(publicEndpoint)
+  );
+}
+
 // Re-export from environment config for backward compatibility
 export { isDevelopment };
 export const isProduction = !isDevelopment();
@@ -43,7 +60,7 @@ export const API_ENDPOINTS = {
     VERIFY_RESET_CODE: '/auth/verify-reset-code',
     RESET_PASSWORD: '/auth/reset-password',
   },
-  
+
   // User endpoints
   USERS: {
     PROFILE: '/users/:username/profile',
@@ -52,7 +69,7 @@ export const API_ENDPOINTS = {
     SETTINGS: '/users/:username/settings',
     LIST: '/users',
   },
-  
+
   // Listing endpoints
   LISTINGS: {
     LIST: '/listings',
@@ -68,7 +85,7 @@ export const API_ENDPOINTS = {
     BID: '/listings/:id/bid',
     END_AUCTION: '/listings/:id/end-auction',
   },
-  
+
   // Order endpoints
   ORDERS: {
     LIST: '/orders',
@@ -80,7 +97,7 @@ export const API_ENDPOINTS = {
     SHIPPING: '/orders/:id/shipping',
     UPDATE_ADDRESS: '/orders/:id/address',
   },
-  
+
   // Message endpoints
   MESSAGES: {
     THREADS: '/messages/threads',
@@ -93,7 +110,7 @@ export const API_ENDPOINTS = {
     TIP: '/messages/tip',
     CUSTOM_REQUEST: '/messages/custom-request',
   },
-  
+
   // Wallet endpoints
   WALLET: {
     BALANCE: '/wallet/balance/:username',
@@ -103,7 +120,7 @@ export const API_ENDPOINTS = {
     ADMIN_ACTIONS: '/wallet/admin-actions',
     TRANSFER: '/wallet/transfer',
   },
-  
+
   // Subscription endpoints
   SUBSCRIPTIONS: {
     LIST: '/subscriptions/:username',
@@ -111,7 +128,7 @@ export const API_ENDPOINTS = {
     UNSUBSCRIBE: '/subscriptions/unsubscribe',
     CHECK: '/subscriptions/check',
   },
-  
+
   // Review endpoints
   REVIEWS: {
     LIST: '/reviews',
@@ -125,7 +142,7 @@ export const API_ENDPOINTS = {
     RESPONSE: '/reviews/:reviewId/response',
     FLAG: '/reviews/:reviewId/flag',
   },
-  
+
   // Report endpoints
   REPORTS: {
     SUBMIT: '/reports/submit',
@@ -136,14 +153,14 @@ export const API_ENDPOINTS = {
     BY_USER: '/reports/user/:username',
     STATS: '/reports/stats',
   },
-  
+
   // Upload endpoints
   UPLOAD: {
     IMAGE: '/upload/image',
     PROFILE: '/upload/profile',
     VERIFICATION: '/upload/verification',
   },
-  
+
   // Custom request endpoints
   REQUESTS: {
     LIST: '/requests',
@@ -198,27 +215,29 @@ export const REFRESH_TOKEN_KEY = 'refresh_token';
  */
 export const buildApiUrl = (endpoint: string, params?: Record<string, string>): string => {
   console.log('[buildApiUrl] Called with:', { endpoint, params });
-  
+
   if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
     console.log('[buildApiUrl] Endpoint is already a full URL, returning as-is');
     return endpoint;
   }
-  
+
   let url = endpoint;
-  
-  const requiredParams = (endpoint.match(/:(\w+)/g) || []).map(p => p.substring(1));
+
+  const requiredParams = (endpoint.match(/:(\w+)/g) || []).map((p) => p.substring(1));
   console.log('[buildApiUrl] Required params in endpoint:', requiredParams);
-  
+
   if (requiredParams.length > 0) {
     if (!params) {
       console.error('[buildApiUrl] ERROR: No params object provided for endpoint:', endpoint);
       console.error('[buildApiUrl] Required params:', requiredParams);
-      throw new Error(`Missing required URL parameters for endpoint: ${endpoint}. Required: ${requiredParams.join(', ')}`);
+      throw new Error(
+        `Missing required URL parameters for endpoint: ${endpoint}. Required: ${requiredParams.join(', ')}`
+      );
     }
-    
+
     for (const param of requiredParams) {
       const value = params[param];
-      
+
       if (value === undefined || value === null || value === '') {
         console.error(`[buildApiUrl] ERROR: Missing required parameter: ${param}`);
         console.error('[buildApiUrl] Endpoint:', endpoint);
@@ -226,35 +245,35 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
         console.error('[buildApiUrl] Required params:', requiredParams);
         throw new Error(`Missing required URL parameter: ${param} for endpoint: ${endpoint}`);
       }
-      
+
       console.log(`[buildApiUrl] Replacing :${param} with "${value}"`);
     }
-    
+
     Object.entries(params).forEach(([key, value]) => {
       if (value === undefined || value === null) {
         console.warn(`[buildApiUrl] Skipping undefined/null parameter: ${key}`);
         return;
       }
-      
+
       const sanitizedKey = sanitizeStrict(key);
       if (sanitizedKey !== key) {
         console.error(`[buildApiUrl] Invalid parameter key: ${key}`);
         throw new Error(`Invalid parameter key: ${key}`);
       }
-      
+
       const stringValue = String(value).trim();
       if (stringValue === '') {
         console.warn(`[buildApiUrl] Empty parameter value for key: ${key}`);
         return;
       }
-      
+
       const sanitizedValue = encodeURIComponent(sanitizeStrict(stringValue));
-      
+
       if (sanitizedValue.includes('..') || sanitizedValue.includes('//')) {
         console.error(`[buildApiUrl] Invalid parameter value (possible path traversal): ${value}`);
         throw new Error(`Invalid parameter value: ${value}`);
       }
-      
+
       const placeholder = `:${key}`;
       if (url.includes(placeholder)) {
         url = url.replace(placeholder, sanitizedValue);
@@ -262,7 +281,7 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
       }
     });
   }
-  
+
   const unreplacedParams = url.match(/:(\w+)/g);
   if (unreplacedParams && unreplacedParams.length > 0) {
     console.error('[buildApiUrl] ERROR: Unreplaced parameters found:', unreplacedParams);
@@ -271,27 +290,27 @@ export const buildApiUrl = (endpoint: string, params?: Record<string, string>): 
     console.error('[buildApiUrl] Provided params:', params);
     throw new Error(`Missing required URL parameters: ${unreplacedParams.join(', ')}`);
   }
-  
+
   if (API_BASE_URL) {
     const baseUrl = API_BASE_URL.replace(/\/$/, '');
     const hasApiPath = baseUrl.endsWith('/api') || baseUrl.includes('/api/');
     const fullUrl = hasApiPath ? `${baseUrl}${url}` : `${baseUrl}/api${url}`;
     const sanitizedUrl = sanitizeUrl(fullUrl);
-    
+
     if (!sanitizedUrl) {
       console.error('[buildApiUrl] ERROR: Failed to sanitize URL:', fullUrl);
       throw new Error('Invalid API URL');
     }
-    
+
     if (sanitizedUrl.length > REQUEST_CONFIG.MAX_URL_LENGTH) {
       console.error('[buildApiUrl] ERROR: URL too long:', sanitizedUrl.length);
       throw new Error('URL too long');
     }
-    
+
     console.log('[buildApiUrl] SUCCESS: Built URL:', sanitizedUrl);
     return sanitizedUrl;
   }
-  
+
   console.log('[buildApiUrl] No API_BASE_URL, returning modified endpoint:', url);
   return url;
 };
@@ -361,7 +380,7 @@ class ApiClient {
    * Cancel all pending requests
    */
   cancelAllRequests() {
-    this.abortControllers.forEach(controller => controller.abort());
+    this.abortControllers.forEach((controller) => controller.abort());
     this.abortControllers.clear();
     this.pendingRequests.clear();
   }
@@ -397,17 +416,18 @@ class ApiClient {
     }
 
     if (options.body) {
-      const bodySize = typeof options.body === 'string' 
-        ? new Blob([options.body]).size 
-        : 0;
-      
+      const bodySize =
+        typeof options.body === 'string' ? new Blob([options.body]).size : 0;
+
       if (bodySize > REQUEST_CONFIG.MAX_REQUEST_SIZE) {
         throw new Error('Request body too large');
       }
-      
-      if (typeof options.body === 'string' && 
-          options.headers && 
-          (options.headers as any)['Content-Type'] === 'application/json') {
+
+      if (
+        typeof options.body === 'string' &&
+        options.headers &&
+        (options.headers as any)['Content-Type'] === 'application/json'
+      ) {
         try {
           JSON.parse(options.body);
         } catch {
@@ -419,20 +439,24 @@ class ApiClient {
     if (options.headers) {
       const headers = options.headers as Record<string, string>;
       let totalHeaderSize = 0;
-      
+
       Object.entries(headers).forEach(([key, value]) => {
-        if (key.includes('\n') || key.includes('\r') || 
-            value.includes('\n') || value.includes('\r')) {
+        if (
+          key.includes('\n') ||
+          key.includes('\r') ||
+          value.includes('\n') ||
+          value.includes('\r')
+        ) {
           throw new Error('Invalid header format');
         }
-        
+
         totalHeaderSize += key.length + value.length + 4;
-        
+
         if (!/^[a-zA-Z0-9\-]+$/.test(key)) {
           throw new Error(`Invalid header name: ${key}`);
         }
       });
-      
+
       if (totalHeaderSize > REQUEST_CONFIG.MAX_HEADER_SIZE) {
         throw new Error('Headers too large');
       }
@@ -455,7 +479,7 @@ class ApiClient {
         return data as T;
       }
     }
-    
+
     if (typeof data === 'object' && data !== null) {
       try {
         return securityService.sanitizeForAPI(data) as T;
@@ -464,7 +488,7 @@ class ApiClient {
         return data as T;
       }
     }
-    
+
     return data as T;
   }
 
@@ -473,12 +497,12 @@ class ApiClient {
    */
   private validateResponse(response: Response): void {
     const suspiciousHeaders = ['X-Powered-By', 'Server'];
-    suspiciousHeaders.forEach(header => {
+    suspiciousHeaders.forEach((header) => {
       if (response.headers.has(header)) {
         console.warn(`Suspicious header detected: ${header}`);
       }
     });
-    
+
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('text/html') && !response.url.includes('.html')) {
       console.warn('Unexpected HTML response');
@@ -490,14 +514,14 @@ class ApiClient {
    */
   private getAuthToken(): string | null {
     if (typeof window === 'undefined') return null;
-    
+
     try {
       const authTokens = sessionStorage.getItem('auth_tokens');
       if (authTokens) {
         const parsed = JSON.parse(authTokens);
         return parsed.token;
       }
-      
+
       return localStorage.getItem('auth_token');
     } catch (error) {
       console.warn('Failed to get auth token:', error);
@@ -515,12 +539,18 @@ class ApiClient {
   ): Promise<ApiResponse<T>> {
     const requestId = generateRequestId();
     const startTime = Date.now();
-    
-    console.log('[ApiClient.call] Starting request:', { endpoint, method: options.method || 'GET', requestId });
-    
+
+    console.log('[ApiClient.call] Starting request:', {
+      endpoint,
+      method: options.method || 'GET',
+      requestId,
+    });
+
     // CRITICAL FIX: Create a unique key for deduplication
-    const dedupeKey = requestKey || `${options.method || 'GET'}:${endpoint}:${JSON.stringify(options.body || '')}`;
-    
+    const dedupeKey =
+      requestKey ||
+      `${options.method || 'GET'}:${endpoint}:${JSON.stringify(options.body || '')}`;
+
     // CRITICAL FIX: Check if an identical request is already in flight
     if (inFlightRequests.has(dedupeKey)) {
       console.log('[ApiClient.call] Reusing in-flight request:', dedupeKey);
@@ -531,7 +561,7 @@ class ApiClient {
         inFlightRequests.delete(dedupeKey);
       }
     }
-    
+
     // Check for duplicate requests (legacy check)
     if (requestKey && this.pendingRequests.has(requestKey)) {
       console.warn('[ApiClient.call] Duplicate request detected:', requestKey);
@@ -544,7 +574,7 @@ class ApiClient {
         meta: { requestId },
       };
     }
-    
+
     if (requestKey) {
       this.pendingRequests.add(requestKey);
     }
@@ -611,23 +641,23 @@ class ApiClient {
           console.error('[ApiClient.call] Invalid endpoint format:', endpoint);
           throw new Error('Invalid endpoint format - must start with / or be a full URL');
         }
-        
+
         const token = this.getAuthToken();
-        
+
         const headers: Record<string, string> = {
-          ...getDefaultHeaders() as Record<string, string>,
-          ...(options.headers || {}) as Record<string, string>,
+          ...(getDefaultHeaders() as Record<string, string>),
+          ...((options.headers || {}) as Record<string, string>),
         };
-        
+
         if (token) {
           headers['Authorization'] = `Bearer ${token}`;
         }
-        
+
         headers['X-Request-ID'] = requestId;
-        
+
         console.log(`[ApiClient.call] Making request to: ${url}`);
         console.log(`[ApiClient.call] Method: ${options.method || 'GET'}`);
-        
+
         const response = await fetch(url, {
           ...options,
           headers,
@@ -636,18 +666,18 @@ class ApiClient {
           mode: 'cors',
           redirect: 'follow',
         });
-        
+
         clearTimeout(timeoutId);
-        
+
         if (requestKey) {
           this.abortControllers.delete(requestKey);
           this.pendingRequests.delete(requestKey);
         }
-        
+
         this.validateResponse(response);
-        
+
         let data: any;
-        
+
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           data = await response.json();
@@ -660,16 +690,42 @@ class ApiClient {
             meta: { requestId },
           };
         }
-        
-        const elapsed = Date.now() - startTime;
-        console.log(`[ApiClient.call] Response [${response.status}] in ${elapsed}ms:`, data);
-        
-        if (!response.ok) {
-          console.error(`[ApiClient.call] API Error [${response.status}]:`, data.error || data);
 
-          const normalizedError = typeof data.error === 'string'
-            ? { message: data.error }
-            : (data.error || { message: data.message || 'An error occurred', code: String(response.status) });
+        const elapsed = Date.now() - startTime;
+        console.log(
+          `[ApiClient.call] Response [${response.status}] in ${elapsed}ms:`,
+          data
+        );
+
+        // >>>>>>>>>>>>>>>>>> MODIFIED BLOCK STARTS HERE <<<<<<<<<<<<<<<<<<
+        if (!response.ok) {
+          console.error(
+            `[ApiClient.call] API Error [${response.status}]:`,
+            data.error || data
+          );
+
+          const normalizedError =
+            typeof data.error === 'string'
+              ? { message: data.error }
+              : (data.error || {
+                  message: data.message || 'An error occurred',
+                  code: String(response.status),
+                });
+
+          // CRITICAL FIX: Only treat 401 as "real" auth issue on protected endpoints
+          if (response.status === 401) {
+            if (isAuthPublicEndpoint(endpoint)) {
+              console.log(
+                '[ApiClient.call] 401 on auth endpoint - NOT triggering logout, returning error'
+              );
+              // just return the error; login/password UI will handle it
+            } else {
+              console.log(
+                '[ApiClient.call] 401 on protected endpoint - triggering normal auth handling'
+              );
+              // keep your existing behavior / higher-level handlers
+            }
+          }
 
           return {
             success: false,
@@ -677,7 +733,8 @@ class ApiClient {
             meta: { requestId },
           };
         }
-        
+        // >>>>>>>>>>>>>>>>>> MODIFIED BLOCK ENDS HERE <<<<<<<<<<<<<<<<<<
+
         if (data.success !== undefined) {
           if (data.success) {
             const {
@@ -691,7 +748,9 @@ class ApiClient {
             const payload =
               nestedData !== undefined
                 ? nestedData
-                : (Object.keys(fallbackPayload).length > 0 ? fallbackPayload : undefined);
+                : Object.keys(fallbackPayload).length > 0
+                  ? fallbackPayload
+                  : undefined;
 
             const sanitizedData = this.sanitizeResponse<T>(payload as T);
 
@@ -699,14 +758,17 @@ class ApiClient {
               success: true,
               data: sanitizedData,
               meta: {
-                ...(typeof responseMeta === 'object' && responseMeta !== null ? responseMeta : {}),
+                ...(typeof responseMeta === 'object' && responseMeta !== null
+                  ? responseMeta
+                  : {}),
                 requestId,
               },
             };
           } else {
-            const normalizedError = typeof data.error === 'string'
-              ? { message: data.error }
-              : (data.error || { message: 'Unknown error' });
+            const normalizedError =
+              typeof data.error === 'string'
+                ? { message: data.error }
+                : data.error || { message: 'Unknown error' };
 
             return {
               success: false,
@@ -724,7 +786,7 @@ class ApiClient {
         }
       } catch (error) {
         clearTimeout(timeoutId);
-        
+
         if (requestKey) {
           this.abortControllers.delete(requestKey);
           this.pendingRequests.delete(requestKey);
@@ -740,7 +802,7 @@ class ApiClient {
         }
 
         console.error('[ApiClient.call] API call error:', error);
-        
+
         if (error instanceof TypeError && error.message === 'Failed to fetch') {
           return {
             success: false,
@@ -751,7 +813,7 @@ class ApiClient {
             meta: { requestId },
           };
         }
-        
+
         return {
           success: false,
           error: {
@@ -823,32 +885,34 @@ export async function apiCallWithRetry<T>(
   maxRetries = REQUEST_CONFIG.RETRY_ATTEMPTS
 ): Promise<ApiResponse<T>> {
   let lastError: ApiError | undefined;
-  
+
   for (let i = 0; i < maxRetries; i++) {
     const result = await apiCall<T>(endpoint, options);
-    
+
     if (result.success) {
       return result;
     }
-    
+
     lastError = result.error;
-    
-    if (lastError?.code && 
-        (lastError.code.startsWith('4') || 
-         lastError.code === 'RATE_LIMIT_EXCEEDED' ||
-         lastError.code === 'VALIDATION_ERROR' ||
-         lastError.code === 'DUPLICATE_REQUEST')) {
+
+    if (
+      lastError?.code &&
+      (lastError.code.startsWith('4') ||
+        lastError.code === 'RATE_LIMIT_EXCEEDED' ||
+        lastError.code === 'VALIDATION_ERROR' ||
+        lastError.code === 'DUPLICATE_REQUEST')
+    ) {
       return result;
     }
-    
+
     if (i < maxRetries - 1) {
       const baseDelay = Math.min(REQUEST_CONFIG.RETRY_DELAY * Math.pow(2, i), 10000);
       const jitter = Math.random() * 0.3 * baseDelay;
       const delay = baseDelay + jitter;
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
-  
+
   return {
     success: false,
     error: lastError || { message: 'Max retries exceeded', code: 'MAX_RETRIES' },

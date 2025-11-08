@@ -90,16 +90,6 @@ function safeNow(): number {
   }
 }
 
-async function safeParseJson<T>(resp: Response): Promise<T | null> {
-  try {
-    const text = await resp.text();
-    if (!text) return null;
-    return JSON.parse(text) as T;
-  } catch {
-    return null;
-  }
-}
-
 function deriveExpiry(expiresIn: unknown, defaultMs: number): number {
   const now = safeNow();
   if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
@@ -164,7 +154,8 @@ class ApiClient {
           body: JSON.stringify({ refreshToken: tokens.refreshToken }),
         });
 
-        const data = await safeParseJson<any>(response);
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
 
         if (response.ok && data?.success && data?.data) {
           const expiresAt = deriveExpiry(
@@ -230,15 +221,19 @@ class ApiClient {
     return tokens.token;
   }
 
+  // ★★★★★ THIS IS THE PART CLAUDE WAS TALKING ABOUT ★★★★★
   async request<T = any>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<{ success: boolean; data?: T; error?: any }> {
-    // CRITICAL FIX: Don't try to get token for login/signup endpoints
-    const isAuthEndpoint = endpoint.includes('/auth/login') || 
-                          endpoint.includes('/auth/signup') ||
-                          endpoint.includes('/auth/forgot-password');
-    
+    // don't attach token / refresh for public auth endpoints
+    const isAuthEndpoint =
+      endpoint.includes('/auth/login') ||
+      endpoint.includes('/auth/signup') ||
+      endpoint.includes('/auth/register') ||
+      endpoint.includes('/auth/forgot-password') ||
+      endpoint.includes('/auth/reset-password');
+
     const token = isAuthEndpoint ? null : await this.getValidToken();
 
     const headerObj: Record<string, string> = {
@@ -263,33 +258,76 @@ class ApiClient {
     const url = this.buildUrl(endpoint);
 
     const doFetch = async () => {
-      const resp = await fetch(url, { ...options, headers: headerObj });
-      const json = await safeParseJson<any>(resp);
+      try {
+        const resp = await fetch(url, { ...options, headers: headerObj });
 
-      if (json && typeof json.success === 'boolean') {
-        return json;
-      }
+        // read text first
+        const text = await resp.text();
+        let json: any = null;
 
-      if (resp.ok) {
-        return { success: true, data: json as T };
+        if (text) {
+          try {
+            json = JSON.parse(text);
+          } catch (parseError) {
+            console.error('[Auth] JSON parse error:', parseError, 'Text:', text);
+          }
+        }
+
+        console.log('[Auth] Response received:', {
+          endpoint,
+          status: resp.status,
+          ok: resp.ok,
+          hasJson: !!json,
+          json,
+        });
+
+        // case 1: API already uses { success: boolean, ... }
+        if (json && typeof json.success === 'boolean') {
+          return json;
+        }
+
+        // case 2: HTTP OK but no "success" key
+        if (resp.ok) {
+          return { success: true, data: json as T };
+        }
+
+        // case 3: non-OK -> build error object
+        console.error('[Auth] Error response:', { endpoint, status: resp.status, json });
+
+        return {
+          success: false,
+          error: {
+            code: json?.error?.code || json?.code || String(resp.status) || 'HTTP_ERROR',
+            message:
+              json?.error?.message ||
+              json?.message ||
+              resp.statusText ||
+              'Request failed',
+            ...(json?.error || {}),
+          },
+        };
+      } catch (fetchError) {
+        console.error('[Auth] Fetch error:', fetchError);
+        return {
+          success: false,
+          error: {
+            code: 'NETWORK_ERROR',
+            message: 'Network request failed',
+          },
+        };
       }
-      
-      // CRITICAL FIX: Properly handle error responses
-      return {
-        success: false,
-        error: {
-          code: json?.error?.code || resp.status || 'HTTP_ERROR',
-          message: json?.error?.message || json?.message || resp.statusText || 'Request failed',
-          ...json?.error, // Include any additional error fields
-        },
-      };
     };
 
     try {
       const result = await doFetch();
 
-      // CRITICAL FIX: Don't try to refresh token on login endpoint failures
-      if (!result.success && !isAuthEndpoint && (result as any)?.error?.code === 401 && token) {
+      // IMPORTANT: only try token refresh on protected endpoints
+      if (
+        !result.success &&
+        !isAuthEndpoint &&
+        (result as any)?.error?.code === '401' &&
+        token
+      ) {
         const newTokens = await this.refreshTokens();
         if (newTokens) {
           headerObj['Authorization'] = `Bearer ${newTokens.token}`;
@@ -442,7 +480,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pathname = usePathname();
   const router = useRouter();
 
   const tokenStorageRef = useRef(new TokenStorage());
@@ -459,12 +496,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiClientRef.current!.get<User>('/auth/me');
 
       if (response.success && response.data) {
+        // check ban
         const banCheckResponse = await apiClientRef.current!.get(
           `/users/${response.data.username}/ban-status`
         );
-        
+
         if (banCheckResponse.success && banCheckResponse.data?.isBanned) {
-          console.log('[Auth] User is banned, clearing session');
           tokenStorageRef.current.clear();
           setUser(null);
           return;
@@ -503,16 +540,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initAuth = async () => {
-      console.log('[Auth] Initializing...');
-      console.log('[Auth] API_BASE_URL:', API_BASE_URL);
-
       try {
         await refreshSession();
       } catch (error) {
         console.error('[Auth] Init error:', error);
       } finally {
         setIsAuthReady(true);
-        console.log('[Auth] Ready');
       }
     };
 
@@ -535,7 +568,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const parsed = LoginPayloadSchema.safeParse({ username, password, role });
         if (!parsed.success) {
           const errorMessage = 'Please enter a valid username and password.';
-          console.log('[Auth] Validation failed:', errorMessage);
           setError(errorMessage);
           setLoading(false);
           return false;
@@ -551,38 +583,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: parsed.data.role,
         };
 
-        console.log('[Auth] Calling API with payload:', { username: cleanUsername, role });
         const response = await apiClientRef.current!.post('/auth/login', payload);
 
-        console.log('[Auth] Login response:', {
-          success: response.success,
-          hasUser: !!response.data?.user,
-          hasError: !!response.error,
-          errorCode: response.error?.code,
-          errorMessage: response.error?.message,
-        });
+        console.log('[Auth] Login response (parsed):', response);
 
         if (response.success && response.data) {
+          // ban check
           const banCheckResponse = await apiClientRef.current!.get(
             `/users/${response.data.user.username}/ban-status`
           );
-          
+
           if (banCheckResponse.success && banCheckResponse.data?.isBanned) {
-            const banInfo = banCheckResponse.data;
             let errorMessage = 'Your account has been suspended.';
-            
-            if (banInfo.reason) {
-              errorMessage += ` Reason: ${banInfo.reason}`;
+            if (banCheckResponse.data.reason) {
+              errorMessage += ` Reason: ${banCheckResponse.data.reason}`;
             }
-            
-            if (banInfo.isPermanent) {
-              errorMessage += ' This is a permanent suspension.';
-            } else if (banInfo.expiresAt) {
-              const expiryDate = new Date(banInfo.expiresAt).toLocaleDateString();
-              errorMessage += ` Suspension expires: ${expiryDate}`;
-            }
-            
-            console.log('[Auth] User is banned:', errorMessage);
             setError(errorMessage);
             setLoading(false);
             return false;
@@ -609,83 +624,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('[Auth] Failed to hydrate user after login:', refreshError);
           }
 
-          console.log('[Auth] Login successful');
           setLoading(false);
           return true;
         } else {
-          // CRITICAL FIX: Handle all error cases properly
           const errorObj = response.error || (response as any);
-          
-          console.log('[Auth] Login failed, error object:', errorObj);
-          
-          // Check for email verification requirement
+
+          // email verification
           if (errorObj.code === 'EMAIL_VERIFICATION_REQUIRED' || errorObj.requiresVerification) {
-            console.log('[Auth] Email verification required - throwing error for redirect');
             setLoading(false);
-            
             const verificationError: any = new Error('EMAIL_VERIFICATION_REQUIRED');
             verificationError.requiresVerification = true;
             verificationError.email = errorObj.email;
             verificationError.username = errorObj.username;
-            verificationError.message = ''; // Empty message for silent redirect
-            
+            verificationError.message = '';
             throw verificationError;
-          } 
-          
-          // Check for password reset pending
+          }
+
+          // password reset pending
           if (errorObj.code === 'PASSWORD_RESET_PENDING' || errorObj.pendingPasswordReset) {
-            console.log('[Auth] Password reset pending - throwing error for redirect');
             setLoading(false);
-            
-            const resetError: any = new Error(errorObj.message || 'Password reset pending');
+            const resetError: any = new Error(
+              errorObj.message || 'A password reset is pending for this account.'
+            );
             resetError.pendingPasswordReset = true;
             resetError.email = errorObj.email;
             resetError.username = errorObj.username;
-            resetError.message = errorObj.message || 'A password reset is pending for this account.';
-            
             throw resetError;
           }
-          
-          // CRITICAL FIX: Extract the actual error message from the error object
+
           let errorMessage: string;
-          
+
           if (typeof errorObj === 'string') {
             errorMessage = errorObj;
           } else if (errorObj.message) {
             errorMessage = errorObj.message;
-          } else if (errorObj.error && typeof errorObj.error === 'string') {
-            errorMessage = errorObj.error;
           } else if (errorObj.error && errorObj.error.message) {
             errorMessage = errorObj.error.message;
           } else {
             errorMessage = 'Login failed. Please check your credentials and try again.';
           }
-          
-          console.log('[Auth] Setting error message:', errorMessage);
-          
+
           setError(errorMessage);
           setLoading(false);
           return false;
         }
       } catch (error: any) {
-        console.error('[Auth] Login error:', error);
-        
-        // If this is an email verification error, re-throw it for redirect
+        console.error('[Auth] Login error (catch):', error);
+
         if (error.requiresVerification) {
           setLoading(false);
           throw error;
         }
-        
-        // If this is a password reset error, re-throw it for redirect
+
         if (error.pendingPasswordReset) {
           setLoading(false);
           throw error;
         }
-        
-        // CRITICAL FIX: For all other errors, set error message and stop loading
-        const errorMessage = error?.message || 'Network error. Please check your connection and try again.';
-        console.log('[Auth] Caught error, setting error message:', errorMessage);
-        
+
+        const errorMessage =
+          error?.message || 'Network error. Please check your connection and try again.';
         setError(errorMessage);
         setLoading(false);
         return false;
@@ -695,8 +692,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    console.log('[Auth] Logging out...');
-
     try {
       const token = getAuthToken();
       if (token) {
@@ -710,8 +705,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setError(null);
     router.push('/login');
-
-    console.log('[Auth] Logout complete');
   }, [getAuthToken, router]);
 
   const updateUser = useCallback(
