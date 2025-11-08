@@ -72,7 +72,21 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
   };
 
   const horizontalLines = 4;
-  const verticalLines = Math.min(chartData.length, 6);
+  const verticalLinePositions = useMemo<number[]>(() => {
+    const count = Math.min(chartData.length, 6);
+
+    if (count <= 0) {
+      return [];
+    }
+
+    const positions = Array.from({ length: count }, (_, index) => ((index + 1) / (count + 1)) * 100);
+
+    if (positions[positions.length - 1] < 100) {
+      positions.push(100);
+    }
+
+    return positions;
+  }, [chartData.length]);
 
   return (
     <div className="bg-[#101010] rounded-xl p-6 border border-[#1f1f1f] shadow-[0_8px_24px_rgba(0,0,0,0.35)] mb-10">
@@ -101,16 +115,16 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
                       style={{ top: `${((index + 1) / (horizontalLines + 1)) * 100}%` }}
                     />
                   ))}
-                  {Array.from({ length: verticalLines }).map((_, index) => (
+                  {verticalLinePositions.map((position, index) => (
                     <span
                       key={`v-${index}`}
                       className="absolute top-0 bottom-0 border-l border-[#1f1f1f]/50"
-                      style={{ left: `${((index + 1) / (verticalLines + 1)) * 100}%` }}
+                      style={{ left: `${position}%` }}
                     />
                   ))}
                 </div>
 
-                <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-2">
+                <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-2 pr-6">
                   {chartData.map((period, index) => {
                     const heightPx = Math.max((period.revenue / maxRevenue) * 200, 4);
                     const isActive = touchedBarIndex === index;
