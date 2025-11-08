@@ -221,12 +221,11 @@ class ApiClient {
     return tokens.token;
   }
 
-  // ★★★★★ THIS IS THE PART CLAUDE WAS TALKING ABOUT ★★★★★
   async request<T = any>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<{ success: boolean; data?: T; error?: any }> {
-    // don't attach token / refresh for public auth endpoints
+    // CRITICAL FIX: Don't try to get token for login/signup endpoints
     const isAuthEndpoint =
       endpoint.includes('/auth/login') ||
       endpoint.includes('/auth/signup') ||
@@ -261,7 +260,7 @@ class ApiClient {
       try {
         const resp = await fetch(url, { ...options, headers: headerObj });
 
-        // read text first
+        // Parse response text first, then JSON
         const text = await resp.text();
         let json: any = null;
 
@@ -281,17 +280,17 @@ class ApiClient {
           json,
         });
 
-        // case 1: API already uses { success: boolean, ... }
+        // If we have structured response with success field
         if (json && typeof json.success === 'boolean') {
           return json;
         }
 
-        // case 2: HTTP OK but no "success" key
+        // If response is OK
         if (resp.ok) {
           return { success: true, data: json as T };
         }
 
-        // case 3: non-OK -> build error object
+        // CRITICAL FIX: Handle error responses
         console.error('[Auth] Error response:', { endpoint, status: resp.status, json });
 
         return {
@@ -321,18 +320,25 @@ class ApiClient {
     try {
       const result = await doFetch();
 
-      // IMPORTANT: only try token refresh on protected endpoints
-      if (
-        !result.success &&
-        !isAuthEndpoint &&
-        (result as any)?.error?.code === '401' &&
-        token
-      ) {
-        const newTokens = await this.refreshTokens();
-        if (newTokens) {
-          headerObj['Authorization'] = `Bearer ${newTokens.token}`;
-          const retry = await doFetch();
-          return retry;
+      // CRITICAL FIX: Don't refresh or logout on auth endpoints (login, signup, etc.)
+      if (!result.success && !isAuthEndpoint) {
+        // Normalize the error code - handle both number and string
+        const errCode =
+          (result as any)?.error?.code ??
+          (result as any)?.error?.status ??
+          (result as any)?.status;
+
+        const is401 = String(errCode) === '401' || errCode === 401;
+
+        if (is401 && token) {
+          // Only now try to refresh
+          console.log('[Auth] 401 on protected endpoint, attempting token refresh');
+          const newTokens = await this.refreshTokens();
+          if (newTokens) {
+            headerObj['Authorization'] = `Bearer ${newTokens.token}`;
+            const retry = await doFetch();
+            return retry;
+          }
         }
       }
 
