@@ -138,6 +138,47 @@ export default function VerifyEmailPendingPage() {
     return () => clearTimeout(timer);
   }, [searchParams, router]);
 
+  // NEW: Auto-redirect if email verification was completed in another tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const verificationComplete = localStorage.getItem('verificationComplete');
+          if (verificationComplete === 'true') {
+            console.log('[Verify Email Pending] Verification completed in another tab, redirecting...');
+            localStorage.removeItem('verificationComplete');
+            localStorage.removeItem('verificationPending');
+            router.push('/');
+          }
+        } catch (err) {
+          console.error('[Verify Email Pending] Error checking verification status:', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    // Check immediately on mount
+    handleVisibilityChange();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [router]);
+
+  // NEW: Set localStorage flag that verification is pending
+  useEffect(() => {
+    if (email) {
+      try {
+        localStorage.setItem('verificationPending', 'true');
+      } catch (err) {
+        console.error('[Verify Email Pending] Error setting verificationPending flag:', err);
+      }
+    }
+  }, [email]);
+
   useEffect(() => {
     if (resendCooldown > 0) {
       const timer = setTimeout(() => {
@@ -223,6 +264,15 @@ export default function VerifyEmailPendingPage() {
           sessionStorage.setItem('auth_token', data.data.token);
           
           console.log('[Verify] Token stored in sessionStorage');
+        }
+
+        // NEW: Set localStorage flag that verification is complete
+        try {
+          localStorage.setItem('verificationComplete', 'true');
+          localStorage.removeItem('verificationPending');
+          console.log('[Verify] Verification complete flag set');
+        } catch (err) {
+          console.error('[Verify] Error setting verificationComplete flag:', err);
         }
 
         // Show success state

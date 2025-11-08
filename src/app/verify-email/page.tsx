@@ -136,6 +136,15 @@ export default function VerifyEmailPage() {
           // Show success animation
           setVerificationStatus('success');
 
+          // NEW: Set localStorage flag that verification is complete
+          try {
+            localStorage.setItem('verificationComplete', 'true');
+            localStorage.removeItem('verificationPending');
+            console.log('[Verify Email] Verification complete flag set');
+          } catch (err) {
+            console.error('[Verify Email] Error setting verificationComplete flag:', err);
+          }
+
           // Wait 2 seconds to show the beautiful success animation
           // Then do a hard reload to ensure AuthContext picks up the new token
           setTimeout(() => {

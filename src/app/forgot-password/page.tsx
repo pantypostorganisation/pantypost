@@ -42,6 +42,36 @@ export default function ForgotPasswordPage() {
     };
   }, []);
 
+  // NEW: Auto-redirect if password reset was completed in another tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const resetComplete = localStorage.getItem('resetComplete');
+          if (resetComplete === 'true') {
+            console.log('[Forgot Password] Reset completed in another tab, redirecting to login...');
+            localStorage.removeItem('resetComplete');
+            localStorage.removeItem('resetPending');
+            router.push('/login');
+          }
+        } catch (err) {
+          console.error('[Forgot Password] Error checking reset status:', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    // Check immediately on mount
+    handleVisibilityChange();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -96,6 +126,13 @@ export default function ForgotPasswordPage() {
           } catch {
             // ignore storage errors (private mode, etc.)
           }
+        }
+
+        // NEW: Set localStorage flag that reset is pending
+        try {
+          localStorage.setItem('resetPending', 'true');
+        } catch (err) {
+          console.error('[Forgot Password] Error setting resetPending flag:', err);
         }
         
         // FIXED: Navigate to code verification page with email in URL after 2 seconds

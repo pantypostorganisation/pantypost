@@ -71,6 +71,47 @@ function VerifyResetCodeContent() {
     });
   }, [searchParams, router]);
 
+  // NEW: Auto-redirect if password reset was completed in another tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const resetComplete = localStorage.getItem('resetComplete');
+          if (resetComplete === 'true') {
+            console.log('[Verify Reset Code] Reset completed in another tab, redirecting to login...');
+            localStorage.removeItem('resetComplete');
+            localStorage.removeItem('resetPending');
+            router.push('/login');
+          }
+        } catch (err) {
+          console.error('[Verify Reset Code] Error checking reset status:', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    // Check immediately on mount
+    handleVisibilityChange();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [router]);
+
+  // NEW: Set localStorage flag that reset is pending
+  useEffect(() => {
+    if (email) {
+      try {
+        localStorage.setItem('resetPending', 'true');
+      } catch (err) {
+        console.error('[Verify Reset Code] Error setting resetPending flag:', err);
+      }
+    }
+  }, [email]);
+
   const handleCodeChange = (index: number, value: string) => {
     // Only allow digits
     if (value && !/^\d$/.test(value)) return;

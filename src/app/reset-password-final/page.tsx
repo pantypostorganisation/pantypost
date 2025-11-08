@@ -118,6 +118,15 @@ export default function ResetPasswordFinalPage() {
       if (response.success) {
         setSuccess(true);
         
+        // NEW: Set localStorage flag that reset is complete
+        try {
+          localStorage.setItem('resetComplete', 'true');
+          localStorage.removeItem('resetPending');
+          console.log('[Reset Password Final] Reset complete flag set');
+        } catch (err) {
+          console.error('[Reset Password Final] Error setting resetComplete flag:', err);
+        }
+        
         // Clear session storage
         sessionStorage.removeItem('resetEmail');
         sessionStorage.removeItem('resetCode');
