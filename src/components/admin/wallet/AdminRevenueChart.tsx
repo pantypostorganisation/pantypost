@@ -71,23 +71,6 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
     setTouchedBarIndex(null);
   };
 
-  const horizontalLines = 4;
-  const verticalLinePositions = useMemo<number[]>(() => {
-    const count = Math.min(chartData.length, 6);
-
-    if (count <= 0) {
-      return [];
-    }
-
-    const positions = Array.from({ length: count }, (_, index) => ((index + 1) / (count + 1)) * 100);
-
-    if (positions[positions.length - 1] < 100) {
-      positions.push(100);
-    }
-
-    return positions;
-  }, [chartData.length]);
-
   return (
     <div className="bg-[#101010] rounded-xl p-6 border border-[#1f1f1f] shadow-[0_8px_24px_rgba(0,0,0,0.35)] mb-10">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-3">
@@ -108,20 +91,6 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
             <div className="min-w-[600px] mb-4">
               <div className="relative h-64">
                 <div className="absolute inset-0 rounded-lg border border-[#1f1f1f]" aria-hidden="true">
-                  {Array.from({ length: horizontalLines }).map((_, index) => (
-                    <span
-                      key={`h-${index}`}
-                      className="absolute left-0 right-0 border-t border-[#1f1f1f]/70"
-                      style={{ top: `${((index + 1) / (horizontalLines + 1)) * 100}%` }}
-                    />
-                  ))}
-                  {verticalLinePositions.map((position, index) => (
-                    <span
-                      key={`v-${index}`}
-                      className="absolute top-0 bottom-0 border-l border-[#1f1f1f]/50"
-                      style={{ left: `${position}%` }}
-                    />
-                  ))}
                 </div>
 
                 <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-2 pr-6">
