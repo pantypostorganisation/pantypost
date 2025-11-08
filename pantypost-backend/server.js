@@ -56,6 +56,9 @@ const tierService = require('./services/tierService');
 // Import auction settlement service
 const AuctionSettlementService = require('./services/auctionSettlement');
 
+// Import subscription renewal service
+const SubscriptionRenewalService = require('./services/subscriptionRenewal');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
@@ -102,7 +105,8 @@ app.get('/api/health', (req, res) => {
       analytics: true,
       auctions: true,
       storage: true,
-      referrals: true
+      referrals: true,
+      subscriptionRenewals: true
     },
   });
 });
@@ -573,7 +577,9 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
   }
 });
 
-// Ban system scheduled task
+// ==================== SCHEDULED TASKS ====================
+
+// Ban system - Check every 5 minutes
 setInterval(async () => {
   try {
     const expiredCount = await Ban.checkAndExpireBans();
@@ -584,6 +590,69 @@ setInterval(async () => {
     console.error('[Ban System] Error checking expired bans:', error);
   }
 }, 5 * 60 * 1000);
+
+// Subscription renewals - Check once per day at 2 AM
+// Runs every 24 hours
+const RENEWAL_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Calculate time until next 2 AM
+function getTimeUntilNextRenewalCheck() {
+  const now = new Date();
+  const next2AM = new Date();
+  next2AM.setHours(2, 0, 0, 0);
+  
+  // If it's past 2 AM today, schedule for 2 AM tomorrow
+  if (now > next2AM) {
+    next2AM.setDate(next2AM.getDate() + 1);
+  }
+  
+  return next2AM.getTime() - now.getTime();
+}
+
+// Schedule the first run
+setTimeout(async () => {
+  console.log('[Subscription Renewal] Starting daily renewal check at 2 AM...');
+  
+  try {
+    const results = await SubscriptionRenewalService.processAllRenewals();
+    console.log('[Subscription Renewal] Daily check completed:', results);
+  } catch (error) {
+    console.error('[Subscription Renewal] Error in scheduled renewal check:', error);
+  }
+  
+  // Schedule subsequent runs every 24 hours
+  setInterval(async () => {
+    console.log('[Subscription Renewal] Starting daily renewal check...');
+    
+    try {
+      const results = await SubscriptionRenewalService.processAllRenewals();
+      console.log('[Subscription Renewal] Daily check completed:', results);
+    } catch (error) {
+      console.error('[Subscription Renewal] Error in scheduled renewal check:', error);
+    }
+  }, RENEWAL_CHECK_INTERVAL);
+  
+}, getTimeUntilNextRenewalCheck());
+
+// Manual subscription renewal endpoint (admin only)
+app.post('/api/subscriptions/process-renewals-manual', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  
+  try {
+    const results = await SubscriptionRenewalService.processAllRenewals();
+    res.json({
+      success: true,
+      data: results
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
 
 // Cleanup stuck auctions every 5 minutes
 setInterval(async () => {
@@ -1095,6 +1164,34 @@ async function initializePublicWebSocketSystem() {
   }
 }
 
+async function initializeSubscriptionRenewalSystem() {
+  try {
+    const Subscription = require('./models/Subscription');
+    
+    const activeSubscriptions = await Subscription.countDocuments({ 
+      status: 'active',
+      autoRenew: true
+    });
+    
+    const dueSubscriptions = await Subscription.countDocuments({
+      status: 'active',
+      autoRenew: true,
+      nextBillingDate: { $lte: new Date() }
+    });
+    
+    console.log(`✅ Subscription renewal system initialized`);
+    console.log(`   - ${activeSubscriptions} active auto-renewing subscriptions`);
+    console.log(`   - ${dueSubscriptions} subscriptions due for renewal`);
+    console.log(`   - Daily renewal check scheduled for 2:00 AM`);
+    
+    if (dueSubscriptions > 0) {
+      console.log(`   - Note: ${dueSubscriptions} subscriptions are overdue and will be processed at next check`);
+    }
+  } catch (error) {
+    console.error('⚠️ Error initializing subscription renewal system:', error);
+  }
+}
+
 // Start server
 const HOST = '0.0.0.0';
 const os = require('os');
@@ -1140,6 +1237,9 @@ server.listen(PORT, HOST, async () => {
   
   await initializePublicWebSocketSystem();
   console.log(`🌐 Public WebSocket ready - guest real-time updates enabled`);
+  
+  await initializeSubscriptionRenewalSystem();
+  console.log(`🔄 Subscription renewal system ready - daily checks at 2:00 AM`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
