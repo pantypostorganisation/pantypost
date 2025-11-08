@@ -4,10 +4,10 @@ import './globals.css';
 import ClientLayout from './ClientLayout';
 import type { Metadata, Viewport } from 'next';
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
-  preload: true
+  preload: true,
 });
 
 // Base URL for canonical URLs
@@ -18,9 +18,10 @@ export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   title: {
     default: 'Panty Post - Buy & Sell Used Panties Safely | Anonymous Marketplace',
-    template: '%s | PantyPost'
+    template: '%s | PantyPost',
   },
-  description: 'Panty Post - The premier discreet marketplace to buy and sell used panties. Connect with verified sellers, secure payments, and complete anonymity. 21+ adult platform.',
+  description:
+    'Panty Post - The premier discreet marketplace to buy and sell used panties. Connect with verified sellers, secure payments, and complete anonymity. 21+ adult platform.',
   keywords: [
     'buy used panties',
     'sell used panties',
@@ -29,34 +30,35 @@ export const metadata: Metadata = {
     'discreet panty selling',
     'anonymous used underwear sales',
     'verified panty sellers',
-    'premium intimate apparel marketplace'
+    'premium intimate apparel marketplace',
   ],
   authors: [{ name: 'PantyPost' }],
   creator: 'PantyPost',
   publisher: 'PantyPost',
-  
-  // FAVICON CONFIGURATION - Next.js will automatically use src/app/icon.png
-  // We explicitly define these to ensure consistency across all browsers
+
+  // FAVICON CONFIGURATION
+  // We want browsers / favourites to use favicon.png
+  // but still expose favicon.ico for Google Search
   icons: {
     icon: [
-      { url: '/icon.png', type: 'image/png' },
-      { url: '/icon.png', type: 'image/png', sizes: '72x72' },
-      { url: '/icon.png', type: 'image/png', sizes: '32x32' },
-      { url: '/icon.png', type: 'image/png', sizes: '16x16' },
+      { url: '/favicon.png', type: 'image/png' },
+      { url: '/favicon.png', type: 'image/png', sizes: '32x32' },
+      { url: '/favicon.png', type: 'image/png', sizes: '16x16' },
+      { url: '/favicon.ico', type: 'image/x-icon' }, // for Google / crawlers
     ],
-    shortcut: '/icon.png',
+    shortcut: ['/favicon.ico', '/favicon.png'],
     apple: [
-      { url: '/icon.png', sizes: '72x72' },
+      { url: '/favicon.png', sizes: '180x180' },
       { url: '/icons/icon-192x192.png', sizes: '192x192' },
     ],
     other: [
       {
         rel: 'icon',
-        url: '/icon.png',
+        url: '/favicon.png',
       },
     ],
   },
-  
+
   alternates: {
     canonical: '/',
     languages: {
@@ -64,7 +66,7 @@ export const metadata: Metadata = {
       'en-GB': '/',
     },
   },
-  
+
   // CRITICAL: Enable indexing for production
   robots: {
     index: true,
@@ -77,7 +79,7 @@ export const metadata: Metadata = {
       'max-snippet': -1,
     },
   },
-  
+
   // Open Graph - UPDATED to use googlesearchimage.png
   openGraph: {
     type: 'website',
@@ -85,7 +87,8 @@ export const metadata: Metadata = {
     url: BASE_URL,
     siteName: 'PantyPost',
     title: 'Panty Post - Buy & Sell Used Panties | Discreet Anonymous Marketplace',
-    description: 'Safe, anonymous platform to buy and sell used panties. Verified sellers, secure transactions, complete privacy. 21+ only.',
+    description:
+      'Safe, anonymous platform to buy and sell used panties. Verified sellers, secure transactions, complete privacy. 21+ only.',
     images: [
       {
         url: `${BASE_URL}/googlesearchimage.png`,
@@ -95,7 +98,7 @@ export const metadata: Metadata = {
       },
     ],
   },
-  
+
   // Twitter Card - UPDATED to use googlesearchimage.png
   twitter: {
     card: 'summary_large_image',
@@ -104,12 +107,12 @@ export const metadata: Metadata = {
     images: [`${BASE_URL}/googlesearchimage.png`],
     creator: '@pantypost',
   },
-  
+
   // Verification tags
   verification: {
     google: 'Gsm1a2UpYcIATRHoie3WTPlp416gBAxw2f5vqEPWNwY',
   },
-  
+
   // Additional meta tags
   category: 'adult marketplace',
   classification: 'Adult Content - 21+',
@@ -123,7 +126,7 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ff950e' },
-    { media: '(prefers-color-scheme: dark)', color: '#000000' }
+    { media: '(prefers-color-scheme: dark)', color: '#000000' },
   ],
 };
 
@@ -136,27 +139,30 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        
+
         {/* PWA tags */}
         <link rel="manifest" href="/manifest.json" />
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
-        
+
         {/* Preconnect to external domains for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        
-        {/* Force favicon refresh with cache busting - IMPORTANT! */}
-        <link rel="icon" href="/icon.png?v=2" type="image/png" />
-        <link rel="shortcut icon" href="/icon.png?v=2" type="image/png" />
-        <link rel="apple-touch-icon" href="/icon.png?v=2" />
-        
+
+        {/* Favicon links */}
+        {/* PNG first (what you want for favourites / tabs) */}
+        <link rel="icon" href="/favicon.png?v=2" type="image/png" />
+        <link rel="shortcut icon" href="/favicon.png?v=2" type="image/png" />
+        {/* ICO present for Google / older browsers */}
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+
         {/* Age restriction meta tag */}
         <meta name="rating" content="adult" />
         <meta name="age" content="21" />
-        
+
         {/* Structured Data - UPDATED to use googlesearchimage.png */}
         <script
           type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               '@context': 'https://schema.org',
@@ -168,21 +174,18 @@ export default function RootLayout({
                 '@type': 'SearchAction',
                 target: {
                   '@type': 'EntryPoint',
-                  urlTemplate: `${BASE_URL}/browse?search={search_term_string}`
+                  urlTemplate: `${BASE_URL}/browse?search={search_term_string}`,
                 },
-                'query-input': 'required name=search_term_string'
+                'query-input': 'required name=search_term_string',
               },
               publisher: {
                 '@type': 'Organization',
                 name: 'PantyPost',
                 url: BASE_URL,
                 logo: `${BASE_URL}/googlesearchimage.png`,
-                sameAs: [
-                  'https://twitter.com/pantypost',
-                  'https://www.instagram.com/pantypost'
-                ]
-              }
-            })
+                sameAs: ['https://twitter.com/pantypost', 'https://www.instagram.com/pantypost'],
+              },
+            }),
           }}
         />
       </head>
