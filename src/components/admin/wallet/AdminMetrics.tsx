@@ -283,7 +283,7 @@ export default function AdminMetrics(props: AdminMetricsProps) {
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5 lg:gap-5 mb-10">
       <MetricCard
         title="Money Made"
-        subtitle={timeFilter === 'all' ? 'Total platform wallet balance' : 'Platform profit this period'}
+        subtitle={timeFilter === 'all' ? 'Total platform wallet balance' : 'Platform profit'}
         value={metrics.totalProfit}
         icon={DollarSign}
         accentBackground="bg-[#ff950e]/10"
