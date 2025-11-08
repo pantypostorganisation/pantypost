@@ -135,10 +135,19 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     messagesService.initialize();
   }, []);
 
-  // Load initial data from API with profiles - UPDATED to use backend field names directly
+  // Load initial data from API with profiles - UPDATED to skip if not authenticated
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
+        setIsLoading(false);
+        setIsInitialized(true);
+        return;
+      }
+
+      // CRITICAL FIX: Don't try to load messages if user isn't authenticated
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (!authTokens) {
+        console.log('[MessageContext] No auth tokens found, skipping message load');
         setIsLoading(false);
         setIsInitialized(true);
         return;
