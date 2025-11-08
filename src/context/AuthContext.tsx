@@ -234,7 +234,12 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<{ success: boolean; data?: T; error?: any }> {
-    const token = await this.getValidToken();
+    // CRITICAL FIX: Don't try to get token for login/signup endpoints
+    const isAuthEndpoint = endpoint.includes('/auth/login') || 
+                          endpoint.includes('/auth/signup') ||
+                          endpoint.includes('/auth/forgot-password');
+    
+    const token = isAuthEndpoint ? null : await this.getValidToken();
 
     const headerObj: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -268,11 +273,14 @@ class ApiClient {
       if (resp.ok) {
         return { success: true, data: json as T };
       }
+      
+      // CRITICAL FIX: Properly handle error responses
       return {
         success: false,
         error: {
-          code: resp.status || 'HTTP_ERROR',
-          message: json?.error?.message || resp.statusText || 'Request failed',
+          code: json?.error?.code || resp.status || 'HTTP_ERROR',
+          message: json?.error?.message || json?.message || resp.statusText || 'Request failed',
+          ...json?.error, // Include any additional error fields
         },
       };
     };
@@ -280,7 +288,8 @@ class ApiClient {
     try {
       const result = await doFetch();
 
-      if (!result.success && (result as any)?.error?.code === 401 && token) {
+      // CRITICAL FIX: Don't try to refresh token on login endpoint failures
+      if (!result.success && !isAuthEndpoint && (result as any)?.error?.code === 401 && token) {
         const newTokens = await this.refreshTokens();
         if (newTokens) {
           headerObj['Authorization'] = `Bearer ${newTokens.token}`;
@@ -526,6 +535,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const parsed = LoginPayloadSchema.safeParse({ username, password, role });
         if (!parsed.success) {
           const errorMessage = 'Please enter a valid username and password.';
+          console.log('[Auth] Validation failed:', errorMessage);
           setError(errorMessage);
           setLoading(false);
           return false;
@@ -541,6 +551,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           role: parsed.data.role,
         };
 
+        console.log('[Auth] Calling API with payload:', { username: cleanUsername, role });
         const response = await apiClientRef.current!.post('/auth/login', payload);
 
         console.log('[Auth] Login response:', {
@@ -548,6 +559,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           hasUser: !!response.data?.user,
           hasError: !!response.error,
           errorCode: response.error?.code,
+          errorMessage: response.error?.message,
         });
 
         if (response.success && response.data) {
@@ -570,6 +582,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               errorMessage += ` Suspension expires: ${expiryDate}`;
             }
             
+            console.log('[Auth] User is banned:', errorMessage);
             setError(errorMessage);
             setLoading(false);
             return false;
@@ -603,6 +616,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // CRITICAL FIX: Handle all error cases properly
           const errorObj = response.error || (response as any);
           
+          console.log('[Auth] Login failed, error object:', errorObj);
+          
           // Check for email verification requirement
           if (errorObj.code === 'EMAIL_VERIFICATION_REQUIRED' || errorObj.requiresVerification) {
             console.log('[Auth] Email verification required - throwing error for redirect');
@@ -631,9 +646,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw resetError;
           }
           
-          // CRITICAL FIX: Handle regular login errors (wrong password, wrong username, etc.)
-          const errorMessage = errorObj.message || 'Login failed. Please check your credentials and try again.';
-          console.log('[Auth] Login failed with error:', errorMessage);
+          // CRITICAL FIX: Extract the actual error message from the error object
+          let errorMessage: string;
+          
+          if (typeof errorObj === 'string') {
+            errorMessage = errorObj;
+          } else if (errorObj.message) {
+            errorMessage = errorObj.message;
+          } else if (errorObj.error && typeof errorObj.error === 'string') {
+            errorMessage = errorObj.error;
+          } else if (errorObj.error && errorObj.error.message) {
+            errorMessage = errorObj.error.message;
+          } else {
+            errorMessage = 'Login failed. Please check your credentials and try again.';
+          }
+          
+          console.log('[Auth] Setting error message:', errorMessage);
           
           setError(errorMessage);
           setLoading(false);
