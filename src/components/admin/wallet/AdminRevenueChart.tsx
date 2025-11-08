@@ -90,8 +90,6 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
           <div className="overflow-x-auto">
             <div className="min-w-[600px] mb-4">
               <div className="relative h-64">
-                <div className="absolute inset-0 rounded-lg border border-[#1f1f1f]" aria-hidden="true">
-                </div>
 
                 <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-2 pr-6">
                   {chartData.map((period, index) => {
