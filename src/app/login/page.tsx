@@ -260,24 +260,25 @@ export default function LoginPage() {
       setError('');
       setErrorData(null);
       clearError?.();
-      
+
+      let loginWasSuccessful = false;
+
       try {
         if (isDev) console.log('[Login] Calling login function...');
-        
+
         const success = await login(username.trim(), password, role, rememberMe);
-        
+        loginWasSuccessful = success;
+
         if (isDev) console.log('[Login] Login result:', success);
-        
+
         // CRITICAL FIX: Handle both success and failure cases explicitly
         if (success) {
           // Login successful - loading will be cleared by redirect
           if (isDev) console.log('[Login] Login successful');
         } else {
-          // CRITICAL FIX: Login failed - stop loading and show error
+          // CRITICAL FIX: Login failed - show error feedback immediately
           if (isDev) console.log('[Login] Login failed');
-          
-          setIsLoading(false);
-          
+
           // Use auth error if available, otherwise generic message
           if (authError) {
             setError(authError);
@@ -287,10 +288,7 @@ export default function LoginPage() {
         }
       } catch (err: any) {
         if (isDev) console.error('[Login] login() threw error:', err);
-        
-        // CRITICAL FIX: Always stop loading on error
-        setIsLoading(false);
-        
+
         // Handle email verification error - silent redirect
         if (err?.requiresVerification) {
           console.log('[Login] Email verification error caught:', {
@@ -330,6 +328,10 @@ export default function LoginPage() {
           const errorMessage = err?.message || 'An unexpected error occurred. Please try again.';
           console.log('[Login] Setting error message:', errorMessage);
           setError(errorMessage);
+        }
+      } finally {
+        if (!loginWasSuccessful) {
+          setIsLoading(false);
         }
       }
     },

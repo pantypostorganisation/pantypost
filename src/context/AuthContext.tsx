@@ -575,7 +575,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!parsed.success) {
           const errorMessage = 'Please enter a valid username and password.';
           setError(errorMessage);
-          setLoading(false);
           return false;
         }
 
@@ -605,7 +604,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               errorMessage += ` Reason: ${banCheckResponse.data.reason}`;
             }
             setError(errorMessage);
-            setLoading(false);
             return false;
           }
 
@@ -630,14 +628,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('[Auth] Failed to hydrate user after login:', refreshError);
           }
 
-          setLoading(false);
           return true;
         } else {
           const errorObj = response.error || (response as any);
 
           // email verification
           if (errorObj.code === 'EMAIL_VERIFICATION_REQUIRED' || errorObj.requiresVerification) {
-            setLoading(false);
             const verificationError: any = new Error('EMAIL_VERIFICATION_REQUIRED');
             verificationError.requiresVerification = true;
             verificationError.email = errorObj.email;
@@ -648,7 +644,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           // password reset pending
           if (errorObj.code === 'PASSWORD_RESET_PENDING' || errorObj.pendingPasswordReset) {
-            setLoading(false);
             const resetError: any = new Error(
               errorObj.message || 'A password reset is pending for this account.'
             );
@@ -671,27 +666,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           setError(errorMessage);
-          setLoading(false);
           return false;
         }
       } catch (error: any) {
         console.error('[Auth] Login error (catch):', error);
 
         if (error.requiresVerification) {
-          setLoading(false);
           throw error;
         }
 
         if (error.pendingPasswordReset) {
-          setLoading(false);
           throw error;
         }
 
         const errorMessage =
           error?.message || 'Network error. Please check your connection and try again.';
         setError(errorMessage);
-        setLoading(false);
         return false;
+      } finally {
+        setLoading(false);
       }
     },
     [refreshSession]
