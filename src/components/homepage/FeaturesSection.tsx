@@ -334,7 +334,7 @@ export default function FeaturesSection() {
           animate={shouldAnimate ? "visible" : "hidden"}
           variants={itemVariants}
         >
-          How <span className="text-[#ff950e]">PantyPost</span> Works
+          How <span className="text-[#ff950e]">Panty Post</span> Works
         </motion.h2>
 
         {/* Error state for entire section */}
