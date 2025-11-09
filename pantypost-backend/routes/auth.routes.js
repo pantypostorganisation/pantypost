@@ -604,7 +604,7 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
-// POST /api/auth/login - UPDATED WITH PASSWORD RESET CHECK
+// POST /api/auth/login - UPDATED WITH IMPROVED ERROR MESSAGES
 router.post('/login', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -617,7 +617,7 @@ router.post('/login', async (req, res) => {
         success: false, 
         error: { 
           code: ERROR_CODES.VALIDATION_ERROR, 
-          message: 'Please enter a valid username (3-20 characters, letters and numbers only).' 
+          message: 'Invalid username format.' 
         }
       });
     }
@@ -637,7 +637,7 @@ router.post('/login', async (req, res) => {
         success: false, 
         error: { 
           code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, 
-          message: `We couldn't find an account with the username "${username}". Double-check the spelling or sign up for a new account.` 
+          message: `No account found with username "${username}".` 
         }
       });
     }
@@ -681,7 +681,7 @@ router.post('/login', async (req, res) => {
         success: false,
         error: {
           code: 'PASSWORD_RESET_PENDING',
-          message: 'A password reset is pending for this account. We\'ve sent a new verification code to your email.',
+          message: 'Password reset in progress. Check your email for the verification code.',
           pendingPasswordReset: true,
           email: user.email,
           username: user.username
@@ -695,7 +695,7 @@ router.post('/login', async (req, res) => {
         success: false, 
         error: { 
           code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, 
-          message: 'That password doesn\'t match. Please try again or use "Forgot password" if you need help.' 
+          message: 'Incorrect password. Try again.' 
         }
       });
     }
@@ -748,7 +748,7 @@ router.post('/login', async (req, res) => {
           success: false,
           error: {
             code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-            message: 'Your account has admin privileges. Please select "Administrator" to access the admin dashboard.'
+            message: 'This is an admin account. Select "Administrator" to login.'
           }
         });
       }
@@ -757,7 +757,7 @@ router.post('/login', async (req, res) => {
           success: false,
           error: {
             code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-            message: 'This account doesn\'t have administrator access. Please select the correct account type to continue.'
+            message: 'This account is not an administrator.'
           }
         });
       }
@@ -768,7 +768,7 @@ router.post('/login', async (req, res) => {
           success: false,
           error: {
             code: ERROR_CODES.AUTH_INVALID_CREDENTIALS,
-            message: `This account is registered as a ${correctRole}, not a ${wrongRole}. Please select "${correctRole}" to sign in.`
+            message: `This is a ${correctRole} account, not ${wrongRole}.`
           }
         });
       }
@@ -805,7 +805,7 @@ router.post('/login', async (req, res) => {
       success: false, 
       error: { 
         code: ERROR_CODES.INTERNAL_ERROR, 
-        message: 'We\'re having trouble signing you in right now. Please try again in a moment.' 
+        message: 'Login failed. Please try again.' 
       }
     });
   }
