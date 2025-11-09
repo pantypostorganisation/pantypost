@@ -69,6 +69,7 @@ export class AuthService {
 
   /**
    * Initialize fetch interceptor for auth headers
+   * CRITICAL FIX: Don't logout on 401 for auth endpoints
    */
   private initializeInterceptor() {
     const originalFetch = window.fetch;
@@ -89,8 +90,20 @@ export class AuthService {
 
       const response = await originalFetch(input, init);
 
-      // Handle 401 responses
-      if (response.status === 401) {
+      // CRITICAL FIX: Check if this is an auth endpoint
+      const url = typeof input === 'string' ? input : input.toString();
+      const isAuthEndpoint = 
+        url.includes('/auth/login') ||
+        url.includes('/auth/signup') ||
+        url.includes('/auth/register') ||
+        url.includes('/auth/forgot-password') ||
+        url.includes('/auth/reset-password') ||
+        url.includes('/auth/verify-email') ||
+        url.includes('/auth/resend-verification') ||
+        url.includes('/auth/verify-reset-code');
+
+      // Handle 401 responses - BUT NOT FOR AUTH ENDPOINTS
+      if (response.status === 401 && !isAuthEndpoint) {
         if (!this.isRefreshing) {
           this.isRefreshing = true;
 
