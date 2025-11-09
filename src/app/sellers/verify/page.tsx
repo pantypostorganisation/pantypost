@@ -47,7 +47,7 @@ const LoginButton = () => {
 };
 
 export default function SellerVerifyPage() {
-  const { user, isAuthReady, refreshSession } = useAuth(); // FIXED: Get refreshSession from useAuth
+  const { user, isAuthReady, refreshSession } = useAuth();
   const router = useRouter();
   const isMountedRef = useRef(false);
 
@@ -92,8 +92,8 @@ export default function SellerVerifyPage() {
       // Determine the actual status to display
       let displayStatus: 'unverified' | 'pending' | 'verified' | 'rejected' = 'unverified';
 
-      // Priority order: verified > pending > rejected > unverified
-      if (isVerified || backendStatus === 'verified') {
+      // Priority order: isVerified flag takes precedence
+      if (isVerified) {
         displayStatus = 'verified';
       } else if (backendStatus === 'pending') {
         displayStatus = 'pending';
@@ -111,14 +111,30 @@ export default function SellerVerifyPage() {
       if (result.success && result.data) {
         console.log('[VerifyPage] Verification service data:', result.data);
         
-        // Use the service status if available, otherwise use the display status
-        const serviceStatus = result.data.status as 'unverified' | 'pending' | 'verified' | 'rejected';
-        
-        if (isMountedRef.current) {
-          setVerificationStatus(serviceStatus || displayStatus);
+        // FIXED: Only use service status if user is NOT verified
+        // If isVerified is true, always show verified state regardless of service response
+        if (!isVerified) {
+          const serviceStatus = result.data.status as 'unverified' | 'pending' | 'verified' | 'rejected';
           
-          if (result.data.rejectionReason) {
-            setRejectionReason(result.data.rejectionReason);
+          // Map 'approved' to 'verified' for compatibility
+          const mappedStatus = serviceStatus === 'approved' as any ? 'verified' : serviceStatus;
+          
+          if (isMountedRef.current) {
+            setVerificationStatus(mappedStatus || displayStatus);
+            
+            if (result.data.rejectionReason) {
+              setRejectionReason(result.data.rejectionReason);
+            }
+          }
+        } else {
+          // User is verified, use the display status (which is 'verified')
+          if (isMountedRef.current) {
+            setVerificationStatus(displayStatus);
+            
+            // Still get rejection reason if available (for history)
+            if (result.data.rejectionReason) {
+              setRejectionReason(result.data.rejectionReason);
+            }
           }
         }
       } else {
@@ -214,7 +230,7 @@ export default function SellerVerifyPage() {
           setIdBack(docs.idBack || null);
           setPassport(docs.passport || null);
           
-          // FIXED: Call refreshSession from AuthContext, not user object
+          // Refresh user session to get updated verification status
           await refreshSession();
           
           // Redirect to profile after short delay
@@ -234,7 +250,7 @@ export default function SellerVerifyPage() {
         throw err; // Re-throw to let the component handle it
       }
     },
-    [user, router, refreshSession] // FIXED: Added refreshSession to dependencies
+    [user, router, refreshSession]
   );
 
   // View image fullscreen
