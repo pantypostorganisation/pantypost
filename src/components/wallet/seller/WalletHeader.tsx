@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Wallet, ArrowUpRight, ShieldCheck, BarChart3 } from 'lucide-react';
+import { Wallet, ArrowUpRight, BarChart3 } from 'lucide-react';
 
 interface WalletHeaderProps {
   balance: number;
@@ -58,14 +58,6 @@ export default function WalletHeader({
         </div>
       </div>
 
-      <div className="rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-3 text-sm text-[#ffb347]">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="h-4 w-4 flex-shrink-0 text-[#ff950e]" />
-          <p className="text-xs text-[#ffb347] sm:text-sm">
-            Secure payouts run automatically before each transfer • Keep your banking details current to avoid payout interruptions.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
