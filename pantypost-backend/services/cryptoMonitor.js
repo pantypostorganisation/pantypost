@@ -153,7 +153,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
     
     // Get recent Transfer events to our wallet
     const latestBlock = Number(await web3.eth.getBlockNumber()); // Convert BigInt to Number
-    const fromBlock = Math.max(0, latestBlock - 50); // ~1.5 minutes of blocks
+    const fromBlock = Math.max(0, latestBlock - 20); // ~1.5 minutes of blocks
     
     const events = await contract.getPastEvents('Transfer', {
       filter: { to: YOUR_WALLET },
@@ -218,7 +218,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
 async function checkMaticDeposits() {
   try {
     const latestBlock = Number(await web3.eth.getBlockNumber()); // Convert BigInt to Number
-    const fromBlock = Math.max(0, latestBlock - 50); // Keep consistent
+    const fromBlock = Math.max(0, latestBlock - 20); // Keep consistent
     
     // Get transactions to our wallet
     for (let i = fromBlock; i <= latestBlock; i++) {
