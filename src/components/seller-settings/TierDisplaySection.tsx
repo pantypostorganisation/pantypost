@@ -87,7 +87,7 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
   const credit = typeof sellerTierInfo.credit === 'number' && Number.isFinite(sellerTierInfo.credit) ? sellerTierInfo.credit : 0;
 
   return (
-    <div className="relative flex h-full flex-col gap-8 overflow-hidden rounded-3xl bg-gradient-to-br from-[#191919] via-[#111] to-[#1f1f1f] p-8 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.9)]">
+    <div className="relative flex flex-col gap-8 rounded-3xl bg-gradient-to-br from-[#191919] via-[#111] to-[#1f1f1f] p-8 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.9)]">
       <div className="pointer-events-none absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-[#ff950e]/10 blur-3xl" />
       <section className="relative z-10 flex flex-col gap-6 rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
