@@ -2,7 +2,7 @@
 // Automated crypto deposit verification service
 // This monitors the Polygon blockchain for USDT/USDC deposits and auto-verifies them
 
-const Web3 = require('web3');
+const { Web3 } = require('web3');
 const CryptoDeposit = require('../models/CryptoDeposit');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
