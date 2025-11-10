@@ -10,6 +10,7 @@ import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import EmptyState from '@/components/wallet/buyer/EmptyState';
 import CryptoDepositSection from '@/components/wallet/buyer/CryptoDepositSection';
+import DirectCryptoDepositSection from '@/components/wallet/buyer/DirectCryptoDepositSection'; // NEW!
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
@@ -36,6 +37,7 @@ function BuyerWalletContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'nowpayments' | 'direct'>('direct'); // Default to direct!
 
   // decide which balance to show: prefer context (backend) if available
   const contextBalance =
@@ -50,16 +52,19 @@ function BuyerWalletContent() {
     }
   }, [user?.username, isInitialized, reloadData]);
 
-  // show banner if we came back from NOWPayments
+  // show banner if we came back from NOWPayments or direct deposit success
   useEffect(() => {
     const depositStatus = searchParams.get('deposit');
-    if (depositStatus === 'success') {
+    const directStatus = searchParams.get('direct');
+    
+    if (depositStatus === 'success' || directStatus === 'success') {
       setShowBanner(true);
 
       // clean query so it doesn't stay forever
       if (typeof window !== 'undefined') {
         const url = new URL(window.location.href);
         url.searchParams.delete('deposit');
+        url.searchParams.delete('direct');
         router.replace(url.toString());
       }
     }
@@ -104,8 +109,38 @@ function BuyerWalletContent() {
                 onQuickAmountSelect={handleQuickAmountSelect}
               />
 
-              {/* new crypto flow */}
-              <CryptoDepositSection />
+              {/* Payment Method Toggle */}
+              <div className="rounded-xl border border-gray-800 bg-[#111] p-4">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setPaymentMethod('direct')}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                      paymentMethod === 'direct'
+                        ? 'bg-[#ff950e] text-black'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    Direct Wallet (0% Fee) 🏆
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('nowpayments')}
+                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
+                      paymentMethod === 'nowpayments'
+                        ? 'bg-[#ff950e] text-black'
+                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    }`}
+                  >
+                    NOWPayments (80% Fee)
+                  </button>
+                </div>
+              </div>
+
+              {/* Crypto deposit component based on selection */}
+              {paymentMethod === 'direct' ? (
+                <DirectCryptoDepositSection />
+              ) : (
+                <CryptoDepositSection />
+              )}
             </div>
           </section>
 

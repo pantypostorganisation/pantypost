@@ -49,6 +49,7 @@ const statsRoutes = require('./routes/stats.routes');
 // NEW
 const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 const referralRoutes = require('./routes/referral.routes');
+const cryptoRoutes = require('./routes/crypto.routes'); // CRYPTO DIRECT DEPOSITS
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -106,7 +107,8 @@ app.get('/api/health', (req, res) => {
       auctions: true,
       storage: true,
       referrals: true,
-      subscriptionRenewals: true
+      subscriptionRenewals: true,
+      cryptoDeposits: true // NEW FEATURE
     },
   });
 });
@@ -131,6 +133,7 @@ app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES
 
 // NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
 app.use('/api/profilebuyer', profileBuyerRoutes);
@@ -510,6 +513,55 @@ app.get('/api/tiers/system-status', authMiddleware, async (req, res) => {
         distribution: tierDistribution,
         timestamp: new Date(),
       },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Crypto deposits system status endpoint (admin only) - NEW
+app.get('/api/crypto/system-status', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  try {
+    const CryptoDeposit = require('./models/CryptoDeposit');
+    
+    const totalDeposits = await CryptoDeposit.countDocuments();
+    const pendingDeposits = await CryptoDeposit.countDocuments({ status: 'pending' });
+    const confirmingDeposits = await CryptoDeposit.countDocuments({ status: 'confirming' });
+    const completedDeposits = await CryptoDeposit.countDocuments({ status: 'completed' });
+    
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentVolume = await CryptoDeposit.aggregate([
+      { $match: { status: 'completed', completedAt: { $gte: last24Hours } } },
+      { $group: { _id: null, total: { $sum: '$actualUSDCredited' } } }
+    ]);
+    
+    const currencyDistribution = await CryptoDeposit.aggregate([
+      { $group: { _id: '$cryptoCurrency', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        statistics: {
+          total: totalDeposits,
+          pending: pendingDeposits,
+          confirming: confirmingDeposits,
+          completed: completedDeposits,
+          volume24h: recentVolume[0]?.total || 0
+        },
+        currencyDistribution,
+        walletAddresses: {
+          polygon: process.env.CRYPTO_WALLET_POLYGON ? '✓ Configured' : '✗ Not configured',
+          tron: process.env.CRYPTO_WALLET_USDT_TRC20 ? '✓ Configured' : '✗ Not configured',
+          bitcoin: process.env.CRYPTO_WALLET_BTC ? '✓ Configured' : '✗ Not configured'
+        },
+        timestamp: new Date()
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1192,6 +1244,46 @@ async function initializeSubscriptionRenewalSystem() {
   }
 }
 
+async function initializeCryptoDepositSystem() {
+  try {
+    const CryptoDeposit = require('./models/CryptoDeposit');
+    
+    const pendingDeposits = await CryptoDeposit.countDocuments({ status: 'pending' });
+    const confirmingDeposits = await CryptoDeposit.countDocuments({ status: 'confirming' });
+    const completedDeposits = await CryptoDeposit.countDocuments({ status: 'completed' });
+    
+    console.log(`✅ Crypto deposit system initialized`);
+    console.log(`   - ${pendingDeposits} pending deposits`);
+    console.log(`   - ${confirmingDeposits} deposits awaiting verification`);
+    console.log(`   - ${completedDeposits} completed deposits`);
+    console.log(`   - Polygon wallet: ${process.env.CRYPTO_WALLET_POLYGON ? '✓' : '✗ Not configured'}`);
+    console.log(`   - TRC-20 wallet: ${process.env.CRYPTO_WALLET_USDT_TRC20 ? '✓' : '✗ Not configured'}`);
+    console.log(`   - Bitcoin wallet: ${process.env.CRYPTO_WALLET_BTC ? '✓' : '✗ Not configured'}`);
+    
+    if (confirmingDeposits > 0 && global.webSocketService) {
+      const admins = await User.find({ role: 'admin' }).select('username');
+      for (const admin of admins) {
+        const notification = new Notification({
+          recipient: admin.username,
+          type: 'admin_alert',
+          title: 'Pending Crypto Deposits',
+          message: `There are ${confirmingDeposits} crypto deposits awaiting verification`,
+          link: '/admin/crypto-deposits',
+          priority: 'high',
+        });
+        await notification.save();
+
+        global.webSocketService.sendToUser(admin.username, {
+          type: 'notification',
+          data: notification
+        });
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Error initializing crypto deposit system:', error);
+  }
+}
+
 // Start server
 const HOST = '0.0.0.0';
 const os = require('os');
@@ -1240,6 +1332,9 @@ server.listen(PORT, HOST, async () => {
   
   await initializeSubscriptionRenewalSystem();
   console.log(`🔄 Subscription renewal system ready - daily checks at 2:00 AM`);
+  
+  await initializeCryptoDepositSystem();
+  console.log(`💰 Crypto deposit system ready - Direct wallet deposits enabled!`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -1248,6 +1343,7 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Orders:        /api/orders/*');
   console.log('  - Messages:      /api/messages/*');
   console.log('  - Wallet:        /api/wallet/*');
+  console.log('  - Crypto:        /api/crypto/*         🆕 DIRECT DEPOSITS!');
   console.log('  - Subscriptions: /api/subscriptions/*');
   console.log('  - Reviews:       /api/reviews/*');
   console.log('  - Upload:        /api/upload/*');
@@ -1266,4 +1362,5 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Referral:      /api/referral/*');
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
+  console.log('🏆 POLYGON CRYPTO DEPOSITS = 0% FEES! 🏆\n');
 });

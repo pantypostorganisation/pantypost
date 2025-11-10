@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { AlertCircle, BarChart3, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, BarChart3, Loader2, RefreshCw, Bitcoin } from 'lucide-react';
 
 // Import split components
 import AdminMetrics from '@/components/admin/wallet/AdminMetrics';
@@ -14,6 +14,7 @@ import AdminRevenueChart from '@/components/admin/wallet/AdminRevenueChart';
 import AdminHealthSection from '@/components/admin/wallet/AdminHealthSection';
 import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
+import CryptoDepositsManager from '@/components/admin/wallet/CryptoDepositsManager'; // NEW!
 import { getTimeFilteredData } from '@/utils/admin/walletHelpers';
 
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
@@ -41,6 +42,7 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
 
   const [isReloading, setIsReloading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<'analytics' | 'crypto'>('analytics'); // NEW TAB STATE
   
   // Use a ref to track loading state for the guard check
   const isReloadingRef = useRef(false);
@@ -250,54 +252,94 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
       )}
 
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header with Tab Switch */}
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
             <h1 className="text-3xl font-semibold text-white flex items-center gap-3">
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-[#ff950e]/10">
-                <BarChart3 className="h-6 w-6 text-[#ff950e]" />
+                {activeTab === 'crypto' ? (
+                  <Bitcoin className="h-6 w-6 text-[#ff950e]" />
+                ) : (
+                  <BarChart3 className="h-6 w-6 text-[#ff950e]" />
+                )}
               </span>
               <span className="leading-tight">
-                Platform Analytics
-                <span className="block text-sm font-normal text-gray-400">Real-time overview of PantyPost revenue performance.</span>
+                {activeTab === 'crypto' ? 'Crypto Deposits' : 'Platform Analytics'}
+                <span className="block text-sm font-normal text-gray-400">
+                  {activeTab === 'crypto' 
+                    ? 'Manage direct wallet deposits' 
+                    : 'Real-time overview of PantyPost revenue performance.'}
+                </span>
               </span>
             </h1>
           </div>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+
+          {/* Tab Controls & Time Filter */}
+          <div className="flex flex-col gap-3">
+            {/* Tab Buttons */}
             <div className="flex rounded-md border border-[#1f1f1f] bg-[#101010] p-1">
-              {[
-                { value: 'today', label: 'Today' },
-                { value: 'week', label: 'Week' },
-                { value: 'month', label: 'Month' },
-                { value: '3months', label: '3 Months' },
-                { value: 'year', label: 'Year' },
-                { value: 'all', label: 'All Time' },
-              ].map((filter) => (
-                <button
-                  key={filter.value}
-                  onClick={() => handleTimeFilterChange(filter.value as TimeFilter)}
-                  className={`px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap rounded-[6px] ${
-                    timeFilter === filter.value
-                      ? 'bg-[#ff950e] text-black'
-                      : 'text-gray-300 hover:text-white hover:bg-[#1c1c1c]'
-                  }`}
-                >
-                  {filter.label}
-                </button>
-              ))}
+              <button
+                onClick={() => setActiveTab('analytics')}
+                className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap rounded-[6px] ${
+                  activeTab === 'analytics'
+                    ? 'bg-[#ff950e] text-black'
+                    : 'text-gray-300 hover:text-white hover:bg-[#1c1c1c]'
+                }`}
+              >
+                Analytics
+              </button>
+              <button
+                onClick={() => setActiveTab('crypto')}
+                className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap rounded-[6px] ${
+                  activeTab === 'crypto'
+                    ? 'bg-[#ff950e] text-black'
+                    : 'text-gray-300 hover:text-white hover:bg-[#1c1c1c]'
+                }`}
+              >
+                Crypto Deposits
+              </button>
             </div>
 
-            <button
-              onClick={handleForceReload}
-              disabled={isReloading}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#ff950e] bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-[#ffa733] disabled:cursor-not-allowed disabled:border-[#ff950e]/60 disabled:bg-[#ff950e]/60"
-            >
-              <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
-              {isReloading ? 'Reloading…' : 'Force Reload'}
-            </button>
+            {/* Time Filter (only show for analytics tab) */}
+            {activeTab === 'analytics' && (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex rounded-md border border-[#1f1f1f] bg-[#101010] p-1">
+                  {[
+                    { value: 'today', label: 'Today' },
+                    { value: 'week', label: 'Week' },
+                    { value: 'month', label: 'Month' },
+                    { value: '3months', label: '3 Months' },
+                    { value: 'year', label: 'Year' },
+                    { value: 'all', label: 'All Time' },
+                  ].map((filter) => (
+                    <button
+                      key={filter.value}
+                      onClick={() => handleTimeFilterChange(filter.value as TimeFilter)}
+                      className={`px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap rounded-[6px] ${
+                        timeFilter === filter.value
+                          ? 'bg-[#ff950e] text-black'
+                          : 'text-gray-300 hover:text-white hover:bg-[#1c1c1c]'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleForceReload}
+                  disabled={isReloading}
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-[#ff950e] bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-[#ffa733] disabled:cursor-not-allowed disabled:border-[#ff950e]/60 disabled:bg-[#ff950e]/60"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
+                  {isReloading ? 'Reloading…' : 'Force Reload'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {walletInitialized && (
+        {walletInitialized && activeTab === 'analytics' && (
           <div className="rounded-lg border border-[#1f1f1f] bg-[#101010] px-4 py-3 text-xs text-gray-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-gray-300">
@@ -313,48 +355,57 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
           </div>
         )}
 
-        {adminBalance !== undefined && (
-          <AdminMetrics
-            timeFilter={timeFilter}
-            filteredActions={filteredData.actions}
-            filteredOrders={filteredData.orders}
-            filteredDeposits={filteredData.deposits}
-            filteredSellerWithdrawals={filteredSellerWithdrawalsArr}
-            filteredAdminWithdrawals={filteredAdminWithdrawalsArr}
-            adminBalance={adminBalance}
-            orderHistory={orderHistory || []}
-            adminActions={adminActions || []}
-            depositLogs={depositLogs || []}
-            sellerWithdrawals={sellerWithdrawals || []}
-            adminWithdrawals={adminWithdrawals || []}
-          />
+        {/* Conditional Content Based on Tab */}
+        {activeTab === 'crypto' ? (
+          // Crypto Deposits Manager
+          <CryptoDepositsManager />
+        ) : (
+          // Original Analytics Content
+          <>
+            {adminBalance !== undefined && (
+              <AdminMetrics
+                timeFilter={timeFilter}
+                filteredActions={filteredData.actions}
+                filteredOrders={filteredData.orders}
+                filteredDeposits={filteredData.deposits}
+                filteredSellerWithdrawals={filteredSellerWithdrawalsArr}
+                filteredAdminWithdrawals={filteredAdminWithdrawalsArr}
+                adminBalance={adminBalance}
+                orderHistory={orderHistory || []}
+                adminActions={adminActions || []}
+                depositLogs={depositLogs || []}
+                sellerWithdrawals={sellerWithdrawals || []}
+                adminWithdrawals={adminWithdrawals || []}
+              />
+            )}
+
+            {orderHistory && adminActions && (
+              <AdminRevenueChart timeFilter={timeFilter} orderHistory={orderHistory} adminActions={adminActions} />
+            )}
+
+            {users && listings && wallet && depositLogs && sellerWithdrawals && (
+              <AdminHealthSection
+                users={users}
+                listings={listings}
+                wallet={wallet}
+                depositLogs={depositLogs}
+                filteredDeposits={filteredData.deposits}
+                sellerWithdrawals={sellerWithdrawals}
+              />
+            )}
+
+            <AdminMoneyFlow />
+
+            <AdminRecentActivity
+              timeFilter={timeFilter}
+              filteredDeposits={filteredData.deposits}
+              filteredSellerWithdrawals={filteredSellerWithdrawalsArr}
+              filteredAdminWithdrawals={filteredAdminWithdrawalsArr}
+              filteredActions={filteredData.actions}
+              filteredOrders={filteredData.orders}
+            />
+          </>
         )}
-
-        {orderHistory && adminActions && (
-          <AdminRevenueChart timeFilter={timeFilter} orderHistory={orderHistory} adminActions={adminActions} />
-        )}
-
-        {users && listings && wallet && depositLogs && sellerWithdrawals && (
-          <AdminHealthSection
-            users={users}
-            listings={listings}
-            wallet={wallet}
-            depositLogs={depositLogs}
-            filteredDeposits={filteredData.deposits}
-            sellerWithdrawals={sellerWithdrawals}
-          />
-        )}
-
-        <AdminMoneyFlow />
-
-        <AdminRecentActivity
-          timeFilter={timeFilter}
-          filteredDeposits={filteredData.deposits}
-          filteredSellerWithdrawals={filteredSellerWithdrawalsArr}
-          filteredAdminWithdrawals={filteredAdminWithdrawalsArr}
-          filteredActions={filteredData.actions}
-          filteredOrders={filteredData.orders}
-        />
       </div>
     </main>
   );
