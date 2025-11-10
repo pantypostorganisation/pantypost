@@ -2,7 +2,7 @@
 // Automated crypto deposit verification service
 // This monitors the Polygon blockchain for USDT/USDC deposits and auto-verifies them
 
-const { Web3 } = require('web3');
+const { Web3 } = require('web3'); // Note: Web3 v4 requires destructuring
 const CryptoDeposit = require('../models/CryptoDeposit');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
@@ -152,7 +152,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
     const contract = new web3.eth.Contract(ERC20_ABI, contractAddress);
     
     // Get recent Transfer events to our wallet
-    const latestBlock = await web3.eth.getBlockNumber();
+    const latestBlock = Number(await web3.eth.getBlockNumber()); // Convert BigInt to Number
     const fromBlock = Math.max(0, latestBlock - 1000); // Check last 1000 blocks (~30 minutes on Polygon)
     
     const events = await contract.getPastEvents('Transfer', {
@@ -171,9 +171,9 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
       const to = event.returnValues.to.toLowerCase();
       const value = event.returnValues.value;
       
-      // Get decimals (USDT has 6, USDC has 6 on Polygon)
-      const decimals = tokenSymbol === 'USDT' ? 6 : 6;
-      const amount = Number(value) / Math.pow(10, decimals);
+      // Convert BigInt to number properly
+      const decimals = tokenSymbol === 'USDT' ? 6 : 6; // Both USDT and USDC have 6 decimals on Polygon
+      const amount = Number(BigInt(value)) / Math.pow(10, decimals);
       
       console.log(`📥 Found ${tokenSymbol} deposit: ${amount} from ${from} (tx: ${txHash})`);
       
@@ -217,7 +217,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
 // Check for native MATIC deposits (for testing)
 async function checkMaticDeposits() {
   try {
-    const latestBlock = await web3.eth.getBlockNumber();
+    const latestBlock = Number(await web3.eth.getBlockNumber()); // Convert BigInt to Number
     const fromBlock = Math.max(0, latestBlock - 100); // Check last 100 blocks
     
     // Get transactions to our wallet
@@ -232,7 +232,10 @@ async function checkMaticDeposits() {
           // Skip if already processed
           if (processedTxs.has(txHash)) continue;
           
-          const amount = Number(web3.utils.fromWei(tx.value, 'ether'));
+          // Convert BigInt to number properly
+          const valueInWei = BigInt(tx.value);
+          const amount = Number(web3.utils.fromWei(valueInWei, 'ether'));
+          
           if (amount > 0) {
             console.log(`📥 Found MATIC deposit: ${amount} from ${tx.from} (tx: ${txHash})`);
             processedTxs.add(txHash);
