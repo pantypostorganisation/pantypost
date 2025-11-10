@@ -108,7 +108,8 @@ app.get('/api/health', (req, res) => {
       storage: true,
       referrals: true,
       subscriptionRenewals: true,
-      cryptoDeposits: true // NEW FEATURE
+      cryptoDeposits: true, // NEW FEATURE
+      cryptoAutoVerification: true // AUTOMATED VERIFICATION
     },
   });
 });
@@ -559,6 +560,11 @@ app.get('/api/crypto/system-status', authMiddleware, async (req, res) => {
           polygon: process.env.CRYPTO_WALLET_POLYGON ? '✓ Configured' : '✗ Not configured',
           tron: process.env.CRYPTO_WALLET_USDT_TRC20 ? '✓ Configured' : '✗ Not configured',
           bitcoin: process.env.CRYPTO_WALLET_BTC ? '✓ Configured' : '✗ Not configured'
+        },
+        autoVerification: {
+          enabled: true,
+          checkInterval: '30 seconds',
+          supportedTokens: ['USDT', 'USDC', 'MATIC']
         },
         timestamp: new Date()
       }
@@ -1260,6 +1266,15 @@ async function initializeCryptoDepositSystem() {
     console.log(`   - TRC-20 wallet: ${process.env.CRYPTO_WALLET_USDT_TRC20 ? '✓' : '✗ Not configured'}`);
     console.log(`   - Bitcoin wallet: ${process.env.CRYPTO_WALLET_BTC ? '✓' : '✗ Not configured'}`);
     
+    // Initialize automated crypto monitoring
+    const cryptoMonitor = require('./services/cryptoMonitor');
+    const monitoringStarted = cryptoMonitor.startMonitoring();
+    if (monitoringStarted) {
+      console.log('🤖 Automated crypto verification enabled!');
+    } else {
+      console.log('⚠️ Automated crypto monitoring disabled - manual verification required');
+    }
+    
     if (confirmingDeposits > 0 && global.webSocketService) {
       const admins = await User.find({ role: 'admin' }).select('username');
       for (const admin of admins) {
@@ -1343,7 +1358,7 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Orders:        /api/orders/*');
   console.log('  - Messages:      /api/messages/*');
   console.log('  - Wallet:        /api/wallet/*');
-  console.log('  - Crypto:        /api/crypto/*         🆕 DIRECT DEPOSITS!');
+  console.log('  - Crypto:        /api/crypto/*         🆕 AUTO-VERIFIED!');
   console.log('  - Subscriptions: /api/subscriptions/*');
   console.log('  - Reviews:       /api/reviews/*');
   console.log('  - Upload:        /api/upload/*');
@@ -1362,5 +1377,5 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Referral:      /api/referral/*');
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
-  console.log('🏆 POLYGON CRYPTO DEPOSITS = 0% FEES! 🏆\n');
+  console.log('🏆 POLYGON CRYPTO DEPOSITS = 0% FEES + AUTO-VERIFICATION! 🏆\n');
 });
