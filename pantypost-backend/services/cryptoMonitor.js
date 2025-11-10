@@ -186,7 +186,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
       for (const deposit of deposits) {
         // Match by amount (within 1% tolerance for fees)
         const expectedAmount = deposit.expectedCryptoAmount;
-        const tolerance = expectedAmount * 0.01; // 1% tolerance
+        const tolerance = expectedAmount * 0.025; // 2.5% tolerance in case of fees
         
         if (Math.abs(amount - expectedAmount) <= tolerance) {
           // Found matching deposit!
