@@ -1,4 +1,4 @@
-// src/components/wallet/buyer/DirectCryptoDepositSection.tsx (FIXED)
+// src/components/wallet/buyer/DirectCryptoDepositSection.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -67,6 +67,18 @@ export default function DirectCryptoDepositSection({
   const [depositHistory, setDepositHistory] = useState<any[]>([]);
   const [showHistory, setShowHistory] = useState(false);
 
+  // Get the API URL from environment or fallback
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com/api';
+  
+  // Get auth token
+  const getAuthHeaders = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    return {
+      "Content-Type": "application/json",
+      ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    };
+  };
+
   // Currency options with more accurate fee ranges - Polygon is the WINNER!
   const currencies = [
     // ULTRA-LOW FEE OPTIONS (Recommended!)
@@ -109,7 +121,7 @@ export default function DirectCryptoDepositSection({
   // Quick amount buttons
   const quickAmounts = [25, 50, 100, 250, 500, 1000];
 
-  // Countdown timer - FIXED: Added return cleanup
+  // Countdown timer
   useEffect(() => {
     if (depositRequest && !confirmed) {
       const timer = setInterval(() => {
@@ -124,9 +136,9 @@ export default function DirectCryptoDepositSection({
         }
       }, 1000);
 
-      return () => clearInterval(timer); // FIXED: Return the cleanup function
+      return () => clearInterval(timer);
     }
-    // If conditions aren't met, no cleanup needed
+    // Return undefined when condition is not met
     return undefined;
   }, [depositRequest, confirmed]);
 
@@ -168,7 +180,7 @@ export default function DirectCryptoDepositSection({
     }
   };
 
-  // Create deposit request
+  // Create deposit request - FIXED with proper API URL
   const createDepositRequest = async () => {
     setError(null);
     setDepositRequest(null);
@@ -182,9 +194,10 @@ export default function DirectCryptoDepositSection({
 
     setLoading(true);
     try {
-      const res = await fetch("/api/crypto/create-deposit", {
+      // FIXED: Use the full backend API URL
+      const res = await fetch(`${API_URL}/crypto/create-deposit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           amount: Number(amount),
           currency
@@ -207,7 +220,7 @@ export default function DirectCryptoDepositSection({
     }
   };
 
-  // Confirm payment sent
+  // Confirm payment sent - FIXED with proper API URL
   const confirmPaymentSent = async () => {
     if (!depositRequest || !txHash) return;
 
@@ -215,9 +228,10 @@ export default function DirectCryptoDepositSection({
     setError(null);
 
     try {
-      const res = await fetch("/api/crypto/confirm-deposit", {
+      // FIXED: Use the full backend API URL
+      const res = await fetch(`${API_URL}/crypto/confirm-deposit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           depositId: depositRequest.depositId,
           txHash
@@ -243,10 +257,13 @@ export default function DirectCryptoDepositSection({
     }
   };
 
-  // Load deposit history
+  // Load deposit history - FIXED with proper API URL
   const loadDepositHistory = async () => {
     try {
-      const res = await fetch("/api/crypto/my-deposits");
+      // FIXED: Use the full backend API URL
+      const res = await fetch(`${API_URL}/crypto/my-deposits`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       if (data.success) {
         setDepositHistory(data.data);
