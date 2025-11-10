@@ -5,7 +5,6 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
-import WalletHeader from '@/components/wallet/buyer/WalletHeader';
 import BalanceCard from '@/components/wallet/buyer/BalanceCard';
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
@@ -73,11 +72,6 @@ function BuyerWalletContent() {
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-10">
-          {/* header card */}
-          <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 sm:p-8 lg:p-10">
-            <WalletHeader />
-          </section>
-
           {/* success banner after crypto redirect */}
           {showBanner && (
             <div className="rounded-lg border border-green-500 bg-green-900/30 p-4 text-center text-green-300">
