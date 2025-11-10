@@ -173,7 +173,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
       
       // Get decimals (USDT has 6, USDC has 6 on Polygon)
       const decimals = tokenSymbol === 'USDT' ? 6 : 6;
-      const amount = parseFloat(value) / Math.pow(10, decimals);
+      const amount = Number(value) / Math.pow(10, decimals);
       
       console.log(`📥 Found ${tokenSymbol} deposit: ${amount} from ${from} (tx: ${txHash})`);
       
@@ -232,7 +232,7 @@ async function checkMaticDeposits() {
           // Skip if already processed
           if (processedTxs.has(txHash)) continue;
           
-          const amount = parseFloat(web3.utils.fromWei(tx.value, 'ether'));
+          const amount = Number(web3.utils.fromWei(tx.value, 'ether'));
           if (amount > 0) {
             console.log(`📥 Found MATIC deposit: ${amount} from ${tx.from} (tx: ${txHash})`);
             processedTxs.add(txHash);
