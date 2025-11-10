@@ -153,7 +153,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
     
     // Get recent Transfer events to our wallet
     const latestBlock = Number(await web3.eth.getBlockNumber()); // Convert BigInt to Number
-    const fromBlock = Math.max(0, latestBlock - 1000); // Check last 1000 blocks (~30 minutes on Polygon)
+    const fromBlock = Math.max(0, latestBlock - 100); // Reduced to 100 blocks (~3 minutes)
     
     const events = await contract.getPastEvents('Transfer', {
       filter: { to: YOUR_WALLET },
