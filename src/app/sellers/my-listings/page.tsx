@@ -83,62 +83,67 @@ function MyListingsContent() {
     <main className="relative min-h-screen overflow-hidden bg-black text-white py-12 sm:py-16">
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <section className="mb-12 overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-10">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-            <div className="max-w-2xl space-y-5">
-              <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-white/70">
-                <LayoutDashboard className="h-4 w-4 text-[#ff950e]" />
-                Seller Workspace
-              </span>
-              <div>
-                <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight text-white">
-                  My Listings
-                </h1>
-                <p className="mt-4 text-base sm:text-lg text-white/70">
-                  Manage every listing, check performance, and launch new drops in a single, streamlined hub.
-                  Stay on-brand, stay premium, and keep your shop looking irresistible.
-                </p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className={`rounded-2xl border border-white/10 ${CARD_BACKGROUND} p-4`}>
-                  <p className="text-xs uppercase tracking-wider text-white/60">Active Listings</p>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-3xl font-semibold text-white">{totalListings}</span>
-                    <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
+        <section className="mb-12">
+          <div className="relative rounded-[28px] bg-[linear-gradient(145deg,_rgba(120,120,130,0.35),_rgba(45,45,55,0.2)_55%,_rgba(12,12,16,0.8))] p-[1.5px] shadow-[0_24px_40px_rgba(0,0,0,0.45)]">
+            <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-black/60 p-6 sm:p-10">
+              <div className="pointer-events-none absolute inset-0 rounded-[26px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-6px_18px_rgba(0,0,0,0.55)]" />
+              <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+                <div className="max-w-2xl space-y-5">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-white/70">
+                    <LayoutDashboard className="h-4 w-4 text-[#ff950e]" />
+                    Seller Workspace
+                  </span>
+                  <div>
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight text-white">
+                      My Listings
+                    </h1>
+                    <p className="mt-4 text-base sm:text-lg text-white/70">
+                      Manage every listing, check performance, and launch new drops in a single, streamlined hub.
+                      Stay on-brand, stay premium, and keep your shop looking irresistible.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className={`rounded-2xl border border-white/10 ${CARD_BACKGROUND} p-4`}>
+                      <p className="text-xs uppercase tracking-wider text-white/60">Active Listings</p>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-3xl font-semibold text-white">{totalListings}</span>
+                        <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
+                      </div>
+                    </div>
+                    <div className={`rounded-2xl border border-emerald-400/30 ${CARD_BACKGROUND} p-4`}>
+                      <p className="text-xs uppercase tracking-wider text-white/70">Available Slots</p>
+                      <div className="mt-2 text-3xl font-semibold text-emerald-200">{remainingSlots}</div>
+                    </div>
+                    <div className={`rounded-2xl border border-purple-500/30 ${CARD_BACKGROUND} p-4`}>
+                      <p className="text-xs uppercase tracking-wider text-white/70">Auctions Running</p>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-3xl font-semibold text-purple-200">{auctionCount ?? 0}</span>
+                        <Timer className="h-4 w-4 text-purple-200" />
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className={`rounded-2xl border border-emerald-400/30 ${CARD_BACKGROUND} p-4`}>
-                  <p className="text-xs uppercase tracking-wider text-white/70">Available Slots</p>
-                  <div className="mt-2 text-3xl font-semibold text-emerald-200">{remainingSlots}</div>
-                </div>
-                <div className={`rounded-2xl border border-purple-500/30 ${CARD_BACKGROUND} p-4`}>
-                  <p className="text-xs uppercase tracking-wider text-white/70">Auctions Running</p>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-3xl font-semibold text-purple-200">{auctionCount ?? 0}</span>
-                    <Timer className="h-4 w-4 text-purple-200" />
+
+                {!showForm && !editingState.isEditing && (
+                  <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-black/50 p-6 text-center">
+                    <p className="text-sm text-white/60">Launch something new</p>
+                    <button
+                      onClick={() => setShowForm(true)}
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ff950e] px-5 py-3 text-base font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                      disabled={atLimit}
+                      style={atLimit ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
+                      aria-label="Create New Listing"
+                    >
+                      <PlusCircle className="h-5 w-5" />
+                      <span>Create Listing</span>
+                    </button>
+                    <p className="mt-4 text-xs text-white/50">
+                      {isVerified ? 'Boost your presence with premium-only drops and auctions.' : 'Verify your seller account to unlock auctions and premium-only drops.'}
+                    </p>
                   </div>
-                </div>
+                )}
               </div>
             </div>
-
-            {!showForm && !editingState.isEditing && (
-              <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-black/50 p-6 text-center">
-                <p className="text-sm text-white/60">Launch something new</p>
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ff950e] px-5 py-3 text-base font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                  disabled={atLimit}
-                  style={atLimit ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
-                  aria-label="Create New Listing"
-                >
-                  <PlusCircle className="h-5 w-5" />
-                  <span>Create Listing</span>
-                </button>
-                <p className="mt-4 text-xs text-white/50">
-                  {isVerified ? 'Boost your presence with premium-only drops and auctions.' : 'Verify your seller account to unlock auctions and premium-only drops.'}
-                </p>
-              </div>
-            )}
           </div>
         </section>
 
