@@ -20,6 +20,8 @@ import ListingCard from '@/components/myListings/ListingCard';
 import ListingForm from '@/components/myListings/ListingForm';
 import { useMyListings } from '@/hooks/useMyListings';
 
+const CARD_BACKGROUND = 'bg-[linear-gradient(135deg,_rgba(36,36,42,0.92),_rgba(12,12,16,0.98))]';
+
 const AUCTION_TIPS = [
   'Set a competitive starting price to attract initial bids.',
   "Use a reserve price to ensure you don't sell below your minimum acceptable price.",
@@ -98,18 +100,18 @@ function MyListingsContent() {
                 </p>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                <div className={`rounded-2xl border border-white/10 ${CARD_BACKGROUND} p-4`}>
                   <p className="text-xs uppercase tracking-wider text-white/60">Active Listings</p>
                   <div className="mt-2 flex items-baseline gap-2">
                     <span className="text-3xl font-semibold text-white">{totalListings}</span>
                     <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
                   </div>
                 </div>
-                <div className="rounded-2xl border border-emerald-400/30 bg-black/40 p-4">
+                <div className={`rounded-2xl border border-emerald-400/30 ${CARD_BACKGROUND} p-4`}>
                   <p className="text-xs uppercase tracking-wider text-white/70">Available Slots</p>
                   <div className="mt-2 text-3xl font-semibold text-emerald-200">{remainingSlots}</div>
                 </div>
-                <div className="rounded-2xl border border-purple-500/30 bg-black/40 p-4">
+                <div className={`rounded-2xl border border-purple-500/30 ${CARD_BACKGROUND} p-4`}>
                   <p className="text-xs uppercase tracking-wider text-white/70">Auctions Running</p>
                   <div className="mt-2 flex items-baseline gap-2">
                     <span className="text-3xl font-semibold text-purple-200">{auctionCount ?? 0}</span>
@@ -145,7 +147,7 @@ function MyListingsContent() {
           <div className="space-y-8 lg:col-span-2">
             {/* Stats */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="group overflow-hidden rounded-2xl border border-white/10 bg-black/40 p-6">
+              <div className={`group overflow-hidden rounded-2xl border border-white/10 ${CARD_BACKGROUND} p-6`}>
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-wider text-white/60">Standard</p>
@@ -157,7 +159,7 @@ function MyListingsContent() {
                 </div>
                 <p className="mt-5 text-xs text-white/50">Keep your storefront fresh with rotating standard listings.</p>
               </div>
-              <div className="group overflow-hidden rounded-2xl border border-[#ff950e]/40 bg-black/40 p-6">
+              <div className={`group overflow-hidden rounded-2xl border border-[#ff950e]/40 ${CARD_BACKGROUND} p-6`}>
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-wider text-white/70">Premium</p>
@@ -169,7 +171,7 @@ function MyListingsContent() {
                 </div>
                 <p className="mt-5 text-xs text-white/60">Reward your subscribers with exclusive premium-only releases.</p>
               </div>
-              <div className="group overflow-hidden rounded-2xl border border-purple-500/40 bg-black/40 p-6">
+              <div className={`group overflow-hidden rounded-2xl border border-purple-500/40 ${CARD_BACKGROUND} p-6`}>
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-wider text-white/70">Auctions</p>
@@ -241,7 +243,7 @@ function MyListingsContent() {
               </div>
               <div className="mt-6 h-px w-full bg-white/10" />
               {(myListings?.length ?? 0) === 0 ? (
-                <div className="rounded-2xl border border-dashed border-white/15 bg-black/40 py-10 text-center text-white/60">
+                <div className={`rounded-2xl border border-dashed border-white/15 ${CARD_BACKGROUND} py-10 text-center text-white/60`}>
                   <p className="text-lg font-medium text-white/70">You haven't created any listings yet.</p>
                   <p className="mt-2 text-sm text-white/50">Tap “Create Listing” to drop your first item.</p>
                 </div>
@@ -303,7 +305,7 @@ function MyListingsContent() {
             )}
 
             {/* Auction Tips */}
-            <div className="overflow-hidden rounded-3xl border border-purple-500/40 bg-black/60 p-6 sm:p-8">
+            <div className={`overflow-hidden rounded-3xl border border-purple-500/40 ${CARD_BACKGROUND} p-6 sm:p-8`}>
               <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
                 <Gavel className="h-6 w-6 text-purple-200" />
                 Auction Tips
@@ -320,7 +322,7 @@ function MyListingsContent() {
                 ))}
               </ul>
               {!isVerified && (
-                <div className="mt-6 rounded-2xl border border-purple-200/20 bg-black/40 p-4">
+                <div className={`mt-6 rounded-2xl border border-purple-200/20 ${CARD_BACKGROUND} p-4`}>
                   <div className="flex items-start gap-3">
                     <Lock className="h-5 w-5 flex-shrink-0 text-yellow-300" />
                     <p className="text-xs text-purple-50/70">
@@ -335,7 +337,7 @@ function MyListingsContent() {
             </div>
 
             {/* Premium Tips */}
-            <div className="overflow-hidden rounded-3xl border border-[#ff950e]/40 bg-black/60 p-6 sm:p-8">
+            <div className={`overflow-hidden rounded-3xl border border-[#ff950e]/40 ${CARD_BACKGROUND} p-6 sm:p-8`}>
               <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
                 <Crown className="h-6 w-6 text-[#ffb347]" />
                 Premium Seller Tips
