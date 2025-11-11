@@ -145,7 +145,7 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
         </div>
 
         {/* Tier Badges Row */}
-        <div className="flex w-full flex-nowrap gap-4 overflow-x-auto pb-2 pr-2 sm:overflow-x-visible sm:pb-0 sm:pr-0">
+        <div className="flex w-full flex-nowrap gap-4 overflow-x-auto pb-2 pr-2 sm:overflow-x-visible sm:pb-0 sm:pr-0 md:mx-auto md:w-fit md:justify-center">
           {(['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'] as TierLevel[]).map((tier) => {
             const isCurrentTier = currentTier === tier;
             const isSelected = selectedTierDetails === tier;
