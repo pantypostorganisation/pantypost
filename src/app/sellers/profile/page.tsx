@@ -65,7 +65,7 @@ export default function SellerProfileSettingsPage() {
     <BanCheck>
       <RequireAuth role="seller">
         <main className="min-h-screen bg-gradient-to-b from-black via-[#0f0a06] to-black text-white py-12 px-4">
-          <div className="max-w-6xl mx-auto space-y-12">
+          <div className="max-w-7xl mx-auto space-y-12">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
               {/* Left column - Profile info and tier progress */}
               <div className="xl:col-span-1 space-y-8">
