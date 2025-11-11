@@ -77,6 +77,7 @@ function MyListingsContent() {
   }
 
   const totalListings = myListings?.length ?? 0;
+  const hasListings = totalListings > 0;
   const remainingSlots = Math.max((maxListings ?? 0) - totalListings, 0);
 
   return (
@@ -246,24 +247,26 @@ function MyListingsContent() {
                   {totalListings} live
                 </div>
               </div>
-              <div className="mt-6 h-px w-full bg-white/10" />
-              {(myListings?.length ?? 0) === 0 ? (
-                <div className={`rounded-2xl border border-dashed border-white/15 ${CARD_BACKGROUND} py-10 text-center text-white/60`}>
+              {hasListings ? (
+                <>
+                  <div className="mt-6 h-px w-full bg-white/10" />
+                  <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {myListings!.map((listing) => (
+                      <ListingCard
+                        key={listing.id}
+                        listing={listing}
+                        analytics={getListingAnalytics(listing)}
+                        onEdit={handleEditClick}
+                        onDelete={removeListing}
+                        onCancelAuction={handleCancelAuction}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className={`mt-6 rounded-3xl border border-dashed border-white/15 ${CARD_BACKGROUND} py-10 text-center text-white/60`}>
                   <p className="text-lg font-medium text-white/70">You haven't created any listings yet.</p>
                   <p className="mt-2 text-sm text-white/50">Tap “Create Listing” to drop your first item.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                  {myListings!.map((listing) => (
-                    <ListingCard
-                      key={listing.id}
-                      listing={listing}
-                      analytics={getListingAnalytics(listing)}
-                      onEdit={handleEditClick}
-                      onDelete={removeListing}
-                      onCancelAuction={handleCancelAuction}
-                    />
-                  ))}
                 </div>
               )}
             </div>
