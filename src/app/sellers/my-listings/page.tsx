@@ -79,6 +79,11 @@ function MyListingsContent() {
   const totalListings = myListings?.length ?? 0;
   const hasListings = totalListings > 0;
   const remainingSlots = Math.max((maxListings ?? 0) - totalListings, 0);
+  const liveBadgeColorClasses = hasListings
+    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100'
+    : 'border-rose-500/50 bg-rose-500/15 text-rose-200';
+  const liveBadgeAnimationClass = hasListings ? 'live-badge live-badge--active' : 'live-badge live-badge--inactive';
+  const liveBadgeIconClass = hasListings ? 'text-emerald-300' : 'text-rose-400';
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-black text-white py-12 sm:py-16">
@@ -242,8 +247,10 @@ function MyListingsContent() {
                   <h2 className="text-2xl font-bold text-white">Your Active Listings</h2>
                   <p className="text-sm text-white/60">Track performance, edit details, or sunset listings in seconds.</p>
                 </div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white/70">
-                  <BarChart2 className="h-4 w-4 text-[#ff950e]" />
+                <div
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wider ${liveBadgeColorClasses} ${liveBadgeAnimationClass}`}
+                >
+                  <BarChart2 className={`h-4 w-4 ${liveBadgeIconClass}`} />
                   {totalListings} live
                 </div>
               </div>
