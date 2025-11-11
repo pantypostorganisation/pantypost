@@ -22,12 +22,22 @@ interface CryptoDepositSectionProps {
   maxAmount?: number;
 }
 
-interface ManualPaymentInfo {
-  payment_id: string;
-  pay_address: string;
-  pay_amount: number;
-  pay_currency: string;
-  instructions: string;
+interface DepositDetails {
+  depositId: string;
+  walletAddress: string;
+  cryptoAmount: string;
+  displayAmount: string;
+  cryptoCurrency: string;
+  usdAmount: number;
+  networkFeeRange: string;
+  estimatedNetworkFee: string;
+  qrCode: string | null;
+  expiresAt: Date;
+  expiryMinutes: number;
+  instructions: any;
+  network: string;
+  exchangeRate: number;
+  uniqueCode?: number;
 }
 
 export default function CryptoDepositSection({
@@ -39,14 +49,42 @@ export default function CryptoDepositSection({
   
   const [amount, setAmount] = useState<string>("25");
   const [loading, setLoading] = useState(false);
-  const [successUrl, setSuccessUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [manualPayment, setManualPayment] = useState<ManualPaymentInfo | null>(null);
+  const [depositDetails, setDepositDetails] = useState<DepositDetails | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedAmount, setCopiedAmount] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
   // Quick amount buttons
   const quickAmounts = [25, 50, 100, 250, 500, 1000];
+
+  // Countdown timer
+  React.useEffect(() => {
+    if (!depositDetails?.expiresAt) return;
+
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const expiry = new Date(depositDetails.expiresAt).getTime();
+      const remaining = Math.max(0, Math.floor((expiry - now) / 1000));
+      
+      setTimeRemaining(remaining);
+
+      if (remaining === 0) {
+        clearInterval(timer);
+        setDepositDetails(null);
+        setError('Deposit expired. Please create a new one.');
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [depositDetails]);
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Validate amount
   const validateAmount = (value: string): string | null => {
@@ -63,7 +101,7 @@ export default function CryptoDepositSection({
     return null;
   }
 
-  // Copy address to clipboard
+  // Copy to clipboard
   const copyToClipboard = async (text: string, type: 'address' | 'amount' = 'address') => {
     try {
       await navigator.clipboard.writeText(text);
@@ -79,11 +117,10 @@ export default function CryptoDepositSection({
     }
   };
 
-  // Start crypto deposit
+  // Create crypto deposit
   const startCryptoDeposit = async () => {
     setError(null);
-    setSuccessUrl(null);
-    setManualPayment(null);
+    setDepositDetails(null);
 
     const validationError = validateAmount(amount);
     if (validationError) {
@@ -95,61 +132,275 @@ export default function CryptoDepositSection({
     
     setLoading(true);
     try {
-      // Generate order ID with username
-      const orderId = user?.username 
-        ? `pp-deposit-${user.username}-${Date.now()}`
-        : `pp-deposit-guest-${Date.now()}`;
-
-      // Call the API (backend now forces USDT only)
-      const res = await fetch("/api/crypto/create-payment", {
+      const res = await fetch("/api/crypto/create-deposit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           amount: numericAmount,
-          order_id: orderId,
-          description: `Wallet deposit for ${user?.username || 'user'}`,
+          currency: 'USDT_POLYGON' // Always use Polygon for lowest fees
         }),
       });
 
-      const data = await res.json().catch(() => ({} as any));
+      const data = await res.json();
 
-      // Handle different response scenarios
-      if (data?.success && data?.data?.payment_url) {
-        // Success - got hosted checkout URL
-        setSuccessUrl(data.data.payment_url);
-        
-        // Open in new tab
-        if (typeof window !== "undefined") {
-          window.open(data.data.payment_url, "_blank", "noopener,noreferrer");
-        }
-        
-        // Reload wallet data after a delay (webhook might process payment)
-        setTimeout(() => {
-          reloadData();
-        }, 5000);
-        
-      } else if (data?.success && data?.data?.type === "manual_payment") {
-        // Manual payment required
-        setManualPayment(data.data);
-        setError(null);
-        
+      if (data?.success && data?.data) {
+        setDepositDetails(data.data);
+        console.log('Deposit created with unique amount:', data.data.displayAmount);
       } else {
-        // Error occurred
-        setError(
-          data?.error || "Unable to create payment. Please try again."
-        );
+        setError(data?.error || "Unable to create deposit. Please try again.");
       }
       
     } catch (err: any) {
       console.error("[CryptoDepositSection] Error:", err);
-      setError(
-        "Network error. Please check your connection and try again."
-      );
+      setError("Network error. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Confirm payment sent
+  const confirmPaymentSent = async () => {
+    if (!depositDetails) return;
+
+    setConfirming(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/crypto/confirm-deposit", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          depositId: depositDetails.depositId,
+          txHash: '' // User can optionally provide this
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data?.success) {
+        alert('Payment confirmation received! Your deposit will be automatically verified within 2-5 minutes.');
+        setDepositDetails(null);
+        setAmount('');
+        
+        // Reload wallet data after a delay
+        setTimeout(() => {
+          reloadData();
+        }, 5000);
+      } else {
+        setError(data?.error || "Failed to confirm payment.");
+      }
+      
+    } catch (err: any) {
+      console.error("[CryptoDepositSection] Confirm error:", err);
+      setError("Failed to confirm payment. Please try again.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // If showing deposit details
+  if (depositDetails) {
+    return (
+      <div className="rounded-2xl border border-gray-800 bg-[#111] p-6 sm:p-8 transition-all">
+        {/* Header with Timer */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+              <Bitcoin className="h-6 w-6 text-[#ff950e]" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-white">
+                Complete Your Deposit
+              </h2>
+              <p className="text-sm text-gray-400">
+                Send USDT on Polygon Network
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Time Remaining</p>
+            <p className={`text-lg font-mono font-semibold ${timeRemaining < 300 ? 'text-red-400' : 'text-white'}`}>
+              {formatTime(timeRemaining)}
+            </p>
+          </div>
+        </div>
+
+        {/* CRITICAL: Exact Amount Box with Brand Color */}
+        <div className="bg-[#ff950e]/10 border-2 border-[#ff950e] p-4 rounded-xl mb-6">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-5 w-5 text-[#ff950e] flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-[#ff950e] mb-2">
+                SEND EXACTLY THIS AMOUNT - ALL DECIMALS MATTER!
+              </p>
+              <div className="bg-black/30 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-2xl font-mono font-bold text-white">
+                    {depositDetails.displayAmount} USDT
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(depositDetails.displayAmount, 'amount')}
+                    className="text-[#ff950e] hover:text-white transition-colors p-2"
+                    title="Copy exact amount"
+                  >
+                    {copiedAmount ? (
+                      <CheckCircle2 className="h-5 w-5" />
+                    ) : (
+                      <Copy className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  This exact amount (including all 4 decimals) uniquely identifies YOUR deposit
+                </p>
+              </div>
+              <div className="mt-3 space-y-1">
+                <p className="text-xs text-[#ff950e]/80">
+                  • Sending even 0.0001 USDT more or less may cause issues
+                </p>
+                <p className="text-xs text-[#ff950e]/80">
+                  • Copy the amount above to ensure accuracy
+                </p>
+                <p className="text-xs text-[#ff950e]/80">
+                  • We accept deposits within 2.5% of the exact amount
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Wallet Address */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            Send to this Polygon address:
+          </label>
+          <div className="flex items-center gap-2 bg-black/30 rounded-lg p-3">
+            <input
+              type="text"
+              readOnly
+              value={depositDetails.walletAddress}
+              className="flex-1 bg-transparent text-sm font-mono text-white outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => copyToClipboard(depositDetails.walletAddress)}
+              className="text-gray-400 hover:text-white transition-colors flex-shrink-0 p-1"
+              title="Copy address"
+            >
+              {copied ? (
+                <CheckCircle2 className="h-4 w-4 text-green-400" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* QR Code if available */}
+        {depositDetails.qrCode && (
+          <div className="mb-6 flex justify-center">
+            <div className="bg-white p-4 rounded-xl">
+              <img
+                src={depositDetails.qrCode}
+                alt="Deposit QR Code"
+                className="w-48 h-48"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Instructions */}
+        <div className="bg-gray-800/30 rounded-xl p-4 mb-6">
+          <h3 className="text-sm font-semibold text-white mb-3">
+            {depositDetails.instructions?.title || 'Deposit Instructions'}
+          </h3>
+          <ol className="space-y-2">
+            {depositDetails.instructions?.steps?.map((step: string, index: number) => (
+              <li key={index} className="text-xs text-gray-300 flex">
+                <span className="text-[#ff950e] mr-2">{index + 1}.</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Network Info */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-black/30 rounded-lg p-3">
+            <p className="text-xs text-gray-500 mb-1">Network</p>
+            <p className="text-sm text-white font-medium">
+              Polygon (MATIC)
+            </p>
+          </div>
+          <div className="bg-black/30 rounded-lg p-3">
+            <p className="text-xs text-gray-500 mb-1">Network Fee</p>
+            <p className="text-sm text-white font-medium">
+              ~$0.01-0.05
+            </p>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/30 p-4 mb-6">
+            <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm text-red-300">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-3">
+          <button
+            onClick={confirmPaymentSent}
+            disabled={confirming}
+            className="flex-1 inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff950e] px-6 py-3.5 text-sm font-semibold text-black transition-all hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {confirming ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4" />
+                I've Sent The Payment
+              </>
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setDepositDetails(null);
+              setError(null);
+            }}
+            className="px-6 py-3.5 rounded-xl border border-gray-700 text-sm font-medium text-gray-300 hover:bg-gray-800 transition-all"
+          >
+            Cancel
+          </button>
+        </div>
+
+        {/* Warning */}
+        <div className="mt-6 text-center">
+          <p className="text-xs text-red-400">
+            ⚠️ Only send USDT on Polygon Network! Wrong network = lost funds!
+          </p>
+          <p className="text-xs text-gray-500 mt-2">
+            Your deposit will be auto-verified within 2-5 minutes after blockchain confirmation
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Initial deposit form
   return (
     <div className="rounded-2xl border border-gray-800 bg-[#111] p-6 sm:p-8 transition-all">
       {/* Header */}
@@ -159,10 +410,10 @@ export default function CryptoDepositSection({
         </div>
         <div>
           <h2 className="text-xl font-semibold text-white sm:text-2xl">
-            USDT Deposit
+            Crypto Deposit
           </h2>
           <p className="text-sm text-gray-400">
-            Secure payment via NOWPayments - USDT (TRC-20) Only
+            USDT on Polygon Network - Lowest Fees!
           </p>
         </div>
       </div>
@@ -171,22 +422,30 @@ export default function CryptoDepositSection({
       <div className="flex items-center gap-2 mb-6 p-3 rounded-xl bg-green-500/10 border border-green-500/30">
         <Shield className="h-4 w-4 text-green-400" />
         <span className="text-xs text-green-300">
-          Secure & encrypted USDT payment processing
+          Secure blockchain deposits with automatic verification
         </span>
       </div>
 
       <div className="space-y-6">
-        {/* Payment Method Info */}
+        {/* Network Info */}
         <div className="p-4 rounded-xl bg-[#ff950e]/10 border border-[#ff950e]/30">
           <div className="flex items-center gap-2 mb-2">
             <Info className="h-4 w-4 text-[#ff950e]" />
             <span className="text-sm font-medium text-[#ff950e]">
-              USDT (TRC-20) Network Only
+              USDT on Polygon Network
             </span>
           </div>
           <p className="text-xs text-gray-400">
-            We only accept USDT on the TRC-20 network for fast, low-fee transactions.
-            Your USD deposit will be converted to USDT automatically.
+            • Network fees: $0.01-0.05 (cheapest option!)
+          </p>
+          <p className="text-xs text-gray-400">
+            • Confirmation time: 30-60 seconds
+          </p>
+          <p className="text-xs text-gray-400">
+            • Auto-verification within 2-5 minutes
+          </p>
+          <p className="text-xs text-gray-400">
+            • Each deposit gets a unique amount for accurate tracking
           </p>
         </div>
 
@@ -243,154 +502,33 @@ export default function CryptoDepositSection({
           </div>
         )}
 
-        {/* Success Message */}
-        {successUrl && (
-          <div className="flex items-start gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4">
-            <CheckCircle2 className="h-5 w-5 text-emerald-400 mt-0.5 flex-shrink-0" />
-            <div className="flex-1 space-y-2">
-              <p className="text-sm font-medium text-emerald-300">
-                Payment page opened successfully!
-              </p>
-              <p className="text-xs text-emerald-300/80">
-                Complete your USDT payment in the new tab. Your balance will update automatically.
-              </p>
-              <a
-                href={successUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 underline underline-offset-2"
-              >
-                Open payment page again
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-          </div>
-        )}
-
-        {/* Manual Payment Instructions */}
-        {manualPayment && (
-          <div className="rounded-xl border border-[#ff950e]/30 bg-[#ff950e]/5 p-4 space-y-4">
-            <div className="flex items-start gap-2">
-              <Info className="h-5 w-5 text-[#ff950e] mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <p className="text-sm font-medium text-[#ff950e]">
-                  Manual USDT Transfer Required
-                </p>
-                <p className="mt-1 text-xs text-gray-400">
-                  Send the exact USDT amount (TRC-20) to the address below
-                </p>
-              </div>
-            </div>
-
-            {/* IMPORTANT: Exact Amount Warning */}
-            <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 rounded-lg">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm text-yellow-400 font-medium">
-                    Send EXACTLY {manualPayment.pay_amount} USDT
-                  </p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    • Include network fees in your wallet balance
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    • Sending less may cause payment to fail
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    • We accept payments within 0.1% of the required amount
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="space-y-3">
-              <div className="rounded-lg bg-black/30 p-3">
-                <p className="text-xs text-gray-500 mb-1">Amount to Send (Click to Copy)</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-mono text-white font-medium">
-                    {manualPayment.pay_amount} USDT
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(manualPayment.pay_amount.toString(), 'amount')}
-                    className="text-gray-400 hover:text-white transition-colors"
-                    title="Copy amount"
-                  >
-                    {copiedAmount ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-400" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              
-              <div className="rounded-lg bg-black/30 p-3">
-                <p className="text-xs text-gray-500 mb-1">TRC-20 Address (Click to Copy)</p>
-                <div className="flex items-center gap-2">
-                  <p className="flex-1 text-xs font-mono text-white break-all">
-                    {manualPayment.pay_address}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(manualPayment.pay_address, 'address')}
-                    className="text-gray-400 hover:text-white transition-colors flex-shrink-0"
-                    title="Copy address"
-                  >
-                    {copied ? (
-                      <CheckCircle2 className="h-4 w-4 text-green-400" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              
-              <div className="text-xs text-gray-400 space-y-1">
-                <p>• Payment ID: {manualPayment.payment_id}</p>
-                <p>• Network: TRC-20 (Tron Network)</p>
-                <p>• Payment expires in 20 minutes</p>
-                <p>• Your balance will update automatically after 1-3 confirmations</p>
-                <p className="text-yellow-400 font-medium">
-                  ⚠️ Only send USDT on TRC-20 network! Other tokens or networks will be lost!
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Submit Button */}
         <button
           onClick={startCryptoDeposit}
-          disabled={loading || !!successUrl}
+          disabled={loading}
           className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#ff950e] px-6 py-3.5 text-sm font-semibold text-black transition-all hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Creating USDT checkout...
-            </>
-          ) : successUrl ? (
-            <>
-              <CheckCircle2 className="h-4 w-4" />
-              Payment in progress
+              Creating deposit...
             </>
           ) : (
             <>
               <Wallet className="h-4 w-4" />
-              Create USDT Deposit
+              Generate Deposit Address
             </>
           )}
         </button>
 
         {/* Info Text */}
         <div className="text-center text-xs text-gray-500">
-          <p>Secure USDT payment processing by NOWPayments</p>
+          <p>Secure blockchain payment processing</p>
           <p className="mt-1">
-            TRC-20 Network • Low fees • Fast confirmations
+            Each deposit receives a unique amount for accurate tracking
           </p>
-          <p className="mt-2 text-gray-600">
-            Payments within 0.1% of the required amount are automatically accepted
+          <p className="mt-2 text-[#ff950e]">
+            Polygon Network • Ultra-low fees • Fast confirmations
           </p>
         </div>
       </div>

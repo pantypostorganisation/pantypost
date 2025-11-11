@@ -11,8 +11,8 @@ const QRCode = require('qrcode');
 // Get wallet addresses from environment
 const WALLET_ADDRESSES = {
   // Polygon Network (CHEAPEST - Priority!)
-  USDT_POLYGON: process.env.CRYPTO_WALLET_POLYGON || '0xEnterYourPolygonAddressHere',
-  USDC_POLYGON: process.env.CRYPTO_WALLET_POLYGON || '0xEnterYourPolygonAddressHere', // Same address for both
+  USDT_POLYGON: process.env.CRYPTO_WALLET_POLYGON || '0x16305612c67a84fa8ae4cccc50e560b94372d04d',
+  USDC_POLYGON: process.env.CRYPTO_WALLET_POLYGON || '0x16305612c67a84fa8ae4cccc50e560b94372d04d', // Same address for both
   
   // Other networks
   USDT_TRC20: process.env.CRYPTO_WALLET_USDT_TRC20 || 'TEnterYourUSDTTRC20AddressHere',
@@ -85,7 +85,7 @@ function isAdminUser(user) {
          user.username === 'gerome');
 }
 
-// POST /api/crypto/create-deposit - Create a new crypto deposit request
+// POST /api/crypto/create-deposit - Create a new crypto deposit request with UNIQUE AMOUNT
 router.post('/create-deposit', authMiddleware, async (req, res) => {
   try {
     const { amount, currency = 'USDT_POLYGON' } = req.body;
@@ -118,29 +118,38 @@ router.post('/create-deposit', authMiddleware, async (req, res) => {
       });
     }
 
-    // Calculate crypto amount
+    // IMPORTANT: Generate unique amount to prevent deposit collisions
+    // This ensures each deposit has a unique fingerprint
+    const uniqueOffset = (Math.floor(Math.random() * 99) + 1) / 10000; // 0.0001 to 0.0099
+    const uniqueAmount = numAmount + uniqueOffset;
+
+    // Calculate crypto amount with unique offset
     const exchangeRate = EXCHANGE_RATES[currency];
     const networkFee = NETWORK_FEES[currency].typical;
-    const totalUSD = numAmount; // User pays the amount they want to deposit
-    const cryptoAmount = (numAmount * exchangeRate).toFixed(currency.includes('USDT') ? 2 : 8);
+    const totalUSD = numAmount; // User gets exactly what they want to deposit
+    
+    // Use 4 decimals for stablecoins, 8 for others
+    const decimals = (currency.includes('USDT') || currency.includes('USDC')) ? 4 : 8;
+    const cryptoAmount = (uniqueAmount * exchangeRate).toFixed(decimals);
     
     // Get wallet address
     const walletAddress = WALLET_ADDRESSES[currency];
 
-    // Generate payment URI for QR code
+    // Generate payment URI for QR code with exact amount
     let paymentURI = '';
     if (currency === 'BTC') {
       paymentURI = `bitcoin:${walletAddress}?amount=${cryptoAmount}&label=PantyPost%20Deposit`;
     } else if (currency === 'ETH' || currency === 'USDT_ERC20') {
-      paymentURI = `ethereum:${walletAddress}`;
+      paymentURI = `ethereum:${walletAddress}?value=${cryptoAmount}`;
     } else {
-      paymentURI = walletAddress; // For TRC-20 and Polygon, just use the address
+      // For TRC-20 and Polygon, include amount in a format wallets understand
+      paymentURI = `${walletAddress}?amount=${cryptoAmount}`;
     }
 
     // Generate QR code
     const qrCodeData = await generateQRCode(paymentURI);
 
-    // Create deposit record
+    // Create deposit record with unique amount
     const deposit = new CryptoDeposit({
       username,
       amountUSD: numAmount,
@@ -155,7 +164,8 @@ router.post('/create-deposit', authMiddleware, async (req, res) => {
         network: currency.includes('POLYGON') ? 'Polygon' :
                  currency.includes('TRC20') ? 'Tron' : 
                  currency.includes('ERC20') ? 'Ethereum' :
-                 currency === 'BTC' ? 'Bitcoin' : 'Ethereum'
+                 currency === 'BTC' ? 'Bitcoin' : 'Ethereum',
+        uniqueCode: Math.round(uniqueOffset * 10000) // Store the unique code for reference
       }
     });
 
@@ -165,12 +175,15 @@ router.post('/create-deposit', authMiddleware, async (req, res) => {
     const expiryMinutes = 30;
     const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
+    console.log(`[Crypto] Created unique deposit for ${username}: $${numAmount} = ${cryptoAmount} ${currency} (code: ${deposit.metadata.uniqueCode})`);
+
     res.json({
       success: true,
       data: {
         depositId: deposit.depositId,
         walletAddress,
         cryptoAmount,
+        displayAmount: cryptoAmount, // Exact amount with proper decimals
         cryptoCurrency: currency,
         usdAmount: numAmount,
         networkFeeRange: getFeeDisplay(currency),
@@ -180,7 +193,8 @@ router.post('/create-deposit', authMiddleware, async (req, res) => {
         expiryMinutes,
         instructions: getDepositInstructions(currency, cryptoAmount, walletAddress),
         network: deposit.metadata.network,
-        exchangeRate: exchangeRate
+        exchangeRate: exchangeRate,
+        uniqueCode: deposit.metadata.uniqueCode // For debugging
       }
     });
 
@@ -231,7 +245,7 @@ router.post('/confirm-deposit', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Payment confirmation received. An admin will verify your deposit shortly.',
+      message: 'Payment confirmation received. Your deposit will be automatically verified within 2-5 minutes.',
       data: {
         depositId: deposit.depositId,
         status: 'confirming',
@@ -388,7 +402,8 @@ router.get('/admin/pending-deposits', authMiddleware, async (req, res) => {
         txHash: d.txHash,
         createdAt: d.createdAt,
         expiresAt: d.expiresAt,
-        isExpired: d.isExpired()
+        isExpired: d.isExpired(),
+        uniqueCode: d.metadata?.uniqueCode // Show unique code for debugging
       }))
     });
 
@@ -610,42 +625,42 @@ router.get('/admin/deposit-history', authMiddleware, async (req, res) => {
   }
 });
 
-// Helper function to generate deposit instructions
+// Helper function to generate deposit instructions with UNIQUE AMOUNT emphasis
 function getDepositInstructions(currency, amount, address) {
-  const instructions = {
+  const baseInstructions = {
     USDT_POLYGON: {
       title: 'USDT (Polygon) Deposit Instructions - CHEAPEST OPTION! 🏆',
       steps: [
-        `Send exactly ${amount} USDT to the address below`,
+        `Send EXACTLY ${amount} USDT to the address below (all decimals matter!)`,
         'Use the POLYGON network - NOT Ethereum!',
         'Network fees are only $0.01-0.05',
-        'Double-check you\'re on Polygon network',
+        'The exact amount including decimals identifies YOUR deposit',
         'Click "I\'ve Sent Payment" after sending',
-        'Admin will verify within 1-2 hours'
+        'Auto-verification happens within 2-5 minutes'
       ],
-      warning: 'Only send USDT on Polygon network! Sending on wrong network will result in loss!',
+      warning: 'Must send the EXACT amount shown! Even 0.0001 difference may cause issues.',
       confirmations: '30-60 seconds (super fast!)'
     },
     USDC_POLYGON: {
       title: 'USDC (Polygon) Deposit Instructions - CHEAPEST OPTION! 🏆',
       steps: [
-        `Send exactly ${amount} USDC to the address below`,
+        `Send EXACTLY ${amount} USDC to the address below (all decimals matter!)`,
         'Use the POLYGON network - NOT Ethereum!',
         'Network fees are only $0.01-0.05',
-        'Double-check you\'re on Polygon network',
+        'The exact amount including decimals identifies YOUR deposit',
         'Click "I\'ve Sent Payment" after sending',
-        'Admin will verify within 1-2 hours'
+        'Auto-verification happens within 2-5 minutes'
       ],
-      warning: 'Only send USDC on Polygon network! Sending on wrong network will result in loss!',
+      warning: 'Must send the EXACT amount shown! Even 0.0001 difference may cause issues.',
       confirmations: '30-60 seconds (super fast!)'
     },
     USDT_TRC20: {
       title: 'USDT (TRC-20) Deposit Instructions',
       steps: [
-        `Send exactly ${amount} USDT to the address below`,
+        `Send EXACTLY ${amount} USDT to the address below`,
         'Use the TRC-20 network (Tron) - NOT ERC-20!',
         'Include network fees in your wallet balance',
-        'Double-check the address before sending',
+        'The exact amount identifies YOUR deposit',
         'Click "I\'ve Sent Payment" after sending',
         'Admin will verify within 1-2 hours'
       ],
@@ -655,7 +670,7 @@ function getDepositInstructions(currency, amount, address) {
     USDT_ERC20: {
       title: 'USDT (ERC-20) Deposit Instructions',
       steps: [
-        `Send exactly ${amount} USDT to the address below`,
+        `Send EXACTLY ${amount} USDT to the address below`,
         'Use the ERC-20 network (Ethereum) - NOT TRC-20!',
         'Ensure you have enough ETH for gas fees',
         'Double-check the address before sending',
@@ -668,7 +683,7 @@ function getDepositInstructions(currency, amount, address) {
     BTC: {
       title: 'Bitcoin Deposit Instructions',
       steps: [
-        `Send exactly ${amount} BTC to the address below`,
+        `Send EXACTLY ${amount} BTC to the address below`,
         'Include network fees in your transaction',
         'Use a reasonable fee for faster confirmation',
         'Double-check the address before sending',
@@ -681,7 +696,7 @@ function getDepositInstructions(currency, amount, address) {
     ETH: {
       title: 'Ethereum Deposit Instructions',
       steps: [
-        `Send exactly ${amount} ETH to the address below`,
+        `Send EXACTLY ${amount} ETH to the address below`,
         'Include gas fees in your wallet balance',
         'Double-check the address before sending',
         'Click "I\'ve Sent Payment" after sending',
@@ -692,7 +707,7 @@ function getDepositInstructions(currency, amount, address) {
     }
   };
 
-  return instructions[currency] || instructions.USDT_POLYGON;
+  return baseInstructions[currency] || baseInstructions.USDT_POLYGON;
 }
 
 // Get blockchain explorer URL
