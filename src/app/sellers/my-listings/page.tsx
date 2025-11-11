@@ -133,16 +133,18 @@ function MyListingsContent() {
                 {!showForm && !editingState.isEditing && (
                   <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-black/50 p-6 text-center">
                     <p className="text-sm text-white/60">Launch something new</p>
-                    <button
-                      onClick={() => setShowForm(true)}
-                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ff950e] px-5 py-3 text-base font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                      disabled={atLimit}
-                      style={atLimit ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
-                      aria-label="Create New Listing"
-                    >
-                      <PlusCircle className="h-5 w-5" />
-                      <span>Create Listing</span>
-                    </button>
+                    <div className="create-listing-glow mt-4 w-full">
+                      <button
+                        onClick={() => setShowForm(true)}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ff950e] px-5 py-3 text-base font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                        disabled={atLimit}
+                        style={atLimit ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
+                        aria-label="Create New Listing"
+                      >
+                        <PlusCircle className="h-5 w-5" />
+                        <span>Create Listing</span>
+                      </button>
+                    </div>
                     <p className="mt-4 text-xs text-white/50">
                       {isVerified ? 'Boost your presence with premium-only drops and auctions.' : 'Verify your seller account to unlock auctions and premium-only drops.'}
                     </p>
@@ -372,6 +374,45 @@ function MyListingsContent() {
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .create-listing-glow {
+          position: relative;
+          z-index: 0;
+        }
+
+        .create-listing-glow::before {
+          content: '';
+          position: absolute;
+          inset: -12px;
+          border-radius: 9999px;
+          background: conic-gradient(
+            from 0deg at 50% 50%,
+            rgba(255, 149, 14, 0.25),
+            rgba(255, 196, 120, 0.55),
+            rgba(255, 149, 14, 0.25)
+          );
+          filter: blur(14px);
+          opacity: 0.75;
+          z-index: -1;
+          animation: orbitGlow 8s linear infinite;
+          pointer-events: none;
+          mask: radial-gradient(closest-side, transparent calc(100% - 18px), black calc(100% - 10px));
+          -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 18px), black calc(100% - 10px));
+        }
+
+        @keyframes orbitGlow {
+          0% {
+            transform: rotate(0deg) scale(1);
+          }
+          50% {
+            transform: rotate(180deg) scale(1.015);
+          }
+          100% {
+            transform: rotate(360deg) scale(1);
+          }
+        }
+      `}</style>
     </main>
   );
 }
