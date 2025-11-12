@@ -1,12 +1,12 @@
 /* src/components/homepage/HeroSection.module.css */
 /* === Shared CTA timing so both buttons sync perfectly === */
 .ctaGroup {
-  /* Exact cycle math:
-     sweep(3.6s) + gap(0.2s) + sweep(3.6s) + end-hold(0.4s) = 7.8s */
-  --pp-duration: 7.8s;    /* total loop time */
-  --pp-sweep-time: 3.6s;  /* single sheen pass duration */
-  --pp-gap: 0.2s;         /* Browse → Start delay */
-  --pp-end-hold: 0.4s;    /* pause before next cycle */
+  /* New cycle math:
+     sweep(1.8s) + gap(0s) + sweep(1.8s) + end-hold(0.4s) = 4.0s total */
+  --pp-duration: 4s;       /* total loop time */
+  --pp-sweep-time: 1.8s;   /* single sheen pass (twice as fast as 3.6s) */
+  --pp-gap: 0s;            /* no explicit gap; baton starts when first is done */
+  --pp-end-hold: 0.4s;     /* brief rest before next cycle */
 }
 
 /* ---------------- Base: Browse Listings ---------------- */
@@ -55,14 +55,14 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Sheen overlay — starts fully OFF left, then enters, crosses, exits */
+/* Sheen overlay — OFF left -> cross -> OFF right */
 .browseListingsBtn::after {
   content: "";
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: 0;                 /* positioned relative to left edge */
-  width: 45%;              /* sheen width as % of button */
+  left: -70%;         /* start well off the left edge (not visible) */
+  width: 70%;         /* wide band for a nice soft sweep */
   border-radius: 999px;
   pointer-events: none;
 
@@ -74,8 +74,7 @@
     rgba(255,255,255,0) 100%
   );
 
-  /* Start fully off-screen to the left (-100% of its own width) */
-  transform: translateX(-100%) skewX(-18deg);
+  transform: translateX(0) skewX(-18deg);
   filter: blur(0.5px);
   mix-blend-mode: screen;
   will-change: transform;
@@ -138,14 +137,14 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Same geometry; delayed start. Begins off-screen left as well. */
+/* Same geometry; baton starts immediately after first sweep ends */
 .startSellingBtn::after {
   content: "";
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: 0;
-  width: 45%;
+  left: -70%;
+  width: 70%;
   border-radius: 999px;
   pointer-events: none;
 
@@ -157,14 +156,13 @@
     rgba(255,255,255,0) 100%
   );
 
-  transform: translateX(-100%) skewX(-18deg);
+  transform: translateX(0) skewX(-18deg);
   filter: blur(0.5px);
   mix-blend-mode: screen;
   will-change: transform;
 
   animation: ppSheen var(--pp-duration) linear infinite both;
-  /* Sheen 1 (3.6s) + gap (0.2s) = 3.8s */
-  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
+  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap)); /* = 1.8s + 0s */
   opacity: 0.9;
 }
 
@@ -176,13 +174,12 @@
 .startSellingBtn:active { transform: scale(0.98); }
 
 /* ---------------- Animations ---------------- */
-/* Align sweep time to keyframes precisely:
-   sweep = 3.6s of 7.8s → 46.1538% of the timeline.
-   Travel from -100% (fully off left) to +100% (fully off right). */
+/* Sweep occupies exactly 45% of the 4s timeline (1.8/4 = 0.45).
+   Travel far enough to exit fully right, even with skew: 320%. */
 @keyframes ppSheen {
-  0%        { transform: translateX(-100%) skewX(-18deg); }  /* not visible */
-  46.154%   { transform: translateX(100%)  skewX(-18deg); }  /* fully off right at 3.6s */
-  100%      { transform: translateX(100%)  skewX(-18deg); }  /* hold off right for end pause */
+  0%   { transform: translateX(0)     skewX(-18deg); }  /* off left due to left:-70% */
+  45%  { transform: translateX(320%)  skewX(-18deg); }  /* fully off right at 1.8s */
+  100% { transform: translateX(320%)  skewX(-18deg); }  /* hold for end pause (0.4s) */
 }
 
 /* ---------------- Reduced Motion ---------------- */
