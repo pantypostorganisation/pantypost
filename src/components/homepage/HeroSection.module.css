@@ -1,9 +1,17 @@
 /* src/components/homepage/HeroSection.module.css */
 /* === Shared CTA timing so both buttons sync perfectly === */
 .ctaGroup {
-  --pp-duration: 12s;      /* total cycle (includes hold) */
-  --pp-sweep-time: 3.6s;   /* portion of cycle used for sweep */
-  --pp-gap: 0.25s;         /* pause between button sheens */
+  /* Whole cycle (includes both sheens + final hold) */
+  --pp-duration: 8.2s;      /* total cycle time */
+
+  /* Visible sweep duration (time to cross each button) */
+  --pp-sweep-time: 3.6s;    /* slow sheen pass */
+
+  /* Pause between button 1 and 2 */
+  --pp-gap: 0.2s;
+
+  /* Extra hold before restarting cycle */
+  --pp-end-hold: 0.4s;
 }
 
 /* ---------------- Base: Browse Listings ---------------- */
@@ -162,7 +170,8 @@
   will-change: transform;
 
   animation: ppSheen var(--pp-duration) linear infinite both;
-  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap)); /* starts after Browse */
+  /* Wait until first sheen + 0.2s gap */
+  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
   opacity: 0.9;
 }
 
@@ -175,11 +184,11 @@
 .startSellingBtn:active { transform: scale(0.98); }
 
 /* ---------------- Animations ---------------- */
-/* 0–30%: slow sweep L→R, 30–100%: hold (one pass per cycle) */
+/* Sweep 0–30%, hold through 100% for total 8.2s cycle (adds ~0.4s final wait) */
 @keyframes ppSheen {
-  0%   { transform: translateX(0)    skewX(-18deg); }   /* off-screen left via left:-70% */
-  30%  { transform: translateX(340%) skewX(-18deg); }   /* well past right edge */
-  100% { transform: translateX(340%) skewX(-18deg); }   /* hold offscreen */
+  0%   { transform: translateX(0)    skewX(-18deg); }
+  30%  { transform: translateX(340%) skewX(-18deg); }  /* full pass */
+  100% { transform: translateX(340%) skewX(-18deg); }  /* hold offscreen right */
 }
 
 /* ---------------- Reduced Motion ---------------- */
