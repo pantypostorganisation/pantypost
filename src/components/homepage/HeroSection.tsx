@@ -129,7 +129,7 @@ export default function HeroSection() {
               </Link>
 
               <Button
-                className={styles.startSellingBtn}
+                className={`${styles.startSellingBtn} startSellingBtn`}
                 onClick={handleStartSelling}
                 aria-label="Start Selling"
               >
