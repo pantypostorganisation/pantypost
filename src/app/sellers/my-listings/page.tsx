@@ -1,6 +1,8 @@
 // src/app/sellers/my-listings/page.tsx
 'use client';
 
+import './createListingBtn.css';
+
 import {
   Crown,
   Sparkles,
@@ -136,7 +138,7 @@ function MyListingsContent() {
                     <div className="create-listing-glow mt-4 w-full">
                       <button
                         onClick={() => setShowForm(true)}
-                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#ff950e] px-5 py-3 text-base font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                        className="createListingBtn flex w-full items-center justify-center gap-2 text-base"
                         disabled={atLimit}
                         style={atLimit ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
                         aria-label="Create New Listing"
