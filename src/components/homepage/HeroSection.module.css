@@ -1,3 +1,101 @@
+/* Browse Listings Button - matches Start Selling style */
+.browseListingsIcon {
+  width: 1rem;
+  height: 1rem;
+  margin-right: 0.6rem;
+  transition: transform 300ms ease;
+}
+
+.browseListingsBtn:hover .browseListingsIcon,
+.browseListingsBtn:focus-visible .browseListingsIcon {
+  transform: translateX(-2px);
+}
+
+.browseListingsBtn {
+  --pp-accent: #ff950e;
+  --pp-bg: #0b0b0b;
+  --pp-text: #ffffff;
+  --pp-radius: 14px;
+  --pp-border-w: 2px;
+  --pp-padding-y: 0.8rem;
+  --pp-padding-x: 1.2rem;
+  --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: var(--pp-padding-y) var(--pp-padding-x);
+  border-radius: var(--pp-radius);
+  color: var(--pp-text);
+  background: var(--pp-bg);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1;
+  transform: translateZ(0);
+  box-shadow: var(--pp-shadow);
+  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+
+.browseListingsBtn:focus { outline: none; }
+.browseListingsBtn:focus-visible {
+  filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
+}
+
+/* Browse Listings animated gradient border - LEFT TO RIGHT */
+.browseListingsBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--pp-border-w);
+  background: linear-gradient(120deg,
+    rgba(255, 149, 14, 0.2),
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 149, 14, 0.6),
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 149, 14, 0.2)
+  );
+  background-size: 400% 100%;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: browseListingsGradient 5s linear infinite; /* Total cycle time with gap */
+  animation-delay: 0s; /* Starts immediately */
+}
+
+/* Browse Listings soft outer neon glow layer */
+.browseListingsBtn::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  background: radial-gradient(40% 60% at 50% 50%, rgba(255, 149, 14, 0.25), transparent 70%);
+  opacity: 0.35;
+  filter: blur(8px);
+  pointer-events: none;
+  transition: opacity 200ms ease, filter 200ms ease;
+}
+
+.browseListingsBtn:hover {
+  box-shadow:
+    0 6px 22px rgba(255, 149, 14, 0.22),
+    0 0 0 1px rgba(255, 149, 14, 0.25);
+}
+.browseListingsBtn:hover::after { opacity: 0.55; filter: blur(10px); }
+
+.browseListingsBtn:active { transform: scale(0.98); }
+.browseListingsBtn:active::after { opacity: 0.32; filter: blur(7px); }
+
+/* Start Selling Button - unchanged base styles */
 .startSellingIcon {
   width: 1rem;
   height: 1rem;
@@ -43,7 +141,7 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Animated gradient border (background-position sweep; NOT rotation) */
+/* Start Selling animated gradient border - RIGHT TO LEFT with delay */
 .startSellingBtn::before {
   content: "";
   position: absolute;
@@ -62,12 +160,16 @@
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-          mask-composite: exclude;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
   pointer-events: none;
-  animation: startSellingGradient 2.2s linear infinite; /* same speed as Create Listing */
+  animation: startSellingGradient 5s linear infinite; /* Total cycle time with gap */
+  animation-delay: 2.5s; /* Starts 0.3s after browse listings completes for travel effect */
 }
 
-/* Soft outer neon glow layer */
+/* Start Selling soft outer neon glow layer */
 .startSellingBtn::after {
   content: "";
   position: absolute;
@@ -90,14 +192,26 @@
 .startSellingBtn:active { transform: scale(0.98); }
 .startSellingBtn:active::after { opacity: 0.32; filter: blur(7px); }
 
-/* Identical sweep keyframes */
-@keyframes startSellingGradient {
+/* Synchronized animations with gap for travel effect */
+/* Browse Listings: Left to Right sweep */
+@keyframes browseListingsGradient {
   0%   { background-position: 0% 50%; }
-  100% { background-position: 400% 50%; }
+  44%  { background-position: 400% 50%; } /* Complete sweep (2.2s of 5s) */
+  44.01% { background-position: 0% 50%; } /* Reset instantly */
+  100% { background-position: 0% 50%; } /* Hold position during gap and second button */
 }
 
-/* Reduced motion: static border, identical to Create Listing */
+/* Start Selling: Right to Left sweep */
+@keyframes startSellingGradient {
+  0%   { background-position: 400% 50%; } /* Start from right */
+  44%  { background-position: 0% 50%; } /* Complete reverse sweep (2.2s of 5s) */
+  44.01% { background-position: 400% 50%; } /* Reset instantly */
+  100% { background-position: 400% 50%; } /* Hold position during gap and first button */
+}
+
+/* Reduced motion: static borders for both buttons */
 @media (prefers-reduced-motion: reduce) {
+  .browseListingsBtn::before,
   .startSellingBtn::before {
     animation: none;
     background: linear-gradient(120deg,

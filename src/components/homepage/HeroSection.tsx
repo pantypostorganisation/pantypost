@@ -51,6 +51,10 @@ export default function HeroSection() {
     router.push(HERO_CONTENT.ctaSecondary.href);
   };
 
+  const handleBrowseListings = () => {
+    router.push(HERO_CONTENT.ctaPrimary.href);
+  };
+
   // Only apply animations after mount to ensure smooth loading
   useEffect(() => {
     setMounted(true);
@@ -115,19 +119,20 @@ export default function HeroSection() {
               role="group"
               aria-label="Primary navigation actions"
             >
-              <Link
-                href={HERO_CONTENT.ctaPrimary.href}
-                className="group relative inline-flex items-center justify-center gap-2.5 rounded-full px-6 py-2.5 bg-gradient-to-r from-[#ff950e] to-[#ffb347] text-black font-semibold text-sm transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg hover:shadow-[#ff950e]/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                style={{ color: '#000' }}
+              {/* Browse Listings Button with synchronized animation */}
+              <Button
+                className={styles.browseListingsBtn}
+                onClick={handleBrowseListings}
                 aria-label="Browse available listings on PantyPost marketplace"
               >
                 <ShoppingBag
-                  className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-[-2px]"
+                  className={styles.browseListingsIcon}
                   aria-hidden="true"
                 />
-                <span className="relative z-10">{HERO_CONTENT.ctaPrimary.text}</span>
-              </Link>
+                {HERO_CONTENT.ctaPrimary.text}
+              </Button>
 
+              {/* Start Selling Button with synchronized animation */}
               <Button
                 className={styles.startSellingBtn}
                 onClick={handleStartSelling}
