@@ -1,14 +1,9 @@
 /* src/components/homepage/HeroSection.module.css */
 /* === Shared CTA timing so both buttons sync perfectly === */
 .ctaGroup {
-  /* Whole cycle (includes sweep + hold time) */
-  --pp-duration: 12s;
-
-  /* Visible sweep duration (portion of the cycle) */
-  --pp-sweep-time: 3.6s; /* ~30% of 12s */
-
-  /* Pause between the two buttons (the “baton handoff”) */
-  --pp-gap: 0.25s;
+  --pp-duration: 12s;      /* total cycle (includes hold) */
+  --pp-sweep-time: 3.6s;   /* portion of cycle used for sweep */
+  --pp-gap: 0.25s;         /* pause between button sheens */
 }
 
 /* ---------------- Base: Browse Listings ---------------- */
@@ -50,7 +45,7 @@
   transform: translateZ(0);
   box-shadow: var(--pp-shadow);
   transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
-  overflow: hidden; /* important for sheen clipping */
+  overflow: hidden; /* clip sheen */
 }
 
 .browseListingsBtn:focus { outline: none; }
@@ -58,18 +53,17 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Sheen overlay — the only animation */
+/* Sheen overlay — this is the only animation */
 .browseListingsBtn::after {
   content: "";
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: -50%;      /* start well off the left edge */
-  width: 50%;      /* wide enough so the band fully covers as it passes */
+  left: -70%;          /* start well offscreen */
+  width: 70%;          /* wide band for full coverage */
   border-radius: 999px;
   pointer-events: none;
 
-  /* Single soft highlight band */
   background: linear-gradient(90deg,
     rgba(255,255,255,0) 0%,
     rgba(255,255,255,0.12) 45%,
@@ -80,7 +74,7 @@
 
   transform: translateX(0) skewX(-18deg);
   filter: blur(0.5px);
-  mix-blend-mode: screen; /* subtle luminous feel on dark bg */
+  mix-blend-mode: screen;
   will-change: transform;
 
   animation: ppSheen var(--pp-duration) linear infinite both;
@@ -94,7 +88,6 @@
     0 0 0 1px rgba(255, 149, 14, 0.25);
 }
 
-/* Tap feedback */
 .browseListingsBtn:active { transform: scale(0.98); }
 
 /* ---------------- Base: Start Selling ---------------- */
@@ -150,8 +143,8 @@
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: -50%;
-  width: 50%;
+  left: -70%;
+  width: 70%;
   border-radius: 999px;
   pointer-events: none;
 
@@ -169,8 +162,7 @@
   will-change: transform;
 
   animation: ppSheen var(--pp-duration) linear infinite both;
-  /* Wait until the first sheen completes, plus a small gap */
-  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
+  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap)); /* starts after Browse */
   opacity: 0.9;
 }
 
@@ -183,12 +175,11 @@
 .startSellingBtn:active { transform: scale(0.98); }
 
 /* ---------------- Animations ---------------- */
-/* 0–30%: run the sheen fully L→R; 30–100%: hold end state to feel “once per cycle”
-   We start off-screen left via `left:-50%`, then travel across and exit fully to the right. */
+/* 0–30%: slow sweep L→R, 30–100%: hold (one pass per cycle) */
 @keyframes ppSheen {
-  0%   { transform: translateX(0)    skewX(-18deg); }   /* off-screen left due to left:-50% */
-  30%  { transform: translateX(200%) skewX(-18deg); }   /* far beyond right edge */
-  100% { transform: translateX(200%) skewX(-18deg); }   /* hold */
+  0%   { transform: translateX(0)    skewX(-18deg); }   /* off-screen left via left:-70% */
+  30%  { transform: translateX(340%) skewX(-18deg); }   /* well past right edge */
+  100% { transform: translateX(340%) skewX(-18deg); }   /* hold offscreen */
 }
 
 /* ---------------- Reduced Motion ---------------- */
@@ -196,6 +187,6 @@
   .browseListingsBtn::after,
   .startSellingBtn::after {
     animation: none;
-    opacity: 0; /* effectively hidden */
+    opacity: 0;
   }
 }
