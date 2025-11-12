@@ -3,14 +3,16 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, type ButtonHTMLAttributes } from 'react';
 import { ShoppingBag, TrendingUp } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { itemVariants, containerVariants, fadeInVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { HERO_CONTENT } from '@/utils/homepage-constants';
 import TrustBadges from './TrustBadges';
 import AnimatedUserCounter from './AnimatedUserCounter';
 import PaymentsProcessedCounter from './PaymentsProcessedCounter';
+import styles from './HeroSection.module.css';
 
 // Lazy load FloatingParticles for better initial load
 import dynamic from 'next/dynamic';
@@ -18,6 +20,12 @@ const FloatingParticles = dynamic(() => import('./FloatingParticles'), {
   ssr: false,
   loading: () => null
 });
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
+
+function Button({ type = 'button', ...props }: ButtonProps) {
+  return <button type={type} {...props} />;
+}
 
 // Suppress Framer Motion's false positive positioning warning in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
@@ -37,6 +45,11 @@ export default function HeroSection() {
   const heroRef = useRef<HTMLElement>(null);
   const [mounted, setMounted] = useState(false);
   const [phoneImageLoaded, setPhoneImageLoaded] = useState(false);
+  const router = useRouter();
+
+  const handleStartSelling = () => {
+    router.push(HERO_CONTENT.ctaSecondary.href);
+  };
 
   // Only apply animations after mount to ensure smooth loading
   useEffect(() => {
@@ -115,17 +128,14 @@ export default function HeroSection() {
                 <span className="relative z-10">{HERO_CONTENT.ctaPrimary.text}</span>
               </Link>
 
-              <Link
-                href={HERO_CONTENT.ctaSecondary.href}
-                className="group relative inline-flex items-center justify-center gap-2.5 rounded-full px-6 py-2.5 bg-black border border-[#ff950e]/60 text-[#ff950e] font-semibold text-sm transition-all duration-300 ease-out hover:scale-105 hover:bg-[#111] hover:border-[#ff950e] hover:text-white active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                aria-label="Start selling on PantyPost platform"
+              <Button
+                className={styles.startSellingBtn}
+                onClick={handleStartSelling}
+                aria-label="Start Selling"
               >
-                <TrendingUp
-                  className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-[-2px]"
-                  aria-hidden="true"
-                />
+                <TrendingUp className={styles.startSellingIcon} aria-hidden="true" />
                 {HERO_CONTENT.ctaSecondary.text}
-              </Link>
+              </Button>
             </motion.div>
 
             {/* Trust Badges */}
