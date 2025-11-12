@@ -1,14 +1,65 @@
-/* === Shared CTA timing so both buttons sync perfectly === */
+@property --circuit {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+:global(#hero-ctas) {
+  --circuit: 0;
+  animation: circuit-spin var(--circuit-speed, 12s) linear infinite;
+  position: relative;
+  display: flex;
+  gap: var(--cta-gap, 1rem);
+}
+
+@keyframes circuit-spin {
+  to {
+    --circuit: 1;
+  }
+}
+
+:global(.cta-btn) {
+  position: relative;
+  isolation: isolate;
+  outline: 1px solid rgba(255, 149, 14, 0.25);
+  box-shadow: 0 0 0 1px rgba(255, 149, 14, 0.08) inset;
+}
+
+:global(.cta-btn)::after {
+  content: '';
+  position: absolute;
+  inset: calc((var(--pp-border-w, 2px) + 4px) * -1);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+
+  --phase: 0;
+  --size: 140deg;
+
+  padding: calc(var(--pp-border-w, 2px) + 4px);
+  background:
+    conic-gradient(
+      from calc((var(--circuit) + var(--phase)) * 1turn),
+      transparent 0deg,
+      rgba(255, 149, 14, 0.75) var(--size),
+      transparent calc(var(--size) + 1deg)
+    );
+  filter: blur(10px);
+  opacity: 0.85;
+  transition: opacity 200ms ease, filter 200ms ease;
+
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
 .ctaGroup {
-  /* Total cycle time (slow + once-per-cycle feel) */
-  --pp-duration: 12s;
-
-  /* The sweep takes place only in the first ~30% of the cycle */
-  /* IMPORTANT: keep this in sync with --pp-sweep-time */
-  --pp-sweep-time: 3.6s; /* 30% of 12s = 3.6s */
-
-  /* Visual “travel” pause between buttons */
-  --pp-gap: 0.25s;
+  --cta-gap: 1rem;
 }
 
 /* Browse Listings Button - matches Start Selling style */
@@ -57,7 +108,7 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Browse Listings animated gradient border - LEFT TO RIGHT */
+/* Browse Listings gradient border */
 .browseListingsBtn::before {
   content: "";
   position: absolute;
@@ -71,7 +122,6 @@
     rgba(255, 255, 255, 0.06),
     rgba(255, 149, 14, 0.2)
   );
-  background-size: 400% 100%;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -81,23 +131,6 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-
-  /* One shared animation, no delay for the first button */
-  animation: ctaBorderSweep var(--pp-duration) linear infinite both;
-  animation-delay: 0s;
-}
-
-/* Browse Listings soft outer neon glow layer */
-.browseListingsBtn::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: inherit;
-  background: radial-gradient(40% 60% at 50% 50%, rgba(255, 149, 14, 0.25), transparent 70%);
-  opacity: 0.35;
-  filter: blur(8px);
-  pointer-events: none;
-  transition: opacity 200ms ease, filter 200ms ease;
 }
 
 .browseListingsBtn:hover {
@@ -156,8 +189,7 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Start Selling animated gradient border - also LEFT TO RIGHT
-   but delayed so it fires after the first button's sweep + a small gap */
+/* Start Selling gradient border */
 .startSellingBtn::before {
   content: "";
   position: absolute;
@@ -171,7 +203,6 @@
     rgba(255, 255, 255, 0.06),
     rgba(255, 149, 14, 0.2)
   );
-  background-size: 400% 100%;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -181,22 +212,6 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-
-  animation: ctaBorderSweep var(--pp-duration) linear infinite both;
-  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
-}
-
-/* Start Selling soft outer neon glow layer */
-.startSellingBtn::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: inherit;
-  background: radial-gradient(40% 60% at 50% 50%, rgba(255, 149, 14, 0.25), transparent 70%);
-  opacity: 0.35;
-  filter: blur(8px);
-  pointer-events: none;
-  transition: opacity 200ms ease, filter 200ms ease;
 }
 
 .startSellingBtn:hover {
@@ -209,25 +224,18 @@
 .startSellingBtn:active { transform: scale(0.98); }
 .startSellingBtn:active::after { opacity: 0.32; filter: blur(7px); }
 
-/* === One shared keyframes for both buttons ===
-   0–30%: slow sweep L→R
-   30–100%: hold (so it feels like "once per cycle") */
-@keyframes ctaBorderSweep {
-  0%   { background-position: -100% 50%; } /* off-screen left */
-  30%  { background-position: 200% 50%; }  /* sweep to far right */
-  100% { background-position: 200% 50%; }  /* hold for rest of cycle */
-}
-
-/* Reduced motion: static borders for both buttons */
+/* Reduced motion: pause shared circuit */
 @media (prefers-reduced-motion: reduce) {
-  .browseListingsBtn::before,
-  .startSellingBtn::before {
+  :global(#hero-ctas) {
     animation: none;
-    background: linear-gradient(120deg,
-      rgba(255, 149, 14, 0.5),
-      rgba(255, 255, 255, 0.08),
-      rgba(255, 149, 14, 0.5)
-    );
-    background-size: 100% 100%;
+  }
+  :global(.cta-btn)::after {
+    background:
+      conic-gradient(
+        from calc(var(--phase) * 1turn),
+        transparent 0deg,
+        rgba(255, 149, 14, 0.75) var(--size),
+        transparent calc(var(--size) + 1deg)
+      );
   }
 }
