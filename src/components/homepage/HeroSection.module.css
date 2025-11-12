@@ -1,0 +1,126 @@
+/* Start Selling — animated neon border with slower rotating glow */
+.startSellingBtn {
+  --pp-accent: #ff950e;
+  --pp-bg: #0b0b0b;
+  --pp-text: #fff;
+  --pp-radius: 14px;
+  --pp-border-w: 2px;
+  --pp-pad-y: 0.8rem;
+  --pp-pad-x: 1.2rem;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+
+  padding: var(--pp-pad-y) var(--pp-pad-x);
+  border-radius: var(--pp-radius);
+  color: var(--pp-text);
+  background: var(--pp-bg);
+  border: none; /* border is drawn by ::before */
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+
+  transition: transform 120ms ease, filter 200ms ease;
+  transform: translateZ(0);
+}
+
+.startSellingIcon {
+  width: 1rem;
+  height: 1rem;
+  transition: transform 300ms ease;
+}
+
+.startSellingBtn:hover .startSellingIcon,
+.startSellingBtn:focus-visible .startSellingIcon {
+  transform: translateX(-2px);
+}
+
+/* Visible keyboard focus */
+.startSellingBtn:focus {
+  outline: none;
+}
+
+.startSellingBtn:focus-visible {
+  filter: drop-shadow(0 0 8px rgba(255, 149, 14, 0.6));
+}
+
+/* Rotating conic-gradient border (slower than My Listings) */
+.startSellingBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: var(--pp-border-w);
+  border-radius: inherit;
+
+  /* Conic gradient that rotates */
+  background:
+    conic-gradient(
+      from 0deg,
+      rgba(255, 149, 14, 0.65),
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 149, 14, 0.25),
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 149, 14, 0.65)
+    );
+
+  /* Mask to show only the border ring */
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+
+  pointer-events: none;
+
+  /* Slow rotation: if My Listings ~2.2s, use 4.4–6s here */
+  animation: startSellingSpin 5.5s linear infinite;
+}
+
+/* Subtle outer glow, only on hover/focus to keep things clean */
+.startSellingBtn::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: radial-gradient(45% 70% at 50% 50%, rgba(255, 149, 14, 0.22), transparent 70%);
+  opacity: 0;
+  filter: blur(8px);
+  pointer-events: none;
+  transition: opacity 200ms ease, filter 200ms ease;
+}
+
+.startSellingBtn:hover::after,
+.startSellingBtn:focus-visible::after {
+  opacity: 0.45;
+  filter: blur(10px);
+}
+
+/* Press effect */
+.startSellingBtn:active {
+  transform: scale(0.985);
+}
+
+/* Keyframes for the slow rotating glow */
+@keyframes startSellingSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Reduce motion: static border, no rotation */
+@media (prefers-reduced-motion: reduce) {
+  .startSellingBtn::before {
+    animation: none;
+    background:
+      conic-gradient(
+        from 0deg,
+        rgba(255, 149, 14, 0.55),
+        rgba(255, 255, 255, 0.08),
+        rgba(255, 149, 14, 0.4)
+      );
+  }
+}
