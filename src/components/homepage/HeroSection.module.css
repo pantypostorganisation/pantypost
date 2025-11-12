@@ -1,6 +1,7 @@
 .startSellingIcon {
   width: 1rem;
   height: 1rem;
+  margin-right: 0.6rem;
   transition: transform 300ms ease;
 }
 
@@ -9,10 +10,7 @@
   transform: translateX(-2px);
 }
 
-/* Start Selling — identical to Create Listing, slower sweep */
 .startSellingBtn {
-  gap: 0.6rem;
-  font-size: 0.95rem;
   --pp-accent: #ff950e;
   --pp-bg: #0b0b0b;
   --pp-text: #ffffff;
@@ -40,24 +38,18 @@
   transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
 }
 
-/* Focus state */
-.startSellingBtn:focus {
-  outline: none;
-}
-
+.startSellingBtn:focus { outline: none; }
 .startSellingBtn:focus-visible {
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* IMPORTANT: border uses animated gradient like Create Listing (no element rotation) */
+/* Animated gradient border (background-position sweep; NOT rotation) */
 .startSellingBtn::before {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   padding: var(--pp-border-w);
-
-  /* Gradient identical to Create Listing */
   background: linear-gradient(120deg,
     rgba(255, 149, 14, 0.2),
     rgba(255, 255, 255, 0.06),
@@ -66,21 +58,16 @@
     rgba(255, 149, 14, 0.2)
   );
   background-size: 400% 100%;
-
-  /* Mask to show only the ring */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-
   pointer-events: none;
-
-  /* Slower sweep than Create Listing (e.g., 3.4s vs 2.2s) */
-  animation: startSellingGradient 3.4s linear infinite;
+  animation: startSellingGradient 2.2s linear infinite; /* same speed as Create Listing */
 }
 
-/* Soft outer neon glow (same behavior) */
+/* Soft outer neon glow layer */
 .startSellingBtn::after {
   content: "";
   position: absolute;
@@ -93,34 +80,23 @@
   transition: opacity 200ms ease, filter 200ms ease;
 }
 
-/* Hover/active identical to Create Listing */
 .startSellingBtn:hover {
   box-shadow:
     0 6px 22px rgba(255, 149, 14, 0.22),
     0 0 0 1px rgba(255, 149, 14, 0.25);
 }
+.startSellingBtn:hover::after { opacity: 0.55; filter: blur(10px); }
 
-.startSellingBtn:hover::after {
-  opacity: 0.55;
-  filter: blur(10px);
-}
+.startSellingBtn:active { transform: scale(0.98); }
+.startSellingBtn:active::after { opacity: 0.32; filter: blur(7px); }
 
-.startSellingBtn:active {
-  transform: scale(0.98);
-}
-
-.startSellingBtn:active::after {
-  opacity: 0.32;
-  filter: blur(7px);
-}
-
-/* Background-position sweep (NOT rotation) */
+/* Identical sweep keyframes */
 @keyframes startSellingGradient {
   0%   { background-position: 0% 50%; }
   100% { background-position: 400% 50%; }
 }
 
-/* Reduced motion: static border */
+/* Reduced motion: static border, identical to Create Listing */
 @media (prefers-reduced-motion: reduce) {
   .startSellingBtn::before {
     animation: none;
