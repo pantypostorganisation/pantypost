@@ -1,67 +1,6 @@
-@property --circuit {
-  syntax: '<number>';
-  inherits: false;
-  initial-value: 0;
-}
-
-:global(#hero-ctas) {
-  --circuit: 0;
-  animation: circuit-spin var(--circuit-speed, 12s) linear infinite;
-  position: relative;
-  display: flex;
-  gap: var(--cta-gap, 1rem);
-}
-
-@keyframes circuit-spin {
-  to {
-    --circuit: 1;
-  }
-}
-
-:global(.cta-btn) {
-  position: relative;
-  isolation: isolate;
-  outline: 1px solid rgba(255, 149, 14, 0.25);
-  box-shadow: 0 0 0 1px rgba(255, 149, 14, 0.08) inset;
-}
-
-:global(.cta-btn)::after {
-  content: '';
-  position: absolute;
-  inset: calc((var(--pp-border-w, 2px) + 4px) * -1);
-  border-radius: inherit;
-  pointer-events: none;
-  z-index: -1;
-
-  --phase: 0;
-  --size: 140deg;
-
-  padding: calc(var(--pp-border-w, 2px) + 4px);
-  background:
-    conic-gradient(
-      from calc((var(--circuit) + var(--phase)) * 1turn),
-      transparent 0deg,
-      rgba(255, 149, 14, 0.75) var(--size),
-      transparent calc(var(--size) + 1deg)
-    );
-  filter: blur(10px);
-  opacity: 0.85;
-  transition: opacity 200ms ease, filter 200ms ease;
-
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-}
-
+/* src/components/homepage/HeroSection.module.css
+/* === Shared CTA timing so both buttons sync perfectly === */
 .ctaGroup {
-<<<<<<< Updated upstream
-  --cta-gap: 1rem;
-=======
   /* Whole cycle (includes sweep + hold time) */
   --pp-duration: 12s;
 
@@ -70,7 +9,6 @@
 
   /* Pause between the two buttons (the “baton handoff”) */
   --pp-gap: 0.25s;
->>>>>>> Stashed changes
 }
 
 /* ---------------- Base: Browse Listings ---------------- */
@@ -120,11 +58,7 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-<<<<<<< Updated upstream
-/* Browse Listings gradient border */
-=======
 /* Static border (no animation) */
->>>>>>> Stashed changes
 .browseListingsBtn::before {
   content: "";
   position: absolute;
@@ -147,8 +81,6 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-<<<<<<< Updated upstream
-=======
 }
 
 /* Sheen overlay — this is the only animation */
@@ -179,7 +111,6 @@
   animation: ppSheen var(--pp-duration) linear infinite both;
   animation-delay: 0s; /* Browse starts first */
   opacity: 0.9;
->>>>>>> Stashed changes
 }
 
 .browseListingsBtn:hover {
@@ -238,10 +169,6 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-<<<<<<< Updated upstream
-/* Start Selling gradient border */
-=======
->>>>>>> Stashed changes
 .startSellingBtn::before {
   content: "";
   position: absolute;
@@ -264,8 +191,6 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-<<<<<<< Updated upstream
-=======
 }
 
 /* Sheen overlay with synchronized delay */
@@ -296,7 +221,6 @@
   /* Wait until the first sheen completes, plus a small gap */
   animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
   opacity: 0.9;
->>>>>>> Stashed changes
 }
 
 .startSellingBtn:hover {
@@ -307,21 +231,6 @@
 
 .startSellingBtn:active { transform: scale(0.98); }
 
-<<<<<<< Updated upstream
-/* Reduced motion: pause shared circuit */
-@media (prefers-reduced-motion: reduce) {
-  :global(#hero-ctas) {
-    animation: none;
-  }
-  :global(.cta-btn)::after {
-    background:
-      conic-gradient(
-        from calc(var(--phase) * 1turn),
-        transparent 0deg,
-        rgba(255, 149, 14, 0.75) var(--size),
-        transparent calc(var(--size) + 1deg)
-      );
-=======
 /* ---------------- Animations ---------------- */
 /* 0–30%: run the sheen fully L→R; 30–100%: hold end state to feel “once per cycle” */
 @keyframes ppSheen {
@@ -346,6 +255,5 @@
       rgba(255, 255, 255, 0.08),
       rgba(255, 149, 14, 0.4)
     );
->>>>>>> Stashed changes
   }
 }
