@@ -1,31 +1,7 @@
-/* Start Selling — animated neon border with slower rotating glow */
+/* Local spacing and icon animation for the Start Selling button */
 .startSellingBtn {
-  --pp-accent: #ff950e;
-  --pp-bg: #0b0b0b;
-  --pp-text: #fff;
-  --pp-radius: 14px;
-  --pp-border-w: 2px;
-  --pp-pad-y: 0.8rem;
-  --pp-pad-x: 1.2rem;
-
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   gap: 0.6rem;
-
-  padding: var(--pp-pad-y) var(--pp-pad-x);
-  border-radius: var(--pp-radius);
-  color: var(--pp-text);
-  background: var(--pp-bg);
-  border: none; /* border is drawn by ::before */
-  font-weight: 600;
   font-size: 0.95rem;
-  line-height: 1;
-  cursor: pointer;
-
-  transition: transform 120ms ease, filter 200ms ease;
-  transform: translateZ(0);
 }
 
 .startSellingIcon {
@@ -39,88 +15,124 @@
   transform: translateX(-2px);
 }
 
-/* Visible keyboard focus */
-.startSellingBtn:focus {
+/* Start Selling — identical to Create Listing, slower sweep */
+:global(.startSellingBtn) {
+  --pp-accent: #ff950e;
+  --pp-bg: #0b0b0b;
+  --pp-text: #ffffff;
+  --pp-radius: 14px;
+  --pp-border-w: 2px;
+  --pp-padding-y: 0.8rem;
+  --pp-padding-x: 1.2rem;
+  --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: var(--pp-padding-y) var(--pp-padding-x);
+  border-radius: var(--pp-radius);
+  color: var(--pp-text);
+  background: var(--pp-bg);
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1;
+  transform: translateZ(0);
+  box-shadow: var(--pp-shadow);
+  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+
+/* Focus state */
+:global(.startSellingBtn:focus) {
   outline: none;
 }
 
-.startSellingBtn:focus-visible {
-  filter: drop-shadow(0 0 8px rgba(255, 149, 14, 0.6));
+:global(.startSellingBtn:focus-visible) {
+  filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Rotating conic-gradient border (slower than My Listings) */
-.startSellingBtn::before {
+/* IMPORTANT: border uses animated gradient like Create Listing (no element rotation) */
+:global(.startSellingBtn::before) {
   content: "";
   position: absolute;
   inset: 0;
-  padding: var(--pp-border-w);
   border-radius: inherit;
+  padding: var(--pp-border-w);
 
-  /* Conic gradient that rotates */
-  background:
-    conic-gradient(
-      from 0deg,
-      rgba(255, 149, 14, 0.65),
-      rgba(255, 255, 255, 0.08),
-      rgba(255, 149, 14, 0.25),
-      rgba(255, 255, 255, 0.08),
-      rgba(255, 149, 14, 0.65)
-    );
+  /* Gradient identical to Create Listing */
+  background: linear-gradient(120deg,
+    rgba(255, 149, 14, 0.2),
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 149, 14, 0.6),
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 149, 14, 0.2)
+  );
+  background-size: 400% 100%;
 
-  /* Mask to show only the border ring */
+  /* Mask to show only the ring */
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
-  mask-composite: exclude;
+          mask-composite: exclude;
 
   pointer-events: none;
 
-  /* Slow rotation: if My Listings ~2.2s, use 4.4–6s here */
-  animation: startSellingSpin 5.5s linear infinite;
+  /* Slower sweep than Create Listing (e.g., 3.4s vs 2.2s) */
+  animation: startSellingGradient 3.4s linear infinite;
 }
 
-/* Subtle outer glow, only on hover/focus to keep things clean */
-.startSellingBtn::after {
+/* Soft outer neon glow (same behavior) */
+:global(.startSellingBtn::after) {
   content: "";
   position: absolute;
-  inset: -4px;
+  inset: -6px;
   border-radius: inherit;
-  background: radial-gradient(45% 70% at 50% 50%, rgba(255, 149, 14, 0.22), transparent 70%);
-  opacity: 0;
+  background: radial-gradient(40% 60% at 50% 50%, rgba(255, 149, 14, 0.25), transparent 70%);
+  opacity: 0.35;
   filter: blur(8px);
   pointer-events: none;
   transition: opacity 200ms ease, filter 200ms ease;
 }
 
-.startSellingBtn:hover::after,
-.startSellingBtn:focus-visible::after {
-  opacity: 0.45;
+/* Hover/active identical to Create Listing */
+:global(.startSellingBtn:hover) {
+  box-shadow:
+    0 6px 22px rgba(255, 149, 14, 0.22),
+    0 0 0 1px rgba(255, 149, 14, 0.25);
+}
+
+:global(.startSellingBtn:hover::after) {
+  opacity: 0.55;
   filter: blur(10px);
 }
 
-/* Press effect */
-.startSellingBtn:active {
-  transform: scale(0.985);
+:global(.startSellingBtn:active) {
+  transform: scale(0.98);
 }
 
-/* Keyframes for the slow rotating glow */
-@keyframes startSellingSpin {
-  to {
-    transform: rotate(1turn);
-  }
+:global(.startSellingBtn:active::after) {
+  opacity: 0.32;
+  filter: blur(7px);
 }
 
-/* Reduce motion: static border, no rotation */
+/* Background-position sweep (NOT rotation) */
+@keyframes startSellingGradient {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 400% 50%; }
+}
+
+/* Reduced motion: static border */
 @media (prefers-reduced-motion: reduce) {
-  .startSellingBtn::before {
+  :global(.startSellingBtn::before) {
     animation: none;
-    background:
-      conic-gradient(
-        from 0deg,
-        rgba(255, 149, 14, 0.55),
-        rgba(255, 255, 255, 0.08),
-        rgba(255, 149, 14, 0.4)
-      );
+    background: linear-gradient(120deg,
+      rgba(255, 149, 14, 0.5),
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 149, 14, 0.5)
+    );
+    background-size: 100% 100%;
   }
 }
