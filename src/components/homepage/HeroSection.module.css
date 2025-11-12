@@ -59,10 +59,21 @@
 }
 
 .ctaGroup {
+<<<<<<< Updated upstream
   --cta-gap: 1rem;
+=======
+  /* Whole cycle (includes sweep + hold time) */
+  --pp-duration: 12s;
+
+  /* How long the visible sweep takes (portion of the cycle) */
+  --pp-sweep-time: 3.6s; /* ~30% of 12s */
+
+  /* Pause between the two buttons (the “baton handoff”) */
+  --pp-gap: 0.25s;
+>>>>>>> Stashed changes
 }
 
-/* Browse Listings Button - matches Start Selling style */
+/* ---------------- Base: Browse Listings ---------------- */
 .browseListingsIcon {
   width: 1rem;
   height: 1rem;
@@ -101,6 +112,7 @@
   transform: translateZ(0);
   box-shadow: var(--pp-shadow);
   transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
+  overflow: hidden; /* important for sheen clipping */
 }
 
 .browseListingsBtn:focus { outline: none; }
@@ -108,7 +120,11 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
+<<<<<<< Updated upstream
 /* Browse Listings gradient border */
+=======
+/* Static border (no animation) */
+>>>>>>> Stashed changes
 .browseListingsBtn::before {
   content: "";
   position: absolute;
@@ -116,11 +132,11 @@
   border-radius: inherit;
   padding: var(--pp-border-w);
   background: linear-gradient(120deg,
-    rgba(255, 149, 14, 0.2),
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 149, 14, 0.6),
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 149, 14, 0.2)
+    rgba(255, 149, 14, 0.25),
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 149, 14, 0.5),
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 149, 14, 0.25)
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -131,6 +147,39 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
+<<<<<<< Updated upstream
+=======
+}
+
+/* Sheen overlay — this is the only animation */
+.browseListingsBtn::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -35%;
+  width: 35%;
+  border-radius: 999px;
+  pointer-events: none;
+
+  /* A single soft highlight band; adjust alphas to taste */
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.12) 45%,
+    rgba(255,255,255,0.28) 50%,
+    rgba(255,255,255,0.12) 55%,
+    rgba(255,255,255,0) 100%
+  );
+
+  transform: translateX(-140%) skewX(-18deg);
+  filter: blur(0.5px);
+  mix-blend-mode: screen; /* subtle luminous feel on dark bg */
+  will-change: transform;
+
+  animation: ppSheen var(--pp-duration) linear infinite both;
+  animation-delay: 0s; /* Browse starts first */
+  opacity: 0.9;
+>>>>>>> Stashed changes
 }
 
 .browseListingsBtn:hover {
@@ -138,12 +187,11 @@
     0 6px 22px rgba(255, 149, 14, 0.22),
     0 0 0 1px rgba(255, 149, 14, 0.25);
 }
-.browseListingsBtn:hover::after { opacity: 0.55; filter: blur(10px); }
 
+/* Tap feedback */
 .browseListingsBtn:active { transform: scale(0.98); }
-.browseListingsBtn:active::after { opacity: 0.32; filter: blur(7px); }
 
-/* Start Selling Button - unchanged base styles */
+/* ---------------- Base: Start Selling ---------------- */
 .startSellingIcon {
   width: 1rem;
   height: 1rem;
@@ -182,6 +230,7 @@
   transform: translateZ(0);
   box-shadow: var(--pp-shadow);
   transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
+  overflow: hidden;
 }
 
 .startSellingBtn:focus { outline: none; }
@@ -189,7 +238,10 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
+<<<<<<< Updated upstream
 /* Start Selling gradient border */
+=======
+>>>>>>> Stashed changes
 .startSellingBtn::before {
   content: "";
   position: absolute;
@@ -197,11 +249,11 @@
   border-radius: inherit;
   padding: var(--pp-border-w);
   background: linear-gradient(120deg,
-    rgba(255, 149, 14, 0.2),
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 149, 14, 0.6),
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 149, 14, 0.2)
+    rgba(255, 149, 14, 0.25),
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 149, 14, 0.5),
+    rgba(255, 255, 255, 0.08),
+    rgba(255, 149, 14, 0.25)
   );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
@@ -212,6 +264,39 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
+<<<<<<< Updated upstream
+=======
+}
+
+/* Sheen overlay with synchronized delay */
+.startSellingBtn::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -35%;
+  width: 35%;
+  border-radius: 999px;
+  pointer-events: none;
+
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,0.12) 45%,
+    rgba(255,255,255,0.28) 50%,
+    rgba(255,255,255,0.12) 55%,
+    rgba(255,255,255,0) 100%
+  );
+
+  transform: translateX(-140%) skewX(-18deg);
+  filter: blur(0.5px);
+  mix-blend-mode: screen;
+  will-change: transform;
+
+  animation: ppSheen var(--pp-duration) linear infinite both;
+  /* Wait until the first sheen completes, plus a small gap */
+  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
+  opacity: 0.9;
+>>>>>>> Stashed changes
 }
 
 .startSellingBtn:hover {
@@ -219,11 +304,10 @@
     0 6px 22px rgba(255, 149, 14, 0.22),
     0 0 0 1px rgba(255, 149, 14, 0.25);
 }
-.startSellingBtn:hover::after { opacity: 0.55; filter: blur(10px); }
 
 .startSellingBtn:active { transform: scale(0.98); }
-.startSellingBtn:active::after { opacity: 0.32; filter: blur(7px); }
 
+<<<<<<< Updated upstream
 /* Reduced motion: pause shared circuit */
 @media (prefers-reduced-motion: reduce) {
   :global(#hero-ctas) {
@@ -237,5 +321,31 @@
         rgba(255, 149, 14, 0.75) var(--size),
         transparent calc(var(--size) + 1deg)
       );
+=======
+/* ---------------- Animations ---------------- */
+/* 0–30%: run the sheen fully L→R; 30–100%: hold end state to feel “once per cycle” */
+@keyframes ppSheen {
+  0%   { transform: translateX(-140%) skewX(-18deg); }
+  30%  { transform: translateX(140%)  skewX(-18deg); }
+  100% { transform: translateX(140%)  skewX(-18deg); }
+}
+
+/* ---------------- Reduced Motion ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  .browseListingsBtn::after,
+  .startSellingBtn::after {
+    animation: none;
+    transform: translateX(120%) skewX(-18deg); /* place sheen off to the right */
+    opacity: 0.0; /* effectively hidden */
+  }
+  .browseListingsBtn::before,
+  .startSellingBtn::before {
+    /* Keep static border */
+    background: linear-gradient(120deg,
+      rgba(255, 149, 14, 0.4),
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 149, 14, 0.4)
+    );
+>>>>>>> Stashed changes
   }
 }
