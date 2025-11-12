@@ -397,7 +397,7 @@ function MyListingsContent() {
           filter: blur(14px);
           opacity: 0.75;
           z-index: -1;
-          animation: orbitGlow 8s linear infinite;
+          animation: none;
           pointer-events: none;
           mask: radial-gradient(closest-side, transparent calc(100% - 18px), black calc(100% - 10px));
           -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 18px), black calc(100% - 10px));
