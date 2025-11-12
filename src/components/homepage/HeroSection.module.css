@@ -4,7 +4,7 @@
   /* Whole cycle (includes sweep + hold time) */
   --pp-duration: 12s;
 
-  /* How long the visible sweep takes (portion of the cycle) */
+  /* Visible sweep duration (portion of the cycle) */
   --pp-sweep-time: 3.6s; /* ~30% of 12s */
 
   /* Pause between the two buttons (the “baton handoff”) */
@@ -43,7 +43,7 @@
   border-radius: var(--pp-radius);
   color: var(--pp-text);
   background: var(--pp-bg);
-  border: none;
+  border: var(--pp-border-w) solid var(--pp-accent); /* solid border */
   cursor: pointer;
   font-weight: 600;
   line-height: 1;
@@ -58,52 +58,27 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Static border (no animation) */
-.browseListingsBtn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: var(--pp-border-w);
-  background: linear-gradient(120deg,
-    rgba(255, 149, 14, 0.25),
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 149, 14, 0.5),
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 149, 14, 0.25)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* Sheen overlay — this is the only animation */
+/* Sheen overlay — the only animation */
 .browseListingsBtn::after {
   content: "";
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: -35%;
-  width: 35%;
+  left: -50%;      /* start well off the left edge */
+  width: 50%;      /* wide enough so the band fully covers as it passes */
   border-radius: 999px;
   pointer-events: none;
 
-  /* A single soft highlight band; adjust alphas to taste */
+  /* Single soft highlight band */
   background: linear-gradient(90deg,
     rgba(255,255,255,0) 0%,
     rgba(255,255,255,0.12) 45%,
-    rgba(255,255,255,0.28) 50%,
+    rgba(255,255,255,0.32) 50%,
     rgba(255,255,255,0.12) 55%,
     rgba(255,255,255,0) 100%
   );
 
-  transform: translateX(-140%) skewX(-18deg);
+  transform: translateX(0) skewX(-18deg);
   filter: blur(0.5px);
   mix-blend-mode: screen; /* subtle luminous feel on dark bg */
   will-change: transform;
@@ -154,7 +129,7 @@
   border-radius: var(--pp-radius);
   color: var(--pp-text);
   background: var(--pp-bg);
-  border: none;
+  border: var(--pp-border-w) solid var(--pp-accent); /* solid border */
   cursor: pointer;
   font-weight: 600;
   line-height: 1;
@@ -169,50 +144,26 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-.startSellingBtn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: var(--pp-border-w);
-  background: linear-gradient(120deg,
-    rgba(255, 149, 14, 0.25),
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 149, 14, 0.5),
-    rgba(255, 255, 255, 0.08),
-    rgba(255, 149, 14, 0.25)
-  );
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
 /* Sheen overlay with synchronized delay */
 .startSellingBtn::after {
   content: "";
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: -35%;
-  width: 35%;
+  left: -50%;
+  width: 50%;
   border-radius: 999px;
   pointer-events: none;
 
   background: linear-gradient(90deg,
     rgba(255,255,255,0) 0%,
     rgba(255,255,255,0.12) 45%,
-    rgba(255,255,255,0.28) 50%,
+    rgba(255,255,255,0.32) 50%,
     rgba(255,255,255,0.12) 55%,
     rgba(255,255,255,0) 100%
   );
 
-  transform: translateX(-140%) skewX(-18deg);
+  transform: translateX(0) skewX(-18deg);
   filter: blur(0.5px);
   mix-blend-mode: screen;
   will-change: transform;
@@ -232,11 +183,12 @@
 .startSellingBtn:active { transform: scale(0.98); }
 
 /* ---------------- Animations ---------------- */
-/* 0–30%: run the sheen fully L→R; 30–100%: hold end state to feel “once per cycle” */
+/* 0–30%: run the sheen fully L→R; 30–100%: hold end state to feel “once per cycle”
+   We start off-screen left via `left:-50%`, then travel across and exit fully to the right. */
 @keyframes ppSheen {
-  0%   { transform: translateX(-140%) skewX(-18deg); }
-  30%  { transform: translateX(140%)  skewX(-18deg); }
-  100% { transform: translateX(140%)  skewX(-18deg); }
+  0%   { transform: translateX(0)    skewX(-18deg); }   /* off-screen left due to left:-50% */
+  30%  { transform: translateX(200%) skewX(-18deg); }   /* far beyond right edge */
+  100% { transform: translateX(200%) skewX(-18deg); }   /* hold */
 }
 
 /* ---------------- Reduced Motion ---------------- */
@@ -244,16 +196,6 @@
   .browseListingsBtn::after,
   .startSellingBtn::after {
     animation: none;
-    transform: translateX(120%) skewX(-18deg); /* place sheen off to the right */
-    opacity: 0.0; /* effectively hidden */
-  }
-  .browseListingsBtn::before,
-  .startSellingBtn::before {
-    /* Keep static border */
-    background: linear-gradient(120deg,
-      rgba(255, 149, 14, 0.4),
-      rgba(255, 255, 255, 0.08),
-      rgba(255, 149, 14, 0.4)
-    );
+    opacity: 0; /* effectively hidden */
   }
 }
