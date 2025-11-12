@@ -1,3 +1,16 @@
+/* === Shared CTA timing so both buttons sync perfectly === */
+.ctaGroup {
+  /* Total cycle time (slow + once-per-cycle feel) */
+  --pp-duration: 12s;
+
+  /* The sweep takes place only in the first ~30% of the cycle */
+  /* IMPORTANT: keep this in sync with --pp-sweep-time */
+  --pp-sweep-time: 3.6s; /* 30% of 12s = 3.6s */
+
+  /* Visual “travel” pause between buttons */
+  --pp-gap: 0.25s;
+}
+
 /* Browse Listings Button - matches Start Selling style */
 .browseListingsIcon {
   width: 1rem;
@@ -68,8 +81,10 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-  animation: browseListingsGradient 10s linear infinite; /* Much longer cycle for slower sweep */
-  animation-delay: 0s; /* Starts immediately */
+
+  /* One shared animation, no delay for the first button */
+  animation: ctaBorderSweep var(--pp-duration) linear infinite both;
+  animation-delay: 0s;
 }
 
 /* Browse Listings soft outer neon glow layer */
@@ -141,7 +156,8 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Start Selling animated gradient border - RIGHT TO LEFT with delay */
+/* Start Selling animated gradient border - also LEFT TO RIGHT
+   but delayed so it fires after the first button's sweep + a small gap */
 .startSellingBtn::before {
   content: "";
   position: absolute;
@@ -165,8 +181,9 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-  animation: startSellingGradient 10s linear infinite; /* Same cycle length */
-  animation-delay: 3.2s; /* Starts after browse sweep (3s) + gap (0.2s) */
+
+  animation: ctaBorderSweep var(--pp-duration) linear infinite both;
+  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
 }
 
 /* Start Selling soft outer neon glow layer */
@@ -192,19 +209,13 @@
 .startSellingBtn:active { transform: scale(0.98); }
 .startSellingBtn:active::after { opacity: 0.32; filter: blur(7px); }
 
-/* Synchronized animations with gap for travel effect */
-/* Browse Listings: Left to Right sweep - SLOW and ONCE per cycle */
-@keyframes browseListingsGradient {
-  0%   { background-position: -100% 50%; } /* Start off-screen left */
-  30%  { background-position: 200% 50%; } /* Slowly sweep across to right */
-  100% { background-position: 200% 50%; } /* Hold position for rest of cycle */
-}
-
-/* Start Selling: Also Left to Right sweep - SLOW and ONCE per cycle */
-@keyframes startSellingGradient {
-  0%   { background-position: -100% 50%; } /* Start off-screen left */
-  30%  { background-position: 200% 50%; } /* Slowly sweep across to right */
-  100% { background-position: 200% 50%; } /* Hold position for rest of cycle */
+/* === One shared keyframes for both buttons ===
+   0–30%: slow sweep L→R
+   30–100%: hold (so it feels like "once per cycle") */
+@keyframes ctaBorderSweep {
+  0%   { background-position: -100% 50%; } /* off-screen left */
+  30%  { background-position: 200% 50%; }  /* sweep to far right */
+  100% { background-position: 200% 50%; }  /* hold for rest of cycle */
 }
 
 /* Reduced motion: static borders for both buttons */

@@ -7,7 +7,12 @@ import { useRef, useState, useEffect, type ButtonHTMLAttributes } from 'react';
 import { ShoppingBag, TrendingUp } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { itemVariants, containerVariants, fadeInVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
+import {
+  itemVariants,
+  containerVariants,
+  fadeInVariants,
+  VIEWPORT_CONFIG
+} from '@/utils/motion.config';
 import { HERO_CONTENT } from '@/utils/homepage-constants';
 import TrustBadges from './TrustBadges';
 import AnimatedUserCounter from './AnimatedUserCounter';
@@ -27,12 +32,12 @@ function Button({ type = 'button', ...props }: ButtonProps) {
   return <button type={type} {...props} />;
 }
 
-// Suppress Framer Motion's false positive positioning warning in development
+// Suppress Framer Motion’s false positive positioning warning in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   const originalWarn = console.warn;
   console.warn = (...args) => {
     if (
-      typeof args[0] === 'string' && 
+      typeof args[0] === 'string' &&
       args[0].includes('ensure scroll offset is calculated correctly')
     ) {
       return; // Suppress this specific warning
@@ -72,14 +77,14 @@ export default function HeroSection() {
       ref={heroRef}
       className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 overflow-hidden"
     >
-      {/* Subtle Noise Overlay - optimized with will-change */}
+      {/* Subtle Noise Overlay */}
       <div
         className="absolute inset-0 opacity-[0.02] bg-[url('/noise.png')] bg-repeat pointer-events-none"
         role="presentation"
         style={{ willChange: 'opacity' }}
       />
 
-      {/* Floating particles - lazy loaded */}
+      {/* Floating particles */}
       {mounted && <FloatingParticles />}
 
       <div className="relative max-w-7xl mx-auto px-6 sm:px-8 flex flex-col md:flex-row items-center justify-between min-h-[70vh] md:min-h-[75vh] z-10">
@@ -92,20 +97,25 @@ export default function HeroSection() {
             viewport={VIEWPORT_CONFIG}
             variants={containerVariants}
           >
-            {/* IMPROVED MOBILE LAYOUT: Stack counters vertically on mobile for better spacing */}
+            {/* Counters */}
             <div className="mb-4 md:mb-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4 justify-center md:justify-start">
               <AnimatedUserCounter compact={true} />
               <PaymentsProcessedCounter compact className="" />
             </div>
 
+            {/* Title */}
             <motion.h1
               className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-tight text-white mb-5 tracking-tighter"
               variants={itemVariants}
             >
-              {HERO_CONTENT.title} <span className="text-[#ff950e]">{HERO_CONTENT.titleHighlight}</span>{' '}
+              {HERO_CONTENT.title}{' '}
+              <span className="text-[#ff950e]">
+                {HERO_CONTENT.titleHighlight}
+              </span>{' '}
               {HERO_CONTENT.titleEnd}
             </motion.h1>
 
+            {/* Description */}
             <motion.p
               className="text-gray-400 text-base md:text-lg mb-8 max-w-xl font-medium"
               variants={itemVariants}
@@ -113,13 +123,14 @@ export default function HeroSection() {
               {HERO_CONTENT.description}
             </motion.p>
 
+            {/* CTA Buttons */}
             <motion.div
-              className="flex gap-4 mb-8 flex-col sm:flex-row w-full md:w-auto justify-center md:justify-start"
+              className={`flex gap-4 mb-8 flex-col sm:flex-row w-full md:w-auto justify-center md:justify-start ${styles.ctaGroup}`}
               variants={itemVariants}
               role="group"
               aria-label="Primary navigation actions"
             >
-              {/* Browse Listings Button with synchronized animation */}
+              {/* Browse Listings Button */}
               <Button
                 className={styles.browseListingsBtn}
                 onClick={handleBrowseListings}
@@ -132,13 +143,16 @@ export default function HeroSection() {
                 {HERO_CONTENT.ctaPrimary.text}
               </Button>
 
-              {/* Start Selling Button with synchronized animation */}
+              {/* Start Selling Button */}
               <Button
                 className={styles.startSellingBtn}
                 onClick={handleStartSelling}
                 aria-label="Start Selling"
               >
-                <TrendingUp className={styles.startSellingIcon} aria-hidden="true" />
+                <TrendingUp
+                  className={styles.startSellingIcon}
+                  aria-hidden="true"
+                />
                 {HERO_CONTENT.ctaSecondary.text}
               </Button>
             </motion.div>
@@ -148,7 +162,7 @@ export default function HeroSection() {
           </motion.div>
         </div>
 
-        {/* RIGHT: Phone Image - OPTIMIZED with Next.js Image */}
+        {/* RIGHT: Phone Image */}
         <div className="w-full md:w-1/2 lg:w-[50%] xl:w-[50%] flex justify-center md:justify-end items-center h-full mt-8 md:mt-0 z-10 perspective pr-0 md:pr-12 lg:pr-20 xl:pr-24 relative">
           <motion.div
             initial="hidden"
@@ -160,20 +174,23 @@ export default function HeroSection() {
           >
             {/* Loading skeleton for phone image */}
             {!phoneImageLoaded && (
-              <div 
+              <div
                 className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 rounded-[2rem] animate-pulse"
                 style={{
                   width: '300px',
-                  height: '520px',
+                  height: '520px'
                 }}
               />
             )}
-            
-            {/* OPTIMIZED: Next.js Image with priority loading */}
-            <div 
-              className={`transition-opacity duration-500 ${phoneImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+
+            {/* Optimized Image */}
+            <div
+              className={`transition-opacity duration-500 ${
+                phoneImageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
               style={{
-                filter: 'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))',
+                filter:
+                  'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))'
               }}
             >
               <Image
@@ -181,9 +198,9 @@ export default function HeroSection() {
                 alt="PantyPost mobile app interface showcasing the marketplace"
                 width={300}
                 height={520}
-                priority // Critical for above-the-fold content
-                quality={85} // Slightly reduce quality for better performance
-                placeholder="blur" // Show blur placeholder while loading
+                priority
+                quality={85}
+                placeholder="blur"
                 blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAGCAYAAADkOT91AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAM0lEQVR4nGNgQAX/gZgRiP8D8X8kNhMSH6oOmwZsYjg1YBPDqgGbGE4N2MRwasDhLwYGADm3EQXVn3lFAAAAAElFTkSuQmCC"
                 className="h-auto w-auto transform transition-all duration-500 hover:scale-105 hover:rotate-3"
                 style={{
