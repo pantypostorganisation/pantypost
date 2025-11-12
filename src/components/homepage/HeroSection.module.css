@@ -1,17 +1,12 @@
 /* src/components/homepage/HeroSection.module.css */
 /* === Shared CTA timing so both buttons sync perfectly === */
 .ctaGroup {
-  /* Whole cycle (includes both sheens + final hold) */
-  --pp-duration: 8.2s;      /* total cycle time */
-
-  /* Visible sweep duration (time to cross each button) */
-  --pp-sweep-time: 3.6s;    /* slow sheen pass */
-
-  /* Pause between button 1 and 2 */
-  --pp-gap: 0.2s;
-
-  /* Extra hold before restarting cycle */
-  --pp-end-hold: 0.4s;
+  /* Precise cycle math:
+     sweep(3.6s) + gap(0.2s) + sweep(3.6s) + end-hold(0.4s) = 7.8s total */
+  --pp-duration: 7.8s;      /* total loop time */
+  --pp-sweep-time: 3.6s;    /* single sheen pass */
+  --pp-gap: 0.2s;           /* Browse → Start delay */
+  --pp-end-hold: 0.4s;      /* pause before cycle restarts */
 }
 
 /* ---------------- Base: Browse Listings ---------------- */
@@ -170,7 +165,7 @@
   will-change: transform;
 
   animation: ppSheen var(--pp-duration) linear infinite both;
-  /* Wait until first sheen + 0.2s gap */
+  /* Wait until first sheen + 0.2s gap (uses exact time, not % of duration) */
   animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
   opacity: 0.9;
 }
@@ -184,11 +179,13 @@
 .startSellingBtn:active { transform: scale(0.98); }
 
 /* ---------------- Animations ---------------- */
-/* Sweep 0–30%, hold through 100% for total 8.2s cycle (adds ~0.4s final wait) */
+/* IMPORTANT:
+   We align the sweep length to time (3.6s of a 7.8s cycle) by setting the sweep
+   to 46.154% of the keyframes (3.6/7.8 = 0.461538...). */
 @keyframes ppSheen {
-  0%   { transform: translateX(0)    skewX(-18deg); }
-  30%  { transform: translateX(340%) skewX(-18deg); }  /* full pass */
-  100% { transform: translateX(340%) skewX(-18deg); }  /* hold offscreen right */
+  0%        { transform: translateX(0)     skewX(-18deg); }  /* offscreen left via left:-70% */
+  46.154%   { transform: translateX(340%)  skewX(-18deg); }  /* full pass completes at 3.6s */
+  100%      { transform: translateX(340%)  skewX(-18deg); }  /* hold offscreen right for 0.4s */
 }
 
 /* ---------------- Reduced Motion ---------------- */
