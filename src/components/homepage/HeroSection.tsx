@@ -72,7 +72,7 @@ export default function HeroSection() {
     }
 
     const buttons = Array.from(
-      wrapper.querySelectorAll<HTMLButtonElement>(`.${styles.ctaButton}`)
+      wrapper.querySelectorAll<HTMLButtonElement>('.cta-btn')
     );
 
     if (buttons.length !== 2) {
@@ -220,7 +220,7 @@ export default function HeroSection() {
             >
               {/* Browse Listings Button */}
               <Button
-                className={`${styles.browseListingsBtn} ${styles.ctaButton}`}
+                className={`${styles.browseListingsBtn} cta-btn`}
                 onClick={handleBrowseListings}
                 aria-label="Browse available listings on PantyPost marketplace"
               >
@@ -233,7 +233,7 @@ export default function HeroSection() {
 
               {/* Start Selling Button */}
               <Button
-                className={`${styles.startSellingBtn} ${styles.ctaButton}`}
+                className={`${styles.startSellingBtn} cta-btn`}
                 onClick={handleStartSelling}
                 aria-label="Start Selling"
               >
