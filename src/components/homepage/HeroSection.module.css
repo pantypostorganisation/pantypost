@@ -1,12 +1,12 @@
 /* src/components/homepage/HeroSection.module.css */
 /* === Shared CTA timing so both buttons sync perfectly === */
 .ctaGroup {
-  /* Precise cycle math:
-     sweep(3.6s) + gap(0.2s) + sweep(3.6s) + end-hold(0.4s) = 7.8s total */
-  --pp-duration: 7.8s;      /* total loop time */
-  --pp-sweep-time: 3.6s;    /* single sheen pass */
-  --pp-gap: 0.2s;           /* Browse → Start delay */
-  --pp-end-hold: 0.4s;      /* pause before cycle restarts */
+  /* Exact cycle math:
+     sweep(3.6s) + gap(0.2s) + sweep(3.6s) + end-hold(0.4s) = 7.8s */
+  --pp-duration: 7.8s;    /* total loop time */
+  --pp-sweep-time: 3.6s;  /* single sheen pass duration */
+  --pp-gap: 0.2s;         /* Browse → Start delay (perceived) */
+  --pp-end-hold: 0.4s;    /* pause before next cycle */
 }
 
 /* ---------------- Base: Browse Listings ---------------- */
@@ -16,7 +16,6 @@
   margin-right: 0.6rem;
   transition: transform 300ms ease;
 }
-
 .browseListingsBtn:hover .browseListingsIcon,
 .browseListingsBtn:focus-visible .browseListingsIcon {
   transform: translateX(-2px);
@@ -56,14 +55,14 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Sheen overlay — this is the only animation */
+/* Sheen overlay — visible immediately to remove perceived pre-gap */
 .browseListingsBtn::after {
   content: "";
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: -70%;          /* start well offscreen */
-  width: 70%;          /* wide band for full coverage */
+  left: 0;             /* start aligned with left edge */
+  width: 60%;          /* wide band; fully covers on entry */
   border-radius: 999px;
   pointer-events: none;
 
@@ -75,6 +74,7 @@
     rgba(255,255,255,0) 100%
   );
 
+  /* Visible instantly at t=0; then glides fully across */
   transform: translateX(0) skewX(-18deg);
   filter: blur(0.5px);
   mix-blend-mode: screen;
@@ -90,7 +90,6 @@
     0 6px 22px rgba(255, 149, 14, 0.22),
     0 0 0 1px rgba(255, 149, 14, 0.25);
 }
-
 .browseListingsBtn:active { transform: scale(0.98); }
 
 /* ---------------- Base: Start Selling ---------------- */
@@ -100,7 +99,6 @@
   margin-right: 0.6rem;
   transition: transform 300ms ease;
 }
-
 .startSellingBtn:hover .startSellingIcon,
 .startSellingBtn:focus-visible .startSellingIcon {
   transform: translateX(-2px);
@@ -140,14 +138,14 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Sheen overlay with synchronized delay */
+/* Same geometry; delayed start. Visible the instant it begins. */
 .startSellingBtn::after {
   content: "";
   position: absolute;
   top: -20%;
   bottom: -20%;
-  left: -70%;
-  width: 70%;
+  left: 0;
+  width: 60%;
   border-radius: 999px;
   pointer-events: none;
 
@@ -165,8 +163,7 @@
   will-change: transform;
 
   animation: ppSheen var(--pp-duration) linear infinite both;
-  /* Wait until first sheen + 0.2s gap (uses exact time, not % of duration) */
-  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap));
+  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap)); /* exact 0.2s baton */
   opacity: 0.9;
 }
 
@@ -175,17 +172,16 @@
     0 6px 22px rgba(255, 149, 14, 0.22),
     0 0 0 1px rgba(255, 149, 14, 0.25);
 }
-
 .startSellingBtn:active { transform: scale(0.98); }
 
 /* ---------------- Animations ---------------- */
-/* IMPORTANT:
-   We align the sweep length to time (3.6s of a 7.8s cycle) by setting the sweep
-   to 46.154% of the keyframes (3.6/7.8 = 0.461538...). */
+/* We align sweep time to keyframes precisely:
+   sweep = 3.6s of 7.8s → 46.1538% of the timeline.
+   Travel 160% (100% width + 60% sheen width) to fully clear right edge. */
 @keyframes ppSheen {
-  0%        { transform: translateX(0)     skewX(-18deg); }  /* offscreen left via left:-70% */
-  46.154%   { transform: translateX(340%)  skewX(-18deg); }  /* full pass completes at 3.6s */
-  100%      { transform: translateX(340%)  skewX(-18deg); }  /* hold offscreen right for 0.4s */
+  0%        { transform: translateX(0)     skewX(-18deg); }   /* starts visible on left */
+  46.154%   { transform: translateX(160%)  skewX(-18deg); }   /* fully off right at 3.6s */
+  100%      { transform: translateX(160%)  skewX(-18deg); }   /* hold offscreen for end pause */
 }
 
 /* ---------------- Reduced Motion ---------------- */
