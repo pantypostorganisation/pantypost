@@ -388,19 +388,14 @@ function MyListingsContent() {
           position: absolute;
           inset: -12px;
           border-radius: 9999px;
-          background: conic-gradient(
-            from 0deg at 50% 50%,
-            rgba(255, 149, 14, 0.25),
-            rgba(255, 196, 120, 0.55),
-            rgba(255, 149, 14, 0.25)
-          );
-          filter: blur(14px);
-          opacity: 0.75;
+          background: transparent;
+          filter: none;
+          opacity: 0;
           z-index: -1;
           animation: none;
           pointer-events: none;
-          mask: radial-gradient(closest-side, transparent calc(100% - 18px), black calc(100% - 10px));
-          -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 18px), black calc(100% - 10px));
+          mask: none;
+          -webkit-mask: none;
         }
 
         @keyframes orbitGlow {
