@@ -1,0 +1,130 @@
+/* Scoped button styles for the animated neon-border effect */
+.createListingBtn {
+  --pp-accent: #ff950e;           /* PantyPost orange */
+  --pp-bg: #0b0b0b;               /* page dark */
+  --pp-text: #ffffff;
+  --pp-radius: 14px;
+  --pp-border-w: 2px;
+  --pp-padding-y: 0.8rem;
+  --pp-padding-x: 1.2rem;
+  --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  padding: var(--pp-padding-y) var(--pp-padding-x);
+  border-radius: var(--pp-radius);
+  color: var(--pp-text);
+  background: var(--pp-bg);
+  border: none;                   /* border drawn by ::before */
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1;
+  transform: translateZ(0);       /* promote for smoother anim */
+  box-shadow: var(--pp-shadow);
+  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
+}
+
+.createListingBtn svg {
+  flex-shrink: 0;
+}
+
+.createListingBtn:focus {
+  outline: none;
+}
+.createListingBtn:focus-visible {
+  /* Stronger glow ring for keyboard users */
+  filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
+}
+
+/* Animated gradient border */
+.createListingBtn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--pp-border-w);
+  background: linear-gradient(120deg,
+    rgba(255, 149, 14, 0.2),
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 149, 14, 0.6),
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 149, 14, 0.2)
+  );
+  background-size: 400% 100%;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  animation: createListingGradient 2.2s linear infinite;
+}
+
+/* Soft outer neon glow layer (subtle at rest, stronger on hover) */
+.createListingBtn::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  background: radial-gradient(40% 60% at 50% 50%, rgba(255, 149, 14, 0.25), transparent 70%);
+  opacity: 0.35;
+  filter: blur(8px);
+  pointer-events: none;
+  transition: opacity 200ms ease, filter 200ms ease;
+}
+
+/* Hover state = brighter glow, sharper bloom */
+.createListingBtn:hover {
+  box-shadow:
+    0 6px 22px rgba(255, 149, 14, 0.22),
+    0 0 0 1px rgba(255, 149, 14, 0.25);
+}
+.createListingBtn:hover::after {
+  opacity: 0.55;
+  filter: blur(10px);
+}
+
+/* Active (press) state = slight scale & dimmer glow */
+.createListingBtn:active {
+  transform: scale(0.98);
+}
+.createListingBtn:active::after {
+  opacity: 0.32;
+  filter: blur(7px);
+}
+
+/* Disabled state respects parent inline styles */
+.createListingBtn:disabled {
+  cursor: not-allowed;
+}
+.createListingBtn:disabled::before,
+.createListingBtn:disabled::after {
+  opacity: 0.2;
+  animation-play-state: paused;
+}
+
+/* Animate the gradient sweep around the border */
+@keyframes createListingGradient {
+  0%   { background-position: 0% 50%; }
+  100% { background-position: 400% 50%; }
+}
+
+/* Reduced motion: show static border, no animation */
+@media (prefers-reduced-motion: reduce) {
+  .createListingBtn::before {
+    animation: none;
+    background: linear-gradient(120deg,
+      rgba(255, 149, 14, 0.5),
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 149, 14, 0.5)
+    );
+    background-size: 100% 100%;
+  }
+  .createListingBtn::after {
+    transition-duration: 0.01ms;
+  }
+}
