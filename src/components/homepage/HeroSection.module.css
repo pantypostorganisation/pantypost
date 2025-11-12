@@ -68,7 +68,7 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-  animation: browseListingsGradient 5s linear infinite; /* Total cycle time with gap */
+  animation: browseListingsGradient 6s linear infinite; /* Longer cycle for slower sweep */
   animation-delay: 0s; /* Starts immediately */
 }
 
@@ -165,8 +165,8 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-  animation: startSellingGradient 5s linear infinite; /* Total cycle time with gap */
-  animation-delay: 2.5s; /* Starts 0.3s after browse listings completes for travel effect */
+  animation: startSellingGradient 6s linear infinite; /* Same longer cycle */
+  animation-delay: 1.4s; /* Starts after browse sweep (1.2s) + gap (0.2s) */
 }
 
 /* Start Selling soft outer neon glow layer */
@@ -193,20 +193,18 @@
 .startSellingBtn:active::after { opacity: 0.32; filter: blur(7px); }
 
 /* Synchronized animations with gap for travel effect */
-/* Browse Listings: Left to Right sweep */
+/* Browse Listings: Left to Right sweep - ONCE per cycle */
 @keyframes browseListingsGradient {
-  0%   { background-position: 0% 50%; }
-  44%  { background-position: 400% 50%; } /* Complete sweep (2.2s of 5s) */
-  44.01% { background-position: 0% 50%; } /* Reset instantly */
-  100% { background-position: 0% 50%; } /* Hold position during gap and second button */
+  0%   { background-position: 0% 50%; } /* Start position */
+  20%  { background-position: 100% 50%; } /* End position after slow sweep */
+  100% { background-position: 100% 50%; } /* Hold position for rest of cycle */
 }
 
-/* Start Selling: Right to Left sweep */
+/* Start Selling: Also Left to Right sweep - ONCE per cycle */
 @keyframes startSellingGradient {
-  0%   { background-position: 400% 50%; } /* Start from right */
-  44%  { background-position: 0% 50%; } /* Complete reverse sweep (2.2s of 5s) */
-  44.01% { background-position: 400% 50%; } /* Reset instantly */
-  100% { background-position: 400% 50%; } /* Hold position during gap and first button */
+  0%   { background-position: 0% 50%; } /* Start position */
+  20%  { background-position: 100% 50%; } /* End position after slow sweep */
+  100% { background-position: 100% 50%; } /* Hold position for rest of cycle */
 }
 
 /* Reduced motion: static borders for both buttons */
