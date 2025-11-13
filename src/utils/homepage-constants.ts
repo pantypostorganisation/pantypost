@@ -58,7 +58,7 @@ export const HERO_CONTENT = {
   },
   ctaSecondary: {
     text: 'Start Selling',
-    href: '/login',
+    href: '/signup',
   },
 };
 
