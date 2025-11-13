@@ -913,7 +913,7 @@ export default function Header(): React.ReactElement | null {
                     </Link>
                     <Link
                       href="/signup"
-                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30"
+                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-[0_0_30px_rgba(255,149,14,0.35)] hover:shadow-[0_0_45px_rgba(255,149,14,0.45)]"
                       onClick={handleMobileMenuClose}
                       style={{ color: '#2a2a2a' }}
                     >
@@ -1327,7 +1327,7 @@ export default function Header(): React.ReactElement | null {
               </Link>
               <Link
                 href="/signup"
-                className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105 border border-white/20"
+                className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 shadow-[0_0_30px_rgba(255,149,14,0.35)] hover:shadow-[0_0_45px_rgba(255,149,14,0.45)] transform hover:scale-105 border border-white/20"
                 style={{ color: '#000' }}
               >
                 Sign Up
