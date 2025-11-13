@@ -79,21 +79,6 @@ export default function HeroSection() {
       return;
     }
 
-    const pxToNum = (value: string) => Number(value.replace('px', '')) || 0;
-
-    const perimeter = (element: HTMLElement) => {
-      const styles = getComputedStyle(element);
-      const width = element.offsetWidth;
-      const height = element.offsetHeight;
-      const radius = Math.min(
-        Math.min(width, height) / 2,
-        pxToNum(styles.borderTopLeftRadius)
-      );
-      const straight = 2 * (width + height - 2 * radius);
-      const arcs = 2 * Math.PI * radius;
-      return straight + arcs;
-    };
-
     const gapBetween = (a: HTMLElement, b: HTMLElement) => {
       const rectA = a.getBoundingClientRect();
       const rectB = b.getBoundingClientRect();
@@ -104,31 +89,35 @@ export default function HeroSection() {
 
     let raf = 0;
 
-    const updatePhases = () => {
+    const updateTrack = () => {
       const [first, second] = buttons;
       if (!first || !second) {
         return;
       }
 
-      const firstPerimeter = perimeter(first);
-      const secondPerimeter = perimeter(second);
+      const firstRect = first.getBoundingClientRect();
+      const secondRect = second.getBoundingClientRect();
       const gap = gapBetween(first, second);
-      const total = firstPerimeter + gap + secondPerimeter + gap;
+      const total = firstRect.width + secondRect.width + gap;
 
       if (!total) {
         return;
       }
 
-      const phaseSecond = (firstPerimeter + gap) / total;
+      const firstFraction = firstRect.width / total;
+      const secondStart = (firstRect.width + gap) / total;
+      const secondFraction = secondRect.width / total;
 
-      first.style.setProperty('--phase', '0');
-      second.style.setProperty('--phase', String(phaseSecond));
-      wrapper.style.setProperty('--circuit-speed', '12s');
+      first.style.setProperty('--track-start', '0');
+      first.style.setProperty('--track-length', String(firstFraction));
+      second.style.setProperty('--track-start', String(secondStart));
+      second.style.setProperty('--track-length', String(secondFraction));
+      wrapper.style.setProperty('--track-duration', '4.6s');
     };
 
     const scheduleUpdate = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(updatePhases);
+      raf = requestAnimationFrame(updateTrack);
     };
 
     const observer =
@@ -224,11 +213,15 @@ export default function HeroSection() {
                 onClick={handleBrowseListings}
                 aria-label="Browse available listings on PantyPost marketplace"
               >
-                <ShoppingBag
-                  className={styles.browseListingsIcon}
-                  aria-hidden="true"
-                />
-                {HERO_CONTENT.ctaPrimary.text}
+                <span className={styles.ctaInner}>
+                  <ShoppingBag
+                    className={styles.browseListingsIcon}
+                    aria-hidden="true"
+                  />
+                  <span className={styles.ctaLabel}>
+                    {HERO_CONTENT.ctaPrimary.text}
+                  </span>
+                </span>
               </Button>
 
               {/* Start Selling Button */}
@@ -237,11 +230,15 @@ export default function HeroSection() {
                 onClick={handleStartSelling}
                 aria-label="Start Selling"
               >
-                <TrendingUp
-                  className={styles.startSellingIcon}
-                  aria-hidden="true"
-                />
-                {HERO_CONTENT.ctaSecondary.text}
+                <span className={styles.ctaInner}>
+                  <TrendingUp
+                    className={styles.startSellingIcon}
+                    aria-hidden="true"
+                  />
+                  <span className={styles.ctaLabel}>
+                    {HERO_CONTENT.ctaSecondary.text}
+                  </span>
+                </span>
               </Button>
             </motion.div>
 
