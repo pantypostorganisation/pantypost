@@ -1,191 +1,191 @@
 /* src/components/homepage/HeroSection.module.css */
-/* === Shared CTA timing so both buttons sync perfectly === */
+
+/* ---------------- Shared CTA group + circuit shine ---------------- */
 .ctaGroup {
-  /* New cycle math:
-     sweep(1.8s) + gap(0s) + sweep(1.8s) + end-hold(0.4s) = 4.0s total */
-  --pp-duration: 4s;       /* total loop time */
-  --pp-sweep-time: 1.8s;   /* single sheen pass (twice as fast as 3.6s) */
-  --pp-gap: 0s;            /* no explicit gap; baton starts when first is done */
-  --pp-end-hold: 0.4s;     /* brief rest before next cycle */
-}
-
-/* ---------------- Base: Browse Listings ---------------- */
-.browseListingsIcon {
-  width: 1rem;
-  height: 1rem;
-  margin-right: 0.6rem;
-  transition: transform 300ms ease;
-}
-.browseListingsBtn:hover .browseListingsIcon,
-.browseListingsBtn:focus-visible .browseListingsIcon {
-  transform: translateX(-2px);
-}
-
-.browseListingsBtn {
-  --pp-accent: #ff950e;
-  --pp-bg: #0b0b0b;
-  --pp-text: #ffffff;
-  --pp-radius: 14px;
-  --pp-border-w: 2px;
-  --pp-padding-y: 0.8rem;
-  --pp-padding-x: 1.2rem;
-  --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
-
+  --hero-accent: #ff950e;
+  --shine-duration: 3.8s;
   position: relative;
+  isolation: isolate;
+}
+
+.ctaGroup::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 48%;
+  height: calc(100% + 1rem);
+  transform: translate(-125%, -50%) skewX(-18deg);
+  border-radius: 48px;
+  background: linear-gradient(
+    120deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.18) 38%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(255, 255, 255, 0.18) 62%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0;
+  filter: blur(1px);
+  pointer-events: none;
+  mix-blend-mode: screen;
+  animation: heroCircuit var(--shine-duration) cubic-bezier(0.6, 0, 0.2, 1) infinite;
+  animation-delay: 0s;
+  z-index: 3;
+}
+
+.ctaGroup:hover::before,
+.ctaGroup:focus-within::before {
+  animation-duration: 3.2s;
+  opacity: 1;
+}
+
+/* ---------------- Shared CTA button base ---------------- */
+.browseListingsBtn,
+.startSellingBtn {
+  --cta-radius: 16px;
+  --cta-padding-y: 0.95rem;
+  --cta-padding-x: 1.55rem;
+  position: relative;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
-  padding: var(--pp-padding-y) var(--pp-padding-x);
-  border-radius: var(--pp-radius);
-  color: var(--pp-text);
-  background: var(--pp-bg);
-  border: var(--pp-border-w) solid var(--pp-accent); /* solid border */
-  cursor: pointer;
+  gap: 0.5rem;
+  padding: var(--cta-padding-y) var(--cta-padding-x);
+  min-height: 3.25rem;
+  border-radius: var(--cta-radius);
+  border: 1.5px solid transparent;
   font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #ffffff;
   line-height: 1;
-  transform: translateZ(0);
-  box-shadow: var(--pp-shadow);
-  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
-  overflow: hidden; /* clip sheen */
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 220ms ease, filter 220ms ease,
+    background 220ms ease, border-color 220ms ease;
+  overflow: hidden;
+  background: transparent;
 }
 
-.browseListingsBtn:focus { outline: none; }
-.browseListingsBtn:focus-visible {
-  filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
+.browseListingsBtn:focus,
+.startSellingBtn:focus {
+  outline: none;
 }
 
-/* Sheen overlay — OFF left -> cross -> OFF right */
+.browseListingsBtn:focus-visible,
+.startSellingBtn:focus-visible {
+  box-shadow: 0 0 0 2px rgba(255, 149, 14, 0.65);
+}
+
+/* ---------------- Browse Listings (secondary) ---------------- */
+.browseListingsBtn {
+  background: linear-gradient(
+      120deg,
+      rgba(255, 149, 14, 0.2) 0%,
+      rgba(0, 0, 0, 0.8) 70%
+    ),
+    rgba(10, 10, 10, 0.85);
+  border-color: rgba(255, 149, 14, 0.65);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 12px rgba(255, 149, 14, 0.15),
+    0 12px 32px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+}
+
 .browseListingsBtn::after {
-  content: "";
+  content: '';
   position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: -70%;         /* start well off the left edge (not visible) */
-  width: 70%;         /* wide band for a nice soft sweep */
-  border-radius: 999px;
+  inset: 1.5px;
+  border-radius: calc(var(--cta-radius) - 2px);
+  border: 1px solid rgba(255, 149, 14, 0.25);
+  opacity: 0.5;
   pointer-events: none;
-
-  background: linear-gradient(90deg,
-    rgba(255,255,255,0) 0%,
-    rgba(255,255,255,0.12) 45%,
-    rgba(255,255,255,0.32) 50%,
-    rgba(255,255,255,0.12) 55%,
-    rgba(255,255,255,0) 100%
-  );
-
-  transform: translateX(0) skewX(-18deg);
-  filter: blur(0.5px);
-  mix-blend-mode: screen;
-  will-change: transform;
-
-  animation: ppSheen var(--pp-duration) linear infinite both;
-  animation-delay: 0s; /* Browse starts first */
-  opacity: 0.9;
 }
 
 .browseListingsBtn:hover {
+  background: linear-gradient(
+      125deg,
+      rgba(255, 149, 14, 0.32) 0%,
+      rgba(0, 0, 0, 0.88) 72%
+    ),
+    rgba(14, 14, 14, 0.9);
   box-shadow:
-    0 6px 22px rgba(255, 149, 14, 0.22),
-    0 0 0 1px rgba(255, 149, 14, 0.25);
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 14px rgba(255, 149, 14, 0.22),
+    0 16px 34px rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(255, 149, 14, 0.18);
 }
-.browseListingsBtn:active { transform: scale(0.98); }
 
-/* ---------------- Base: Start Selling ---------------- */
+.browseListingsBtn:active {
+  transform: scale(0.98);
+}
+
+/* ---------------- Start Selling (primary) ---------------- */
+.startSellingBtn {
+  background: linear-gradient(120deg, #b84c00 0%, #ff7d0d 45%, #ff950e 70%, #ffb347 100%);
+  border-color: rgba(255, 167, 62, 0.95);
+  box-shadow:
+    0 12px 26px rgba(255, 149, 14, 0.28),
+    0 20px 45px rgba(255, 149, 14, 0.32);
+}
+
+.startSellingBtn:hover {
+  transform: translateY(-1px) scale(1.01);
+  filter: brightness(1.04);
+  box-shadow:
+    0 18px 34px rgba(255, 149, 14, 0.38),
+    0 25px 55px rgba(255, 149, 14, 0.32);
+}
+
+.startSellingBtn:active {
+  transform: scale(0.985);
+}
+
+/* ---------------- Icon treatments ---------------- */
+.browseListingsIcon,
 .startSellingIcon {
   width: 1rem;
   height: 1rem;
-  margin-right: 0.6rem;
-  transition: transform 300ms ease;
+  margin-right: 0.65rem;
+  transition: transform 250ms ease;
 }
+
+.browseListingsBtn:hover .browseListingsIcon,
+.browseListingsBtn:focus-visible .browseListingsIcon,
 .startSellingBtn:hover .startSellingIcon,
 .startSellingBtn:focus-visible .startSellingIcon {
   transform: translateX(-2px);
 }
 
-.startSellingBtn {
-  --pp-accent: #ff950e;
-  --pp-bg: #0b0b0b;
-  --pp-text: #ffffff;
-  --pp-radius: 14px;
-  --pp-border-w: 2px;
-  --pp-padding-y: 0.8rem;
-  --pp-padding-x: 1.2rem;
-  --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
-
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  padding: var(--pp-padding-y) var(--pp-padding-x);
-  border-radius: var(--pp-radius);
-  color: var(--pp-text);
-  background: var(--pp-bg);
-  border: var(--pp-border-w) solid var(--pp-accent); /* solid border */
-  cursor: pointer;
-  font-weight: 600;
-  line-height: 1;
-  transform: translateZ(0);
-  box-shadow: var(--pp-shadow);
-  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
-  overflow: hidden;
-}
-
-.startSellingBtn:focus { outline: none; }
-.startSellingBtn:focus-visible {
-  filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
-}
-
-/* Same geometry; baton starts immediately after first sweep ends */
-.startSellingBtn::after {
-  content: "";
-  position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: -70%;
-  width: 70%;
-  border-radius: 999px;
-  pointer-events: none;
-
-  background: linear-gradient(90deg,
-    rgba(255,255,255,0) 0%,
-    rgba(255,255,255,0.12) 45%,
-    rgba(255,255,255,0.32) 50%,
-    rgba(255,255,255,0.12) 55%,
-    rgba(255,255,255,0) 100%
-  );
-
-  transform: translateX(0) skewX(-18deg);
-  filter: blur(0.5px);
-  mix-blend-mode: screen;
-  will-change: transform;
-
-  animation: ppSheen var(--pp-duration) linear infinite both;
-  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap)); /* = 1.8s + 0s */
-  opacity: 0.9;
-}
-
-.startSellingBtn:hover {
-  box-shadow:
-    0 6px 22px rgba(255, 149, 14, 0.22),
-    0 0 0 1px rgba(255, 149, 14, 0.25);
-}
-.startSellingBtn:active { transform: scale(0.98); }
-
-/* ---------------- Animations ---------------- */
-/* Sweep occupies exactly 45% of the 4s timeline (1.8/4 = 0.45).
-   Travel far enough to exit fully right, even with skew: 320%. */
-@keyframes ppSheen {
-  0%   { transform: translateX(0)     skewX(-18deg); }  /* off left due to left:-70% */
-  45%  { transform: translateX(320%)  skewX(-18deg); }  /* fully off right at 1.8s */
-  100% { transform: translateX(320%)  skewX(-18deg); }  /* hold for end pause (0.4s) */
+/* ---------------- Shine animation ---------------- */
+@keyframes heroCircuit {
+  0% {
+    transform: translate(-125%, -50%) skewX(-18deg);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.35;
+  }
+  40% {
+    opacity: 0.85;
+  }
+  70% {
+    transform: translate(255%, -50%) skewX(-18deg);
+    opacity: 0.8;
+  }
+  82% {
+    opacity: 0;
+  }
+  100% {
+    transform: translate(255%, -50%) skewX(-18deg);
+    opacity: 0;
+  }
 }
 
 /* ---------------- Reduced Motion ---------------- */
 @media (prefers-reduced-motion: reduce) {
-  .browseListingsBtn::after,
-  .startSellingBtn::after {
+  .ctaGroup::before {
     animation: none;
     opacity: 0;
   }
