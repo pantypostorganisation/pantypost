@@ -1,27 +1,61 @@
 /* src/components/homepage/HeroSection.module.css */
+
+@property --shine-progress {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: -0.2;
+}
+
 /* === Shared CTA timing so both buttons sync perfectly === */
 .ctaGroup {
-  /* New cycle math:
-     sweep(1.8s) + gap(0s) + sweep(1.8s) + end-hold(0.4s) = 4.0s total */
-  --pp-duration: 4s;       /* total loop time */
-  --pp-sweep-time: 1.8s;   /* single sheen pass (twice as fast as 3.6s) */
-  --pp-gap: 0s;            /* no explicit gap; baton starts when first is done */
-  --pp-end-hold: 0.4s;     /* brief rest before next cycle */
+  position: relative;
+  isolation: isolate;
+  --track-duration: 4.6s;
+  --shine-progress: -0.2;
+  animation: heroCtaTrack var(--track-duration) ease-in-out infinite;
+}
+
+.ctaGroup::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ctaGroup :global(.cta-btn) {
+  position: relative;
+  z-index: 1;
 }
 
 /* ---------------- Base: Browse Listings ---------------- */
+.ctaInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  width: 100%;
+  line-height: 1.2;
+}
+
+.ctaLabel {
+  display: inline-flex;
+  align-items: center;
+}
+
 .browseListingsIcon {
   width: 1rem;
   height: 1rem;
-  margin-right: 0.6rem;
   transition: transform 300ms ease;
+  flex-shrink: 0;
 }
 .browseListingsBtn:hover .browseListingsIcon,
 .browseListingsBtn:focus-visible .browseListingsIcon {
   transform: translateX(-2px);
 }
 
-.browseListingsBtn {
+.browseListingsBtn,
+.startSellingBtn {
   --pp-accent: #ff950e;
   --pp-bg: #0b0b0b;
   --pp-text: #ffffff;
@@ -30,6 +64,15 @@
   --pp-padding-y: 0.8rem;
   --pp-padding-x: 1.2rem;
   --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
+  --track-start: 0;
+  --track-length: 0.5;
+  --normalized-length: max(var(--track-length, 0.5), 0.001);
+  --local-progress-raw: calc(
+    (var(--shine-progress, -0.2) - var(--track-start, 0)) /
+      var(--normalized-length)
+  );
+
+  --local-progress: clamp(0, var(--local-progress-raw), 1);
 
   position: relative;
   display: inline-flex;
@@ -40,14 +83,19 @@
   border-radius: var(--pp-radius);
   color: var(--pp-text);
   background: var(--pp-bg);
-  border: var(--pp-border-w) solid var(--pp-accent); /* solid border */
+  border: var(--pp-border-w) solid var(--pp-accent);
   cursor: pointer;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
   transform: translateZ(0);
   box-shadow: var(--pp-shadow);
   transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
-  overflow: hidden; /* clip sheen */
+  overflow: hidden;
+  min-height: 3rem;
+}
+
+.browseListingsBtn {
+  background: var(--pp-bg);
 }
 
 .browseListingsBtn:focus { outline: none; }
@@ -56,13 +104,14 @@
 }
 
 /* Sheen overlay — OFF left -> cross -> OFF right */
-.browseListingsBtn::after {
+.browseListingsBtn::after,
+.startSellingBtn::after {
   content: "";
   position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: -70%;         /* start well off the left edge (not visible) */
-  width: 70%;         /* wide band for a nice soft sweep */
+  top: -35%;
+  bottom: -35%;
+  left: -60%;
+  width: 60%;
   border-radius: 999px;
   pointer-events: none;
 
@@ -74,14 +123,15 @@
     rgba(255,255,255,0) 100%
   );
 
-  transform: translateX(0) skewX(-18deg);
+  transform: translateX(
+      calc((var(--local-progress-raw) * 260%) - 130%)
+    )
+    skewX(-18deg);
   filter: blur(0.5px);
   mix-blend-mode: screen;
   will-change: transform;
 
-  animation: ppSheen var(--pp-duration) linear infinite both;
-  animation-delay: 0s; /* Browse starts first */
-  opacity: 0.9;
+  opacity: calc(clamp(0, var(--local-progress-raw), 1) * 0.95);
 }
 
 .browseListingsBtn:hover {
@@ -95,41 +145,12 @@
 .startSellingIcon {
   width: 1rem;
   height: 1rem;
-  margin-right: 0.6rem;
   transition: transform 300ms ease;
+  flex-shrink: 0;
 }
 .startSellingBtn:hover .startSellingIcon,
 .startSellingBtn:focus-visible .startSellingIcon {
   transform: translateX(-2px);
-}
-
-.startSellingBtn {
-  --pp-accent: #ff950e;
-  --pp-bg: #0b0b0b;
-  --pp-text: #ffffff;
-  --pp-radius: 14px;
-  --pp-border-w: 2px;
-  --pp-padding-y: 0.8rem;
-  --pp-padding-x: 1.2rem;
-  --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
-
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-
-  padding: var(--pp-padding-y) var(--pp-padding-x);
-  border-radius: var(--pp-radius);
-  color: var(--pp-text);
-  background: var(--pp-bg);
-  border: var(--pp-border-w) solid var(--pp-accent); /* solid border */
-  cursor: pointer;
-  font-weight: 600;
-  line-height: 1;
-  transform: translateZ(0);
-  box-shadow: var(--pp-shadow);
-  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
-  overflow: hidden;
 }
 
 .startSellingBtn:focus { outline: none; }
@@ -137,33 +158,9 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Same geometry; baton starts immediately after first sweep ends */
-.startSellingBtn::after {
-  content: "";
-  position: absolute;
-  top: -20%;
-  bottom: -20%;
-  left: -70%;
-  width: 70%;
-  border-radius: 999px;
-  pointer-events: none;
 
-  background: linear-gradient(90deg,
-    rgba(255,255,255,0) 0%,
-    rgba(255,255,255,0.12) 45%,
-    rgba(255,255,255,0.32) 50%,
-    rgba(255,255,255,0.12) 55%,
-    rgba(255,255,255,0) 100%
-  );
-
-  transform: translateX(0) skewX(-18deg);
-  filter: blur(0.5px);
-  mix-blend-mode: screen;
-  will-change: transform;
-
-  animation: ppSheen var(--pp-duration) linear infinite both;
-  animation-delay: calc(var(--pp-sweep-time) + var(--pp-gap)); /* = 1.8s + 0s */
-  opacity: 0.9;
+.startSellingBtn {
+  background: var(--pp-bg);
 }
 
 .startSellingBtn:hover {
@@ -174,19 +171,25 @@
 .startSellingBtn:active { transform: scale(0.98); }
 
 /* ---------------- Animations ---------------- */
-/* Sweep occupies exactly 45% of the 4s timeline (1.8/4 = 0.45).
-   Travel far enough to exit fully right, even with skew: 320%. */
-@keyframes ppSheen {
-  0%   { transform: translateX(0)     skewX(-18deg); }  /* off left due to left:-70% */
-  45%  { transform: translateX(320%)  skewX(-18deg); }  /* fully off right at 1.8s */
-  100% { transform: translateX(320%)  skewX(-18deg); }  /* hold for end pause (0.4s) */
+@keyframes heroCtaTrack {
+  0% {
+    --shine-progress: -0.25;
+  }
+  68% {
+    --shine-progress: 1.25;
+  }
+  100% {
+    --shine-progress: 1.25;
+  }
 }
 
 /* ---------------- Reduced Motion ---------------- */
 @media (prefers-reduced-motion: reduce) {
+  .ctaGroup {
+    animation: none;
+  }
   .browseListingsBtn::after,
   .startSellingBtn::after {
-    animation: none;
     opacity: 0;
   }
 }
