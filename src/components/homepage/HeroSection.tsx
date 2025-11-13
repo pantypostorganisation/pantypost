@@ -65,6 +65,93 @@ export default function HeroSection() {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    const wrapper = document.getElementById('hero-ctas');
+    if (!wrapper) {
+      return;
+    }
+
+    const buttons = Array.from(
+      wrapper.querySelectorAll<HTMLButtonElement>('.cta-btn')
+    );
+
+    if (buttons.length !== 2) {
+      return;
+    }
+
+    const pxToNum = (value: string) => Number(value.replace('px', '')) || 0;
+
+    const perimeter = (element: HTMLElement) => {
+      const styles = getComputedStyle(element);
+      const width = element.offsetWidth;
+      const height = element.offsetHeight;
+      const radius = Math.min(
+        Math.min(width, height) / 2,
+        pxToNum(styles.borderTopLeftRadius)
+      );
+      const straight = 2 * (width + height - 2 * radius);
+      const arcs = 2 * Math.PI * radius;
+      return straight + arcs;
+    };
+
+    const gapBetween = (a: HTMLElement, b: HTMLElement) => {
+      const rectA = a.getBoundingClientRect();
+      const rectB = b.getBoundingClientRect();
+      const horizontalGap = Math.max(0, rectB.left - rectA.right);
+      const verticalOverlap = rectB.top < rectA.bottom && rectA.top < rectB.bottom;
+      return verticalOverlap ? horizontalGap : 0;
+    };
+
+    let raf = 0;
+
+    const updatePhases = () => {
+      const [first, second] = buttons;
+      if (!first || !second) {
+        return;
+      }
+
+      const firstPerimeter = perimeter(first);
+      const secondPerimeter = perimeter(second);
+      const gap = gapBetween(first, second);
+      const total = firstPerimeter + gap + secondPerimeter + gap;
+
+      if (!total) {
+        return;
+      }
+
+      const phaseSecond = (firstPerimeter + gap) / total;
+
+      first.style.setProperty('--phase', '0');
+      second.style.setProperty('--phase', String(phaseSecond));
+      wrapper.style.setProperty('--circuit-speed', '12s');
+    };
+
+    const scheduleUpdate = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(updatePhases);
+    };
+
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            scheduleUpdate();
+          })
+        : null;
+
+    buttons.forEach((button) => observer?.observe(button));
+    observer?.observe(wrapper);
+
+    window.addEventListener('resize', scheduleUpdate, { passive: true });
+
+    scheduleUpdate();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer?.disconnect();
+      window.removeEventListener('resize', scheduleUpdate);
+    };
+  }, []);
+
   const { scrollYProgress } = useScroll({
     target: heroRef,
     offset: ['start start', 'end start']
