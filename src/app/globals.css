@@ -223,6 +223,8 @@ a:hover {
   position: absolute;
   border-radius: inherit;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
 }
 
 .save-all-glow-wrapper::before {
@@ -241,7 +243,6 @@ a:hover {
   -webkit-mask-composite: xor;
           mask-composite: exclude;
   z-index: 0;
-  opacity: 1;
 }
 
 .save-all-glow-wrapper::after {
@@ -255,10 +256,9 @@ a:hover {
   );
   filter: blur(26px);
   z-index: -1;
-  opacity: 0;
-  transition: opacity 0.25s ease-out;
 }
 
+.save-all-glow-wrapper:hover::before,
 .save-all-glow-wrapper:hover::after {
   opacity: 1;
 }
