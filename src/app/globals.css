@@ -201,10 +201,12 @@ a:hover {
 /* Save All button glow inspired by Button 2 */
 .save-all-button {
   position: relative;
-  overflow: visible;
+  z-index: 1;
   border-radius: 9999px;
   border-color: rgba(255, 255, 255, 0.18);
-  background: #050509;
+  background: #000;
+  color: #fff;
+  overflow: visible;
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
@@ -220,23 +222,21 @@ a:hover {
 }
 
 .save-all-button::after {
-  inset: -8px;
+  inset: -12px;
   background: conic-gradient(
-    from 0deg,
     #ff950e,
     #ff4ecd,
     #4f46e5,
     #06b6d4,
     #ff950e
   );
-  filter: blur(18px);
-  z-index: -1;
+  filter: blur(22px);
+  z-index: -2;
 }
 
 .save-all-button::before {
-  padding: 1px;
+  padding: 2px;
   background: conic-gradient(
-    from 0deg,
     #ff950e,
     #ff4ecd,
     #4f46e5,
@@ -252,50 +252,28 @@ a:hover {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
-  z-index: 0;
+  z-index: -1;
 }
 
-@keyframes saveAllGlowRingBreath {
+@keyframes glowBreath {
   0% {
     transform: scale(1);
-    filter: brightness(1);
-  }
-  50% {
-    transform: scale(1.02);
-    filter: brightness(1.18);
-  }
-  100% {
-    transform: scale(1);
-    filter: brightness(1);
-  }
-}
-
-@keyframes saveAllGlowHaloBreath {
-  0% {
-    transform: scale(1);
-    filter: blur(18px) brightness(1);
+    filter: blur(22px) brightness(1);
   }
   50% {
     transform: scale(1.05);
-    filter: blur(21px) brightness(1.12);
+    filter: blur(24px) brightness(1.15);
   }
   100% {
     transform: scale(1);
-    filter: blur(18px) brightness(1);
+    filter: blur(22px) brightness(1);
   }
 }
 
 .save-all-button:hover::before,
 .save-all-button:hover::after {
   opacity: 1;
-}
-
-.save-all-button:hover::before {
-  animation: saveAllGlowRingBreath 1.8s ease-in-out infinite;
-}
-
-.save-all-button:hover::after {
-  animation: saveAllGlowHaloBreath 1.8s ease-in-out infinite;
+  animation: glowBreath 1.8s ease-in-out infinite;
 }
 
 .save-all-button:hover {
