@@ -198,6 +198,56 @@ a:hover {
   box-shadow: 0 4px 6px -1px rgba(56, 161, 105, 0.2);
 }
 
+/* Save All button glow inspired by Button 2 */
+.save-all-button {
+  position: relative;
+  overflow: visible;
+}
+
+.save-all-button::before {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 25% 30%, rgba(255, 149, 14, 0.65), transparent 55%),
+    radial-gradient(circle at 75% 30%, rgba(167, 86, 255, 0.45), transparent 55%),
+    radial-gradient(circle at 50% 80%, rgba(64, 163, 255, 0.4), transparent 65%);
+  filter: blur(18px);
+  opacity: 0;
+  transform: scale(0.92);
+  transition: opacity 220ms ease, transform 220ms ease;
+  z-index: -1;
+  pointer-events: none;
+}
+
+@keyframes saveAllGlowPulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+}
+
+.save-all-button:hover::before,
+.save-all-button:focus-visible::before {
+  opacity: 1;
+  transform: scale(1.05);
+  animation: saveAllGlowPulse 1.8s ease-in-out infinite;
+}
+
+.save-all-button:disabled::before,
+.save-all-button[aria-disabled="true"]::before {
+  opacity: 0;
+  animation: none;
+}
+
 .btn-approve:hover {
   background: linear-gradient(to right, #48bb78, #68d391);
   box-shadow: 0 10px 15px -3px rgba(56, 161, 105, 0.3);
