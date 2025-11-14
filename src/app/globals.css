@@ -199,42 +199,42 @@ a:hover {
 }
 
 /* Save All button glow inspired by Button 2 */
+.save-all-glow-wrapper {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+  overflow: visible;
+}
+
 .save-all-button {
   position: relative;
   z-index: 1;
   border-radius: 9999px;
-  border-color: rgba(255, 255, 255, 0.18);
   background: #000;
   color: #fff;
-  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.75rem 2.5rem;
   transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
 }
 
-.save-all-button::before,
-.save-all-button::after {
+.save-all-button:hover {
+  border-color: rgba(255, 149, 14, 0.55);
+  box-shadow: 0 0 15px rgba(255, 149, 14, 0.2), 0 0 35px rgba(98, 0, 255, 0.15);
+  transform: translateY(-1px) scale(1.01);
+}
+
+.save-all-glow-wrapper::before,
+.save-all-glow-wrapper::after {
   content: "";
   position: absolute;
-  inset: 0;
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 250ms ease-out, transform 250ms ease-out, filter 250ms ease-out;
+  transition: opacity 0.25s ease-out;
 }
 
-.save-all-button::after {
-  inset: -12px;
-  background: conic-gradient(
-    #ff950e,
-    #ff4ecd,
-    #4f46e5,
-    #06b6d4,
-    #ff950e
-  );
-  filter: blur(22px);
-  z-index: -2;
-}
-
-.save-all-button::before {
+.save-all-glow-wrapper::before {
+  inset: 0;
   padding: 2px;
   background: conic-gradient(
     #ff950e,
@@ -248,46 +248,41 @@ a:hover {
     linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
           mask-composite: exclude;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
+  z-index: 0;
+}
+
+.save-all-glow-wrapper::after {
+  inset: -12px;
+  background: conic-gradient(
+    #ff950e,
+    #ff4ecd,
+    #4f46e5,
+    #06b6d4,
+    #ff950e
+  );
+  filter: blur(22px);
   z-index: -1;
 }
 
-@keyframes glowBreath {
+.save-all-glow-wrapper:hover::before,
+.save-all-glow-wrapper:hover::after {
+  opacity: 1;
+  animation: saveAllGlowBreath 1.8s ease-in-out infinite;
+}
+
+@keyframes saveAllGlowBreath {
   0% {
     transform: scale(1);
     filter: blur(22px) brightness(1);
   }
   50% {
     transform: scale(1.05);
-    filter: blur(24px) brightness(1.15);
+    filter: blur(24px) brightness(1.12);
   }
   100% {
     transform: scale(1);
     filter: blur(22px) brightness(1);
   }
-}
-
-.save-all-button:hover::before,
-.save-all-button:hover::after {
-  opacity: 1;
-  animation: glowBreath 1.8s ease-in-out infinite;
-}
-
-.save-all-button:hover {
-  border-color: rgba(255, 149, 14, 0.55);
-  box-shadow: 0 0 15px rgba(255, 149, 14, 0.2), 0 0 35px rgba(98, 0, 255, 0.15);
-  transform: translateY(-1px) scale(1.01);
-}
-
-.save-all-button:disabled::before,
-.save-all-button:disabled::after,
-.save-all-button[aria-disabled="true"]::before,
-.save-all-button[aria-disabled="true"]::after {
-  opacity: 0;
-  animation: none;
 }
 
 .btn-approve:hover {

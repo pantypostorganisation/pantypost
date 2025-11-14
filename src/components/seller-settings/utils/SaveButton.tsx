@@ -43,14 +43,16 @@ export default function SaveButton({
           <span className="text-xs text-[#ff950e]">Saving...</span>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={handleClick}
-          className="save-all-button relative inline-flex items-center justify-center px-8 py-3 text-sm font-medium text-white bg-[#050509] border border-white/15 rounded-full shadow-[0_0_25px_rgba(0,0,0,0.35)] transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#ff950e] overflow-visible"
-          aria-label="Save all profile changes"
-        >
-          Save All
-        </button>
+        <div className="save-all-glow-wrapper">
+          <button
+            type="button"
+            onClick={handleClick}
+            className="save-all-button relative inline-flex items-center justify-center px-8 py-3 text-sm font-medium text-white bg-[#050509] border border-white/15 rounded-full shadow-[0_0_25px_rgba(0,0,0,0.35)] transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#ff950e] overflow-visible"
+            aria-label="Save all profile changes"
+          >
+            Save All
+          </button>
+        </div>
       )}
 
       {/* Success Message */}
