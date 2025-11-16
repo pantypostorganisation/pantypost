@@ -12,6 +12,8 @@ interface ProfileSaveData {
   profilePic: string | null;
   subscriptionPrice: string;
   galleryImages?: string[];
+  country: string;
+  isLocationPublic: boolean;
 }
 
 interface UseProfileSaveReturn {
@@ -105,6 +107,19 @@ export function useProfileSave(): UseProfileSaveReturn {
           return null;
         }
         sanitized.galleryImages = sanitizedGallery;
+      }
+
+      if (data.country !== undefined) {
+        const sanitizedCountry = sanitizeStrict(data.country).trim();
+        if (!sanitizedCountry) {
+          setSaveError('Country is required');
+          return null;
+        }
+        sanitized.country = sanitizedCountry;
+      }
+
+      if (data.isLocationPublic !== undefined) {
+        sanitized.isLocationPublic = Boolean(data.isLocationPublic);
       }
 
       return sanitized;

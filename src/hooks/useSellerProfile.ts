@@ -6,7 +6,7 @@ import { usersService } from '@/services/users.service';
 import { listingsService } from '@/services/listings.service';
 import { reviewsService } from '@/services/reviews.service';
 import { API_BASE_URL } from '@/services/api.config';
-import { sanitizeUrl } from '@/utils/security/sanitization';
+import { sanitizeUrl, sanitizeStrict } from '@/utils/security/sanitization';
 import { getSellerTierMemoized, TierInfo } from '@/utils/sellerTiers';
 import { useWallet } from '@/context/WalletContext';
 import { subscriptionsService } from '@/services/subscriptions.service';
@@ -44,6 +44,8 @@ export function useSellerProfile(username: string) {
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isVerified, setIsVerified] = useState(false);
   const [sellerTierInfo, setSellerTierInfo] = useState<TierInfo | null>(null);
+  const [country, setCountry] = useState<string | null>(null);
+  const [isLocationPublic, setIsLocationPublic] = useState(false);
 
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [totalVideos] = useState(0);
@@ -150,6 +152,22 @@ export function useSellerProfile(username: string) {
 
         setGalleryImages(gallery);
         setIsVerified(Boolean(userData.isVerified));
+        const resolvedCountrySource =
+          typeof profileData?.country === 'string'
+            ? profileData.country
+            : typeof userData?.country === 'string'
+              ? userData.country
+              : '';
+        const sanitizedCountry = resolvedCountrySource ? sanitizeStrict(resolvedCountrySource) : '';
+        setCountry(sanitizedCountry || null);
+
+        const locationPublicValue =
+          typeof profileData?.isLocationPublic === 'boolean'
+            ? profileData.isLocationPublic
+            : typeof userData?.isLocationPublic === 'boolean'
+              ? userData.isLocationPublic
+              : false;
+        setIsLocationPublic(Boolean(locationPublicValue));
         setFollowers(userData.subscriberCount || 0);
         setAverageRating(userData.rating ?? null);
 
@@ -411,6 +429,8 @@ export function useSellerProfile(username: string) {
     selectedImage,
     currentImageIndex,
     showToast,
+    country,
+    isLocationPublic,
     tipAmount,
     tipSuccess,
     tipError,

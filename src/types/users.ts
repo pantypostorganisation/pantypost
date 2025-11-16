@@ -15,6 +15,8 @@ export interface UserProfile {
   subscriptionPrice: string;
   lastUpdated?: string;
   galleryImages?: string[];
+  country?: string | null;
+  isLocationPublic?: boolean;
   preferences?: UserPreferences;
   completeness?: ProfileCompleteness;
   socialLinks?: SocialLinks;
