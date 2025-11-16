@@ -28,6 +28,7 @@ export const useSignup = () => {
     email: '',
     password: '',
     confirmPassword: '',
+    country: '',
     role: null,
     termsAccepted: false,
     ageVerified: false,
@@ -144,6 +145,9 @@ export const useSignup = () => {
         // Don't over-sanitize email - just trim whitespace
         sanitizedValue = value.trim();
         break;
+      case 'country':
+        sanitizedValue = typeof value === 'string' ? value : '';
+        break;
       case 'role':
         if (value !== 'buyer' && value !== 'seller') {
           console.error('Invalid role value');
@@ -204,6 +208,7 @@ export const useSignup = () => {
       email: state.email,
       password: state.password,
       confirmPassword: state.confirmPassword,
+      country: state.country,
       role: state.role,
       termsAccepted: state.termsAccepted,
       ageVerified: state.ageVerified
@@ -246,6 +251,7 @@ export const useSignup = () => {
         username: state.username,
         email: state.email,
         password: state.password,
+        country: state.country,
         role: state.role
       };
       

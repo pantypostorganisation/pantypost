@@ -92,6 +92,10 @@ export const authSchemas = {
         'Password must contain at least one uppercase letter, one lowercase letter, and one number'
       ),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
+    country: z
+      .string()
+      .min(1, 'Country is required')
+      .transform(sanitizers.normalizeSpaces),
     role: z.enum(['buyer', 'seller'], {
       required_error: 'Please select a role',
     }).nullable(),
