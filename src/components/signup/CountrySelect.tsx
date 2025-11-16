@@ -23,13 +23,13 @@ export default function CountrySelect({ country, error, onChange }: CountryField
           aria-invalid={!!error}
           aria-describedby={errorId}
           aria-required="true"
-          className={`w-full appearance-none px-4 py-2.5 pr-16 bg-black/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 ${
+          className={`w-full appearance-none px-4 py-2.5 pr-16 bg-black/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-all duration-200 ${
             error
               ? 'border-red-500/50 focus:ring-red-500/50'
               : 'border-gray-700 focus:ring-[#ff950e]/50 focus:border-[#ff950e]'
-          }`}
+          } ${!country ? 'text-gray-500' : 'text-white'}`}
         >
-          <option value="" className="bg-[#0b0b0b] text-gray-400">
+          <option value="" disabled className="bg-[#0b0b0b] text-gray-500">
             Select your country
           </option>
           {countriesWithFlags.map((option) => (
