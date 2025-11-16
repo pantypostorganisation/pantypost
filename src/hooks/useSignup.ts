@@ -147,6 +147,16 @@ export const useSignup = () => {
         break;
       case 'country':
         sanitizedValue = typeof value === 'string' ? value : '';
+        // Clear country error when a valid country is selected
+        if (sanitizedValue) {
+          setState(prev => ({
+            ...prev,
+            errors: {
+              ...prev.errors,
+              country: undefined
+            }
+          }));
+        }
         break;
       case 'role':
         if (value !== 'buyer' && value !== 'seller') {
@@ -231,10 +241,23 @@ export const useSignup = () => {
       }
     }
 
-    // Additional validation
+    // Additional validation - including mandatory country check
     const validationErrors = validateForm(formData);
     if (Object.keys(validationErrors).length > 0) {
       setState(prev => ({ ...prev, errors: validationErrors }));
+      return;
+    }
+    
+    // Additional check for country field (mandatory)
+    if (!state.country || state.country.trim() === '') {
+      setState(prev => ({
+        ...prev,
+        errors: { 
+          ...prev.errors, 
+          country: 'Please select your country',
+          form: 'Please complete all required fields'
+        }
+      }));
       return;
     }
     
@@ -265,6 +288,7 @@ export const useSignup = () => {
       console.log('[useSignup] Signup request payload:', { 
         username: signupData.username,
         email: signupData.email,
+        country: signupData.country,
         role: signupData.role,
         hasReferralCode: !!signupData.referralCode,
         referralCodeLength: signupData.referralCode ? signupData.referralCode.length : 0
