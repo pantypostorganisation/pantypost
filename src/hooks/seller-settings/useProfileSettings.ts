@@ -296,7 +296,7 @@ export function useProfileSettings() {
         return url;
       }),
       country: sanitizedCountry,
-      isLocationPublic: profileData.isLocationPublic,
+      isLocationPublic: profileData.isLocationPublic ?? true,
     };
 
     await baseSaveProfile(payload);

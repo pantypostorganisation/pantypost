@@ -45,7 +45,7 @@ export function useSellerProfile(username: string) {
   const [isVerified, setIsVerified] = useState(false);
   const [sellerTierInfo, setSellerTierInfo] = useState<TierInfo | null>(null);
   const [country, setCountry] = useState<string | null>(null);
-  const [isLocationPublic, setIsLocationPublic] = useState(false);
+  const [isLocationPublic, setIsLocationPublic] = useState(true);
 
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [totalVideos] = useState(0);
@@ -161,13 +161,15 @@ export function useSellerProfile(username: string) {
         const sanitizedCountry = resolvedCountrySource ? sanitizeStrict(resolvedCountrySource) : '';
         setCountry(sanitizedCountry || null);
 
-        const locationPublicValue =
+        const rawLocationPublic =
           typeof profileData?.isLocationPublic === 'boolean'
             ? profileData.isLocationPublic
             : typeof userData?.isLocationPublic === 'boolean'
               ? userData.isLocationPublic
-              : false;
-        setIsLocationPublic(Boolean(locationPublicValue));
+              : undefined;
+        const normalizedLocationPublic =
+          rawLocationPublic === undefined ? true : Boolean(rawLocationPublic);
+        setIsLocationPublic(normalizedLocationPublic);
         setFollowers(userData.subscriberCount || 0);
         setAverageRating(userData.rating ?? null);
 

@@ -51,6 +51,10 @@ const userSchema = new mongoose.Schema({
     maxlength: 56,
     default: ''
   },
+  isLocationPublic: {
+    type: Boolean,
+    default: true
+  },
   profilePic: {
     type: String,
     default: 'https://via.placeholder.com/150' // Default avatar

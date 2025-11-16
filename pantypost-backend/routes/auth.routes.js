@@ -56,6 +56,19 @@ router.post('/signup', async (req, res) => {
     const email = cleanEmail(raw.email);
     const password = raw.password;
     const role = normalizeRole(raw.role);
+    const countryInput = typeof raw.country === 'string' ? raw.country.trim() : '';
+
+    if (!countryInput) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.MISSING_REQUIRED_FIELD,
+          message: 'Country is required'
+        }
+      });
+    }
+
+    const country = countryInput.slice(0, 56);
 
     if (!isValidUsername(username)) {
       return res.status(400).json({ 
@@ -111,12 +124,17 @@ router.post('/signup', async (req, res) => {
       email,
       password,
       role,
+      country,
+      isLocationPublic: true,
       tier: role === 'seller' ? 'Tease' : undefined,
       isOnline: false,
       lastActive: new Date(),
       emailVerified: false,
       emailVerifiedAt: null
     });
+
+    newUser.settings = newUser.settings || {};
+    newUser.settings.country = country;
 
     // ============= REFERRAL TRACKING - FIXED =============
     let referrerUsername = null;

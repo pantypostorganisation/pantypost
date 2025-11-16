@@ -132,7 +132,8 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
           user?.settings?.profilePic ||
           user?.settings?.profilePicture ||
           null,
-        country: user.country || user?.settings?.country
+        country: user.country || user?.settings?.country,
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
     });
   } catch (error) {
@@ -154,7 +155,7 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
       });
     }
 
-    const { bio, profilePic, country } = req.body || {};
+    const { bio, profilePic, country, isLocationPublic } = req.body || {};
 
     // Validate bio
     if (typeof bio !== 'undefined') {
@@ -205,6 +206,16 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
       user.settings.country = country;
     }
 
+    if (typeof isLocationPublic !== 'undefined') {
+      if (typeof isLocationPublic !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid location privacy value' }
+        });
+      }
+      user.isLocationPublic = isLocationPublic;
+    }
+
     await user.save();
 
     res.json({
@@ -219,7 +230,8 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           user?.settings?.profilePic ||
           user?.settings?.profilePicture ||
           null,
-        country: user.country || user?.settings?.country
+        country: user.country || user?.settings?.country,
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
     });
   } catch (error) {
@@ -306,6 +318,7 @@ router.get('/:username/profile', async (req, res) => {
               user?.settings?.profilePicture ||
               null,
             country: user.country || user?.settings?.country,
+            isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true,
             isVerified: user.isVerified,
             role: user.role,
             joinedDate: user.joinedDate
@@ -340,6 +353,7 @@ router.get('/:username/profile', async (req, res) => {
           user?.settings?.profilePicture ||
           null,
         country: user.country || user?.settings?.country,
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true,
         isVerified: user.isVerified,
         tier: user.tier,
         subscriptionPrice: user.subscriptionPrice,
@@ -419,13 +433,14 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
     }
     
     const allowedFields = [
-      'bio', 
-      'profilePic', 
+      'bio',
+      'profilePic',
       'phoneNumber',
       'subscriptionPrice',
       'galleryImages',
       'settings',
-      'country'
+      'country',
+      'isLocationPublic'
     ];
     
     if (user.role !== 'seller') {
@@ -452,8 +467,16 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
               pic.includes('placeholder')) {
             user[field] = pic;
           }
+        } else if (field === 'isLocationPublic') {
+          if (typeof req.body[field] === 'boolean') {
+            user[field] = req.body[field];
+          }
         } else {
           user[field] = req.body[field];
+          if (field === 'country') {
+            user.settings = user.settings || {};
+            user.settings.country = req.body[field];
+          }
         }
       }
     });
