@@ -7,6 +7,7 @@ export interface SignupFormData {
   email: string;
   password: string;
   confirmPassword: string;
+  country: string;
   role: UserRole | null;
   termsAccepted: boolean;
   ageVerified: boolean;
@@ -17,6 +18,7 @@ export interface FormErrors {
   email?: string;
   password?: string;
   confirmPassword?: string;
+  country?: string;
   role?: string;
   termsAccepted?: string;
   ageVerified?: string;
@@ -60,6 +62,12 @@ export interface PasswordFieldProps {
   onConfirmChange: (value: string) => void;
   onTogglePassword: () => void;
   onToggleConfirm: () => void;
+}
+
+export interface CountryFieldProps {
+  country: string;
+  error?: string;
+  onChange: (value: string) => void;
 }
 
 export interface RoleSelectorProps {

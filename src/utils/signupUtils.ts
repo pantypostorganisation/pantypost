@@ -52,7 +52,11 @@ export const validateForm = (formData: SignupFormData): FormErrors => {
   if (!formData.role) {
     newErrors.role = 'Please select a role';
   }
-  
+
+  if (!formData.country) {
+    newErrors.country = 'Please select your country';
+  }
+
   // Terms and age verification
   if (!formData.termsAccepted) {
     newErrors.termsAccepted = 'You must accept the terms and conditions';

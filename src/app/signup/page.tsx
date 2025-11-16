@@ -21,6 +21,7 @@ import { authSchemas } from '@/utils/validation/schemas';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { securityService } from '@/services/security.service';
 import { referralService } from '@/services/referral.service';
+import CountrySelect from '@/components/signup/CountrySelect';
 
 // Referral Code Input Component
 const ReferralCodeInput: React.FC<{
@@ -136,6 +137,7 @@ export default function SignupPage() {
     email,
     password,
     confirmPassword,
+    country,
     role,
     termsAccepted,
     ageVerified,
@@ -168,6 +170,7 @@ export default function SignupPage() {
       email: email || '',
       password: password || '',
       confirmPassword: confirmPassword || '',
+      country: country || '',
       role: role || null,
       termsAccepted: termsAccepted || false,
       ageVerified: ageVerified || false,
@@ -267,7 +270,7 @@ export default function SignupPage() {
     }
 
     // Manual validation check
-    const hasErrors = !username || !email || !password || !confirmPassword || !role || 
+    const hasErrors = !username || !email || !password || !confirmPassword || !country || !role ||
                      !termsAccepted || !ageVerified || password !== confirmPassword;
 
     if (hasErrors) {
@@ -275,6 +278,7 @@ export default function SignupPage() {
       if (!email) updateField('email' as any, '');
       if (!password) updateField('password' as any, '');
       if (!confirmPassword) updateField('confirmPassword' as any, '');
+      if (!country) updateField('country' as any, '');
       if (!role) updateField('form' as any, 'Please select a role');
       if (!termsAccepted) updateField('form' as any, 'You must accept the terms');
       if (!ageVerified) updateField('form' as any, 'You must confirm you are 18+');
@@ -386,6 +390,12 @@ export default function SignupPage() {
                 email={email || ''}
                 error={errors.email}
                 onChange={(value) => handleFieldUpdate('email', value)}
+              />
+
+              <CountrySelect
+                country={country || ''}
+                error={errors.country}
+                onChange={(value) => handleFieldUpdate('country', value)}
               />
 
               <PasswordField

@@ -19,6 +19,7 @@ interface UseSecureSignupReturn {
   email: string;
   password: string;
   confirmPassword: string;
+  country: string;
   role: UserRole | null;
   termsAccepted: boolean;
   ageVerified: boolean;
@@ -33,6 +34,7 @@ interface UseSecureSignupReturn {
   handleEmailChange: (value: string) => void;
   handlePasswordChange: (value: string) => void;
   handleConfirmPasswordChange: (value: string) => void;
+  handleCountryChange: (value: string) => void;
   handleRoleChange: (role: UserRole) => void;
   handleTermsChange: (accepted: boolean) => void;
   handleAgeChange: (verified: boolean) => void;
@@ -83,6 +85,7 @@ export const useSecureSignup = (): UseSecureSignupReturn => {
     email: '',
     password: '',
     confirmPassword: '',
+    country: '',
     role: null,
     termsAccepted: false,
     ageVerified: false,
@@ -112,6 +115,7 @@ export const useSecureSignup = (): UseSecureSignupReturn => {
       email: '',
       password: '',
       confirmPassword: '',
+      country: '',
       role: null,
       termsAccepted: false,
       ageVerified: false,
@@ -220,6 +224,11 @@ export const useSecureSignup = (): UseSecureSignupReturn => {
     setState(prev => ({ ...prev, confirmPassword: value }));
   }, [validation]);
 
+  const handleCountryChange = useCallback((value: string) => {
+    validation.handleChange('country', value);
+    setState(prev => ({ ...prev, country: value }));
+  }, [validation]);
+
   const handleRoleChange = useCallback((role: UserRole) => {
     // Validate role value
     if (role !== 'buyer' && role !== 'seller') {
@@ -294,9 +303,9 @@ export const useSecureSignup = (): UseSecureSignupReturn => {
         return;
       }
       
-      // Store email and hashed password in storage (temporary until backend)
-      if (typeof window !== 'undefined') {
-        const userCredentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
+    // Store email and hashed password in storage (temporary until backend)
+    if (typeof window !== 'undefined') {
+      const userCredentials = await storageService.getItem<Record<string, any>>('userCredentials', {});
         
         // Hash password before storage (still not production-ready)
         const hashedPassword = await hashPassword(values.password);
@@ -307,6 +316,7 @@ export const useSecureSignup = (): UseSecureSignupReturn => {
           passwordHash: hashedPassword,
           createdAt: new Date().toISOString(),
           role: values.role,
+          country: values.country,
         };
         
         await storageService.setItem('userCredentials', userCredentials);
@@ -366,6 +376,7 @@ export const useSecureSignup = (): UseSecureSignupReturn => {
     email: validation.values.email,
     password: validation.values.password,
     confirmPassword: validation.values.confirmPassword,
+    country: validation.values.country,
     role: validation.values.role,
     termsAccepted: validation.values.termsAccepted,
     ageVerified: validation.values.ageVerified,
@@ -380,6 +391,7 @@ export const useSecureSignup = (): UseSecureSignupReturn => {
     handleEmailChange,
     handlePasswordChange,
     handleConfirmPasswordChange,
+    handleCountryChange,
     handleRoleChange,
     handleTermsChange,
     handleAgeChange,
