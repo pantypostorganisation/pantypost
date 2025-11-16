@@ -1591,7 +1591,7 @@ export class EnhancedUsersService {
           : undefined;
 
     const locationPublic =
-      typeof p.isLocationPublic === 'boolean' ? p.isLocationPublic : false;
+      typeof p.isLocationPublic === 'boolean' ? p.isLocationPublic : true;
 
     const socialLinks = p.socialLinks
       ? {

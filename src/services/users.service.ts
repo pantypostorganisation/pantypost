@@ -199,7 +199,7 @@ export class UsersService {
           ? (raw.galleryImages.map(p => toAbsoluteUrl(p)!).filter(Boolean) as string[])
           : undefined,
         country: typeof raw.country === 'string' ? raw.country : raw.country === null ? null : undefined,
-        isLocationPublic: typeof raw.isLocationPublic === 'boolean' ? raw.isLocationPublic : undefined,
+        isLocationPublic: typeof raw.isLocationPublic === 'boolean' ? raw.isLocationPublic : true,
       };
 
       return { success: true, data: profile };
@@ -249,7 +249,7 @@ export class UsersService {
           ? (raw.galleryImages.map((p: string) => toAbsoluteUrl(p)!).filter(Boolean) as string[])
           : undefined,
         country: typeof raw.country === 'string' ? raw.country : raw.country === null ? null : undefined,
-        isLocationPublic: typeof raw.isLocationPublic === 'boolean' ? raw.isLocationPublic : undefined,
+        isLocationPublic: typeof raw.isLocationPublic === 'boolean' ? raw.isLocationPublic : true,
       };
 
       return { success: true, data: profile };

@@ -64,7 +64,7 @@ export function useProfileData(): UseProfileDataReturn {
   const [preview, setPreview] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<string>('');
   const [country, setCountry] = useState<string>('');
-  const [isLocationPublic, setIsLocationPublic] = useState<boolean>(false);
+  const [isLocationPublic, setIsLocationPublic] = useState<boolean>(true);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   
   // Additional features
@@ -170,7 +170,10 @@ export function useProfileData(): UseProfileDataReturn {
         
         // Store original data for change tracking
         const sanitizedCountry = profile.country ? sanitizeStrict(profile.country) : '';
-        const locationPublic = Boolean(profile.isLocationPublic);
+        const locationPublic =
+          typeof profile.isLocationPublic === 'boolean'
+            ? profile.isLocationPublic
+            : true;
 
         setCountry(sanitizedCountry);
         setIsLocationPublic(locationPublic);

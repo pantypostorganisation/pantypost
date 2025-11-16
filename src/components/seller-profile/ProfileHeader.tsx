@@ -151,7 +151,9 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
 
   const sanitizedUsername = sanitizeStrict(username);
   const sanitizedCountry = country ? sanitizeStrict(country) : '';
-  const canDisplayLocation = Boolean(isLocationPublic && sanitizedCountry);
+  const normalizedLocationPublic =
+    typeof isLocationPublic === 'boolean' ? isLocationPublic : true;
+  const canDisplayLocation = Boolean(normalizedLocationPublic && sanitizedCountry);
   const isoCode = canDisplayLocation ? getCountryCode(sanitizedCountry) : '';
   const normalizedIso = isoCode ? isoCode.toUpperCase() : '';
   const hasValidIso = normalizedIso && normalizedIso !== 'XX';
