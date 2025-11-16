@@ -86,16 +86,14 @@ export default function CountrySelect({ country, error, onChange }: CountryField
               : 'border-gray-700 focus:ring-[#ff950e]/50 focus:border-[#ff950e]'
           }`}
         >
-          <span className={selectedCountry ? 'text-white' : 'text-gray-500'}>
-            {selectedCountry ? (
-              <>
-                <span className="mr-2">{selectedCountry.flag}</span>
-                {selectedCountry.name}
-              </>
-            ) : (
-              'Select your country'
-            )}
-          </span>
+          {selectedCountry ? (
+            <span className="text-white">
+              <span className="mr-2">{selectedCountry.flag}</span>
+              {selectedCountry.name}
+            </span>
+          ) : (
+            <span className="text-gray-500">Select your country</span>
+          )}
         </button>
 
         {/* Icons */}
