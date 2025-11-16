@@ -158,7 +158,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
                       role="option"
                       aria-selected={option.name === country}
                     >
-                      <span className="text-xl emoji-font">{option.flag}</span>
+                      <span className="emoji-font">{option.flag}</span>
                       <span className="text-sm">{option.name}</span>
                     </button>
                   ))
@@ -187,10 +187,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
       </p>
 
       <style jsx>{`
-        .emoji-font {
-          font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
-        }
-        
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
         }

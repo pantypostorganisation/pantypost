@@ -37,6 +37,22 @@ a:hover {
   color: var(--color-foreground);
 }
 
+/* ======== EMOJI FONT SUPPORT ======== */
+/* Strong emoji font stack for flags on all devices */
+.emoji-font {
+  font-family:
+    "Apple Color Emoji",       /* iOS / macOS */
+    "Segoe UI Emoji",          /* Windows */
+    "Noto Color Emoji",        /* Android / many Linux distros */
+    "Segoe UI Symbol",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
 /* ======== SMOOTH APP FADE-IN ======== */
 @keyframes appFadeIn {
   from {
