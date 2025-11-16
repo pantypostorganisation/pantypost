@@ -580,12 +580,30 @@ export class EnhancedUsersService {
             profileData = this.sanitizeProfileData((response.data as any).profile);
             userData = (response.data as any).user;
           } else if ((response.data as any).username) {
-            userData = response.data as any;
+            const rawUser = response.data as any;
+            userData = rawUser;
+
+            const resolvedCountry =
+              typeof rawUser.country === 'string'
+                ? rawUser.country
+                : typeof rawUser?.settings?.country === 'string'
+                  ? rawUser.settings.country
+                  : undefined;
+
+            const resolvedLocationPublic =
+              typeof rawUser.isLocationPublic === 'boolean'
+                ? rawUser.isLocationPublic
+                : typeof rawUser?.profile?.isLocationPublic === 'boolean'
+                  ? rawUser.profile.isLocationPublic
+                  : undefined;
+
             profileData = this.sanitizeProfileData({
-              bio: (response.data as any).bio || '',
-              profilePic: (response.data as any).profilePic ?? (response.data as any).profilePicture ?? null,
-              subscriptionPrice: toPriceString((response.data as any).subscriptionPrice ?? '0'),
-              galleryImages: (response.data as any).galleryImages || [],
+              bio: rawUser.bio || '',
+              profilePic: rawUser.profilePic ?? rawUser.profilePicture ?? null,
+              subscriptionPrice: toPriceString(rawUser.subscriptionPrice ?? '0'),
+              galleryImages: rawUser.galleryImages || [],
+              country: resolvedCountry,
+              isLocationPublic: resolvedLocationPublic,
             });
           } else {
             // Unexpected format: coerce to empty profile
