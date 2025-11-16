@@ -1,6 +1,7 @@
 // src/app/layout.tsx
 import { Inter } from 'next/font/google';
 import './globals.css';
+import 'flag-icons/css/flag-icons.min.css'; // ✅ Ensure SVG flags CSS is loaded
 import ClientLayout from './ClientLayout';
 import type { Metadata, Viewport } from 'next';
 
