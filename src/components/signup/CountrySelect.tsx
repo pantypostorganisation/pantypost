@@ -6,7 +6,7 @@ import { Globe, ChevronDown, AlertCircle, Search, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CountryFieldProps } from '@/types/signup';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
-import { countriesWithFlags } from '@/utils/countries';
+import { countriesWithFlags, getCountryCode } from '@/utils/countries';
 
 export default function CountrySelect({ country, error, onChange }: CountryFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -34,7 +34,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      // Focus search input when dropdown opens
       setTimeout(() => searchInputRef.current?.focus(), 50);
     }
 
@@ -43,7 +42,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
     };
   }, [isOpen]);
 
-  // Handle keyboard navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       setIsOpen(false);
@@ -70,7 +68,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
       </label>
       
       <div className="relative">
-        {/* Dropdown Button */}
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
@@ -87,8 +84,8 @@ export default function CountrySelect({ country, error, onChange }: CountryField
           }`}
         >
           {selectedCountry ? (
-            <span className="text-white flex items-center">
-              <span className="mr-2 emoji-font">{selectedCountry.flag}</span>
+            <span className="text-white flex items-center gap-2">
+              <span className={`fi fi-${getCountryCode(selectedCountry.name)} w-5 h-4`}></span>
               <span>{selectedCountry.name}</span>
             </span>
           ) : (
@@ -96,7 +93,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
           )}
         </button>
 
-        {/* Icons */}
         <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-500">
           {selectedCountry && (
             <button
@@ -115,7 +111,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
           <Globe className="w-4 h-4" aria-hidden="true" />
         </div>
 
-        {/* Dropdown Menu */}
         <AnimatePresence>
           {isOpen && (
             <motion.div
@@ -126,7 +121,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
               className="absolute z-50 w-full mt-2 bg-[#0b0b0b] border border-gray-700 rounded-lg shadow-xl overflow-hidden"
               role="listbox"
             >
-              {/* Search Input */}
               <div className="p-2 border-b border-gray-700">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -142,7 +136,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
                 </div>
               </div>
 
-              {/* Countries List */}
               <div className="max-h-60 overflow-y-auto custom-scrollbar">
                 {filteredCountries.length > 0 ? (
                   filteredCountries.map((option) => (
@@ -158,7 +151,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
                       role="option"
                       aria-selected={option.name === country}
                     >
-                      <span className="emoji-font">{option.flag}</span>
+                      <span className={`fi fi-${getCountryCode(option.name)} w-5 h-4`}></span>
                       <span className="text-sm">{option.name}</span>
                     </button>
                   ))
@@ -173,7 +166,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
         </AnimatePresence>
       </div>
 
-      {/* Error Message */}
       {error && (
         <p id={errorId} className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
           <AlertCircle className="w-3 h-3 flex-shrink-0" />
@@ -181,7 +173,6 @@ export default function CountrySelect({ country, error, onChange }: CountryField
         </p>
       )}
 
-      {/* Help Text */}
       <p className="mt-1.5 text-xs text-gray-500">
         Required for verification purposes in certain countries
       </p>

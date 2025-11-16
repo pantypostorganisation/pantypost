@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "flag-icons/css/flag-icons.min.css";
 
 :root {
   --background: #0a0a0a;
@@ -35,22 +36,6 @@ a:hover {
   box-shadow: 0 2px 12px 0 rgba(0,0,0,0.12);
   padding: 1.5rem;
   color: var(--color-foreground);
-}
-
-/* ======== EMOJI FONT SUPPORT ======== */
-/* Strong emoji font stack for flags on all devices */
-.emoji-font {
-  font-family:
-    "Apple Color Emoji",       /* iOS / macOS */
-    "Segoe UI Emoji",          /* Windows */
-    "Noto Color Emoji",        /* Android / many Linux distros */
-    "Segoe UI Symbol",
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
-  font-size: 1.2rem;
-  line-height: 1;
 }
 
 /* ======== SMOOTH APP FADE-IN ======== */
