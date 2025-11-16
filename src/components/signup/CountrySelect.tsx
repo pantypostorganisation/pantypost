@@ -8,6 +8,9 @@ import { CountryFieldProps } from '@/types/signup';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { countriesWithFlags, getCountryCode } from '@/utils/countries';
 
+// ✅ Load flag-icons CSS globally from here
+import 'flag-icons/css/flag-icons.min.css';
+
 export default function CountrySelect({ country, error, onChange }: CountryFieldProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,10 +19,10 @@ export default function CountrySelect({ country, error, onChange }: CountryField
   const errorId = error ? 'country-error' : undefined;
 
   // Get selected country data
-  const selectedCountry = countriesWithFlags.find(c => c.name === country);
+  const selectedCountry = countriesWithFlags.find((c) => c.name === country);
 
   // Filter countries based on search
-  const filteredCountries = countriesWithFlags.filter(c =>
+  const filteredCountries = countriesWithFlags.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -66,8 +69,9 @@ export default function CountrySelect({ country, error, onChange }: CountryField
       <label htmlFor="country" className="block text-sm font-medium text-gray-300 mb-2">
         Country
       </label>
-      
+
       <div className="relative">
+        {/* Dropdown Button */}
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
@@ -85,7 +89,11 @@ export default function CountrySelect({ country, error, onChange }: CountryField
         >
           {selectedCountry ? (
             <span className="text-white flex items-center gap-2">
-              <span className={`fi fi-${getCountryCode(selectedCountry.name)} w-5 h-4`}></span>
+              {/* ✅ Flag from flag-icons */}
+              <span
+                className={`fi fi-${getCountryCode(selectedCountry.name)} w-5 h-4`}
+                aria-hidden="true"
+              ></span>
               <span>{selectedCountry.name}</span>
             </span>
           ) : (
@@ -93,6 +101,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
           )}
         </button>
 
+        {/* Icons */}
         <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-500">
           {selectedCountry && (
             <button
@@ -104,13 +113,14 @@ export default function CountrySelect({ country, error, onChange }: CountryField
               <X className="w-4 h-4" />
             </button>
           )}
-          <ChevronDown 
+          <ChevronDown
             className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-            aria-hidden="true" 
+            aria-hidden="true"
           />
           <Globe className="w-4 h-4" aria-hidden="true" />
         </div>
 
+        {/* Dropdown Menu */}
         <AnimatePresence>
           {isOpen && (
             <motion.div
@@ -121,6 +131,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
               className="absolute z-50 w-full mt-2 bg-[#0b0b0b] border border-gray-700 rounded-lg shadow-xl overflow-hidden"
               role="listbox"
             >
+              {/* Search Input */}
               <div className="p-2 border-b border-gray-700">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -136,6 +147,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
                 </div>
               </div>
 
+              {/* Countries List */}
               <div className="max-h-60 overflow-y-auto custom-scrollbar">
                 {filteredCountries.length > 0 ? (
                   filteredCountries.map((option) => (
@@ -151,7 +163,10 @@ export default function CountrySelect({ country, error, onChange }: CountryField
                       role="option"
                       aria-selected={option.name === country}
                     >
-                      <span className={`fi fi-${getCountryCode(option.name)} w-5 h-4`}></span>
+                      <span
+                        className={`fi fi-${getCountryCode(option.name)} w-5 h-4`}
+                        aria-hidden="true"
+                      ></span>
                       <span className="text-sm">{option.name}</span>
                     </button>
                   ))
@@ -166,6 +181,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
         </AnimatePresence>
       </div>
 
+      {/* Error Message */}
       {error && (
         <p id={errorId} className="mt-1.5 text-xs text-red-400 flex items-center gap-1">
           <AlertCircle className="w-3 h-3 flex-shrink-0" />
@@ -173,6 +189,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
         </p>
       )}
 
+      {/* Help Text */}
       <p className="mt-1.5 text-xs text-gray-500">
         Required for verification purposes in certain countries
       </p>
