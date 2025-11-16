@@ -36,6 +36,7 @@ export function useProfileSettings() {
   const tierData = useTierCalculation();
 
   const [selectedTierDetails, setSelectedTierDetails] = useState<any>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -278,6 +279,13 @@ export function useProfileSettings() {
   const clearAllGalleryImages = () => { void clearAllGalleryImagesAsync(); };
 
   const handleSave = async () => {
+    const sanitizedCountry = profileData.country.trim();
+    if (!sanitizedCountry) {
+      setLocationError('Please select your country.');
+      return false;
+    }
+    setLocationError(null);
+
     const payload = {
       bio: profileData.bio,
       profilePic: profileData.preview || profileData.profilePic,
@@ -286,7 +294,9 @@ export function useProfileSettings() {
         // Persist /uploads paths without API_BASE_URL prefix
         if (url.startsWith(`${API_BASE_URL}/uploads/`)) return url.replace(API_BASE_URL, '');
         return url;
-      })
+      }),
+      country: sanitizedCountry,
+      isLocationPublic: profileData.isLocationPublic,
     };
 
     await baseSaveProfile(payload);
@@ -308,6 +318,13 @@ export function useProfileSettings() {
     preview: profileData.preview,
     subscriptionPrice: profileData.subscriptionPrice,
     setSubscriptionPrice: profileData.setSubscriptionPrice,
+    country: profileData.country,
+    setCountry: (value: string) => {
+      setLocationError(null);
+      profileData.setCountry(value);
+    },
+    isLocationPublic: profileData.isLocationPublic,
+    setIsLocationPublic: profileData.setIsLocationPublic,
     profileUploading: profileData.isUploading,
     handleProfilePicChange: profileData.handleProfilePicChange,
     removeProfilePic: profileData.removeProfilePic,
@@ -340,6 +357,7 @@ export function useProfileSettings() {
     saveSuccess,
     saveError,
     isSaving,
-    handleSave
+    handleSave,
+    locationError
   };
 }

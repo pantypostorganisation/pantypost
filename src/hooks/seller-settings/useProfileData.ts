@@ -20,7 +20,11 @@ interface UseProfileDataReturn {
   setPreview: (preview: string | null) => void;
   subscriptionPrice: string;
   setSubscriptionPrice: (price: string) => void;
-  
+  country: string;
+  setCountry: (country: string) => void;
+  isLocationPublic: boolean;
+  setIsLocationPublic: (value: boolean) => void;
+
   // Gallery
   galleryImages: string[];
   setGalleryImages: (images: string[]) => void;
@@ -59,6 +63,8 @@ export function useProfileData(): UseProfileDataReturn {
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<string>('');
+  const [country, setCountry] = useState<string>('');
+  const [isLocationPublic, setIsLocationPublic] = useState<boolean>(false);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   
   // Additional features
@@ -71,7 +77,7 @@ export function useProfileData(): UseProfileDataReturn {
   const [isSaving, setIsSaving] = useState(false);
   
   // Validation errors
-  const [errors, setErrors] = useState<{ bio?: string; subscriptionPrice?: string }>({});
+  const [errors, setErrors] = useState<{ bio?: string; subscriptionPrice?: string; country?: string }>({});
   
   // Track unsaved changes
   const hasUnsavedChanges = useRef(false);
@@ -163,11 +169,19 @@ export function useProfileData(): UseProfileDataReturn {
         setGalleryImages(sanitizedGallery);
         
         // Store original data for change tracking
+        const sanitizedCountry = profile.country ? sanitizeStrict(profile.country) : '';
+        const locationPublic = Boolean(profile.isLocationPublic);
+
+        setCountry(sanitizedCountry);
+        setIsLocationPublic(locationPublic);
+
         originalData.current = {
           bio: sanitizedBio,
           profilePic: sanitizedProfilePic,
           subscriptionPrice: String(profile.subscriptionPrice || '0'),
           galleryImages: sanitizedGallery,
+          country: sanitizedCountry,
+          isLocationPublic: locationPublic,
         };
       } else {
         console.warn('[useProfileData] No profile data returned');
@@ -221,12 +235,14 @@ export function useProfileData(): UseProfileDataReturn {
 
   // Track changes
   useEffect(() => {
-    hasUnsavedChanges.current = 
+    hasUnsavedChanges.current =
       bio !== originalData.current.bio ||
       profilePic !== originalData.current.profilePic ||
       subscriptionPrice !== originalData.current.subscriptionPrice ||
-      JSON.stringify(galleryImages) !== JSON.stringify(originalData.current.galleryImages);
-  }, [bio, profilePic, subscriptionPrice, galleryImages]);
+      JSON.stringify(galleryImages) !== JSON.stringify(originalData.current.galleryImages) ||
+      country !== originalData.current.country ||
+      isLocationPublic !== originalData.current.isLocationPublic;
+  }, [bio, profilePic, subscriptionPrice, galleryImages, country, isLocationPublic]);
 
   // Internal async function for profile picture upload
   const handleProfilePicChangeAsync = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -322,7 +338,13 @@ export function useProfileData(): UseProfileDataReturn {
     // Validate all fields
     const isBioValid = validateBio(bio);
     const isPriceValid = validatePrice(subscriptionPrice);
-    
+    const sanitizedCountry = sanitizeStrict(country).trim();
+    if (!sanitizedCountry) {
+      setErrors(prev => ({ ...prev, country: 'Please select your country' }));
+      return false;
+    }
+    setErrors(prev => ({ ...prev, country: undefined }));
+
     if (!isBioValid || !isPriceValid) {
       return false;
     }
@@ -357,6 +379,8 @@ export function useProfileData(): UseProfileDataReturn {
         profilePic: sanitizedProfilePic,
         subscriptionPrice,
         galleryImages: sanitizedGallery,
+        country: sanitizedCountry,
+        isLocationPublic,
       };
 
       console.log(`[useProfileData] Saving profile for username: "${username}"`, updates);
@@ -494,6 +518,16 @@ export function useProfileData(): UseProfileDataReturn {
     validatePrice(cleaned);
   };
 
+  const secureCountrySetter = (value: string) => {
+    const sanitized = sanitizeStrict(value).slice(0, 100);
+    setCountry(sanitized);
+    setErrors(prev => ({ ...prev, country: undefined }));
+  };
+
+  const secureLocationPrivacySetter = (value: boolean) => {
+    setIsLocationPublic(Boolean(value));
+  };
+
   return {
     // Profile data
     bio,
@@ -504,7 +538,11 @@ export function useProfileData(): UseProfileDataReturn {
     setPreview,
     subscriptionPrice,
     setSubscriptionPrice: securePriceSetter,
-    
+    country,
+    setCountry: secureCountrySetter,
+    isLocationPublic,
+    setIsLocationPublic: secureLocationPrivacySetter,
+
     // Gallery
     galleryImages,
     setGalleryImages,

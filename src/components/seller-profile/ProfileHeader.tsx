@@ -29,6 +29,8 @@ import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import { z } from 'zod';
 import { resolveApiUrl } from '@/utils/url';
 import type { TierLevel } from '@/utils/sellerTiers';
+import { getCountryCode } from '@/utils/countries';
+import { flagFromIso2 } from '@/constants/countries';
 
 /** Valid TierLevel literals we accept */
 const VALID_TIERS: TierLevel[] = ['None', 'Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
@@ -89,6 +91,8 @@ const PropsSchema = z.object({
   bio: z.string().default(''),
   isVerified: z.boolean().default(false),
   sellerTierInfo: SellerTierInfoSchema,
+  country: z.string().nullable().optional(),
+  isLocationPublic: z.boolean().optional(),
   user: UserSchema,
   onShowSubscribeModal: z.function().args().returns(z.void()),
   onShowUnsubscribeModal: z.function().args().returns(z.void()),
@@ -118,6 +122,8 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
     bio,
     isVerified,
     sellerTierInfo,
+    country,
+    isLocationPublic,
     user,
     onShowSubscribeModal,
     onShowUnsubscribeModal,
@@ -144,6 +150,16 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
       : 'Subscribe';
 
   const sanitizedUsername = sanitizeStrict(username);
+  const sanitizedCountry = country ? sanitizeStrict(country) : '';
+  const canDisplayLocation = Boolean(isLocationPublic && sanitizedCountry);
+  const isoCode = canDisplayLocation ? getCountryCode(sanitizedCountry) : '';
+  const normalizedIso = isoCode ? isoCode.toUpperCase() : '';
+  const hasValidIso = normalizedIso && normalizedIso !== 'XX';
+  const countryFlag = canDisplayLocation
+    ? hasValidIso
+      ? flagFromIso2(normalizedIso)
+      : '🌐'
+    : '';
 
   // Get user activity status using the hook
   const { activityStatus, loading: activityLoading } = useUserActivityStatus(username);
@@ -328,7 +344,16 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
           {getStatusBadge()}
         </div>
 
-        <div className="text-sm text-gray-400 mb-1">Location: Private</div>
+        {canDisplayLocation && (
+          <div className="mb-2 flex justify-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/30 bg-black/60 px-3 py-1 text-xs font-semibold text-gray-100 shadow-[0_0_18px_rgba(255,149,14,0.15)]">
+              <span aria-hidden="true" className="text-base">
+                {countryFlag}
+              </span>
+              <span className="text-sm">{sanitizedCountry}</span>
+            </span>
+          </div>
+        )}
 
         <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed mt-3">
           <SecureMessageDisplay

@@ -7,6 +7,7 @@ import RequireAuth from '@/components/RequireAuth';
 import ProfileInfoCard from '@/components/seller-settings/ProfileInfoCard';
 import TierProgressCard from '@/components/seller-settings/TierProgressCard';
 import GalleryManager from '@/components/seller-settings/GalleryManager';
+import LocationPrivacyCard from '@/components/seller-settings/LocationPrivacyCard';
 import ReferralSection from '@/components/seller-settings/ReferralSection';
 import TierDetailsModal from '@/components/seller-settings/modals/TierDetailsModal';
 import SaveButton from '@/components/seller-settings/utils/SaveButton';
@@ -27,6 +28,10 @@ export default function SellerProfileSettingsPage() {
     preview,
     subscriptionPrice,
     setSubscriptionPrice,
+    country,
+    setCountry,
+    isLocationPublic,
+    setIsLocationPublic,
     profileUploading,
     handleProfilePicChange,
     removeProfilePic,
@@ -55,7 +60,8 @@ export default function SellerProfileSettingsPage() {
     saveSuccess,
     saveError,
     isSaving,
-    handleSave
+    handleSave,
+    locationError,
   } = useProfileSettings();
 
   const tierProgress = getTierProgress();
@@ -116,6 +122,16 @@ export default function SellerProfileSettingsPage() {
                     removeGalleryImage={removeGalleryImage}
                     removeSelectedFile={removeSelectedFile}
                     clearAllGalleryImages={clearAllGalleryImages}
+                  />
+                </div>
+
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
+                  <LocationPrivacyCard
+                    country={country}
+                    onCountryChange={setCountry}
+                    isLocationPublic={isLocationPublic}
+                    onLocationVisibilityChange={setIsLocationPublic}
+                    error={locationError}
                   />
                 </div>
 

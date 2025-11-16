@@ -108,6 +108,8 @@ const userProfileUpdateSchema = z.object({
   // Always KEEP this as string; convert numbers to string before sending
   subscriptionPrice: z.string().regex(/^\d+(\.\d{1,2})?$/).optional(),
   galleryImages: z.array(galleryImageValidator).max(SECURITY_LIMITS.MAX_GALLERY_IMAGES).optional(),
+  country: z.string().max(100).transform(sanitizeStrict).optional(),
+  isLocationPublic: z.boolean().optional(),
   socialLinks: z
     .object({
       twitter: z.string().url().transform(sanitizeUrl).optional(),
@@ -1581,6 +1583,16 @@ export class EnhancedUsersService {
           .filter(Boolean) as string[])
       : [];
 
+    const normalizedCountry =
+      typeof p.country === 'string'
+        ? sanitizeStrict(p.country)
+        : p.country === null
+          ? null
+          : undefined;
+
+    const locationPublic =
+      typeof p.isLocationPublic === 'boolean' ? p.isLocationPublic : false;
+
     const socialLinks = p.socialLinks
       ? {
           twitter: sanitizeUrlOrUndefined(p.socialLinks.twitter),
@@ -1596,6 +1608,8 @@ export class EnhancedUsersService {
       profilePicUpdatedAt,
       subscriptionPrice: priceStr, // <- always string
       galleryImages,
+      country: normalizedCountry,
+      isLocationPublic: locationPublic,
       socialLinks,
       completeness: p.completeness,
       lastUpdated: p.lastUpdated,
