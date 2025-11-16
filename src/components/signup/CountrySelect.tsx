@@ -1,7 +1,7 @@
 // src/components/signup/CountrySelect.tsx
 'use client';
 
-import { ChevronDown, AlertCircle } from 'lucide-react';
+import { Globe, ChevronDown, AlertCircle } from 'lucide-react';
 import { CountryFieldProps } from '@/types/signup';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { countriesWithFlags } from '@/utils/countries';
@@ -23,7 +23,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
           aria-invalid={!!error}
           aria-describedby={errorId}
           aria-required="true"
-          className={`w-full appearance-none px-4 py-2.5 pr-10 bg-black/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 ${
+          className={`w-full appearance-none px-4 py-2.5 pr-16 bg-black/50 border rounded-lg text-white focus:outline-none focus:ring-2 transition-all duration-200 ${
             error
               ? 'border-red-500/50 focus:ring-red-500/50'
               : 'border-gray-700 focus:ring-[#ff950e]/50 focus:border-[#ff950e]'
@@ -42,8 +42,9 @@ export default function CountrySelect({ country, error, onChange }: CountryField
             </option>
           ))}
         </select>
-        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center text-gray-500">
+        <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-gray-500">
           <ChevronDown className="w-4 h-4" aria-hidden="true" />
+          <Globe className="w-4 h-4" aria-hidden="true" />
         </div>
       </div>
       {error && (
