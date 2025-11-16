@@ -66,7 +66,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
   return (
     <div className="mb-4" ref={dropdownRef}>
       <label htmlFor="country" className="block text-sm font-medium text-gray-300 mb-2">
-        Country <span className="text-red-400">*</span>
+        Country
       </label>
       
       <div className="relative">
@@ -87,9 +87,9 @@ export default function CountrySelect({ country, error, onChange }: CountryField
           }`}
         >
           {selectedCountry ? (
-            <span className="text-white">
-              <span className="mr-2">{selectedCountry.flag}</span>
-              {selectedCountry.name}
+            <span className="text-white flex items-center">
+              <span className="mr-2 emoji-font">{selectedCountry.flag}</span>
+              <span>{selectedCountry.name}</span>
             </span>
           ) : (
             <span className="text-gray-500">Select your country</span>
@@ -158,7 +158,7 @@ export default function CountrySelect({ country, error, onChange }: CountryField
                       role="option"
                       aria-selected={option.name === country}
                     >
-                      <span className="text-xl">{option.flag}</span>
+                      <span className="text-xl emoji-font">{option.flag}</span>
                       <span className="text-sm">{option.name}</span>
                     </button>
                   ))
@@ -187,6 +187,10 @@ export default function CountrySelect({ country, error, onChange }: CountryField
       </p>
 
       <style jsx>{`
+        .emoji-font {
+          font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
+        }
+        
         .custom-scrollbar::-webkit-scrollbar {
           width: 8px;
         }
