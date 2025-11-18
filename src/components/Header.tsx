@@ -954,7 +954,6 @@ export default function Header(): React.ReactElement | null {
       <header className="bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#0a0a0a] text-white shadow-2xl px-4 lg:px-6 py-3 flex items-center gap-3 w-full z-40 relative border-b border-[#ff950e]/20 backdrop-blur-sm">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
-            <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
             {/* OPTIMIZED: Use Next.js Image with priority */}
             <Image
               src="/logo.png"
@@ -963,7 +962,7 @@ export default function Header(): React.ReactElement | null {
               height={96}
               priority
               quality={90}
-              className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300"
+              className="relative w-16 lg:w-24 h-auto transform group-hover:scale-105 transition duration-300"
             />
           </div>
         </Link>
