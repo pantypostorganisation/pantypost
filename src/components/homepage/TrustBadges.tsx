@@ -3,32 +3,24 @@
 
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import { Shield, CreditCard, Lock } from 'lucide-react';
 import { itemVariants, containerVariants } from '@/utils/motion.config';
-import type { LucideIcon } from 'lucide-react';
 
 // Define proper types for the badges
-type IconBadge = {
-  type: 'icon';
-  Icon: LucideIcon;
-  text: string;
-};
-
 type ImageBadge = {
   type: 'image';
   src: string;
   text: string;
 };
 
-type TrustBadge = IconBadge | ImageBadge;
+type TrustBadge = ImageBadge;
 
 export default function TrustBadges() {
-  // Define badges with proper typing
+  // Define badges with all new images
   const trustBadges: TrustBadge[] = [
-    { type: 'icon', Icon: Shield, text: 'Secure & Private' },
+    { type: 'image', src: '/security_badge.png', text: 'Secure & Private' },
     { type: 'image', src: '/verification_badge.png', text: 'Verified Sellers' },
-    { type: 'icon', Icon: CreditCard, text: 'Safe Payments' },
-    { type: 'icon', Icon: Lock, text: 'Encrypted' },
+    { type: 'image', src: '/card_badge.png', text: 'Safe Payments' },
+    { type: 'image', src: '/encrypted_badge.png', text: 'Encrypted' },
   ];
 
   return (
@@ -50,19 +42,15 @@ export default function TrustBadges() {
           role="img"
           aria-label={`Trust indicator: ${badge.text}`}
         >
-          {badge.type === 'image' ? (
-            <div className="w-3.5 h-3.5 relative group-hover:scale-110 transition-transform duration-200">
-              <Image
-                src={badge.src}
-                alt="Verification Badge"
-                width={14}
-                height={14}
-                className="w-full h-full object-contain"
-              />
-            </div>
-          ) : (
-            <badge.Icon className="w-3.5 h-3.5 text-[#ff950e] group-hover:scale-110 transition-transform duration-200" aria-hidden="true" />
-          )}
+          <div className="w-3.5 h-3.5 relative group-hover:scale-110 transition-transform duration-200">
+            <Image
+              src={badge.src}
+              alt={`${badge.text} Badge`}
+              width={14}
+              height={14}
+              className="w-full h-full object-contain"
+            />
+          </div>
           <span className="font-medium select-none whitespace-nowrap text-[11px] sm:text-xs">{badge.text}</span>
         </motion.span>
       ))}
