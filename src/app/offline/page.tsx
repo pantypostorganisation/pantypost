@@ -1,4 +1,4 @@
-// src/app/offline/page.tsx
+// src/app/offline/page.tsx 
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';

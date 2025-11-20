@@ -118,7 +118,7 @@ export default function LoginPage() {
       if (isDev) console.log('[Login] Auth loading stopped, stopping local loading');
       setIsLoading(false);
     }
-  }, [authError, authLoading, isLoading]);
+  }, [authError, authLoading, isLoading, mapAuthErrorMessage]);
 
   const clearCountdownInterval = useCallback(() => {
     if (countdownIntervalRef.current) {

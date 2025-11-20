@@ -17,6 +17,7 @@ import {
   destroyWebSocketService,
 } from '@/services/websocket.service';
 import { apiConfig, websocketConfig } from '@/config/environment';
+import { getWebSocketUrl } from '@/services/api.config';
 
 import type {
   WebSocketHandler,
@@ -249,9 +250,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
     console.log('[WebSocket] Initializing with token:', !!token);
 
     try {
-      const wsUrl =
-        websocketConfig.url ||
-        apiConfig.baseUrl.replace('/api', '').replace(/^http/, 'ws');
+      // FIXED: Use dynamic WebSocket URL that works on network
+      const wsUrl = getWebSocketUrl();
 
       // Lazily create service
       if (!wsService.current) {
