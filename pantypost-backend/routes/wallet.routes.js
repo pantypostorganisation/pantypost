@@ -186,6 +186,109 @@ router.get('/balance/:username', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/wallet/deposit/system - system/webhook deposits (NOWPayments, etc.)
+router.post('/deposit/system', async (req, res) => {
+  try {
+    // normalize both values to avoid sneaky spaces/newlines
+    const systemKey = (req.headers['x-api-key'] || '').trim();
+    const expectedKey = (process.env.INTERNAL_API_KEY || 'pantypost-system-webhook-key').trim();
+
+    if (!systemKey || systemKey !== expectedKey) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized: invalid system API key',
+      });
+    }
+
+    // Expected payload from your webhook handler
+    // You can tweak these names to match your /api/crypto/webhook Next.js route
+    const {
+      username,
+      amount,
+      method = 'crypto',
+      notes = 'NOWPayments deposit',
+      txId,            // NOWPayments payment_id or transaction hash
+      orderId,         // the pp-deposit-username-... string
+      source = 'nowpayments',
+    } = req.body;
+
+    // Basic validation
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ success: false, error: 'username is required' });
+    }
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Valid amount is required' });
+    }
+
+    // Find user to determine role
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Find or create wallet
+    let wallet = await Wallet.findOne({ username });
+    if (!wallet) {
+      wallet = new Wallet({
+        username,
+        role: user.role,
+        balance: 0,
+      });
+    }
+
+    const previousBalance = wallet.balance;
+
+    // Credit wallet
+    await wallet.deposit(numericAmount);
+
+    // Record transaction
+    const transaction = new Transaction({
+      type: 'deposit',
+      amount: numericAmount,
+      to: username,
+      toRole: user.role,
+      description: notes || 'Deposit via NOWPayments',
+      status: 'completed',
+      completedAt: new Date(),
+      metadata: {
+        source,
+        method,
+        txId,
+        orderId,
+      },
+    });
+    await transaction.save();
+
+    // Emit websocket updates so WalletContext sees it immediately
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
+        username,
+        user.role,
+        previousBalance,
+        wallet.balance,
+        'deposit'
+      );
+      global.webSocketService.emitTransaction(transaction);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        username,
+        newBalance: wallet.balance,
+        transactionId: transaction._id,
+      },
+    });
+  } catch (err) {
+    console.error('[Wallet] System deposit error:', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+    });
+  }
+});
+
 // POST /api/wallet/deposit - Add money to wallet (buyers only)
 router.post('/deposit', authMiddleware, async (req, res) => {
   try {
@@ -818,6 +921,107 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/wallet/admin/withdrawals - Get withdrawal requests with weekly filtering (NEW)
+router.get('/admin/withdrawals', authMiddleware, async (req, res) => {
+  try {
+    // Only admins can access
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Admin access required'
+      });
+    }
+
+    const { weekStart, weekEnd, status, username } = req.query;
+    
+    // Build query for withdrawal transactions
+    const query = {
+      type: 'withdrawal',
+      fromRole: 'seller'
+    };
+    
+    // Add status filter if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    // Add username filter if provided
+    if (username) {
+      query.from = username;
+    }
+    
+    // Add date range filter if provided
+    if (weekStart || weekEnd) {
+      query.createdAt = {};
+      if (weekStart) {
+        query.createdAt.$gte = new Date(weekStart);
+      }
+      if (weekEnd) {
+        query.createdAt.$lte = new Date(weekEnd);
+      }
+    }
+    
+    // Get withdrawal transactions with user details
+    const withdrawals = await Transaction.find(query)
+      .sort({ createdAt: -1 })
+      .limit(500);
+    
+    // Get user details for each withdrawal
+    const usernames = [...new Set(withdrawals.map(w => w.from).filter(Boolean))];
+    const users = await User.find({ 
+      username: { $in: usernames } 
+    }).select('username email isVerified verificationStatus tier');
+    
+    // Create user lookup map
+    const userMap = {};
+    users.forEach(user => {
+      userMap[user.username] = {
+        email: user.email,
+        verified: user.isVerified || user.verificationStatus === 'verified',
+        tier: user.tier || 'Tease'
+      };
+    });
+    
+    // Format response with user details
+    const formattedWithdrawals = withdrawals.map(w => ({
+      id: w._id.toString(),
+      username: w.from,
+      amount: w.amount,
+      status: w.status,
+      createdAt: w.createdAt,
+      completedAt: w.completedAt,
+      metadata: w.metadata,
+      sellerDetails: userMap[w.from] || null
+    }));
+    
+    // Calculate summary statistics
+    const pendingWithdrawals = formattedWithdrawals.filter(w => w.status === 'pending');
+    const completedWithdrawals = formattedWithdrawals.filter(w => w.status === 'completed');
+    
+    const totalPending = pendingWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+    const totalCompleted = completedWithdrawals.reduce((sum, w) => sum + w.amount, 0);
+    
+    res.json({
+      success: true,
+      data: formattedWithdrawals,
+      summary: {
+        totalWithdrawals: formattedWithdrawals.length,
+        pendingCount: pendingWithdrawals.length,
+        completedCount: completedWithdrawals.length,
+        totalPendingAmount: totalPending,
+        totalCompletedAmount: totalCompleted,
+        uniqueSellers: usernames.length
+      }
+    });
+  } catch (error) {
+    console.error('[Wallet] Error fetching withdrawals:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // ============= ADMIN ANALYTICS ROUTES =============
 
 // GET /api/wallet/admin/analytics - Complete analytics data for admin dashboard
@@ -922,7 +1126,9 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
         role: user.role,
         verified: user.verified || false,
         verificationStatus: user.verificationStatus || 'unverified',
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        email: user.email,
+        tier: user.tier
       };
     });
 
@@ -1017,7 +1223,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
         status: deposit.status,
         transactionId: deposit._id.toString(),
         notes: deposit.metadata?.notes,
-        // NEW (non-breaking, fixes wrong “seller” label in UI)
+        // NEW (non-breaking, fixes wrong "seller" label in UI)
         role,                           // <— prefer this in UI
         actor: deposit.to,              // explicit actor username
         actorRole: role                 // explicit actor role
@@ -1085,7 +1291,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
       data: {
         adminBalance,
         orderHistory,
-        depositLogs, // now includes actor/role for correct “Buyer” label
+        depositLogs, // now includes actor/role for correct "Buyer" label
         sellerWithdrawals: sellerWithdrawalsByUser,
         adminWithdrawals: formattedAdminWithdrawals,
         adminActions: allAdminActions, // includes tier credits

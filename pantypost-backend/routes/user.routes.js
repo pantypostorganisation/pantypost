@@ -9,6 +9,54 @@ const jwt = require('jsonwebtoken');
 
 // ============= USER ROUTES =============
 
+// GET /api/users/stats - Get user statistics (PUBLIC)
+router.get('/stats', async (req, res) => {
+  try {
+    const [totalUsers, totalBuyers, totalSellers, verifiedSellers] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ role: 'buyer' }),
+      User.countDocuments({ role: 'seller' }),
+      User.countDocuments({ role: 'seller', isVerified: true })
+    ]);
+
+    // Get users joined in last 24 hours
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const newUsersToday = await User.countDocuments({ 
+      createdAt: { $gte: yesterday } 
+    });
+
+    // Get users joined today (from midnight)
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const newUsersTodayActual = await User.countDocuments({ 
+      createdAt: { $gte: todayStart } 
+    });
+
+    res.json({
+      success: true,
+      data: {
+        totalUsers,
+        totalBuyers,
+        totalSellers,
+        verifiedSellers,
+        newUsersToday: newUsersTodayActual,
+        newUsers24Hours: newUsersToday,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: error.message
+      }
+    });
+  }
+});
+
 // GET /api/users - List all users with filters
 router.get('/', async (req, res) => {
   try {
@@ -84,7 +132,8 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
           user?.settings?.profilePic ||
           user?.settings?.profilePicture ||
           null,
-        country: user.country || user?.settings?.country
+        country: user.country || user?.settings?.country,
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
     });
   } catch (error) {
@@ -106,7 +155,7 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
       });
     }
 
-    const { bio, profilePic, country } = req.body || {};
+    const { bio, profilePic, country, isLocationPublic } = req.body || {};
 
     // Validate bio
     if (typeof bio !== 'undefined') {
@@ -157,6 +206,16 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
       user.settings.country = country;
     }
 
+    if (typeof isLocationPublic !== 'undefined') {
+      if (typeof isLocationPublic !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid location privacy value' }
+        });
+      }
+      user.isLocationPublic = isLocationPublic;
+    }
+
     await user.save();
 
     res.json({
@@ -171,7 +230,8 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           user?.settings?.profilePic ||
           user?.settings?.profilePicture ||
           null,
-        country: user.country || user?.settings?.country
+        country: user.country || user?.settings?.country,
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
     });
   } catch (error) {
@@ -258,6 +318,7 @@ router.get('/:username/profile', async (req, res) => {
               user?.settings?.profilePicture ||
               null,
             country: user.country || user?.settings?.country,
+            isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true,
             isVerified: user.isVerified,
             role: user.role,
             joinedDate: user.joinedDate
@@ -292,6 +353,7 @@ router.get('/:username/profile', async (req, res) => {
           user?.settings?.profilePicture ||
           null,
         country: user.country || user?.settings?.country,
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true,
         isVerified: user.isVerified,
         tier: user.tier,
         subscriptionPrice: user.subscriptionPrice,
@@ -371,12 +433,14 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
     }
     
     const allowedFields = [
-      'bio', 
-      'profilePic', 
+      'bio',
+      'profilePic',
       'phoneNumber',
       'subscriptionPrice',
       'galleryImages',
-      'settings'
+      'settings',
+      'country',
+      'isLocationPublic'
     ];
     
     if (user.role !== 'seller') {
@@ -403,8 +467,16 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
               pic.includes('placeholder')) {
             user[field] = pic;
           }
+        } else if (field === 'isLocationPublic') {
+          if (typeof req.body[field] === 'boolean') {
+            user[field] = req.body[field];
+          }
         } else {
           user[field] = req.body[field];
+          if (field === 'country') {
+            user.settings = user.settings || {};
+            user.settings.country = req.body[field];
+          }
         }
       }
     });

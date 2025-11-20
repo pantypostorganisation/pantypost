@@ -17,7 +17,7 @@ interface ReviewSectionProps {
 
 export default function ReviewSection({ order }: ReviewSectionProps) {
   const { user } = useAuth();
-  const { addReview, hasReviewed, isLoading } = useReviews();
+  const { addReview, hasReviewed } = useReviews();
   const { showToast } = useToast();
   
   const [showReviewForm, setShowReviewForm] = useState(false);
@@ -49,7 +49,8 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
 
       // Can review if order is shipped or delivered and not already reviewed
       // FIXED: Cast to any to handle the delivered status that might not be in the type definition
-      const canDoReview = (order.shippingStatus === 'shipped' || (order.shippingStatus as any) === 'delivered') && !reviewed;
+      const status = order.shippingStatus as string | undefined;
+      const canDoReview = (status === 'shipped' || status === 'delivered') && !reviewed;
       setCanReview(canDoReview);
     };
 
@@ -131,7 +132,7 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
         <div className="mt-4 p-3 bg-gray-800/30 border border-gray-700/50 rounded-lg">
           <div className="flex items-center gap-2 text-gray-500">
             <AlertCircle className="w-4 h-4" />
-            <span className="text-xs">You can review this order after it's shipped</span>
+            <span className="text-xs">You can review this order after it&apos;s shipped</span>
           </div>
         </div>
       );
@@ -144,7 +145,7 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
       <div className="mt-4">
         <button
           onClick={() => setShowReviewForm(true)}
-          className="w-full bg-gradient-to-r from-purple-600/20 to-purple-500/20 hover:from-purple-600/30 hover:to-purple-500/30 text-purple-300 py-2.5 px-4 rounded-lg font-medium transition flex items-center justify-center gap-2 border border-purple-600/30 hover:border-purple-500/50"
+          className="w-full rounded-lg border border-purple-600/30 bg-purple-600/20 py-2.5 px-4 font-medium text-purple-300 transition-colors hover:border-purple-500/50 hover:bg-purple-600/25 flex items-center justify-center gap-2"
         >
           <Star className="w-4 h-4" />
           Write a Review
@@ -155,7 +156,7 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
   }
 
   return (
-    <div className="mt-4 p-5 bg-purple-900/10 border border-purple-700/30 rounded-lg">
+    <div className="mt-4 rounded-lg border border-purple-700/30 bg-purple-900/10 p-5">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-bold text-white flex items-center gap-2">
           <Star className="w-4 h-4 text-yellow-500" />
@@ -253,14 +254,14 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
             type="button"
             onClick={() => setShowReviewForm(false)}
             disabled={isSubmitting}
-            className="flex-1 bg-gray-700/50 hover:bg-gray-700/70 text-white py-2 px-3 rounded-lg font-medium transition disabled:opacity-50 text-sm"
+            className="flex-1 rounded-lg bg-gray-700/50 py-2 px-3 text-sm font-medium text-white transition-colors hover:bg-gray-700/70 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isSubmitting || !comment || comment.trim().length < 10}
-            className="flex-1 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white py-2 px-3 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+            className="flex-1 rounded-lg bg-purple-600 py-2 px-3 text-sm font-semibold text-white transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? 'Submitting...' : 'Submit Review'}
           </button>

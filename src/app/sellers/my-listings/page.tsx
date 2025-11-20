@@ -1,12 +1,27 @@
 'use client';
 
-import { Crown, Sparkles, Gavel, BarChart2, Lock, ShieldCheck } from 'lucide-react';
+import './createListingBtn.css';
+
+import {
+  Crown,
+  Sparkles,
+  Gavel,
+  BarChart2,
+  Lock,
+  ShieldCheck,
+  LayoutDashboard,
+  ArrowUpRight,
+  PlusCircle,
+  Timer,
+} from 'lucide-react';
 import Link from 'next/link';
 import BanCheck from '@/components/BanCheck';
 import RequireAuth from '@/components/RequireAuth';
 import ListingCard from '@/components/myListings/ListingCard';
 import ListingForm from '@/components/myListings/ListingForm';
 import { useMyListings } from '@/hooks/useMyListings';
+
+const CARD_BACKGROUND = 'bg-[linear-gradient(135deg,_rgba(36,36,42,0.92),_rgba(12,12,16,0.98))]';
 
 const AUCTION_TIPS = [
   'Set a competitive starting price to attract initial bids.',
@@ -62,61 +77,140 @@ function MyListingsContent() {
     );
   }
 
-  return (
-    <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Page Title */}
-        <div className="mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-white">My Listings</h1>
-          <div className="w-16 h-1 bg-[#ff950e] mt-2 rounded-full"></div>
-        </div>
+  const totalListings = myListings?.length ?? 0;
+  const hasListings = totalListings > 0;
+  const remainingSlots = Math.max((maxListings ?? 0) - totalListings, 0);
+  const liveBadgeColorClasses = hasListings
+    ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-100'
+    : 'border-rose-500/50 bg-rose-500/15 text-rose-200';
+  const liveBadgeAnimationClass = hasListings ? 'live-badge live-badge--active' : 'live-badge live-badge--inactive';
+  const liveBadgeIconClass = hasListings ? 'text-emerald-300' : 'text-rose-400';
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-12">
+  return (
+    <main className="relative min-h-screen overflow-hidden bg-black text-white py-12 sm:py-16">
+
+      <div className="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <section className="mb-12">
+          <div className="relative rounded-[28px] bg-[linear-gradient(145deg,_rgba(120,120,130,0.35),_rgba(45,45,55,0.2)_55%,_rgba(12,12,16,0.8))] p-[1.5px] shadow-[0_24px_40px_rgba(0,0,0,0.45)]">
+            <div className="relative overflow-hidden rounded-[26px] border border-white/10 bg-black/60 p-6 sm:p-10">
+              <div className="pointer-events-none absolute inset-0 rounded-[26px] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-6px_18px_rgba(0,0,0,0.55)]" />
+              <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
+                <div className="max-w-2xl space-y-5">
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-3 py-1 text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] text-white/70">
+                    <LayoutDashboard className="h-4 w-4 text-[#ff950e]" />
+                    Seller Workspace
+                  </span>
+                  <div>
+                    <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold leading-tight text-white">
+                      My Listings
+                    </h1>
+                    <p className="mt-4 text-base sm:text-lg text-white/70">
+                      Manage every listing, check performance, and launch new drops in a single, streamlined hub.
+                      Stay on-brand, stay premium, and keep your shop looking irresistible.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className={`rounded-2xl border border-white/10 ${CARD_BACKGROUND} p-4`}>
+                      <p className="text-xs uppercase tracking-wider text-white/60">Active Listings</p>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-3xl font-semibold text-white">{totalListings}</span>
+                        <ArrowUpRight className="h-4 w-4 text-[#ff950e]" />
+                      </div>
+                    </div>
+                    <div className={`rounded-2xl border border-emerald-400/30 ${CARD_BACKGROUND} p-4`}>
+                      <p className="text-xs uppercase tracking-wider text-white/70">Available Slots</p>
+                      <div className="mt-2 text-3xl font-semibold text-emerald-200">{remainingSlots}</div>
+                    </div>
+                    <div className={`rounded-2xl border border-purple-500/30 ${CARD_BACKGROUND} p-4`}>
+                      <p className="text-xs uppercase tracking-wider text-white/70">Auctions Running</p>
+                      <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-3xl font-semibold text-purple-200">{auctionCount ?? 0}</span>
+                        <Timer className="h-4 w-4 text-purple-200" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {!showForm && !editingState.isEditing && (
+                  <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-black/50 p-6 text-center">
+                    <p className="text-sm text-white/60">Launch something new</p>
+                    <div className="create-listing-glow mt-4 w-full">
+                      <button
+                        onClick={() => setShowForm(true)}
+                        className="createListingBtn flex w-full items-center justify-center gap-2 text-base"
+                        disabled={atLimit}
+                        style={atLimit ? { opacity: 0.55, cursor: 'not-allowed' } : {}}
+                        aria-label="Create New Listing"
+                      >
+                        <PlusCircle className="h-5 w-5" />
+                        <span>Create Listing</span>
+                      </button>
+                    </div>
+                    <p className="mt-4 text-xs text-white/50">
+                      {isVerified ? 'Boost your presence with premium-only drops and auctions.' : 'Verify your seller account to unlock auctions and premium-only drops.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:gap-12">
           {/* Left: form + active listings */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className="space-y-8 lg:col-span-2">
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-[#1a1a1a] p-6 rounded-2xl shadow-lg border border-white/10">
-                <div className="flex justify-between items-center">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className={`group overflow-hidden rounded-2xl border border-white/10 ${CARD_BACKGROUND} p-6`}>
+                <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-white/80">Standard Listings</h3>
-                    <span className="text-4xl font-bold text-white">{standardCount ?? 0}</span>
+                    <p className="text-sm font-semibold uppercase tracking-wider text-white/60">Standard</p>
+                    <p className="mt-4 text-4xl font-bold text-white">{standardCount ?? 0}</p>
                   </div>
-                  <Sparkles className="w-10 h-10 text-white/30" />
+                  <div className="rounded-full bg-white/5 p-3 text-white/60">
+                    <Sparkles className="h-6 w-6" />
+                  </div>
                 </div>
+                <p className="mt-5 text-xs text-white/50">Keep your storefront fresh with rotating standard listings.</p>
               </div>
-              <div className="bg-[#1a1a1a] p-6 rounded-2xl shadow-lg border border-[#ff950e]/60">
-                <div className="flex justify-between items-center">
+              <div className={`group overflow-hidden rounded-2xl border border-[#ff950e]/40 ${CARD_BACKGROUND} p-6`}>
+                <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-white/80">Premium Listings</h3>
-                    <span className="text-4xl font-bold text-[#ff950e]">{premiumCount ?? 0}</span>
+                    <p className="text-sm font-semibold uppercase tracking-wider text-white/70">Premium</p>
+                    <p className="mt-4 text-4xl font-bold text-[#ffb347]">{premiumCount ?? 0}</p>
                   </div>
-                  <Crown className="w-10 h-10 text-[#ff950e]" />
+                  <div className="rounded-full bg-[#ff950e]/20 p-3 text-[#ff950e]">
+                    <Crown className="h-6 w-6" />
+                  </div>
                 </div>
+                <p className="mt-5 text-xs text-white/60">Reward your subscribers with exclusive premium-only releases.</p>
               </div>
-              <div className="bg-[#1a1a1a] p-6 rounded-2xl shadow-lg border border-purple-700/70">
-                <div className="flex justify-between items-center">
+              <div className={`group overflow-hidden rounded-2xl border border-purple-500/40 ${CARD_BACKGROUND} p-6`}>
+                <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-white/80">Auction Listings</h3>
-                    <span className="text-4xl font-bold text-purple-400">{auctionCount ?? 0}</span>
+                    <p className="text-sm font-semibold uppercase tracking-wider text-white/70">Auctions</p>
+                    <p className="mt-4 text-4xl font-bold text-purple-200">{auctionCount ?? 0}</p>
                   </div>
-                  <Gavel className="w-10 h-10 text-purple-400" />
+                  <div className="rounded-full bg-purple-500/20 p-3 text-purple-200">
+                    <Gavel className="h-6 w-6" />
+                  </div>
                 </div>
+                <p className="mt-5 text-xs text-white/60">Drive urgency and higher bids with time-limited auction drops.</p>
               </div>
             </div>
 
             {/* Limit notice */}
             {atLimit && !editingState.isEditing && (
-              <div className="bg-yellow-950/60 border border-yellow-700/70 text-yellow-100 rounded-xl p-4 my-4 text-center font-semibold">
+              <div className="my-4 rounded-2xl border border-yellow-500/30 bg-black/50 p-5 text-center font-semibold text-yellow-100">
                 {isVerified ? (
                   <>You have reached the maximum of <span className="text-[#ff950e] font-bold">25</span> listings for verified sellers.</>
                 ) : (
                   <>
-                    Unverified sellers can only have <span className="text-[#ff950e] font-bold">2</span> active listings.<br />
-                    <span className="block mt-2">
+                    Unverified sellers can only have <span className="text-[#ff950e] font-bold">2</span> active listings.
+                    <span className="mt-2 block text-sm font-normal text-yellow-100/80">
                       <Link
                         href="/sellers/verify"
-                        className="text-[#ff950e] font-bold underline hover:text-white transition"
+                        className="font-semibold text-[#ffb347] underline decoration-dotted underline-offset-4 transition hover:text-white"
                       >
                         Verify your account
                       </Link>{' '}
@@ -128,30 +222,8 @@ function MyListingsContent() {
             )}
 
             {/* Create Listing CTA */}
-            {!showForm && !editingState.isEditing && (
-              <div className="flex justify-center">
-                <button
-                  onClick={() => setShowForm(true)}
-                  className="
-                    px-8 py-3 rounded-2xl font-semibold text-lg
-                    bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00]
-                    text-black shadow-lg transition-all duration-300
-                    hover:scale-105 hover:shadow-orange-400/50 hover:ring-2 hover:ring-orange-400
-                    focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-black
-                    flex items-center gap-2
-                  "
-                  disabled={atLimit}
-                  style={atLimit ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-                  aria-label="Create New Listing"
-                >
-                  <Sparkles className="w-5 h-5" />
-                  <span className="text-black">Create New Listing</span>
-                </button>
-              </div>
-            )}
-
             {(showForm || editingState.isEditing) && (
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-white/10">
+              <div className="rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8">
                 <ListingForm
                   formState={formState}
                   isEditing={editingState.isEditing}
@@ -172,28 +244,39 @@ function MyListingsContent() {
             )}
 
             {/* Active Listings */}
-            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-white/10">
-              <h2 className="text-2xl font-bold mb-6 text-white flex items-center gap-3">
-                Your Active Listings
-                <BarChart2 className="w-6 h-6 text-[#ff950e]" />
-              </h2>
-              {(myListings?.length ?? 0) === 0 ? (
-                <div className="text-center py-10 bg-black rounded-xl border border-dashed border-white/10 text-white/60">
-                  <p className="text-lg mb-2">You haven't created any listings yet.</p>
-                  <p className="text-sm">Use the button above to add your first listing.</p>
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-black/60 p-6 sm:p-8">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Your Active Listings</h2>
+                  <p className="text-sm text-white/60">Track performance, edit details, or sunset listings in seconds.</p>
                 </div>
+                <div
+                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wider ${liveBadgeColorClasses} ${liveBadgeAnimationClass}`}
+                >
+                  <BarChart2 className={`h-4 w-4 ${liveBadgeIconClass}`} />
+                  {totalListings} live
+                </div>
+              </div>
+              {hasListings ? (
+                <>
+                  <div className="mt-6 h-px w-full bg-white/10" />
+                  <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+                    {myListings!.map((listing) => (
+                      <ListingCard
+                        key={listing.id}
+                        listing={listing}
+                        analytics={getListingAnalytics(listing)}
+                        onEdit={handleEditClick}
+                        onDelete={removeListing}
+                        onCancelAuction={handleCancelAuction}
+                      />
+                    ))}
+                  </div>
+                </>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {myListings!.map((listing) => (
-                    <ListingCard
-                      key={listing.id}
-                      listing={listing}
-                      analytics={getListingAnalytics(listing)}
-                      onEdit={handleEditClick}
-                      onDelete={removeListing}
-                      onCancelAuction={handleCancelAuction}
-                    />
-                  ))}
+                <div className={`mt-6 rounded-3xl border border-dashed border-white/15 ${CARD_BACKGROUND} py-10 text-center text-white/60`}>
+                  <p className="text-lg font-medium text-white/70">You haven't created any listings yet.</p>
+                  <p className="mt-2 text-sm text-white/50">Tap “Create Listing” to drop your first item.</p>
                 </div>
               )}
             </div>
@@ -202,78 +285,68 @@ function MyListingsContent() {
           {/* Right: verification banner + tips */}
           <div className="space-y-8">
             {!isVerified && (
-              <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-yellow-700/70">
-                <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
-                  <ShieldCheck className="text-yellow-500 w-6 h-6" />
-                  Get Verified
-                </h2>
-                <div className="mb-5">
-                  <p className="text-white/80 mb-3">Verified sellers get these exclusive benefits:</p>
-                  <ul className="space-y-2 text-white/80 text-sm">
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                      <span>Post up to <span className="text-yellow-500 font-bold">25 listings</span> (vs only 2 for unverified)</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                      <span>Create <span className="text-purple-400 font-bold">auction listings</span> for higher bids</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                      <div className="flex items-center">
-                        <span>Display a verification badge </span>
-                        <img src="/verification_badge.png" alt="Verification Badge" className="w-4 h-4 mx-1" />
-                        <span> on your profile and listings</span>
+              <div className="overflow-hidden rounded-3xl border border-yellow-500/30 bg-black/60 p-6 sm:p-8 text-center">
+                <div className="flex flex-col items-center gap-4">
+                  <div className="rounded-2xl bg-yellow-500/20 p-3">
+                    <ShieldCheck className="h-6 w-6 text-yellow-200" />
+                  </div>
+                  <div className="space-y-4">
+                    <h2 className="text-2xl font-bold text-white">Get Verified</h2>
+                    <p className="text-sm text-yellow-50/80">
+                      Unlock higher limits, auctions, and a premium trust badge that reassures buyers instantly.
+                    </p>
+                    <div className="space-y-3 text-sm text-yellow-50/80">
+                      <div className="text-center">
+                        Post up to <span className="font-semibold text-yellow-200">25 listings</span> instead of 2
                       </div>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-yellow-500 font-bold text-lg leading-none">•</span>
-                      <span>Earn buyers' trust for more sales and higher prices</span>
-                    </li>
-                  </ul>
+                      <div className="text-center">
+                        Launch <span className="font-semibold text-purple-100">auction listings</span> for bidding wars
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-1 text-center">
+                        Display the verification badge
+                        <img src="/verification_badge.png" alt="Verification Badge" className="h-4 w-4" />
+                        everywhere
+                      </div>
+                      <div className="text-center">Build trust that converts browsers into buyers.</div>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Verify CTA with breathing text */}
                 <Link
                   href="/sellers/verify"
                   aria-label="Verify My Account"
-                  className="
-                    group w-full px-6 py-3 rounded-2xl font-bold text-lg
-                    flex items-center justify-center gap-2
-                    bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff6a00]
-                    text-black shadow-xl transition-all duration-300
-                    hover:scale-105 hover:shadow-green-500/40 hover:ring-2 hover:ring-green-500
-                    focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:ring-offset-black
-                  "
+                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3 text-sm font-semibold text-black transition focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-200/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
-                  <ShieldCheck className="w-5 h-5 text-black transition-transform duration-300 group-hover:rotate-12" />
-                  <span className="tracking-wide text-black breathe-green-hover">
-                    Verify My Account
-                  </span>
+                  <ShieldCheck className="h-5 w-5" />
+                  Verify my account
                 </Link>
               </div>
             )}
 
             {/* Auction Tips */}
-            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-purple-700/70">
-              <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
-                <Gavel className="text-purple-400 w-6 h-6" />
+            <div className={`overflow-hidden rounded-3xl border border-purple-500/40 ${CARD_BACKGROUND} p-6 sm:p-8`}>
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
+                <Gavel className="h-6 w-6 text-purple-200" />
                 Auction Tips
               </h2>
-              <ul className="space-y-4 text-white/80 text-sm">
+              <p className="mt-2 text-sm text-purple-50/70">Create scarcity, fuel excitement, and keep bidders coming back.</p>
+              <ul className="mt-6 space-y-4 text-sm text-purple-50/80">
                 {AUCTION_TIPS.map((tip, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <span className="text-purple-400 font-bold text-lg leading-none">•</span>
+                  <li key={index} className="flex items-start gap-3">
+                    <span className="mt-1 inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-purple-200/50 text-xs font-semibold text-purple-100">
+                      {index + 1}
+                    </span>
                     <span>{tip}</span>
                   </li>
                 ))}
               </ul>
               {!isVerified && (
-                <div className="mt-5 pt-4 border-t border-white/10">
-                  <div className="flex items-center gap-2">
-                    <Lock className="text-yellow-500 w-5 h-5" />
-                    <p className="text-yellow-300 text-sm">
-                      <Link href="/sellers/verify" className="underline hover:text-yellow-200">
+                <div className={`mt-6 rounded-2xl border border-purple-200/20 ${CARD_BACKGROUND} p-4`}>
+                  <div className="flex items-start gap-3">
+                    <Lock className="h-5 w-5 flex-shrink-0 text-yellow-300" />
+                    <p className="text-xs text-purple-50/70">
+                      <Link href="/sellers/verify" className="font-semibold text-yellow-200 underline decoration-dotted underline-offset-4 hover:text-yellow-100">
                         Get verified
                       </Link>{' '}
                       to unlock auction listings!
@@ -284,16 +357,17 @@ function MyListingsContent() {
             </div>
 
             {/* Premium Tips */}
-            <div className="bg-[#1a1a1a] p-6 sm:p-8 rounded-2xl shadow-lg border border-[#ff950e]/60">
-              <h2 className="text-2xl font-bold mb-5 text-white flex items-center gap-3">
-                <Crown className="text-[#ff950e] w-6 h-6" />
+            <div className={`overflow-hidden rounded-3xl border border-[#ff950e]/40 ${CARD_BACKGROUND} p-6 sm:p-8`}>
+              <h2 className="flex items-center gap-3 text-2xl font-bold text-white">
+                <Crown className="h-6 w-6 text-[#ffb347]" />
                 Premium Seller Tips
               </h2>
-              <ul className="space-y-4 text-white/80 text-sm">
+              <p className="mt-2 text-sm text-white/70">Elevate your premium catalog with subscriber-only experiences.</p>
+              <ul className="mt-6 space-y-4 text-left text-sm text-white/80 sm:max-w-2xl sm:space-y-5 sm:mx-auto">
                 {PREMIUM_TIPS.map((tip, index) => (
-                  <li key={index} className="flex items-start gap-2">
-                    <span className="text-[#ff950e] font-bold text-lg leading-none">•</span>
-                    <span>{tip}</span>
+                  <li key={index} className="flex items-start gap-3">
+                    <span className="mt-1 inline-flex h-2.5 w-2.5 flex-shrink-0 rounded-full bg-[#ff950e]" />
+                    <span className="flex-1 leading-relaxed">{tip}</span>
                   </li>
                 ))}
               </ul>
@@ -303,6 +377,40 @@ function MyListingsContent() {
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .create-listing-glow {
+          position: relative;
+          z-index: 0;
+        }
+
+        .create-listing-glow::before {
+          content: '';
+          position: absolute;
+          inset: -12px;
+          border-radius: 9999px;
+          background: transparent;
+          filter: none;
+          opacity: 0;
+          z-index: -1;
+          animation: none;
+          pointer-events: none;
+          mask: none;
+          -webkit-mask: none;
+        }
+
+        @keyframes orbitGlow {
+          0% {
+            transform: rotate(0deg) scale(1);
+          }
+          50% {
+            transform: rotate(180deg) scale(1.015);
+          }
+          100% {
+            transform: rotate(360deg) scale(1);
+          }
+        }
+      `}</style>
     </main>
   );
 }

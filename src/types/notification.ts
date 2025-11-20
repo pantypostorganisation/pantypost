@@ -1,4 +1,5 @@
 // src/types/notification.ts
+
 export interface Notification {
   id: string;
   _id?: string;

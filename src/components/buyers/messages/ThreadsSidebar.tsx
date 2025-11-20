@@ -311,9 +311,9 @@ export default function ThreadsSidebar({
   }, [buyerRequests]);
   
   return (
-    <div className="h-full flex flex-col bg-[#1a1a1a]">
+    <div className="flex h-full min-h-0 flex-col bg-[#1a1a1a] border-r border-gray-800">
       {/* Header */}
-      <div className="p-4 border-b border-gray-800">
+      <div className="flex-none p-4 border-b border-gray-800">
         <h2 className="text-xl font-bold text-white mb-4">Messages</h2>
         
         {/* Search */}
@@ -394,7 +394,7 @@ export default function ThreadsSidebar({
       </div>
       
       {/* Thread List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-contain min-h-0">
         {activeTab === 'messages' && (
           <>
             {filteredThreads.length === 0 ? (

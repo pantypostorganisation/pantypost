@@ -27,11 +27,11 @@ export default function ReportsList({
 
   if (safeReports.length === 0) {
     return (
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-8 text-center">
-        <AlertTriangle size={48} className="mx-auto text-gray-600 mb-4" />
-        <p className="text-gray-400 text-lg">No reports found</p>
+      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-10 text-center">
+        <AlertTriangle size={40} className="mx-auto mb-4 text-zinc-600" />
+        <p className="text-base font-medium text-zinc-300">No reports found</p>
         {searchTerm && (
-          <p className="text-gray-500 text-sm mt-2">
+          <p className="mt-2 text-sm text-zinc-500">
             Try adjusting your search terms or filters
           </p>
         )}
@@ -40,7 +40,7 @@ export default function ReportsList({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {safeReports.map((report, index) => {
         // Validate report structure
         if (!report || typeof report.id !== 'string' || !report.id || typeof report.reportee !== 'string' || !report.reportee) {

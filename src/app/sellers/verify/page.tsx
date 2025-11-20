@@ -9,7 +9,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import BanCheck from '@/components/BanCheck';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { Shield } from 'lucide-react';
+import { Shield, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { verificationService } from '@/services/verification.service';
 
@@ -47,11 +47,12 @@ const LoginButton = () => {
 };
 
 export default function SellerVerifyPage() {
-  const { user } = useAuth();
+  const { user, isAuthReady, refreshSession } = useAuth();
   const router = useRouter();
   const isMountedRef = useRef(false);
 
-  const [verificationStatus, setVerificationStatus] = useState<string>('unverified');
+  // State for verification status and documents
+  const [verificationStatus, setVerificationStatus] = useState<'unverified' | 'pending' | 'verified' | 'rejected'>('unverified');
   const [code, setCode] = useState('');
   const [codePhoto, setCodePhoto] = useState<string | null>(null);
   const [idFront, setIdFront] = useState<string | null>(null);
@@ -68,27 +69,78 @@ export default function SellerVerifyPage() {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  // Initialize verification status and code
-  useEffect(() => {
-    if (!user) {
+  // Load verification status from backend
+  const loadVerificationStatus = useCallback(async () => {
+    if (!user || !isMountedRef.current) {
       setIsLoading(false);
       return;
     }
 
-    loadVerificationStatus();
-  }, [user]);
-
-  const loadVerificationStatus = async () => {
-    if (!user || !isMountedRef.current) return;
+    console.log('[VerifyPage] Loading verification status for user:', user.username);
 
     try {
-      // Get verification status from backend
+      // CRITICAL: Use the backend user verification status from AuthContext
+      // The User model has these fields: isVerified, verificationStatus
+      const backendStatus = user.verificationStatus || 'unverified';
+      const isVerified = user.isVerified || false;
+
+      console.log('[VerifyPage] User verification data:', {
+        verificationStatus: backendStatus,
+        isVerified: isVerified
+      });
+
+      // Determine the actual status to display
+      let displayStatus: 'unverified' | 'pending' | 'verified' | 'rejected' = 'unverified';
+
+      // Priority order: isVerified flag takes precedence
+      if (isVerified) {
+        displayStatus = 'verified';
+      } else if (backendStatus === 'pending') {
+        displayStatus = 'pending';
+      } else if (backendStatus === 'rejected') {
+        displayStatus = 'rejected';
+      } else {
+        displayStatus = 'unverified';
+      }
+
+      console.log('[VerifyPage] Display status:', displayStatus);
+
+      // Get detailed status from verification service
       const result = await verificationService.getVerificationStatus();
       
       if (result.success && result.data) {
-        setVerificationStatus(result.data.status);
-        if (result.data.rejectionReason) {
-          setRejectionReason(result.data.rejectionReason);
+        console.log('[VerifyPage] Verification service data:', result.data);
+        
+        // FIXED: Only use service status if user is NOT verified
+        // If isVerified is true, always show verified state regardless of service response
+        if (!isVerified) {
+          const serviceStatus = result.data.status as 'unverified' | 'pending' | 'verified' | 'rejected';
+          
+          // Map 'approved' to 'verified' for compatibility
+          const mappedStatus = serviceStatus === 'approved' as any ? 'verified' : serviceStatus;
+          
+          if (isMountedRef.current) {
+            setVerificationStatus(mappedStatus || displayStatus);
+            
+            if (result.data.rejectionReason) {
+              setRejectionReason(result.data.rejectionReason);
+            }
+          }
+        } else {
+          // User is verified, use the display status (which is 'verified')
+          if (isMountedRef.current) {
+            setVerificationStatus(displayStatus);
+            
+            // Still get rejection reason if available (for history)
+            if (result.data.rejectionReason) {
+              setRejectionReason(result.data.rejectionReason);
+            }
+          }
+        }
+      } else {
+        // Fallback to user's status from AuthContext
+        if (isMountedRef.current) {
+          setVerificationStatus(displayStatus);
         }
       }
 
@@ -96,7 +148,7 @@ export default function SellerVerifyPage() {
       const storedCode = localStorage.getItem(`verification_code_${user.username}`);
       let nextCode: string;
       
-      if (verificationStatus === 'rejected' || !storedCode) {
+      if (displayStatus === 'rejected' || !storedCode) {
         // Generate new code if rejected or no existing code
         nextCode = generateVerificationCode(user.username);
         localStorage.setItem(`verification_code_${user.username}`, nextCode);
@@ -108,21 +160,25 @@ export default function SellerVerifyPage() {
         setCode(nextCode);
       }
 
-      // Load stored documents if in pending/verified state
-      if (result.data?.status === 'pending' || result.data?.status === 'verified') {
+      // Load stored documents if in pending/verified/rejected state
+      if (displayStatus !== 'unverified') {
         const storedDocs = localStorage.getItem(`verification_docs_${user.username}`);
         if (storedDocs) {
-          const docs = JSON.parse(storedDocs);
-          if (isMountedRef.current) {
-            setCodePhoto(docs.codePhoto || null);
-            setIdFront(docs.idFront || null);
-            setIdBack(docs.idBack || null);
-            setPassport(docs.passport || null);
+          try {
+            const docs = JSON.parse(storedDocs);
+            if (isMountedRef.current) {
+              setCodePhoto(docs.codePhoto || null);
+              setIdFront(docs.idFront || null);
+              setIdBack(docs.idBack || null);
+              setPassport(docs.passport || null);
+            }
+          } catch (parseError) {
+            console.error('[VerifyPage] Error parsing stored docs:', parseError);
           }
         }
       }
     } catch (err) {
-      console.error('Error loading verification status:', err);
+      console.error('[VerifyPage] Error loading verification status:', err);
       if (isMountedRef.current) {
         setError(err instanceof Error ? err.message : 'Failed to load verification status');
       }
@@ -131,12 +187,28 @@ export default function SellerVerifyPage() {
         setIsLoading(false);
       }
     }
-  };
+  }, [user]);
 
-  // Submit handler
+  // Initialize verification status when auth is ready and user is available
+  useEffect(() => {
+    if (!isAuthReady) {
+      return;
+    }
+
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    loadVerificationStatus();
+  }, [isAuthReady, user, loadVerificationStatus]);
+
+  // Submit handler for unverified and rejected states
   const handleSubmit = useCallback(
     async (docs: any) => {
       if (!isMountedRef.current || !user) return;
+
+      console.log('[VerifyPage] Submitting verification documents...');
 
       try {
         if (!docs || typeof docs !== 'object') throw new Error('Invalid verification documents');
@@ -149,11 +221,17 @@ export default function SellerVerifyPage() {
         const result = await verificationService.submitVerification(docs);
         
         if (result.success) {
+          console.log('[VerifyPage] Verification submitted successfully');
+          
+          // Update local state
           setVerificationStatus('pending');
           setCodePhoto(docs.codePhoto);
           setIdFront(docs.idFront || null);
           setIdBack(docs.idBack || null);
           setPassport(docs.passport || null);
+          
+          // Refresh user session to get updated verification status
+          await refreshSession();
           
           // Redirect to profile after short delay
           setTimeout(() => {
@@ -165,14 +243,14 @@ export default function SellerVerifyPage() {
           throw new Error(result.error?.message || 'Failed to submit verification');
         }
       } catch (err) {
-        console.error('Error submitting verification:', err);
+        console.error('[VerifyPage] Error submitting verification:', err);
         if (isMountedRef.current) {
           setError(err instanceof Error ? err.message : 'Failed to submit verification');
         }
         throw err; // Re-throw to let the component handle it
       }
     },
-    [user, router]
+    [user, router, refreshSession]
   );
 
   // View image fullscreen
@@ -185,13 +263,13 @@ export default function SellerVerifyPage() {
     if (isMountedRef.current) setCurrentImage(image);
   }, []);
 
-  // Loading
-  if (isLoading) {
+  // Loading state
+  if (!isAuthReady || isLoading) {
     return (
       <BanCheck>
         <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
           <div className="bg-[#121212] rounded-xl shadow-xl p-8 max-w-md w-full border border-gray-800">
-            <div className="w-8 h-8 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin mx-auto mb-4"></div>
+            <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
             <p className="text-gray-400 text-center">Loading verification page...</p>
           </div>
         </div>
@@ -199,7 +277,7 @@ export default function SellerVerifyPage() {
     );
   }
 
-  // Error
+  // Error state
   if (error) {
     return (
       <BanCheck>
@@ -226,7 +304,7 @@ export default function SellerVerifyPage() {
       <BanCheck>
         <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
           <div className="bg-[#121212] rounded-xl shadow-xl p-8 max-w-md w-full border border-gray-800">
-            <Shield className="w-12 h-12 text-[#ff950e] mb-4" />
+            <Shield className="w-12 h-12 text-[#ff950e] mb-4 mx-auto" />
             <h1 className="text-2xl font-bold mb-4">Seller Verification</h1>
             <p className="text-gray-400">You must be logged in as a seller to access this page.</p>
             <LoginButton />
@@ -259,7 +337,9 @@ export default function SellerVerifyPage() {
     );
   }
 
-  // VERIFIED
+  console.log('[VerifyPage] Rendering state:', verificationStatus);
+
+  // VERIFIED STATE
   if (verificationStatus === 'verified') {
     return (
       <BanCheck>
@@ -268,7 +348,7 @@ export default function SellerVerifyPage() {
     );
   }
 
-  // PENDING
+  // PENDING STATE
   if (verificationStatus === 'pending') {
     return (
       <BanCheck>
@@ -288,7 +368,7 @@ export default function SellerVerifyPage() {
     );
   }
 
-  // REJECTED
+  // REJECTED STATE
   if (verificationStatus === 'rejected') {
     return (
       <BanCheck>
@@ -304,7 +384,7 @@ export default function SellerVerifyPage() {
     );
   }
 
-  // DEFAULT (unverified first-time)
+  // DEFAULT - UNVERIFIED STATE (First time)
   return (
     <BanCheck>
       <UnverifiedState user={user} code={code} onSubmit={handleSubmit} />

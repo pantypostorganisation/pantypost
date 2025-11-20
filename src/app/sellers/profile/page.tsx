@@ -7,6 +7,8 @@ import RequireAuth from '@/components/RequireAuth';
 import ProfileInfoCard from '@/components/seller-settings/ProfileInfoCard';
 import TierProgressCard from '@/components/seller-settings/TierProgressCard';
 import GalleryManager from '@/components/seller-settings/GalleryManager';
+import LocationPrivacyCard from '@/components/seller-settings/LocationPrivacyCard';
+import ReferralSection from '@/components/seller-settings/ReferralSection';
 import TierDetailsModal from '@/components/seller-settings/modals/TierDetailsModal';
 import SaveButton from '@/components/seller-settings/utils/SaveButton';
 import TierDisplaySection from '@/components/seller-settings/TierDisplaySection';
@@ -26,6 +28,10 @@ export default function SellerProfileSettingsPage() {
     preview,
     subscriptionPrice,
     setSubscriptionPrice,
+    country,
+    setCountry,
+    isLocationPublic,
+    setIsLocationPublic,
     profileUploading,
     handleProfilePicChange,
     removeProfilePic,
@@ -54,7 +60,8 @@ export default function SellerProfileSettingsPage() {
     saveSuccess,
     saveError,
     isSaving,
-    handleSave
+    handleSave,
+    locationError,
   } = useProfileSettings();
 
   const tierProgress = getTierProgress();
@@ -63,39 +70,88 @@ export default function SellerProfileSettingsPage() {
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <main className="min-h-screen bg-black text-white py-10 px-4">
-          <div className="max-w-6xl mx-auto">
-            <h1 className="text-3xl font-bold mb-2 text-[#ff950e]">My Profile</h1>
-            <p className="text-gray-400 mb-8">Manage your seller profile and photo gallery</p>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <main className="min-h-screen bg-gradient-to-b from-black via-[#0f0a06] to-black text-white py-12 px-4">
+          <div className="max-w-7xl mx-auto space-y-12">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
               {/* Left column - Profile info and tier progress */}
-              <div className="lg:col-span-1 space-y-6">
-                <ProfileInfoCard
-                  username={user?.username}
-                  bio={bio}
-                  setBio={setBio}
-                  preview={preview}
-                  profilePic={profilePic}
-                  subscriptionPrice={subscriptionPrice}
-                  setSubscriptionPrice={setSubscriptionPrice}
-                  handleProfilePicChange={handleProfilePicChange}
-                  removeProfilePic={removeProfilePic}
-                  profilePicInputRef={profilePicInputRef}
-                  isUploading={profileUploading}
-                />
-
-                {/* Save Button with loading and error states */}
-                <div className="flex justify-center">
-                  <SaveButton 
-                    onClick={handleSave} 
-                    showSuccess={saveSuccess}
-                    showError={saveError} // Now correctly passing string | undefined
-                    isLoading={isSaving}
+              <div className="xl:col-span-1 space-y-8">
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
+                  <ProfileInfoCard
+                    username={user?.username}
+                    bio={bio}
+                    setBio={setBio}
+                    preview={preview}
+                    profilePic={profilePic}
+                    subscriptionPrice={subscriptionPrice}
+                    setSubscriptionPrice={setSubscriptionPrice}
+                    handleProfilePicChange={handleProfilePicChange}
+                    removeProfilePic={removeProfilePic}
+                    profilePicInputRef={profilePicInputRef}
+                    isUploading={profileUploading}
                   />
                 </div>
 
-                {sellerTierInfo && (
+                {/* Save Button with loading and error states */}
+                <div className="rounded-3xl border border-white/5 bg-gradient-to-br from-[#1a120f] to-black p-6 text-center">
+                  <div className="mx-auto flex max-w-xs flex-col items-center gap-4 text-sm text-gray-300">
+                    <p className="text-base font-medium text-white">Ready to publish your latest changes?</p>
+                    <p className="text-xs text-gray-400">
+                      Click save to sync profile updates with buyers instantly. Your gallery uploads are stored securely.
+                    </p>
+                    <SaveButton
+                      onClick={handleSave}
+                      showSuccess={saveSuccess}
+                      showError={saveError}
+                      isLoading={isSaving}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Right column - Gallery */}
+              <div className="xl:col-span-2 space-y-8">
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
+                  <GalleryManager
+                    galleryImages={galleryImages}
+                    selectedFiles={selectedFiles}
+                    isUploading={galleryUploading}
+                    uploadProgress={uploadProgress}
+                    multipleFileInputRef={multipleFileInputRef}
+                    handleMultipleFileChange={handleMultipleFileChange}
+                    uploadGalleryImages={uploadGalleryImages}
+                    removeGalleryImage={removeGalleryImage}
+                    removeSelectedFile={removeSelectedFile}
+                    clearAllGalleryImages={clearAllGalleryImages}
+                  />
+                </div>
+
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
+                  <LocationPrivacyCard
+                    country={country}
+                    onCountryChange={setCountry}
+                    isLocationPublic={isLocationPublic}
+                    onLocationVisibilityChange={setIsLocationPublic}
+                    error={locationError}
+                  />
+                </div>
+
+                <div className="rounded-3xl border border-dashed border-[#ff950e]/40 bg-[#ff950e]/5 p-6 text-sm text-[#ffb347]">
+                  <p className="font-medium text-[#ffcb80]">Pro tip</p>
+                  <p className="mt-2 text-xs text-[#ffd9a3] leading-relaxed">
+                    Highlight a mix of lifestyle, detail, and teaser shots to give buyers a richer preview of what&apos;s available
+                    through subscriptions and custom requests.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Referral Section - NEW */}
+            <ReferralSection />
+
+            {/* Tier Progress & Display Section */}
+            {sellerTierInfo && (
+              <div className="flex flex-col gap-10">
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
                   <TierProgressCard
                     sellerTierInfo={sellerTierInfo}
                     userStats={userStats}
@@ -103,35 +159,17 @@ export default function SellerProfileSettingsPage() {
                     nextTier={nextTier}
                     onTierClick={setSelectedTierDetails}
                   />
-                )}
+                </div>
+                <div className="rounded-3xl border border-white/5 bg-black/40 p-1 backdrop-blur">
+                  <TierDisplaySection
+                    sellerTierInfo={sellerTierInfo}
+                    userStats={userStats}
+                    nextTier={nextTier}
+                    selectedTierDetails={selectedTierDetails}
+                    onTierSelect={setSelectedTierDetails}
+                  />
+                </div>
               </div>
-
-              {/* Right column - Gallery */}
-              <div className="lg:col-span-2">
-                <GalleryManager
-                  galleryImages={galleryImages}
-                  selectedFiles={selectedFiles}
-                  isUploading={galleryUploading}
-                  uploadProgress={uploadProgress}
-                  multipleFileInputRef={multipleFileInputRef}
-                  handleMultipleFileChange={handleMultipleFileChange}
-                  uploadGalleryImages={uploadGalleryImages}
-                  removeGalleryImage={removeGalleryImage}
-                  removeSelectedFile={removeSelectedFile}
-                  clearAllGalleryImages={clearAllGalleryImages}
-                />
-              </div>
-            </div>
-
-            {/* Tier Display Section */}
-            {sellerTierInfo && (
-              <TierDisplaySection
-                sellerTierInfo={sellerTierInfo}
-                userStats={userStats}
-                nextTier={nextTier}
-                selectedTierDetails={selectedTierDetails}
-                onTierSelect={setSelectedTierDetails}
-              />
             )}
           </div>
 

@@ -2,12 +2,13 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import {
   Bell,
   ShoppingBag,
@@ -22,19 +23,26 @@ import {
   DollarSign,
   Crown,
   Shield,
-  Heart,
   RotateCcw,
   Trash2,
   Ban,
   Menu,
   X,
 } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
-import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
+import { resolveApiUrl } from '@/utils/url';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
+import dynamic from 'next/dynamic';
+
+// OPTIMIZED: Lazy load HeaderSearch to reduce initial bundle
+const HeaderSearch = dynamic(() => import('@/components/HeaderSearch').then(mod => ({ default: mod.HeaderSearch })), {
+  ssr: false,
+  loading: () => null
+});
 
 type UINotification = {
   id: string;
@@ -81,8 +89,42 @@ const useInterval = (callback: () => void, delay: number | null) => {
   };
 };
 
+// OPTIMIZED: Memoized mobile link component to prevent re-renders
+const MobileLink = memo(({ 
+  href, 
+  icon, 
+  label, 
+  badge, 
+  onClick 
+}: { 
+  href: string; 
+  icon: React.ReactNode; 
+  label: string; 
+  badge?: number;
+  onClick: () => void;
+}) => (
+  <Link
+    href={href}
+    className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1"
+    onClick={onClick}
+    style={{ touchAction: 'manipulation' }}
+  >
+    <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg">
+      {icon}
+    </div>
+    <span className="flex-1">{label}</span>
+    {badge && badge > 0 && (
+      <span className="bg-[#ff950e] text-black text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
+        {badge}
+      </span>
+    )}
+  </Link>
+));
+MobileLink.displayName = 'MobileLink';
+
 export default function Header(): React.ReactElement | null {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, logout } = useAuth();
   const { sellerNotifications, clearSellerNotification, restoreSellerNotification, permanentlyDeleteSellerNotification, listings, checkEndedAuctions } =
     useListings();
@@ -116,11 +158,101 @@ export default function Header(): React.ReactElement | null {
   const isMountedRef = useRef(true);
   const lastBalanceUpdate = useRef(0);
   const lastAuctionCheck = useRef(0);
-  const hasRefreshedAdminData = useRef(false);
 
-  const isAdminUser = isAdmin(user);
-  const role = user?.role ?? null;
-  const username = user?.username ? sanitizeStrict(user.username) : '';
+  // OPTIMIZED: Memoize computed values to prevent re-calculations
+  const isAdminUser = useMemo(() => isAdmin(user), [user]);
+  const role = useMemo(() => user?.role ?? null, [user?.role]);
+  const isSellerVerified = useMemo(
+    () => user?.role === 'seller' && (user?.isVerified === true || user?.verificationStatus === 'verified'),
+    [user?.role, user?.isVerified, user?.verificationStatus]
+  );
+  const canUseSearch = useMemo(() => Boolean(user && (isAdminUser || role === 'buyer' || role === 'seller')), [user, isAdminUser, role]);
+  const username = useMemo(() => (user?.username ? sanitizeStrict(user.username) : ''), [user?.username]);
+  const profileHref = useMemo(() => {
+    if (!user || isAdminUser) {
+      return null;
+    }
+
+    if (role === 'seller') {
+      return '/sellers/profile';
+    }
+
+    if (role === 'buyer' && username) {
+      return `/buyers/${username}`;
+    }
+
+    return null;
+  }, [user, isAdminUser, role, username]);
+  
+  const profileImageSrc = useMemo(() => {
+    if (!user) {
+      return null;
+    }
+
+    const rawProfilePictureValues: Array<string | null> = [
+      typeof user.profilePicture === 'string' ? user.profilePicture : null,
+      (() => {
+        const candidate = (user as unknown as Record<string, unknown>).profilePic;
+        return typeof candidate === 'string' ? candidate : null;
+      })(),
+    ];
+
+    const profilePictureCandidates = rawProfilePictureValues.filter(
+      (value): value is string => typeof value === 'string' && value.trim().length > 0
+    );
+
+    if (profilePictureCandidates.length === 0) {
+      return null;
+    }
+
+    const normalizedProfilePicture = (() => {
+      const [rawCandidate] = profilePictureCandidates;
+      const raw = rawCandidate.trim();
+      if (
+        raw.startsWith('http://') ||
+        raw.startsWith('https://') ||
+        raw.startsWith('/') ||
+        raw.startsWith('data:')
+      ) {
+        return raw;
+      }
+      return `/${raw.replace(/^\/+/, '')}`;
+    })();
+
+    const sanitized = sanitizeUrl(normalizedProfilePicture);
+    if (!sanitized) {
+      return null;
+    }
+
+    const resolved = resolveApiUrl(sanitized) ?? sanitized;
+
+    const profileUpdatedAt = (() => {
+      const extendedUser = user as unknown as Record<string, unknown>;
+      const updatedAtCandidates = [
+        extendedUser.profilePictureUpdatedAt,
+        extendedUser.profilePicUpdatedAt,
+        extendedUser.profilePicLastUpdated,
+      ];
+      for (const value of updatedAtCandidates) {
+        if (typeof value === 'string' && value.trim().length > 0) {
+          return value.trim();
+        }
+      }
+      return null;
+    })();
+
+    if (!profileUpdatedAt) {
+      return resolved;
+    }
+
+    const separator = resolved.includes('?') ? '&' : '?';
+    return `${resolved}${separator}v=${encodeURIComponent(profileUpdatedAt)}`;
+  }, [user]);
+  
+  const canDisplayUserAvatar = useMemo(() => role === 'buyer' || role === 'seller', [role]);
+  const profileAvatarSrc = useMemo(() => (canDisplayUserAvatar ? profileImageSrc ?? null : null), [canDisplayUserAvatar, profileImageSrc]);
+  const showAvatarImage = useMemo(() => canDisplayUserAvatar && Boolean(profileAvatarSrc), [canDisplayUserAvatar, profileAvatarSrc]);
+  const avatarAltText = useMemo(() => (username ? `${username}'s avatar` : 'User avatar'), [username]);
 
   useClickOutside(notifRef, () => setShowNotifDropdown(false));
   useClickOutside(mobileMenuRef, () => {
@@ -128,19 +260,51 @@ export default function Header(): React.ReactElement | null {
     setShowMobileNotifications(false);
   });
 
+  // Mobile detection
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+    };
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Calculate pending orders count for sellers
+  // Body scroll lock for mobile menu only
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    // Only lock when mobile menu or notifications are open
+    if (isMobile && (mobileMenuOpen || showMobileNotifications)) {
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
+      document.body.style.overflow = 'hidden';
+    } else {
+      const scrollY = document.body.style.top;
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      }
+    }
+
+    return () => {
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+    };
+  }, [isMobile, mobileMenuOpen, showMobileNotifications]);
+
   const pendingOrdersCount = useMemo(() => {
     if (!user?.username || user.role !== 'seller') return 0;
     
     try {
-      // Filter orders for this seller that are not yet shipped
       const sellerOrders = orderHistory.filter(order => 
         order.seller === user.username && 
         (!order.shippingStatus || order.shippingStatus === 'pending' || order.shippingStatus === 'processing')
@@ -161,13 +325,10 @@ export default function Header(): React.ReactElement | null {
     const addNotificationEmojis = (message: string): string => {
       const sanitizedMessage = sanitizeStrict(message);
       
-      // Check if the message already starts with emoji characters
-      // If it does, return it as-is (backend already added emojis)
       if (sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
         return sanitizedMessage;
       }
       
-      // Only add emojis if they're not already present
       if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
       if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `💸 ${sanitizedMessage}`;
       if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
@@ -189,7 +350,7 @@ export default function Header(): React.ReactElement | null {
       for (const n of notifications) {
         const cleanMessage = (n.message || '').replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
         const timestamp = new Date(n.timestamp || Date.now());
-        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000)); // 1 minute window
+        const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000));
         const key = `${cleanMessage}_${timeWindow}`;
 
         if (!seen.has(key)) {
@@ -298,30 +459,6 @@ export default function Header(): React.ReactElement | null {
     };
   }, [isAdminUser, user]);
 
-  useEffect(() => {
-    if (isAdminUser && user && refreshAdminData && !hasRefreshedAdminData.current) {
-      hasRefreshedAdminData.current = true;
-      let cancelled = false;
-      const refreshOnce = async () => {
-        if (cancelled) return;
-        try {
-          await refreshAdminData();
-          setBalanceUpdateTrigger((prev) => prev + 1);
-        } catch (error) {
-          console.error('[Header] Error refreshing admin data:', error);
-        }
-      };
-      void refreshOnce();
-      return () => {
-        cancelled = true;
-      };
-    }
-    if (!user || !isAdminUser) {
-      hasRefreshedAdminData.current = false;
-    }
-    return undefined;
-  }, [isAdminUser, user?.id, refreshAdminData]);
-
   const unreadCount = useMemo(() => {
     if (!user?.username) return 0;
     try {
@@ -383,7 +520,6 @@ export default function Header(): React.ReactElement | null {
     }
   }, [isAdminUser]);
 
-  // Add these handler functions for notifications
   const handleClearOne = useCallback((notification: UINotification) => {
     if (notification.source === 'legacy') {
       clearSellerNotification(notification.id);
@@ -417,7 +553,6 @@ export default function Header(): React.ReactElement | null {
         ctxClearNotification(notification.id);
       }
     });
-    // Also call the context clear all
     ctxClearAll();
     setTimeout(() => setClearingNotifications(false), 500);
   }, [processedNotifications.active, clearSellerNotification, ctxClearNotification, ctxClearAll]);
@@ -431,7 +566,6 @@ export default function Header(): React.ReactElement | null {
         ctxDeleteNotification(notification.id);
       }
     });
-    // Also call the context delete all cleared
     ctxDeleteAllCleared();
     setTimeout(() => setDeletingNotifications(false), 500);
   }, [processedNotifications.cleared, permanentlyDeleteSellerNotification, ctxDeleteNotification, ctxDeleteAllCleared]);
@@ -473,46 +607,24 @@ export default function Header(): React.ReactElement | null {
       window.removeEventListener('auctionEnded', handleAuctionEnd);
       window.removeEventListener('walletUpdated', handleWalletUpdate as EventListener);
     };
-  }, []); // once
+  }, []);
 
   useEffect(() => {
     if (showNotifDropdown) setActiveNotifTab('active');
   }, [showNotifDropdown]);
 
-  // Prevent body scroll when mobile menu is open
-  useEffect(() => {
-    if (mobileMenuOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
+  // OPTIMIZED: Memoize mobile menu close handler
+  const handleMobileMenuClose = useCallback(() => {
+    setMobileMenuOpen(false);
+    setShowMobileNotifications(false);
+  }, []);
 
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [mobileMenuOpen]);
-
-  const renderMobileLink = (href: string, icon: React.ReactNode, label: string, badge?: number) => (
-    <Link
-      href={href}
-      className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1"
-      onClick={() => setMobileMenuOpen(false)}
-      style={{ touchAction: 'manipulation' }}
-    >
-      <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg">
-        {icon}
-      </div>
-      <span className="flex-1">{label}</span>
-      {badge && badge > 0 && (
-        <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
-          {badge}
-        </span>
-      )}
-    </Link>
-  );
+  const renderMobileLink = useCallback((href: string, icon: React.ReactNode, label: string, badge?: number) => (
+    <MobileLink key={href} href={href} icon={icon} label={label} badge={badge} onClick={handleMobileMenuClose} />
+  ), [handleMobileMenuClose]);
 
   const MobileNotificationsPanel = () => (
-    <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a] to-[#111] z-10 flex flex-col">
+    <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a] to-[#111] z-[110] flex flex-col">
       <div className="flex items-center gap-2 p-4 border-b border-[#ff950e]/30">
         <button
           onClick={() => setShowMobileNotifications(false)}
@@ -608,18 +720,18 @@ export default function Header(): React.ReactElement | null {
 
   const MobileMenu = () => (
     <>
-      {/* Backdrop */}
+      {/* Increased z-index for overlay */}
       <div 
-        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 lg:hidden transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-[90] lg:hidden transition-opacity duration-300 ${
           mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setMobileMenuOpen(false)}
+        onClick={handleMobileMenuClose}
       />
       
-      {/* Menu Panel */}
+      {/* Increased z-index for menu content */}
       <div
         ref={mobileMenuRef}
-        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-50 lg:hidden transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-[100] lg:hidden transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{ touchAction: 'pan-y' }}
@@ -628,42 +740,93 @@ export default function Header(): React.ReactElement | null {
           <MobileNotificationsPanel />
         ) : (
           <>
-            {/* Header */}
-            <div className="p-4 border-b border-[#ff950e]/30">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <img src="/logo.png" alt="PantyPost" className="w-8 h-auto" />
-                  <span className="text-[#ff950e] font-bold">PantyPost</span>
-                </div>
-                <button
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="text-[#ff950e] hover:text-white transition-colors p-2"
-                  aria-label="Close menu"
-                >
-                  <X className="w-6 h-6" />
-                </button>
+            <div className="relative p-6 border-b border-[#ff950e]/30">
+              <button
+                onClick={handleMobileMenuClose}
+                className="absolute top-4 right-4 text-[#ff950e] hover:text-white transition-colors p-2 z-10"
+                aria-label="Close menu"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <div className="flex items-center justify-center">
+                {/* OPTIMIZED: Use Next.js Image component with priority for mobile menu logo */}
+                <Image
+                  src="/logo.png"
+                  alt="Panty Post - Used Panties Marketplace"
+                  width={80}
+                  height={80}
+                  priority
+                  quality={90}
+                  className="w-20 h-auto drop-shadow-2xl"
+                />
               </div>
             </div>
 
-            {/* User Info Section */}
             {user && (
-              <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
-                    {role === 'seller' && <Heart className="w-5 h-5 text-[#ff950e]" />}
-                    {role === 'buyer' && <ShoppingBag className="w-5 h-5 text-[#ff950e]" />}
-                    {isAdminUser && <Crown className="w-5 h-5 text-purple-400" />}
-                  </div>
+              profileHref ? (
+                <Link
+                  href={profileHref}
+                  onClick={handleMobileMenuClose}
+                  className="flex items-center gap-3 p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20 transition-colors duration-200 hover:bg-[#ff950e]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50"
+                >
+                  {showAvatarImage ? (
+                    <SecureImage
+                      src={profileAvatarSrc!}
+                      alt={avatarAltText}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
+                      {isAdminUser ? (
+                        <Crown className="w-5 h-5 text-purple-400" />
+                      ) : (
+                        <User className="w-5 h-5 text-[#ff950e]" />
+                      )}
+                    </div>
+                  )}
                   <div>
                     <div className="text-[#ff950e] font-bold">{username}</div>
                     <div className="text-gray-400 text-xs capitalize">{isAdminUser ? 'Admin' : role}</div>
                   </div>
+                </Link>
+              ) : (
+                <div className="p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20">
+                  <div className="flex items-center gap-3">
+                    {showAvatarImage ? (
+                      <SecureImage
+                        src={profileAvatarSrc!}
+                        alt={avatarAltText}
+                        className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
+                      />
+                    ) : (
+                      <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
+                        {isAdminUser ? (
+                          <Crown className="w-5 h-5 text-purple-400" />
+                        ) : (
+                          <User className="w-5 h-5 text-[#ff950e]" />
+                        )}
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-[#ff950e] font-bold">{username}</div>
+                      <div className="text-gray-400 text-xs capitalize">{isAdminUser ? 'Admin' : role}</div>
+                    </div>
+                  </div>
                 </div>
+              )
+            )}
+
+            {canUseSearch && (
+              <div className="p-4 border-b border-[#ff950e]/20">
+                <HeaderSearch 
+                  variant="mobile" 
+                  canUseSearch={canUseSearch}
+                  onResultClick={handleMobileMenuClose}
+                />
               </div>
             )}
 
-            {/* Navigation Links */}
-            <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
+            <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
               {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
 
               {isAdminUser && (
@@ -678,6 +841,7 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/admin/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/admin/verification-requests', <ClipboardCheck className="w-5 h-5" />, 'Verify')}
                   {renderMobileLink('/admin/wallet-management', <DollarSign className="w-5 h-5" />, 'Wallets')}
+                  {renderMobileLink('/admin/withdrawals', <DollarSign className="w-5 h-5" />, 'Withdrawals')}
                   {renderMobileLink('/wallet/admin', <WalletIcon className="w-5 h-5" />, `Platform: $${platformBalance.toFixed(2)}`)}
                 </>
               )}
@@ -688,14 +852,20 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Seller Menu</span>
                   </div>
                   {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
-                  {renderMobileLink('/sellers/profile', <User className="w-5 h-5" />, 'Profile')}
-                  {renderMobileLink('/sellers/verify', <ShieldCheck className="w-5 h-5 text-green-400" />, 'Get Verified')}
+                  {renderMobileLink(
+                    '/sellers/verify',
+                    <img
+                      src="/verification_badge.png"
+                      alt="Verification badge"
+                      className="w-5 h-5"
+                    />,
+                    isSellerVerified ? 'Verified!' : 'Get Verified'
+                  )}
                   {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/sellers/subscribers', <Users className="w-5 h-5" />, 'Analytics')}
                   {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
                   {renderMobileLink('/wallet/seller', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
                   
-                  {/* Notifications for Sellers */}
                   <button
                     onClick={() => setShowMobileNotifications(true)}
                     className="flex items-center gap-3 text-[#ff950e] hover:bg-[#ff950e]/10 p-3 rounded-lg transition-all duration-200 hover:translate-x-1 w-full"
@@ -704,14 +874,14 @@ export default function Header(): React.ReactElement | null {
                     <div className="flex items-center justify-center w-8 h-8 bg-[#ff950e]/10 rounded-lg relative">
                       <Bell className="w-5 h-5" />
                       {processedNotifications.active.length > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-[#ff950e] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[16px] text-center font-bold">
+                        <span className="absolute -top-1 -right-1 bg-[#ff950e] text-black text-[10px] rounded-full px-1.5 py-0.5 min-w-[16px] text-center font-bold">
                           {processedNotifications.active.length}
                         </span>
                       )}
                     </div>
                     <span className="flex-1">Notifications</span>
                     {processedNotifications.active.length > 0 && (
-                      <span className="bg-[#ff950e] text-white text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
+                      <span className="bg-[#ff950e] text-black text-xs rounded-full px-2 py-0.5 min-w-[24px] text-center font-bold animate-pulse">
                         {processedNotifications.active.length}
                       </span>
                     )}
@@ -736,15 +906,16 @@ export default function Header(): React.ReactElement | null {
                   <div className="pt-4 space-y-2">
                     <Link
                       href="/login"
-                      className="block text-center bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50"
-                      onClick={() => setMobileMenuOpen(false)}
+                      className="block text-center bg-gradient-to-r from-[#2a2a2a] to-[#333] hover:from-[#333] hover:to-[#444] text-white font-bold px-4 py-3 rounded-lg transition-all duration-300 border border-[#444] hover:border-[#555]"
+                      onClick={handleMobileMenuClose}
                     >
                       Log In
                     </Link>
                     <Link
                       href="/signup"
-                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30"
-                      onClick={() => setMobileMenuOpen(false)}
+                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-[0_0_30px_rgba(255,149,14,0.35)] hover:shadow-[0_0_45px_rgba(255,149,14,0.45)]"
+                      onClick={handleMobileMenuClose}
+                      style={{ color: '#2a2a2a' }}
                     >
                       Sign Up
                     </Link>
@@ -756,7 +927,7 @@ export default function Header(): React.ReactElement | null {
                 <div className="pt-4 mt-4 border-t border-[#ff950e]/20">
                   <button
                     onClick={() => {
-                      setMobileMenuOpen(false);
+                      handleMobileMenuClose();
                       logout();
                     }}
                     className="flex items-center gap-3 text-red-400 hover:bg-red-900/20 p-3 rounded-lg transition-all duration-200 w-full"
@@ -780,30 +951,48 @@ export default function Header(): React.ReactElement | null {
 
   return (
     <>
-      <header className="bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#0a0a0a] text-white shadow-2xl px-4 lg:px-6 py-3 flex justify-between items-center z-40 relative border-b border-[#ff950e]/20 backdrop-blur-sm">
+      <header className="bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#0a0a0a] text-white shadow-2xl px-4 lg:px-6 py-3 flex items-center gap-3 w-full z-40 relative border-b border-[#ff950e]/20 backdrop-blur-sm">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative">
-            <div className="absolute -inset-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] rounded-xl blur opacity-30 group-hover:opacity-50 transition duration-300"></div>
-            <img src="/logo.png" alt="PantyPost Logo" className="relative w-16 lg:w-24 h-auto drop-shadow-2xl transform group-hover:scale-105 transition duration-300" />
+            {/* OPTIMIZED: Use Next.js Image with priority */}
+            <Image
+              src="/logo.png"
+              alt="Panty Post - Used Panties Marketplace"
+              width={96}
+              height={96}
+              priority
+              quality={90}
+              className="relative w-16 lg:w-24 h-auto transform group-hover:scale-105 transition duration-300"
+            />
           </div>
         </Link>
 
-        {isMobile && (
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="lg:hidden flex items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-            aria-label="Open menu"
-          >
-            <Menu className="w-6 h-6" />
-          </button>
+        {canUseSearch && (
+          <div className="hidden md:flex flex-1 px-4 max-w-md">
+            <HeaderSearch 
+              variant="desktop" 
+              canUseSearch={canUseSearch} 
+            />
+          </div>
         )}
 
-        <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
+        <div className="flex items-center gap-2 ml-auto">
+          {isMobile && (
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="lg:hidden flex items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+              aria-label="Open menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+          )}
+
+          <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
           <Link
             href="/browse"
-            className="group flex items-center gap-1.5 bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20 text-xs"
+            className="group flex items-center gap-1.5 whitespace-nowrap bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
           >
-            <ShoppingBag className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+            <ShoppingBag className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-[#ff950e]" />
             <span className="font-medium">Browse</span>
           </Link>
 
@@ -875,6 +1064,14 @@ export default function Header(): React.ReactElement | null {
               </Link>
 
               <Link
+                href="/admin/withdrawals"
+                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
+              >
+                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Withdrawals</span>
+              </Link>
+
+              <Link
                 href="/wallet/admin"
                 className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
                 onClick={(e) => {
@@ -892,21 +1089,21 @@ export default function Header(): React.ReactElement | null {
 
           {role === 'seller' && !isAdminUser && (
             <>
-              {/* Correct order: Browse, My Listings, Profile, Get Verified, Messages, Analytics, Wallet, Orders to Fulfil, Bell, Username, Logout */}
-              
               <Link href="/sellers/my-listings" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
                 <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
                 <span>My Listings</span>
               </Link>
 
-              <Link href="/sellers/profile" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>Profile</span>
-              </Link>
-
-              <Link href="/sellers/verify" className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs">
-                <ShieldCheck className="w-3.5 h-3.5 text-green-400 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Get Verified</span>
+              <Link
+                href="/sellers/verify"
+                className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs"
+              >
+                <img
+                  src="/verification_badge.png"
+                  alt="Verification badge"
+                  className="w-3.5 h-3.5 flex-shrink-0 group-hover:scale-110 transition-transform"
+                />
+                <span className="font-medium">{isSellerVerified ? 'Verified!' : 'Get Verified'}</span>
               </Link>
 
               <Link href="/sellers/messages" className="relative group">
@@ -928,7 +1125,7 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/wallet/seller"
-                className="group flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 hover:from-[#ff950e]/20 hover:to-[#ff6b00]/20 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#ff950e]/30 hover:border-[#ff950e]/50 shadow-lg text-xs"
+                className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-purple-900/30 to-purple-700/30 hover:from-purple-800/40 hover:to-purple-600/40 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -936,8 +1133,8 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletIcon className="w-3.5 h-3.5 text-[#ff950e]" />
-                <span className="font-bold text-[#ff950e]">${Math.max(sellerBalance, 0).toFixed(2)}</span>
+                <WalletIcon className="w-3.5 h-3.5 text-purple-200 transition-colors duration-300 group-hover:text-purple-100" />
+                <span className="font-bold text-purple-100">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
 
               <Link href="/sellers/orders-to-fulfil" className="relative group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
@@ -950,6 +1147,7 @@ export default function Header(): React.ReactElement | null {
                 )}
               </Link>
 
+              {/* Increased z-index for notification dropdown */}
               <div className="relative flex items-center" ref={notifRef}>
                 <button
                   onClick={() => setShowNotifDropdown((prev) => !prev)}
@@ -966,7 +1164,7 @@ export default function Header(): React.ReactElement | null {
                 </button>
 
                 {showNotifDropdown && (
-                  <div className="absolute right-0 top-12 w-80 bg-gradient-to-b from-[#1a1a1a] to-[#111] text-white rounded-2xl shadow-2xl z-50 border border-[#ff950e]/30 overflow-hidden backdrop-blur-md">
+                  <div className="absolute right-0 top-12 w-80 bg-gradient-to-b from-[#1a1a1a] to-[#111] text-white rounded-2xl shadow-2xl z-[100] border border-[#ff950e]/30 overflow-hidden backdrop-blur-md">
                     <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 px-4 py-2 border-b border-[#ff950e]/30">
                       <div className="flex justify-between items-center">
                         <h3 className="text-sm font-bold text-[#ff950e]">Notifications</h3>
@@ -1092,7 +1290,7 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/wallet/buyer"
-                className="group flex items-center gap-1.5 bg-gradient-to-r from-purple-600/20 to-purple-700/20 hover:from-purple-600/30 hover:to-purple-700/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 shadow-lg text-xs"
+                className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-purple-900/30 to-purple-700/30 hover:from-purple-800/40 hover:to-purple-600/40 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1100,8 +1298,8 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletIcon className="w-3.5 h-3.5 text-purple-400" />
-                <span className="font-bold text-purple-400">${Math.max(buyerBalance, 0).toFixed(2)}</span>
+                <WalletIcon className="w-3.5 h-3.5 text-purple-200 transition-colors duration-300 group-hover:text-purple-100" />
+                <span className="font-bold text-purple-100">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>
 
               <Link href="/buyers/messages" className="relative group">
@@ -1128,7 +1326,7 @@ export default function Header(): React.ReactElement | null {
               </Link>
               <Link
                 href="/signup"
-                className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:shadow-[#ff950e]/30 transform hover:scale-105 border border-white/20"
+                className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 shadow-[0_0_30px_rgba(255,149,14,0.35)] hover:shadow-[0_0_45px_rgba(255,149,14,0.45)] transform hover:scale-105 border border-white/20"
                 style={{ color: '#000' }}
               >
                 Sign Up
@@ -1138,13 +1336,50 @@ export default function Header(): React.ReactElement | null {
 
           {user && (
             <div className="flex items-center gap-2 ml-1">
-              <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
-                {role === 'seller' && <Heart className="w-3.5 h-3.5 text-[#ff950e]" />}
-                {role === 'buyer' && <ShoppingBag className="w-3.5 h-3.5 text-[#ff950e]" />}
-                {isAdminUser && <Crown className="w-3.5 h-3.5 text-purple-400" />}
-                <span className="text-[#ff950e] font-bold text-xs">{username}</span>
-                <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
-              </div>
+              {profileHref ? (
+                <Link
+                  href={profileHref}
+                  className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30 transition-colors duration-200 hover:bg-[#ff950e]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50"
+                >
+                  {showAvatarImage ? (
+                    <SecureImage
+                      src={profileAvatarSrc!}
+                      alt={avatarAltText}
+                      className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                    />
+                  ) : (
+                    <>
+                      {isAdminUser ? (
+                        <Crown className="w-3.5 h-3.5 text-purple-400" />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-[#ff950e]" />
+                      )}
+                    </>
+                  )}
+                  <span className="text-[#ff950e] font-bold text-xs">{username}</span>
+                  <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
+                </Link>
+              ) : (
+                <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
+                  {showAvatarImage ? (
+                    <SecureImage
+                      src={profileAvatarSrc!}
+                      alt={avatarAltText}
+                      className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                    />
+                  ) : (
+                    <>
+                      {isAdminUser ? (
+                        <Crown className="w-3.5 h-3.5 text-purple-400" />
+                      ) : (
+                        <User className="w-3.5 h-3.5 text-[#ff950e]" />
+                      )}
+                    </>
+                  )}
+                  <span className="text-[#ff950e] font-bold text-xs">{username}</span>
+                  <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
+                </div>
+              )}
               <button
                 onClick={logout}
                 className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs cursor-pointer"
@@ -1156,6 +1391,7 @@ export default function Header(): React.ReactElement | null {
             </div>
           )}
         </nav>
+      </div>
       </header>
 
       <MobileMenu />

@@ -61,12 +61,12 @@ const getAuthToken = (): string | null => {
  * Upload a single file - NOW USES BACKEND
  * This is the main function used for profile picture uploads
  * @param file - The file to upload
- * @param uploadType - Type of upload (profile-pic, gallery, verification, listing)
+ * @param uploadType - Type of upload (profile-pic, gallery, verification, listing, message)
  * @returns Promise with upload result
  */
 export const uploadToCloudinary = async (
   file: File,
-  uploadType: 'profile-pic' | 'gallery' | 'verification' | 'listing' = 'profile-pic'
+  uploadType: 'profile-pic' | 'gallery' | 'verification' | 'listing' | 'message' = 'profile-pic'
 ): Promise<CloudinaryUploadResult> => {
   // Validate file before upload
   if (!isValidImageFile(file)) {
@@ -85,10 +85,8 @@ export const uploadToCloudinary = async (
     formData.append('gallery', file);  // Backend expects 'gallery' for gallery
   } else if (uploadType === 'listing') {
     formData.append('images', file);  // Backend expects 'images' for listing
-  } else if (uploadType === 'verification') {
-    formData.append('file', file);  // Single file for verification
   } else {
-    formData.append('file', file);  // Default to 'file'
+    formData.append('file', file);  // Verification, message, and generic uploads
   }
   
   try {
@@ -105,6 +103,8 @@ export const uploadToCloudinary = async (
       endpoint = '/upload/verification';
     } else if (uploadType === 'listing') {
       endpoint = '/upload/listing-images';
+    } else if (uploadType === 'message') {
+      endpoint = '/upload';
     }
     
     const url = buildApiUrl(endpoint);
@@ -158,10 +158,24 @@ export const uploadToCloudinary = async (
         size: file.size
       };
     }
-    
+
     // For listing uploads, data.data might have a files array
     if (uploadType === 'listing' && data.data.files) {
       uploadData = data.data.files[0];
+    }
+
+    // Message uploads use the generic upload endpoint which returns a simple payload
+    if (uploadType === 'message') {
+      const url = data.data?.url || data.url;
+      if (!url) {
+        throw new Error('Upload failed: missing file URL');
+      }
+
+      uploadData = {
+        url,
+        filename: data.data?.filename || `message_${Date.now()}`,
+        size: data.data?.size || file.size
+      };
     }
     
     // Ensure URL is absolute

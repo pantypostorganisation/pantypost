@@ -9,18 +9,18 @@ import {
   ShieldAlert,
   X,
   Smile,
-  Sparkles,
   Clock,
   CheckCircle2,
   XCircle,
   Edit3,
   ShoppingBag,
-  Package,
   ChevronLeft,
   User,
   MoreVertical,
   Ban,
-  Flag
+  Flag,
+  ArrowUp,
+  Plus
 } from 'lucide-react';
 import MessageItem from './MessageItem';
 import TypingIndicator from '@/components/messaging/TypingIndicator';
@@ -258,24 +258,29 @@ export default function ConversationView(props: ConversationViewProps) {
   }, [isMobile, messagesContainerRef]);
 
   // Auto-scroll to bottom on new messages
-  const scrollToBottom = useCallback((behavior: 'instant' | 'smooth' = 'instant') => {
-    if (!messagesContainerRef.current) return;
-    
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const scroller = messagesContainerRef.current;
+    if (!scroller) return;
+
     const isNearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 100;
-    
-    // Only auto-scroll if user is near bottom or it's a new conversation
+
     if (isNearBottom || !userHasScrolledRef.current) {
-      scroller.scrollTo({
-        top: scroller.scrollHeight,
-        behavior: behavior
+      requestAnimationFrame(() => {
+        scroller.scrollTo({
+          top: scroller.scrollHeight,
+          behavior
+        });
+
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior, block: 'end' });
+        }
       });
     }
-  }, [messagesContainerRef]);
+  }, [messagesContainerRef, messagesEndRef]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom('instant');
+    scrollToBottom('smooth');
   }, [threadMessages.length, scrollToBottom]);
 
   // Thread focus/blur
@@ -392,7 +397,7 @@ export default function ConversationView(props: ConversationViewProps) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleReply();
-        scrollToBottom('instant');
+        scrollToBottom('auto');
       }
     },
     [handleReply, scrollToBottom]
@@ -408,7 +413,7 @@ export default function ConversationView(props: ConversationViewProps) {
     
     // Scroll to bottom after sending
     setTimeout(() => {
-      scrollToBottom('instant');
+      scrollToBottom('auto');
       // Refocus input without scrolling
       if (inputRef.current) {
         (inputRef.current as any).focus({ preventScroll: true });
@@ -726,6 +731,8 @@ export default function ConversationView(props: ConversationViewProps) {
     </>
   );
 
+  const canSend = (!!replyMessage.trim() || !!selectedImage) && !isImageLoading;
+
   // Render composer
   const renderComposer = () => (
     <>
@@ -759,18 +766,41 @@ export default function ConversationView(props: ConversationViewProps) {
       )}
 
       {/* Input */}
-      <div className="px-4 py-3">
-        <div className="relative mb-2">
+      <div className="px-4 py-2">
+        <div className="flex w-full items-center gap-1.5 rounded-2xl border border-[#2a2d31] bg-[#1a1c20] px-3 py-1.5 focus-within:border-[#3d4352] focus-within:ring-1 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-1 focus-within:ring-offset-[#16161a]">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={stableHandleImageSelect}
+          />
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isImageLoading) return;
+              triggerFileInput();
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#363840] bg-[#202226] text-gray-300 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
+            title="Attach Image"
+            type="button"
+            aria-label="Attach image"
+            disabled={isImageLoading}
+          >
+            <Plus size={16} />
+          </button>
+
           <SecureTextarea
             ref={inputRef}
             value={replyMessage}
             onChange={handleTypingChange}
-            onKeyPress={handleKeyDown}
+            onKeyDown={handleKeyDown}
             onFocus={(e) => {
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="w-full p-3 pr-12 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
+            className="flex-1 self-center !bg-transparent !border-0 !shadow-none !px-0 !pt-[10px] !pb-[4px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[34px] max-h-20 !resize-none overflow-auto leading-[1.6]"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
@@ -778,86 +808,69 @@ export default function ConversationView(props: ConversationViewProps) {
             aria-label="Message"
           />
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowEmojiPicker(!showEmojiPicker);
-            }}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-              showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-            } transition-colors duration-150`}
-            title="Emoji"
-            type="button"
-            aria-label="Toggle emoji picker"
-          >
-            <Smile size={20} className="flex-shrink-0" />
-          </button>
-        </div>
-
-        {replyMessage.length > 0 && (
-          <div className="text-xs text-gray-400 mb-2 text-right">{replyMessage.length}/250</div>
-        )}
-
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-0">
-            <img
-              src="/Send_Tip_Icon.png"
-              alt="Send Tip"
-              className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
+          <div className="flex items-center gap-1.5">
+            <button
               onClick={(e) => {
                 e.stopPropagation();
-                setShowTipModal(true);
+                setShowEmojiPicker(!showEmojiPicker);
               }}
-              title="Send Tip"
-            />
-
-            <img
-              src="/Attach_Image_Icon.png"
-              alt="Attach Image"
-              className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                showEmojiPicker
+                  ? 'bg-[#ff950e] text-black focus:ring-[#ff950e]'
+                  : 'border border-transparent text-gray-300 hover:text-white hover:bg-[#272a2f] focus:ring-[#4752e2]'
               }`}
-              onClick={(e) => {
-                if (isImageLoading) return;
-                e.stopPropagation();
-                triggerFileInput();
-              }}
-              title="Attach Image"
-            />
-
-            <img
-              src="/Custom_Request_Icon.png"
-              alt="Custom Request"
-              className="w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity"
+              title="Emoji"
+              type="button"
+              aria-label="Toggle emoji picker"
+              aria-pressed={showEmojiPicker}
+            >
+              <Smile size={18} className="flex-shrink-0" />
+            </button>
+            <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowCustomRequestModal(true);
+                if (!canSend) return;
+                setShowEmojiPicker(false);
+                stableHandleReply();
               }}
-              title="Send Custom Request"
-            />
-
-            {/* Hidden file input with strict types */}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={stableHandleImageSelect}
-            />
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                canSend
+                  ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
+                  : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
+              }`}
+              aria-label="Send message"
+              disabled={!canSend}
+            >
+              <ArrowUp size={14} strokeWidth={2.5} />
+            </button>
           </div>
-
-          <img
-            src="/Send_Button.png"
-            alt="Send"
+        </div>
+        <div className="mt-2 flex items-center gap-2 text-xs text-gray-300">
+          <button
+            type="button"
             onClick={(e) => {
               e.stopPropagation();
-              stableHandleReply();
+              setShowTipModal(true);
             }}
-            className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
-              (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
-          />
+            className="flex items-center gap-1.5 rounded-full border border-[#363840] bg-[#202226] px-3 py-1 text-gray-200 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-1 focus:ring-[#4752e2]/60 focus:ring-offset-1 focus:ring-offset-[#16161a]"
+            aria-label="Send tip"
+          >
+            <img src="/Send_Tip_Icon.png" alt="Send tip" className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium uppercase tracking-wide">Tip</span>
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowCustomRequestModal(true);
+            }}
+            className="flex items-center gap-1.5 rounded-full border border-[#363840] bg-[#202226] px-3 py-1 text-gray-200 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-1 focus:ring-[#4752e2]/60 focus:ring-offset-1 focus:ring-offset-[#16161a]"
+            aria-label="Send custom request"
+          >
+            <img src="/Custom_Request_Icon.png" alt="Custom request" className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium uppercase tracking-wide">Custom</span>
+          </button>
         </div>
       </div>
 
@@ -908,15 +921,15 @@ export default function ConversationView(props: ConversationViewProps) {
   // Mobile Layout
   if (isMobile) {
     return (
-      <div className="fixed inset-0 bg-[#121212] flex flex-col overflow-hidden">
+      <div className="flex h-full flex-col overflow-hidden bg-[#121212] min-h-0">
         {/* Mobile Header */}
         {renderMobileHeader()}
 
         {/* Messages container */}
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 py-2"
-          style={{ 
+          className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
+          style={{
             WebkitOverflowScrolling: 'touch'
           }}
         >
@@ -926,9 +939,9 @@ export default function ConversationView(props: ConversationViewProps) {
         </div>
 
         {/* Composer with safe bottom */}
-        <div 
+        <div
           ref={composerRef}
-          className="bg-[#111111] border-t border-gray-800 shadow-sm flex-shrink-0 safe-bottom"
+          className="bg-[#111111] border-t border-gray-800 shadow-sm flex-none safe-bottom"
         >
           {!isUserBlocked ? (
             <div className="relative">
@@ -956,29 +969,29 @@ export default function ConversationView(props: ConversationViewProps) {
 
   // Desktop Layout
   return (
-    <div className="h-full flex flex-col bg-[#121212]">
+    <div className="flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden">
       {/* Desktop Header */}
       <div className="flex-shrink-0 bg-[#1a1a1a] border-b border-gray-800 shadow-sm">
         {renderDesktopHeader()}
       </div>
 
       {/* Desktop Messages */}
-      <div 
-        className="flex-1 overflow-y-auto bg-[#121212]" 
+      <div
+        className="flex-1 overflow-y-auto overscroll-contain bg-[#121212] min-h-0 scroll-smooth scrollbar-thin scrollbar-thumb-[#ff950e]/40 scrollbar-track-[#1a1a1a]"
         ref={messagesContainerRef}
       >
-        <div className="max-w-3xl mx-auto space-y-4 p-4">
+        <div className="max-w-3xl mx-auto space-y-3 p-4">
           {renderMessagesList()}
         </div>
       </div>
 
       {/* Desktop Composer */}
       {!isUserBlocked ? (
-        <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+        <div className="relative flex-none border-t border-gray-800 bg-[#1a1a1a]">
           {renderComposer()}
         </div>
       ) : (
-        <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+        <div className="flex flex-none items-center justify-center border-t border-gray-800 bg-[#1a1a1a] p-4 text-center text-sm text-red-400">
           <ShieldAlert size={16} className="mr-2" />
           You have blocked this seller
           <button

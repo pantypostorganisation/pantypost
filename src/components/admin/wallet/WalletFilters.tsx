@@ -43,17 +43,17 @@ export default function WalletFilters({
   };
 
   return (
-    <div className="bg-[#1a1a1a] p-6 rounded-xl border border-gray-800 shadow-lg mb-8">
-      <div className="flex flex-col lg:flex-row gap-4 mb-4">
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
         {/* Search Bar */}
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400 z-10" />
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
           <SecureInput
             type="text"
             value={searchTerm}
             onChange={handleSearchChange}
-            placeholder="Search users..."
-            className="w-full pl-10 pr-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e]"
+            placeholder="Search by username, role, or balance"
+            className="w-full rounded-xl border border-white/10 bg-[#161126] py-3 pl-11 pr-4 text-sm text-white placeholder-gray-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/30"
             maxLength={100}
             sanitize={true}
             sanitizer={sanitizeSearchQuery}
@@ -65,7 +65,7 @@ export default function WalletFilters({
         <select
           value={roleFilter}
           onChange={(e) => setRoleFilter(e.target.value as any)}
-          className="px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
+          className="rounded-xl border border-white/10 bg-[#161126] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/30"
           aria-label="Role filter"
         >
           <option value="all">All Roles</option>
@@ -77,7 +77,7 @@ export default function WalletFilters({
         <select
           value={balanceFilter}
           onChange={(e) => setBalanceFilter(e.target.value as any)}
-          className="px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
+          className="rounded-xl border border-white/10 bg-[#161126] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/30"
           aria-label="Balance filter"
         >
           <option value="all">All Balances</option>
@@ -89,7 +89,7 @@ export default function WalletFilters({
         {/* Toggle Balance Visibility */}
         <button
           onClick={() => setShowBalances(!showBalances)}
-          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition-colors flex items-center gap-2"
+          className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#161126] px-4 py-3 text-sm text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition hover:border-[#ff950e]/40 hover:text-white"
           aria-pressed={showBalances}
           aria-label="Toggle balance visibility"
         >
@@ -100,40 +100,52 @@ export default function WalletFilters({
 
       {/* Bulk Actions Bar */}
       {selectedUsers.length > 0 && (
-        <div className="flex items-center justify-between bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg p-3 mb-4">
+        <div className="flex flex-col gap-3 rounded-xl border border-[#ff950e]/30 bg-[#ff950e]/10 p-4 text-sm text-white sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-white">{selectedUsers.length} users selected</span>
-            <button onClick={() => setSelectedUsers([])} className="text-gray-400 hover:text-white" aria-label="Clear selection">
+            <span className="font-medium">{selectedUsers.length} users selected</span>
+            <button onClick={() => setSelectedUsers([])} className="text-gray-300 transition hover:text-white" aria-label="Clear selection">
               <X className="h-4 w-4" />
             </button>
           </div>
-          <button
-            onClick={() => setShowBulkModal(true)}
-            className="px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] text-black rounded-lg text-sm font-medium transition-colors"
-          >
-            Bulk Action
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="hidden max-h-14 flex-1 items-center overflow-hidden sm:flex">
+              <div className="flex flex-wrap gap-2 overflow-y-auto">
+                {selectedUsers.map((u) => (
+                  <span key={u} className="inline-flex items-center rounded-full border border-[#ff950e]/40 bg-[#ff950e]/20 px-2 py-1 text-xs text-[#ffb347]">
+                    <SecureMessageDisplay content={u} allowBasicFormatting={false} className="inline" />
+                  </span>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => setShowBulkModal(true)}
+              className="rounded-xl bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#ff6b00]"
+            >
+              Launch Bulk Action
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Selected users (optional inline peek) */}
+      {/* Selected users (mobile peek) */}
       {selectedUsers.length > 0 && (
-        <div className="mb-3 -mt-2">
-          <div className="max-h-16 overflow-y-auto">
-            {selectedUsers.map((u) => (
-              <span key={u} className="inline-block bg-[#ff950e]/20 text-[#ff950e] px-2 py-1 rounded text-xs mr-1 mb-1">
-                <SecureMessageDisplay content={u} allowBasicFormatting={false} className="inline" />
-              </span>
-            ))}
-          </div>
+        <div className="flex flex-wrap gap-2 sm:hidden">
+          {selectedUsers.map((u) => (
+            <span key={u} className="inline-flex items-center rounded-full border border-[#ff950e]/40 bg-[#ff950e]/20 px-2 py-1 text-xs text-[#ffb347]">
+              <SecureMessageDisplay content={u} allowBasicFormatting={false} className="inline" />
+            </span>
+          ))}
         </div>
       )}
 
       {/* Results Summary */}
-      <div className="flex items-center justify-between text-sm text-gray-400">
-        <span>Showing {Array.isArray(displayedUsers) ? displayedUsers.length : 0} users</span>
+      <div className="flex flex-col gap-3 text-sm text-gray-300 sm:flex-row sm:items-center sm:justify-between">
+        <span>
+          Displaying {Array.isArray(displayedUsers) ? displayedUsers.length : 0} wallet
+          {Array.isArray(displayedUsers) && displayedUsers.length !== 1 ? 's' : ''}
+        </span>
         {Array.isArray(displayedUsers) && displayedUsers.length > 0 && (
-          <button onClick={handleSelectAll} className="text-[#ff950e] hover:text-[#ff6b00] transition-colors">
+          <button onClick={handleSelectAll} className="text-[#ffb347] transition hover:text-[#ffd79a]">
             {selectedUsers.length === displayedUsers.length ? 'Deselect All' : 'Select All'}
           </button>
         )}

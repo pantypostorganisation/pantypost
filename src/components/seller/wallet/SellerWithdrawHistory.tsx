@@ -1,3 +1,4 @@
+// src/components/seller/wallet/SellerWithdrawHistory.tsx
 'use client';
 
 import { Clock } from 'lucide-react';

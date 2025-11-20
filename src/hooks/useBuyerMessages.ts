@@ -156,20 +156,73 @@ export const useBuyerMessages = () => {
         console.log('[useBuyerMessages] Loading initial data...');
         console.log('[useBuyerMessages] User:', user.username);
         console.log('[useBuyerMessages] Is initialized:', isInitialized);
-        
+
         // If messages context is not initialized, refresh
         if (!isInitialized) {
           console.log('[useBuyerMessages] Context not initialized, refreshing...');
           await refreshMessages();
         }
-        
+
         setInitialLoadComplete(true);
         setMounted(true);
       }
     };
-    
+
     loadInitialData();
   }, [user, isInitialized, refreshMessages, initialLoadComplete]);
+
+  // Refresh messages when returning to the tab/app
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+
+    let isRefreshing = false;
+    let lastRefresh = 0;
+
+    const refreshIfVisible = async (force = false) => {
+      if (!force && document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const now = Date.now();
+      // Throttle refreshes to avoid rapid consecutive calls
+      if (isRefreshing || now - lastRefresh < 1000) {
+        return;
+      }
+
+      isRefreshing = true;
+      try {
+        await refreshMessages();
+        setMessageUpdateCounter(prev => prev + 1);
+      } finally {
+        lastRefresh = Date.now();
+        isRefreshing = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      void refreshIfVisible();
+    };
+
+    const handleFocus = () => {
+      void refreshIfVisible();
+    };
+
+    const handlePageShow = () => {
+      void refreshIfVisible(true);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [mounted, refreshMessages]);
   
   // Handle wallet context availability
   const getBuyerBalance = useCallback((username: string) => {
@@ -626,7 +679,7 @@ export const useBuyerMessages = () => {
     // Create optimistic message
     const tempId = uuidv4();
     const threadId = getConversationKey(user.username, activeThread);
-    const messageContent = replyMessage.trim() || (selectedImage ? 'Image shared' : '');
+    const messageContent = replyMessage.trim();
     
     const optimisticMsg: OptimisticMessage = {
       id: tempId,
@@ -1119,7 +1172,7 @@ export const useBuyerMessages = () => {
       
       // Upload to Cloudinary instead of just reading as base64
       console.log('Uploading image to Cloudinary...');
-      const uploadResult = await uploadToCloudinary(file);
+      const uploadResult = await uploadToCloudinary(file, 'message');
       
       // Set the Cloudinary URL, not base64 data
       setSelectedImage(uploadResult.url);

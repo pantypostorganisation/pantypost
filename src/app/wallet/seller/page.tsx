@@ -6,12 +6,11 @@ import { useAuth } from '@/context/AuthContext';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/seller/WalletHeader';
-import BalanceCard from '@/components/wallet/seller/BalanceCard';
-import EarningsCard from '@/components/wallet/seller/EarningsCard';
 import WithdrawSection from '@/components/wallet/seller/WithdrawSection';
 import RecentWithdrawals from '@/components/wallet/seller/RecentWithdrawals';
 import EmptyState from '@/components/wallet/seller/EmptyState';
 import WithdrawConfirmModal from '@/components/wallet/seller/WithdrawConfirmModal';
+import BackgroundPattern from '@/components/wallet/seller/BackgroundPattern';
 import { useSellerWallet } from '@/hooks/useSellerWallet';
 import { useRouter } from 'next/navigation';
 
@@ -32,6 +31,10 @@ function SellerWalletContent() {
     totalEarnings,
     recentWithdrawals,
     sellerSales,
+    todaysWithdrawals,
+    withdrawalLimits,
+    remainingDailyLimit,
+    validationError,
 
     // Actions
     handleWithdrawClick,
@@ -40,52 +43,58 @@ function SellerWalletContent() {
     handleKeyPress,
     handleQuickAmountSelect,
     setShowConfirmation,
-    setWithdrawAmount,
   } = useSellerWallet();
 
   // Guard against unexpected non-array values
   const salesArray = Array.isArray(sellerSales) ? sellerSales : [];
   const sortedArray = Array.isArray(sortedWithdrawals) ? sortedWithdrawals : [];
   const recentArray = Array.isArray(recentWithdrawals) ? recentWithdrawals : [];
+  const totalSalesCount = salesArray.length;
+  const hasWithdrawals = sortedArray.length > 0;
 
   return (
-    <main className="min-h-screen bg-black text-white p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <WalletHeader />
+    <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <BackgroundPattern />
 
-        {/* Balance and Earnings Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <BalanceCard balance={balance} />
-          <EarningsCard
-            totalEarnings={totalEarnings}
-            totalWithdrawn={totalWithdrawn}
-            salesCount={salesArray.length}
-          />
+      <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-10">
+          <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 sm:p-8 lg:p-10">
+            <WalletHeader
+              balance={balance}
+              totalEarnings={totalEarnings}
+              totalWithdrawn={totalWithdrawn}
+              salesCount={totalSalesCount}
+              recentWithdrawalsCount={recentArray.length}
+              remainingDailyLimit={remainingDailyLimit}
+            />
+          </section>
+
+          <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+            <WithdrawSection
+              balance={balance}
+              withdrawAmount={withdrawAmount}
+              message={message}
+              messageType={messageType}
+              isLoading={isLoading}
+              onAmountChange={handleAmountChange}
+              onKeyPress={handleKeyPress}
+              onWithdraw={handleWithdrawClick}
+              onQuickAmountSelect={handleQuickAmountSelect}
+              remainingDailyLimit={remainingDailyLimit}
+              todaysWithdrawals={todaysWithdrawals}
+              withdrawalLimits={withdrawalLimits}
+              validationError={validationError}
+            />
+
+            {hasWithdrawals ? (
+              <RecentWithdrawals withdrawals={recentArray} />
+            ) : (
+              <EmptyState showEmptyState={true} />
+            )}
+          </section>
         </div>
-
-        {/* Withdraw Section */}
-        <WithdrawSection
-          balance={balance}
-          withdrawAmount={withdrawAmount}
-          message={message}
-          messageType={messageType}
-          isLoading={isLoading}
-          onAmountChange={handleAmountChange}
-          onKeyPress={handleKeyPress}
-          onWithdraw={handleWithdrawClick}
-          onQuickAmountSelect={handleQuickAmountSelect}
-        />
-
-        {/* Recent Withdrawals or Empty State */}
-        {sortedArray.length > 0 ? (
-          <RecentWithdrawals withdrawals={recentArray} />
-        ) : (
-          <EmptyState showEmptyState={true} />
-        )}
       </div>
 
-      {/* Confirmation Modal */}
       <WithdrawConfirmModal
         showConfirmation={showConfirmation}
         setShowConfirmation={setShowConfirmation}

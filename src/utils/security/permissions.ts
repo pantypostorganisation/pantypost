@@ -1,3 +1,5 @@
+// src/utils/security/permissions.ts
+
 // Centralized role/permission helpers for the frontend
 
 export type Role = 'buyer' | 'seller' | 'admin';

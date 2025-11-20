@@ -5,39 +5,47 @@ import { Info, Download, ShoppingBag, Upload, TrendingUp } from 'lucide-react';
 
 export default function AdminMoneyFlow() {
   return (
-    <div className="bg-gradient-to-r from-[#1a1a1a] to-[#252525] rounded-xl p-6 border border-gray-800 mb-8">
-      <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-        <Info className="h-5 w-5 text-[#ff950e]" aria-hidden="true" />
-        How Your Money Machine Works
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Download className="h-8 w-8 text-blue-400" aria-hidden="true" />
+    <div className="rounded-xl border border-[#1f1f1f] bg-[#101010] p-5 shadow-[0_6px_18px_rgba(0,0,0,0.35)]">
+      <div className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-gray-200">
+        <Info className="h-4 w-4 text-[#ff950e]" aria-hidden="true" />
+        Money Flow Snapshot
+      </div>
+      <div className="grid grid-cols-1 gap-3 text-xs text-gray-300 sm:grid-cols-2">
+        <div className="flex items-start gap-3 rounded-lg border border-[#1f1f1f] bg-[#181818] p-4">
+          <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-blue-500/15">
+            <Download className="h-4 w-4 text-blue-300" aria-hidden="true" />
           </div>
-          <h4 className="font-bold text-white mb-2">1. Buyer Deposits</h4>
-          <p className="text-sm text-gray-400">Buyer adds $100 to wallet → You collect $100 upfront cash flow</p>
+          <div>
+            <p className="font-semibold text-gray-100">Buyer deposits</p>
+            <p className="leading-relaxed text-gray-400">Instant cash in platform wallets ready for future orders.</p>
+          </div>
         </div>
-        <div className="text-center">
-          <div className="w-16 h-16 bg-[#ff950e]/20 rounded-full flex items-center justify-center mx-auto mb-3">
-            <ShoppingBag className="h-8 w-8 text-[#ff950e]" aria-hidden="true" />
+        <div className="flex items-start gap-3 rounded-lg border border-[#1f1f1f] bg-[#181818] p-4">
+          <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-[#ff950e]/15">
+            <ShoppingBag className="h-4 w-4 text-[#ff950e]" aria-hidden="true" />
           </div>
-          <h4 className="font-bold text-white mb-2">2. Purchase Made</h4>
-          <p className="text-sm text-gray-400">$1000 item → Buyer pays $1100 → Seller gets $900 → You keep $200 (20%)</p>
+          <div>
+            <p className="font-semibold text-gray-100">Orders processed</p>
+            <p className="leading-relaxed text-gray-400">Buyer payments split automatically between seller earnings and fees.</p>
+          </div>
         </div>
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-            <Upload className="h-8 w-8 text-red-400" aria-hidden="true" />
+        <div className="flex items-start gap-3 rounded-lg border border-[#1f1f1f] bg-[#181818] p-4">
+          <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-red-500/15">
+            <Upload className="h-4 w-4 text-red-300" aria-hidden="true" />
           </div>
-          <h4 className="font-bold text-white mb-2">3. Seller Withdraws</h4>
-          <p className="text-sm text-gray-400">Seller requests payout of their earnings from completed sales</p>
+          <div>
+            <p className="font-semibold text-gray-100">Seller payouts</p>
+            <p className="leading-relaxed text-gray-400">Completed sales move to withdrawal queue for scheduled releases.</p>
+          </div>
         </div>
-        <div className="text-center">
-          <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-            <TrendingUp className="h-8 w-8 text-green-400" aria-hidden="true" />
+        <div className="flex items-start gap-3 rounded-lg border border-[#1f1f1f] bg-[#181818] p-4">
+          <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-md bg-green-500/15">
+            <TrendingUp className="h-4 w-4 text-green-300" aria-hidden="true" />
           </div>
-          <h4 className="font-bold text-white mb-2">4. Pure Profit</h4>
-          <p className="text-sm text-gray-400">20% profit margin on all sales + 25% from subscriptions</p>
+          <div>
+            <p className="font-semibold text-gray-100">Platform profit</p>
+            <p className="leading-relaxed text-gray-400">Transaction fees and subscriptions accumulate as retained revenue.</p>
+          </div>
         </div>
       </div>
     </div>

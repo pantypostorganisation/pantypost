@@ -66,7 +66,8 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
                 return (
                   <div
                     key={index}
-                    className="min-w-full h-full flex-shrink-0 flex items-center justify-center bg-black"
+                    className="w-full h-full flex-shrink-0 flex items-center justify-center bg-black"
+                    style={{ minWidth: '100%' }}
                   >
                     <img
                       src={src}

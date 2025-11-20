@@ -1,0 +1,1 @@
+// src/components/a11y/ScreenReaderAnnouncement.tsx

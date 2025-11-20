@@ -6,10 +6,7 @@ import { useListings } from '@/context/ListingContext';
 import { sanitizeUsername } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 
-// Dynamic API URL that works on local network
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname.match(/192\.168\.|10\.|172\./)
-  ? `http://${window.location.hostname}:5000/api`
-  : 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com/api';
 
 export function useSellerSubscription(
   username: string,

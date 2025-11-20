@@ -45,8 +45,8 @@ function MetricCard({
   value,
   currency = true,
   icon: Icon,
-  iconColor,
-  bgGradient,
+  accentBackground,
+  accentColor,
   growthRate,
   breakdown,
   loading = false
@@ -56,8 +56,8 @@ function MetricCard({
   value: number;
   currency?: boolean;
   icon: IconType;
-  iconColor: string;
-  bgGradient: string;
+  accentBackground: string;
+  accentColor: string;
   growthRate?: number;
   breakdown?: { label: string; value: number }[];
   loading?: boolean;
@@ -73,51 +73,55 @@ function MetricCard({
   const formatValue = (val: number) => (currency ? formatCurrency(val) : (Number.isFinite(val) ? val : 0).toLocaleString());
 
   const cleanGrowth = Number.isFinite(growthRate as number) ? (growthRate as number) : 0;
-
   return (
-    <div className={`bg-gradient-to-br ${bgGradient} rounded-xl p-6 border relative overflow-hidden`}>
-      <div className="absolute top-0 right-0 w-32 h-32 bg-black/10 rounded-full -translate-y-16 translate-x-16" aria-hidden="true"></div>
-      <div className="relative">
-        <div className="flex items-center gap-3 mb-4">
-          <div className={`p-3 ${iconColor} rounded-lg`} aria-hidden="true">
-            <Icon className="w-6 h-6" />
+    <div
+      className="h-full rounded-xl border border-[#1f1f1f] bg-[#101010] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.35)] transition-colors duration-200 hover:border-[#ff950e]/40 flex flex-col gap-4"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${accentBackground}`} aria-hidden="true">
+            <Icon className={`h-5 w-5 ${accentColor}`} />
           </div>
           <div>
-            <h3 className="text-sm font-medium text-gray-300">{title}</h3>
-            <p className="text-xs text-gray-500">{subtitle}</p>
+            <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
+            <p className="text-xs text-gray-500 leading-relaxed">{subtitle}</p>
           </div>
         </div>
-
-        {loading ? (
-          <div className="flex items-center gap-2 mb-2">
-            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-            <span className="text-sm text-gray-400">Calculating...</span>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-baseline gap-2 mb-2">
-              <span className="text-3xl font-bold text-white">{formatValue(value)}</span>
-              {cleanGrowth !== 0 && (
-                <span className={`text-sm flex items-center gap-1 ml-2 ${cleanGrowth > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {cleanGrowth > 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                  {Math.abs(cleanGrowth).toFixed(1)}%
-                </span>
-              )}
-            </div>
-
-            {breakdown && breakdown.length > 0 && (
-              <p className="text-sm text-gray-400">
-                {breakdown.map((item, idx) => (
-                  <span key={idx}>
-                    {idx > 0 && ' • '}
-                    {item.label}: {formatCurrency(item.value)}
-                  </span>
-                ))}
-              </p>
-            )}
-          </>
-        )}
       </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+          Calculating...
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-baseline gap-2 text-white">
+            <span className="text-3xl font-semibold tracking-tight">{formatValue(value)}</span>
+            {cleanGrowth !== 0 && (
+              <span
+                className={`text-xs font-medium uppercase tracking-wide flex items-center gap-1 rounded-full px-2 py-1 ${
+                  cleanGrowth > 0 ? 'text-emerald-300 bg-emerald-500/10' : 'text-rose-300 bg-rose-500/10'
+                }`}
+              >
+                {cleanGrowth > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                {Math.abs(cleanGrowth).toFixed(1)}%
+              </span>
+            )}
+          </div>
+
+          {breakdown && breakdown.length > 0 && (
+            <div className="space-y-1 text-xs text-gray-500">
+              {breakdown.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between">
+                  <span className="uppercase tracking-wide text-[10px] text-gray-500">{item.label}</span>
+                  <span className="font-medium text-gray-200">{formatCurrency(item.value)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -276,14 +280,14 @@ export default function AdminMetrics(props: AdminMetricsProps) {
   ]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5 lg:gap-5 mb-10">
       <MetricCard
         title="Money Made"
-        subtitle={timeFilter === 'all' ? 'Total platform wallet balance' : 'Platform profit this period'}
+        subtitle={timeFilter === 'all' ? 'Total platform wallet balance' : 'Platform profit'}
         value={metrics.totalProfit}
         icon={DollarSign}
-        iconColor="bg-[#ff950e]"
-        bgGradient="from-[#ff950e]/20 to-[#ff6b00]/10 border-[#ff950e]/30"
+        accentBackground="bg-[#ff950e]/10"
+        accentColor="text-[#ff950e]"
         growthRate={timeFilter !== 'all' ? metrics.growthRate : undefined}
         breakdown={
           timeFilter !== 'all'
@@ -303,8 +307,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         subtitle="Cash collected upfront"
         value={metrics.totalDeposits}
         icon={Download}
-        iconColor="bg-blue-500"
-        bgGradient="from-blue-500/20 to-blue-600/10 border-blue-500/30"
+        accentBackground="bg-blue-500/10"
+        accentColor="text-blue-400"
         growthRate={timeFilter !== 'all' ? metrics.depositGrowthRate : undefined}
       />
 
@@ -313,8 +317,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         subtitle="Money paid out"
         value={metrics.totalWithdrawals}
         icon={Upload}
-        iconColor="bg-red-500"
-        bgGradient="from-red-500/20 to-red-600/10 border-red-500/30"
+        accentBackground="bg-red-500/10"
+        accentColor="text-red-400"
         growthRate={timeFilter !== 'all' ? metrics.withdrawalGrowthRate : undefined}
       />
 
@@ -323,8 +327,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         subtitle="All revenue"
         value={metrics.totalRevenue}
         icon={BarChart3}
-        iconColor="bg-purple-500"
-        bgGradient="from-purple-500/20 to-purple-600/10 border-purple-500/30"
+        accentBackground="bg-purple-500/10"
+        accentColor="text-purple-400"
       />
 
       <MetricCard
@@ -332,8 +336,8 @@ export default function AdminMetrics(props: AdminMetricsProps) {
         subtitle="Per transaction"
         value={metrics.averageOrderValue}
         icon={Target}
-        iconColor="bg-green-500"
-        bgGradient="from-green-500/20 to-green-600/10 border-green-500/30"
+        accentBackground="bg-green-500/10"
+        accentColor="text-green-400"
       />
     </div>
   );

@@ -94,14 +94,14 @@ export default function AnalyticsContent({ banStats }: AnalyticsContentProps) {
       <h2 className="text-xl font-semibold text-white mb-4">Ban Analytics</h2>
 
       {/* Ban Reasons Chart */}
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <BarChart3 size={20} className="text-blue-400" />
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-6">
+        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
+          <BarChart3 size={20} className="text-indigo-400" />
           Ban Reasons Distribution
         </h3>
         <div className="space-y-3">
           {Object.keys(sanitizedBansByReason).length === 0 ? (
-            <p className="text-gray-400 text-center py-4">No ban data available</p>
+            <p className="py-4 text-center text-sm text-zinc-500">No ban data available</p>
           ) : (
             Object.entries(sanitizedBansByReason)
               .sort(([, a], [, b]) => b - a) // Sort by count desc
@@ -109,20 +109,20 @@ export default function AnalyticsContent({ banStats }: AnalyticsContentProps) {
                 const percentage = calculatePercentage(count, total);
                 return (
                   <div key={reason}>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm text-gray-300">
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm text-zinc-200">
                         <SecureMessageDisplay
                           content={formatReasonForDisplay(reason)}
                           allowBasicFormatting={false}
                         />
                       </span>
-                      <span className="text-sm text-gray-400">
+                      <span className="text-sm text-zinc-400">
                         {count.toLocaleString()} ({percentage.toFixed(1)}%)
                       </span>
                     </div>
-                    <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                    <div className="h-2 w-full overflow-hidden rounded-full border border-zinc-800 bg-zinc-900">
                       <div
-                        className="bg-[#ff950e] h-2 rounded-full transition-all duration-500"
+                        className="h-2 rounded-full bg-[#ff950e] transition-all duration-500"
                         style={{ width: `${percentage}%` }}
                         role="progressbar"
                         aria-valuenow={Number.isFinite(percentage) ? Math.round(percentage) : 0}
@@ -138,35 +138,35 @@ export default function AnalyticsContent({ banStats }: AnalyticsContentProps) {
       </div>
 
       {/* Appeal Statistics */}
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+      <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-6">
+        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-white">
           <MessageSquare size={20} className="text-orange-400" />
           Appeal Processing
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-400">
+            <div className="text-2xl font-semibold text-indigo-300">
               {sanitizedAppealStats.totalAppeals.toLocaleString()}
             </div>
-            <div className="text-xs text-gray-400">Total Appeals</div>
+            <div className="text-xs text-zinc-500">Total Appeals</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-400">
+            <div className="text-2xl font-semibold text-amber-300">
               {sanitizedAppealStats.pendingAppeals.toLocaleString()}
             </div>
-            <div className="text-xs text-gray-400">Pending</div>
+            <div className="text-xs text-zinc-500">Pending</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-400">
+            <div className="text-2xl font-semibold text-emerald-300">
               {sanitizedAppealStats.approvedAppeals.toLocaleString()}
             </div>
-            <div className="text-xs text-gray-400">Approved</div>
+            <div className="text-xs text-zinc-500">Approved</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl font-bold text-red-400">
+            <div className="text-2xl font-semibold text-rose-300">
               {sanitizedAppealStats.rejectedAppeals.toLocaleString()}
             </div>
-            <div className="text-xs text-gray-400">Rejected</div>
+            <div className="text-xs text-zinc-500">Rejected</div>
           </div>
         </div>
       </div>

@@ -19,6 +19,7 @@ export const useLogin = () => {
   const router = useRouter();
   const { login, isAuthReady, user, error: authError, clearError } = useAuth();
   
+  // Rate limiting for login attempts
   const { checkLimit: checkLoginLimit, resetLimit: resetLoginLimit } = useRateLimit('LOGIN_HOOK', RATE_LIMITS.LOGIN);
   
   // Track failed attempts for this session
@@ -105,7 +106,7 @@ export const useLogin = () => {
       updateState({ error: 'Password is required.', isLoading: false });
       return;
     }
-
+    
     // Check rate limit
     const rateLimitResult = checkLoginLimit();
     if (!rateLimitResult.allowed) {
@@ -360,7 +361,7 @@ export const useLogin = () => {
     handleUsernameSubmit,
     handleKeyPress,
     handleUsernameChange,
-    handlePasswordChange, // ADD THIS
+    handlePasswordChange,
     goBack,
     handleCrownClick,
     

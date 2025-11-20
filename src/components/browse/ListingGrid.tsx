@@ -6,6 +6,10 @@ import ListingCard from './ListingCard';
 import { ListingGridProps } from '@/types/browse';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
+interface ExtendedListingGridProps extends ListingGridProps {
+  isGuest?: boolean;
+}
+
 export default function ListingGrid({
   listings,
   hoveredListing,
@@ -19,8 +23,9 @@ export default function ListingGrid({
   forceUpdateTimer,
   formatTimeRemaining,
   listingErrors,
-  onListingError
-}: ListingGridProps) {
+  onListingError,
+  isGuest = false
+}: ExtendedListingGridProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
       {listings.map((listing) => {
@@ -59,6 +64,7 @@ export default function ListingGrid({
               displayPrice={displayPrice}
               forceUpdateTimer={forceUpdateTimer}
               formatTimeRemaining={formatTimeRemaining}
+              isGuest={isGuest}
             />
           );
         } catch (error) {

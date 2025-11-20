@@ -75,7 +75,7 @@ export function ProductStructuredData({
       availability: `https://schema.org/${availability}`,
       seller: {
         '@type': 'Organization',
-        name: 'PantyPost',
+        name: 'Panty Post',
       },
       ...(baseUrl && { url: baseUrl }),
     },
@@ -100,15 +100,15 @@ export function ProductStructuredData({
   );
 }
 
-// Organization structured data
+// Organization structured data - UPDATED to use googlesearchimage.png
 export function OrganizationStructuredData() {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/+$/, '') || '';
-  const logoAbs = makeAbsoluteUrl(baseUrl, '/logo.png') || '/logo.png';
+  const logoAbs = makeAbsoluteUrl(baseUrl, '/googlesearchimage.png') || '/googlesearchimage.png';
 
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'PantyPost',
+    name: 'Panty Post',
     ...(baseUrl && { url: baseUrl }),
     ...(logoAbs && { logo: logoAbs }),
     description: 'Premium marketplace for intimate apparel',

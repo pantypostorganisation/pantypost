@@ -7,34 +7,34 @@ import { Package, MessageCircle } from 'lucide-react';
 
 export default function EmptyOrdersState() {
   return (
-    <div className="text-center py-20 bg-[#1a1a1a] rounded-2xl border border-gray-800">
-      <Package className="w-24 h-24 text-gray-600 mx-auto mb-8" />
-      <h3 className="text-2xl font-bold text-gray-400 mb-4">No orders yet</h3>
-      <p className="text-gray-500 text-lg mb-8 max-w-md mx-auto">
-        Your purchases from direct sales, auctions, and custom requests will appear here once you start shopping.
-      </p>
-      <div className="flex flex-wrap justify-center gap-4">
-        <Link
-          href="/browse"
-          className="group relative inline-flex items-center gap-2 bg-transparent text-[#ff950e] font-semibold px-8 py-3 rounded-xl transition-all duration-300 border-2 border-[#ff950e]/70 hover:border-[#ff950e] hover:bg-[#ff950e]/10 hover:-translate-y-1 shadow-[0_4px_0_0] shadow-[#ff950e]/50 hover:shadow-[0_6px_0_0] hover:shadow-[#ff950e]/70"
-        >
-          <Package className="w-5 h-5 transition-transform duration-300 group-hover:scale-110" />
-          <span className="relative">
-            Browse Listings
-            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#ff950e] transition-all duration-300 group-hover:w-full"></span>
-          </span>
-        </Link>
-        
-        <Link
-          href="/buyers/messages"
-          className="group relative inline-flex items-center gap-2 bg-transparent text-[#ff950e] font-semibold px-8 py-3 rounded-xl transition-all duration-300 border-2 border-[#ff950e]/70 hover:border-[#ff950e] hover:bg-[#ff950e]/10 hover:-translate-y-1 shadow-[0_4px_0_0] shadow-[#ff950e]/50 hover:shadow-[0_6px_0_0] hover:shadow-[#ff950e]/70"
-        >
-          <MessageCircle className="w-5 h-5 transition-transform duration-300 group-hover:rotate-12" />
-          <span className="relative">
-            Send Custom Requests
-            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#ff950e] transition-all duration-300 group-hover:w-full"></span>
-          </span>
-        </Link>
+    <div className="rounded-3xl border border-white/10 bg-black/40 px-8 py-16 text-center">
+      <div className="mx-auto flex max-w-2xl flex-col items-center gap-8">
+        <div className="flex h-24 w-24 items-center justify-center rounded-[28px] border border-white/10 bg-black/40">
+          <Package className="h-12 w-12 text-white/40" />
+        </div>
+        <div className="space-y-3">
+          <h3 className="text-3xl font-semibold text-white">You haven&apos;t placed any orders yet</h3>
+          <p className="text-base text-gray-400">
+            Discover verified sellers, browse curated drops, or send a custom request to get something made just for you.
+          </p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-4">
+          <Link
+            href="/browse"
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#ff950e] px-8 py-3 text-base font-semibold text-black transition-colors hover:bg-[#ff7a00]"
+          >
+            <Package className="h-5 w-5" />
+            Explore listings
+          </Link>
+
+          <Link
+            href="/buyers/messages"
+            className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-8 py-3 text-base font-semibold text-white transition-colors hover:bg-white/10"
+          >
+            <MessageCircle className="h-5 w-5" />
+            Send a custom request
+          </Link>
+        </div>
       </div>
     </div>
   );

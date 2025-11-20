@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Paperclip, Send, X } from 'lucide-react';
+import { Plus, Send, Smile, X } from 'lucide-react';
 import { compressImage } from '@/utils/imageUtils';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { securityService } from '@/services';
@@ -14,6 +14,8 @@ interface MessageInputProps {
   disabled?: boolean;
   maxLength?: number;
   showAttachmentButton?: boolean;
+  showEmojiButton?: boolean;
+  onEmojiClick?: () => void;
   className?: string;
   autoFocus?: boolean;
 }
@@ -27,6 +29,8 @@ const MessageInput: React.FC<MessageInputProps> = ({
   disabled = false,
   maxLength = 250,
   showAttachmentButton = true,
+  showEmojiButton = true,
+  onEmojiClick,
   className = '',
   autoFocus = false,
 }) => {
@@ -117,7 +121,7 @@ const MessageInput: React.FC<MessageInputProps> = ({
   };
 
   return (
-    <div className={`px-4 py-3 border-t border-gray-800 bg-[#1a1a1a] ${className}`}>
+    <div className={`px-4 py-2 border-t border-[#1f1f24] bg-[#111214] ${className}`}>
       {isUploading && (
         <div className="mb-2 flex items-center text-sm text-[#ff950e]">
           <div className="w-4 h-4 mr-2 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin"></div>
@@ -158,68 +162,84 @@ const MessageInput: React.FC<MessageInputProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-2">
-        <div className="relative">
-          <SecureTextarea
-            ref={textareaRef}
-            value={content}
-            onChange={setContent}
-            onKeyDown={handleKeyDown}
-            placeholder={selectedImage ? 'Add a caption...' : placeholder}
-            className="w-full p-3 pr-10 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] min-h-[60px] resize-none"
-            rows={1}
-            maxLength={maxLength}
-            characterCount={false}
-            sanitize={true}
-            disabled={disabled}
-            aria-label="Message text"
-          />
-          <div className="absolute bottom-2 right-2">
-            <span className="text-xs text-gray-400">
-              {content.length}/{maxLength}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center gap-2">
-            {showAttachmentButton && (
+      <div className="flex flex-col gap-1">
+        <div
+          className={`flex w-full items-center gap-1.5 rounded-2xl border border-[#2a2d31] bg-[#1a1c20] px-3 py-1.5 transition-all duration-150 focus-within:border-[#3d4352] focus-within:ring-1 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-1 focus-within:ring-offset-[#111214] ${
+            disabled ? 'opacity-90' : ''
+          }`}
+        >
+          {showAttachmentButton && (
+            <>
               <button
                 type="button"
                 onClick={triggerFileInput}
-                className="p-2 rounded-full bg-[#ff950e] text-black hover:bg-[#e88800] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex h-8 w-8 items-center justify-center rounded-full border border-[#363840] bg-[#202226] text-gray-300 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
                 disabled={disabled || isUploading}
                 title="Attach Image"
                 aria-label="Attach image"
               >
-                <Paperclip size={20} />
+                <Plus size={16} />
               </button>
-            )}
-            <input
-              type="file"
-              accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleImageSelect}
-              aria-hidden="true"
+              <input
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleImageSelect}
+                aria-hidden="true"
+                disabled={disabled}
+              />
+            </>
+          )}
+          <div className="flex-1 flex items-center">
+            <SecureTextarea
+              ref={textareaRef}
+              value={content}
+              onChange={setContent}
+              onKeyDown={handleKeyDown}
+              placeholder={selectedImage ? 'Add a caption...' : placeholder}
+              className="w-full !bg-transparent !border-0 !shadow-none !px-0 !pt-[10px] !pb-[4px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 leading-[1.6] min-h-[32px] resize-none"
+              rows={1}
+              maxLength={maxLength}
+              characterCount={false}
+              sanitize={true}
               disabled={disabled}
+              aria-label="Message text"
             />
           </div>
 
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
-            className={`px-4 py-2 rounded-full flex items-center gap-2 transition-colors ${
-              disabled || (!content.trim() && !selectedImage) || isUploading
-                ? 'bg-[#333] text-gray-500 cursor-not-allowed'
-                : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-            }`}
-            aria-label="Send message"
-          >
-            <Send size={18} />
-            Send
-          </button>
+          {showEmojiButton && (
+            <button
+              type="button"
+              onClick={() => {
+                if (disabled) return;
+                onEmojiClick?.();
+                textareaRef.current?.focus();
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-gray-300 transition-colors duration-150 hover:text-white hover:bg-[#272a2f] focus:outline-none focus:ring-2 focus:ring-[#4752e2] focus:ring-offset-2 focus:ring-offset-[#111214] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={disabled}
+              title="Add emoji"
+              aria-label="Add emoji"
+            >
+              <Smile size={16} />
+            </button>
+          )}
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={disabled || (!content.trim() && !selectedImage) || isUploading}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#111214] ${
+                disabled || (!content.trim() && !selectedImage) || isUploading
+                  ? 'bg-[#2b2c31] text-gray-500 cursor-not-allowed focus:ring-[#2b2c31]'
+                  : 'bg-[#5865f2] text-white hover:bg-[#4752e2] focus:ring-[#5865f2]'
+              }`}
+              aria-label="Send message"
+            >
+              <Send size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </div>

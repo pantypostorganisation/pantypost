@@ -1,3 +1,5 @@
+// src/types/ban.ts
+
 export type BanType = 'temporary' | 'permanent';
 export type BanReason = 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'underage' | 'payment_fraud' | 'other';
 export type AppealStatus = 'pending' | 'under_review' | 'approved' | 'rejected' | 'escalated';

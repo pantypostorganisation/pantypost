@@ -1,7 +1,7 @@
 // src/components/wallet/buyer/BalanceCard.tsx
 'use client';
 
-import { DollarSign, AlertCircle, ShieldCheck, Zap } from 'lucide-react';
+import { DollarSign, AlertCircle, ShieldCheck, Zap, ArrowUpRight, Clock } from 'lucide-react';
 
 interface BalanceCardProps {
   balance: number;
@@ -13,59 +13,52 @@ export default function BalanceCard({ balance }: BalanceCardProps) {
   return (
     <section
       aria-label="Current balance"
-      className="bg-[#141414] rounded-2xl border border-gray-800/80 hover:border-gray-700 transition-colors relative overflow-hidden"
+      className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8"
     >
-      {/* subtle background wash */}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-[#ff950e]/5 to-transparent" />
-
-      <div className="relative z-10 px-5 py-5 md:px-6 md:py-6">
-        {/* Top row: title + icon */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-sm font-medium text-gray-300">Current Balance</h2>
-            <span className="text-xs text-gray-500">Available for purchases</span>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-end gap-3">
+              <p className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+                ${safeBalance.toFixed(2)}
+              </p>
+              <span className="pb-1 text-xs font-medium uppercase tracking-wider text-gray-400">USD</span>
+            </div>
           </div>
 
-          <div className="bg-gradient-to-r from-[#ff950e] to-orange-600 p-2.5 rounded-xl shadow-lg shadow-orange-500/15">
-            <DollarSign className="w-5 h-5 text-white" />
+          <div className="inline-flex items-center gap-3 rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10 px-4 py-2 text-sm font-semibold text-[#ff950e]">
+            <DollarSign className="h-4 w-4" />
+            Available to spend
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="mt-4 h-px w-full bg-gradient-to-r from-transparent via-gray-800 to-transparent" />
-
-        {/* Content grid */}
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-center">
-          {/* Amount */}
-          <div className="flex items-end gap-3">
-            <span className="text-4xl md:text-5xl font-extrabold tracking-tight text-white tabular-nums">
-              ${safeBalance.toFixed(2)}
-            </span>
-            <span className="pb-2 text-xs md:text-sm text-gray-400">USD</span>
+        <div className="flex flex-col gap-3 text-sm text-gray-400">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#ff950e]" />
+            <span>Secure transaction coverage keeps every purchase protected.</span>
           </div>
-
-          {/* Status / badges */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">
-              <Zap className="w-3.5 h-3.5" />
-              Instant deposits
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-lg border border-gray-700 px-2.5 py-1 text-gray-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
-              No waiting period
-            </span>
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-[#ff950e]" />
+            <span>Instant reloads mean funds are ready to spend immediately.</span>
           </div>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-[#ff950e]" />
+            <span>Real-time activity sync keeps your balance up to date.</span>
+          </div>
+        </div>
 
-          {/* Meta / fine print */}
-          <p className="text-[11px] md:text-xs text-gray-500 leading-relaxed lg:text-right">
-            Each transaction includes a <span className="text-gray-300 font-medium">10% platform fee</span> for secure
-            processing.
+        <div className="flex flex-col gap-3 rounded-2xl border border-gray-800 bg-[#0c0c0c] p-4 text-xs text-gray-400 sm:flex-row sm:items-center sm:justify-between sm:text-sm">
+          <p>
+            Each transaction includes a <span className="font-semibold text-gray-100">10% platform fee</span> for secure processing and buyer protection.
           </p>
+          <span className="inline-flex items-center gap-2 text-[#ff950e]">
+            <ArrowUpRight className="h-4 w-4" />
+            Boost your balance to stay checkout-ready.
+          </span>
         </div>
 
-        {/* Low balance notice */}
         {safeBalance < 20 && safeBalance > 0 && (
-          <div className="mt-4 flex items-start gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2.5 text-sm text-yellow-300">
+          <div className="flex items-start gap-2 rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-3 text-sm text-[#ff950e]">
             <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
             <span>Low balance — add funds to continue shopping.</span>
           </div>

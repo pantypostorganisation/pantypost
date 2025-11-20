@@ -2,7 +2,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
@@ -11,20 +11,33 @@ type ValidRole = (typeof VALID_ROLES)[number];
 
 const RoleSchema = z.enum(VALID_ROLES);
 
+interface RequireAuthProps {
+  role: ValidRole;
+  children: React.ReactNode;
+  allowGuest?: boolean; // New prop to allow guest access
+}
+
 export default function RequireAuth({
   role,
   children,
-}: {
-  role: ValidRole;
-  children: React.ReactNode;
-}) {
+  allowGuest = false,
+}: RequireAuthProps) {
   const { user, isAuthReady } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [authorized, setAuthorized] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
 
   useEffect(() => {
     if (!isAuthReady || hasChecked) return;
+
+    // Check if this is the browse page and guest access is allowed
+    const isBrowsePage = pathname === '/browse';
+    if (isBrowsePage && allowGuest) {
+      setAuthorized(true);
+      setHasChecked(true);
+      return;
+    }
 
     // Runtime validation of `role` prop (dev-only noise)
     const parsed = RoleSchema.safeParse(role);
@@ -44,17 +57,22 @@ export default function RequireAuth({
     if (parsed.data === 'admin') {
       hasAccess = userRole === 'admin';
     } else {
-      hasAccess = userRole === parsed.data; // admin can’t view buyer/seller pages
+      hasAccess = userRole === parsed.data; // admin can't view buyer/seller pages
     }
 
     if (!user || !hasAccess) {
-      router.push('/login');
+      // If guest access is allowed and no user, still allow access
+      if (allowGuest) {
+        setAuthorized(true);
+      } else {
+        router.push('/login');
+      }
     } else {
       setAuthorized(true);
     }
 
     setHasChecked(true);
-  }, [isAuthReady, user, role, router, hasChecked]);
+  }, [isAuthReady, user, role, router, hasChecked, allowGuest, pathname]);
 
   if (!isAuthReady || !hasChecked) {
     return (

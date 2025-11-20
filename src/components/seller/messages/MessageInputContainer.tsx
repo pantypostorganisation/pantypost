@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useCallback } from 'react';
-import { X, Smile, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { X, Smile, AlertTriangle, ShieldAlert, ArrowUp, Plus } from 'lucide-react';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -90,6 +90,8 @@ export default function MessageInputContainer({
     handleImageSelect(file);
   }, [handleImageSelect, setImageError]);
 
+  const canSend = (!!replyMessage.trim() || !!selectedImage) && !isImageLoading;
+
   if (isUserBlocked) {
     return (
       <div className="p-4 text-center text-sm text-red-400 flex items-center justify-center">
@@ -146,8 +148,31 @@ export default function MessageInputContainer({
       )}
 
       {/* Input area */}
-      <div className="px-4 py-3">
-        <div className="relative mb-2">
+      <div className="px-4 py-2">
+        <div className="flex w-full items-center gap-1.5 rounded-2xl border border-[#2a2d31] bg-[#1a1c20] px-3 py-1.5 focus-within:border-[#3d4352] focus-within:ring-1 focus-within:ring-[#4752e2]/40 focus-within:ring-offset-1 focus-within:ring-offset-[#16161a]">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleImageSelectFromInput}
+          />
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (isImageLoading) return;
+              triggerFileInput();
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#363840] bg-[#202226] text-gray-300 transition-colors duration-150 hover:border-[#4a4c56] hover:bg-[#272a2f] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Attach image"
+            title="Attach Image"
+            disabled={isImageLoading}
+          >
+            <Plus size={16} />
+          </button>
+
           <SecureTextarea
             ref={inputRef}
             value={replyMessage}
@@ -157,7 +182,7 @@ export default function MessageInputContainer({
               e.preventDefault();
             }}
             placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-            className="w-full p-3 pr-12 !bg-[#222] !border-gray-700 !text-white focus:!outline-none focus:!ring-1 focus:!ring-[#ff950e] min-h-[40px] max-h-20 !resize-none overflow-auto leading-tight"
+            className="flex-1 self-center !bg-transparent !border-0 !shadow-none !px-0 !pt-[10px] !pb-[4px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[34px] max-h-20 !resize-none overflow-auto leading-[1.6]"
             rows={1}
             maxLength={250}
             sanitizer={messageSanitizer}
@@ -165,67 +190,42 @@ export default function MessageInputContainer({
             aria-label="Message"
           />
 
-          {/* Emoji button integrated in textarea */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowEmojiPicker(!showEmojiPicker);
-            }}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-              showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-            } transition-colors duration-150`}
-            title="Emoji"
-            type="button"
-            aria-label="Toggle emoji picker"
-          >
-            <Smile size={20} className="flex-shrink-0" />
-          </button>
-        </div>
-
-        {replyMessage.length > 0 && (
-          <div className="text-xs text-gray-400 mb-2 text-right">{replyMessage.length}/250</div>
-        )}
-
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-0">
-            {/* Attach image button */}
-            <img
-              src="/Attach_Image_Icon.png"
-              alt="Attach Image"
-              className={`w-14 h-14 cursor-pointer hover:opacity-80 transition-opacity ${
-                isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
+          <div className="flex items-center gap-1.5">
+            <button
               onClick={(e) => {
-                if (isImageLoading) return;
                 e.stopPropagation();
-                triggerFileInput();
+                setShowEmojiPicker(!showEmojiPicker);
               }}
-              title="Attach Image"
-            />
-
-            {/* Hidden file input */}
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              onChange={handleImageSelectFromInput}
-            />
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                showEmojiPicker
+                  ? 'bg-[#ff950e] text-black focus:ring-[#ff950e]'
+                  : 'border border-transparent text-gray-300 hover:text-white hover:bg-[#272a2f] focus:ring-[#4752e2]'
+              }`}
+              title="Emoji"
+              type="button"
+              aria-label="Toggle emoji picker"
+            >
+              <Smile size={18} className="flex-shrink-0" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!canSend) return;
+                setShowEmojiPicker(false);
+                handleReply();
+              }}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                canSend
+                  ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
+                  : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
+              }`}
+              aria-label="Send message"
+              disabled={!canSend}
+            >
+              <ArrowUp size={14} strokeWidth={2.5} />
+            </button>
           </div>
-
-          {/* Send button */}
-          <img
-            src="/Send_Button.png"
-            alt="Send"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleReply();
-            }}
-            className={`cursor-pointer hover:opacity-90 transition-opacity h-11 ${
-              (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            style={{ pointerEvents: (!replyMessage.trim() && !selectedImage) || isImageLoading ? 'none' : 'auto' }}
-          />
         </div>
       </div>
 

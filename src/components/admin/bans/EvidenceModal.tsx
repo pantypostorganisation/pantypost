@@ -1,3 +1,4 @@
+// src/components/admin/bans/EvidenceModal.tsx
 'use client';
 
 import { XCircle, ArrowLeft, ArrowRight } from 'lucide-react';

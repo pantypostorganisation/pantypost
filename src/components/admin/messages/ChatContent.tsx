@@ -1,19 +1,20 @@
+// src/components/admin/messages/ChatContent.tsx
 'use client';
 
 import { useRef, useCallback, useState, useEffect, useMemo } from 'react';
 import {
-  ArrowRightCircle,
+  ArrowUp,
   CheckCheck,
   X,
   Paperclip,
   Smile,
-  Image as ImageIcon,
   ShieldAlert,
   AlertTriangle,
   Clock,
   BadgeCheck,
   MessageCircle,
-  MessageSquarePlus
+  MessageSquarePlus,
+  Plus
 } from 'lucide-react';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 import { Message } from '@/types/message';
@@ -150,20 +151,22 @@ export default function ChatContent({
 
   if (!activeThread) {
     return (
-      <div className="flex-1 flex items-center justify-center text-gray-400">
-        <div className="text-center p-4">
-          <div className="flex justify-center mb-4">
-            <MessageCircle size={64} className="text-gray-600" />
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#121212]">
+        <div className="flex flex-1 items-center justify-center text-gray-400">
+          <div className="text-center p-4">
+            <div className="mb-4 flex justify-center">
+              <MessageCircle size={64} className="text-gray-600" />
+            </div>
+            <p className="mb-2 text-xl">Select a conversation to view messages</p>
+            <p className="mb-4 text-sm">Your messages will appear here</p>
+            <button
+              onClick={onStartNewConversation}
+              className="mx-auto flex items-center justify-center rounded-lg bg-[#ff950e] px-4 py-2 font-medium text-black transition-colors hover:bg-[#e88800]"
+            >
+              <MessageSquarePlus size={16} className="mr-2" />
+              Start New Conversation
+            </button>
           </div>
-          <p className="text-xl mb-2">Select a conversation to view messages</p>
-          <p className="text-sm mb-4">Your messages will appear here</p>
-          <button
-            onClick={onStartNewConversation}
-            className="px-4 py-2 bg-[#ff950e] text-black font-medium rounded-lg hover:bg-[#e88800] transition-colors flex items-center justify-center mx-auto"
-          >
-            <MessageSquarePlus size={16} className="mr-2" />
-            Start New Conversation
-          </button>
         </div>
       </div>
     );
@@ -172,7 +175,7 @@ export default function ChatContent({
   const canSend = (!!content.trim() || !!selectedImage) && !isImageLoading;
 
   return (
-    <>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#121212]">
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
         <div className="flex items-center">
@@ -242,7 +245,7 @@ export default function ChatContent({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 bg-[#121212]">
+      <div className="flex-1 overflow-y-auto overscroll-contain p-4 bg-[#121212] min-h-0">
         <div className="max-w-3xl mx-auto space-y-4">
           {activeMessages.map((msg, index) => {
             const isFromMe = msg.sender === username;
@@ -278,15 +281,17 @@ export default function ChatContent({
                   {/* Image message */}
                   {msg.type === 'image' && msg.meta?.imageUrl && (
                     <div className="mt-1 mb-2">
-                      <SecureImage
-                        src={msg.meta.imageUrl}
-                        alt="Shared image"
-                        className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                        onClick={(e: React.MouseEvent<HTMLImageElement>) => {
-                          e.stopPropagation();
-                          setPreviewImage(msg.meta?.imageUrl || null);
-                        }}
-                      />
+                      <div className="max-h-[60vh] overflow-hidden rounded-md bg-black/30">
+                        <SecureImage
+                          src={msg.meta.imageUrl}
+                          alt="Shared image"
+                          className="h-auto w-full cursor-pointer object-contain transition-opacity hover:opacity-90"
+                          onClick={(e: React.MouseEvent<HTMLImageElement>) => {
+                            e.stopPropagation();
+                            setPreviewImage(msg.meta?.imageUrl || null);
+                          }}
+                        />
+                      </div>
                       {msg.content && (
                         <div className={`mt-2 ${isSingleEmojiMsg ? 'text-3xl' : ''}`}>
                           <SecureMessageDisplay content={msg.content} allowBasicFormatting={false} className="text-white" />
@@ -338,7 +343,7 @@ export default function ChatContent({
 
       {/* Composer */}
       {!isUserBlocked && (
-        <div className="relative border-t border-gray-800 bg-[#1a1a1a]">
+        <div className="relative flex-none border-t border-gray-800 bg-[#1a1a1a]">
           {showEmojiPicker && <EmojiPicker onEmojiSelect={handleEmojiSelect} onClose={() => setShowEmojiPicker(false)} />}
 
           {/* Selected image preview */}
@@ -376,103 +381,89 @@ export default function ChatContent({
 
           {/* Input */}
           <div className="px-4 py-3">
-            <div className="relative mb-2">
+            <div className="flex w-full items-center gap-3 rounded-2xl border border-[#2f3036] bg-[#1f1f24] px-3 py-2.5 focus-within:border-transparent focus-within:ring-2 focus-within:ring-[#4752e2] focus-within:ring-offset-2 focus-within:ring-offset-[#16161a]">
+              <input
+                type="file"
+                accept={ALLOWED_IMAGE_TYPES.join(',')}
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleImageSelect}
+              />
+
+              <button
+                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.stopPropagation();
+                  if (isImageLoading) return;
+                  triggerFileInput();
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#3b3c43] bg-[#272830] text-gray-300 transition-colors duration-150 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] focus:ring-[#4752e2] disabled:cursor-not-allowed disabled:opacity-50"
+                title="Attach Image"
+                aria-label="Attach image"
+                type="button"
+                disabled={isImageLoading}
+              >
+                <Plus size={18} />
+              </button>
+
               <SecureTextarea
                 ref={inputRef}
                 value={content}
                 onChange={setContent}
                 onKeyDown={handleKeyDown}
                 placeholder={selectedImage ? 'Add a caption...' : 'Type a message'}
-                className="w-full p-3 pr-12 rounded-lg bg-[#222] border border-gray-700 text-white focus:outline-none focus:ring-1 focus:ring-[#ff950e] min-h-[40px] max-h-20 resize-none overflow-auto leading-tight"
+                className="flex-1 self-center !bg-transparent !border-0 !shadow-none !px-0 !pt-[10px] !pb-[4px] text-[15px] text-gray-100 placeholder:text-gray-500 focus:!outline-none focus:!ring-0 min-h-[46px] max-h-20 !resize-none overflow-auto leading-[1.6]"
                 rows={1}
                 maxLength={250}
                 characterCount={false}
                 sanitize
               />
 
-              {/* Emoji button */}
-              <button
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.stopPropagation();
-                  setShowEmojiPicker((v) => !v);
-                }}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 mt-[-4px] flex items-center justify-center h-8 w-8 rounded-full ${
-                  showEmojiPicker ? 'bg-[#ff950e] text-black' : 'text-[#ff950e] hover:bg-[#333]'
-                } transition-colors duration-150`}
-                title="Emoji"
-                type="button"
-                aria-pressed={showEmojiPicker}
-              >
-                <Smile size={20} className="flex-shrink-0" />
-              </button>
-            </div>
-
-            {content.length > 0 && <div className="text-xs text-gray-400 mb-2 text-right">{content.length}/250</div>}
-
-            {/* Actions */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <button
-                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.stopPropagation();
-                    triggerFileInput();
-                  }}
-                  disabled={isImageLoading}
-                  className={`w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-md ${
-                    isImageLoading ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-[#ff950e] text-black hover:bg-[#e88800]'
-                  } transition-colors duration-150`}
-                  title="Attach Image"
-                  aria-label="Attach Image"
-                  type="button"
-                >
-                  <ImageIcon size={26} />
-                </button>
-
+              <div className="flex items-center gap-2">
                 <button
                   onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
                     e.stopPropagation();
                     setShowEmojiPicker((v) => !v);
                   }}
-                  className={`md:hidden w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-md text-black text-2xl ${
-                    showEmojiPicker ? 'bg-[#e88800]' : 'bg-[#ff950e] hover:bg-[#e88800]'
-                  } transition-colors duration-150`}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                    showEmojiPicker
+                      ? 'bg-[#ff950e] text-black focus:ring-[#ff950e]'
+                      : 'border border-[#3b3c43] bg-[#272830] text-gray-300 hover:border-[#4a4b55] hover:bg-[#30313a] hover:text-white focus:ring-[#4752e2]'
+                  }`}
                   title="Emoji"
-                  aria-label="Emoji"
                   type="button"
+                  aria-pressed={showEmojiPicker}
                 >
-                  <Smile size={26} />
+                  <Smile size={20} className="flex-shrink-0" />
                 </button>
 
-                <input
-                  type="file"
-                  accept={ALLOWED_IMAGE_TYPES.join(',')}
-                  ref={fileInputRef}
-                  style={{ display: 'none' }}
-                  onChange={handleImageSelect}
-                />
+                <button
+                  onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    e.stopPropagation();
+                    if (!canSend) return;
+                    setShowEmojiPicker(false);
+                    onSend();
+                  }}
+                  disabled={!canSend}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#1f1f24] ${
+                    canSend
+                      ? 'bg-[#ff950e] text-black hover:bg-[#e88800] focus:ring-[#ff950e]'
+                      : 'bg-[#2b2b2b] text-gray-500 cursor-not-allowed focus:ring-[#2b2b2b]'
+                  }`}
+                  type="button"
+                  aria-label="Send message"
+                >
+                  <ArrowUp size={16} strokeWidth={2.5} />
+                </button>
               </div>
-
-              <button
-                onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.stopPropagation();
-                  onSend();
-                }}
-                disabled={!canSend}
-                className={`flex items-center justify-center px-5 py-2 rounded-full ${
-                  canSend ? 'bg-[#ff950e] text-black hover:bg-[#e88800]' : 'bg-[#c17200] cursor-not-allowed text-gray-300'
-                } transition-colors duration-150 shadow-md`}
-                type="button"
-              >
-                <span className="mr-1">Send</span>
-                <ArrowRightCircle size={16} className="flex-shrink-0" />
-              </button>
             </div>
+
+            {content.length > 0 && <div className="text-xs text-gray-400 mb-2 mt-2 text-right">{content.length}/250</div>}
           </div>
         </div>
       )}
 
       {isUserBlocked && (
-        <div className="p-4 border-t border-gray-800 text-center text-sm text-red-400 bg-[#1a1a1a] flex items-center justify-center">
+        <div className="flex flex-none items-center justify-center border-t border-gray-800 bg-[#1a1a1a] p-4 text-center text-sm text-red-400">
           <ShieldAlert size={16} className="mr-2" />
           You have blocked this user
           <button
@@ -488,6 +479,6 @@ export default function ChatContent({
       )}
 
       <ImagePreviewModal imageUrl={previewImage || ''} isOpen={!!previewImage} onClose={() => setPreviewImage(null)} />
-    </>
+    </div>
   );
 }

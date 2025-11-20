@@ -40,10 +40,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'buyer' | 'seller' | 'admin' | null>(null);
   const [error, setError] = useState('');
+  const [errorData, setErrorData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
   const [showAdminMode, setShowAdminMode] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Rate limiting
   const [isRateLimited, setIsRateLimited] = useState(false);
@@ -102,48 +104,18 @@ export default function LoginPage() {
     }
   }, [isAuthReady, user, router]);
 
-  const mapAuthErrorMessage = useCallback(
-    (message: string) => {
-      const trimmed = message?.trim();
-      if (!trimmed) return '';
-
-      const lower = trimmed.toLowerCase();
-
-      if (lower.includes('too many login')) {
-        return trimmed;
-      }
-
-      if (
-        lower.includes("couldn't find") ||
-        lower.includes('could not find') ||
-        lower.includes('no account')
-      ) {
-        return `We couldn't find an account with the username "${username}". Double-check the spelling or sign up for a new account.`;
-      }
-
-      if (
-        lower.includes('wrong password') ||
-        lower.includes("doesn't match") ||
-        lower.includes('incorrect password')
-      ) {
-        return 'Wrong password. Please try again or use "Forgot password" if you need help.';
-      }
-
-      return trimmed;
-    },
-    [username]
-  );
-
-  // Sync auth errors and loading state
+  // CRITICAL FIX: Sync auth errors and loading state properly
   useEffect(() => {
     if (authError) {
-      if (isDev) console.log('[Login] Auth error:', authError);
-      setError(mapAuthErrorMessage(authError));
-      setIsLoading(false); // IMPORTANT: Clear loading state when error occurs
+      if (isDev) console.log('[Login] Auth error detected:', authError);
+      setError(authError);
+      // CRITICAL: Always stop loading when there's an error
+      setIsLoading(false);
     }
-
-    // Also sync loading state from auth context
+    
+    // CRITICAL: Sync loading state with auth loading
     if (!authLoading && isLoading) {
+      if (isDev) console.log('[Login] Auth loading stopped, stopping local loading');
       setIsLoading(false);
     }
   }, [authError, authLoading, isLoading, mapAuthErrorMessage]);
@@ -233,6 +205,7 @@ export default function LoginPage() {
     }
 
     setError('');
+    setErrorData(null);
     clearError?.();
     setStep(2);
   }, [username, clearError]);
@@ -240,7 +213,7 @@ export default function LoginPage() {
   const handleLogin = useCallback(
     async (e?: React.FormEvent) => {
       if (isDev)
-        console.log('[Login] handleLogin', {
+        console.log('[Login] handleLogin called', {
           hasEvent: !!e,
           username,
           role,
@@ -258,48 +231,111 @@ export default function LoginPage() {
 
       if (!username.trim()) {
         setError('Please enter your username');
+        setErrorData(null);
+        setIsLoading(false);
         return;
       }
       if (!password.trim()) {
         setError('Please enter your password');
+        setErrorData(null);
+        setIsLoading(false);
         return;
       }
       if (!role) {
         setError('Please select a role');
+        setErrorData(null);
+        setIsLoading(false);
         return;
       }
       if (!login || typeof login !== 'function') {
         if (isDev) console.error('[Login] login() unavailable');
         setError('Authentication system not ready. Please refresh the page.');
+        setErrorData(null);
+        setIsLoading(false);
         return;
       }
 
+      // CRITICAL FIX: Set loading state and clear all errors before login attempt
       setIsLoading(true);
       setError('');
+      setErrorData(null);
       clearError?.();
-      
+
+      let loginWasSuccessful = false;
+
       try {
-        const success = await login(username.trim(), password, role);
+        if (isDev) console.log('[Login] Calling login function...');
+
+        const success = await login(username.trim(), password, role, rememberMe);
+        loginWasSuccessful = success;
 
         if (isDev) console.log('[Login] Login result:', success);
 
-        if (!success) {
-          // Login failed - auth context has set the error
-          if (!authError) {
-            setError(mapAuthErrorMessage('Invalid username or password'));
+        // CRITICAL FIX: Handle both success and failure cases explicitly
+        if (success) {
+          // Login successful - loading will be cleared by redirect
+          if (isDev) console.log('[Login] Login successful');
+        } else {
+          // CRITICAL FIX: Login failed - show error feedback immediately
+          if (isDev) console.log('[Login] Login failed');
+
+          // Use auth error if available, otherwise generic message
+          if (authError) {
+            setError(authError);
+          } else {
+            setError('Incorrect username or password. Please try again.');
           }
         }
-        // If success is true, user will be redirected by the useEffect
-      } catch (err) {
-        if (isDev) console.error('[Login] login() error:', err);
-        setError('An unexpected error occurred. Please try again.');
+      } catch (err: any) {
+        if (isDev) console.error('[Login] login() threw error:', err);
+
+        // Handle email verification error - silent redirect
+        if (err?.requiresVerification) {
+          console.log('[Login] Email verification error caught:', {
+            requiresVerification: err.requiresVerification,
+            email: err.email,
+            username: err.username,
+            message: err.message
+          });
+          
+          setErrorData({
+            requiresVerification: true,
+            email: err.email,
+            username: err.username
+          });
+          
+          setError(err.message || '');
+        } 
+        // Handle password reset pending error
+        else if (err?.pendingPasswordReset) {
+          console.log('[Login] Password reset pending error caught:', {
+            pendingPasswordReset: err.pendingPasswordReset,
+            email: err.email,
+            username: err.username,
+            message: err.message
+          });
+          
+          setErrorData({
+            pendingPasswordReset: true,
+            email: err.email,
+            username: err.username
+          });
+          
+          setError(err.message || 'Password reset pending');
+        } 
+        // CRITICAL FIX: Handle all other errors properly
+        else {
+          const errorMessage = err?.message || 'An unexpected error occurred. Please try again.';
+          console.log('[Login] Setting error message:', errorMessage);
+          setError(errorMessage);
+        }
       } finally {
-        if (isMountedRef.current) {
+        if (!loginWasSuccessful) {
           setIsLoading(false);
         }
       }
     },
-    [username, password, role, login, isRateLimited, authError, clearError, mapAuthErrorMessage]
+    [username, password, role, rememberMe, login, isRateLimited, authError, clearError]
   );
 
   const handleKeyPress = useCallback(
@@ -319,7 +355,8 @@ export default function LoginPage() {
     setPassword('');
     setRole(null);
     setError('');
-    setIsLoading(false); // Clear loading state when going back
+    setErrorData(null);
+    setIsLoading(false);
     clearError?.();
   }, [clearError]);
 
@@ -335,11 +372,13 @@ export default function LoginPage() {
       if (updates.username !== undefined) {
         setUsername(updates.username);
         setError('');
+        setErrorData(null);
         clearError?.();
       }
       if (updates.password !== undefined) {
         setPassword(updates.password);
         setError('');
+        setErrorData(null);
         clearError?.();
       }
       if (updates.role !== undefined) {
@@ -349,7 +388,6 @@ export default function LoginPage() {
     [clearError]
   );
 
-  // Early wait UI
   if (!mounted || !isAuthReady) {
     if (isDev) console.log('[Login] waiting...', { mounted, isAuthReady });
     return (
@@ -363,30 +401,24 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-black overflow-hidden relative">
-      {/* Enhanced Floating Particles Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {Array.from({ length: 35 }).map((_, i) => (
           <FloatingParticle key={i} delay={0} index={i} />
         ))}
       </div>
 
-      {/* Subtle gradient overlay for depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-black via-transparent to-black/50 pointer-events-none" />
 
-      {/* Secret Admin Crown - Bottom Right */}
       <AdminCrownButton showAdminMode={showAdminMode} onToggle={handleCrownClick} />
 
-      {/* Main Content */}
       <div
         className={`relative z-10 flex items-center justify-center p-4 ${
           step === 1 ? 'min-h-[90vh] pt-4' : 'min-h-screen py-4'
         }`}
       >
         <div className="w-full max-w-md">
-          {/* Header */}
           <LoginHeader step={step} showAdminMode={showAdminMode} onLogoClick={() => router.push('/')} />
 
-          {/* Form Card */}
           <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500">
             <div className="transition-all duration-300">
               {step === 1 && (
@@ -405,6 +437,7 @@ export default function LoginPage() {
                   username={username}
                   password={password}
                   error={error}
+                  errorData={errorData}
                   onPasswordChange={(value) => updateState({ password: value })}
                   onBack={goBack}
                   onSubmit={handleLogin}
@@ -415,15 +448,14 @@ export default function LoginPage() {
                   role={role}
                   roleOptions={roleOptions}
                   onRoleSelect={(selectedRole) => setRole(selectedRole as 'buyer' | 'seller' | 'admin')}
+                  rememberMe={rememberMe}
+                  onRememberMeChange={setRememberMe}
                 />
               )}
             </div>
           </div>
 
-          {/* Footer */}
           <LoginFooter step={step} />
-
-          {/* Trust Indicators */}
           <TrustIndicators />
         </div>
       </div>

@@ -1,6 +1,7 @@
+// src/components/wallet/buyer/RecentPurchases.tsx
 'use client';
 
-import { ShoppingBag, ArrowRight, Package, Calendar } from 'lucide-react';
+import { ShoppingBag, ArrowRight, Package, Calendar, Shield } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
 
 interface RecentPurchasesProps {
@@ -22,25 +23,25 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
   }
 
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800 hover:border-gray-700 transition-all duration-300 relative overflow-hidden group">
-      {/* Background gradient effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-      <div className="relative z-10">
-        <div className="flex justify-between items-center mb-8">
-          <h2 className="text-2xl font-bold flex items-center text-white">
-            <div className="bg-gradient-to-r from-purple-600 to-purple-500 p-2 rounded-lg mr-3 shadow-lg shadow-purple-500/20">
-              <ShoppingBag className="w-6 h-6 text-white" />
+    <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+              <ShoppingBag className="h-5 w-5 text-[#ff950e]" />
             </div>
-            Recent Purchases
-          </h2>
+            <div>
+              <h2 className="text-2xl font-semibold text-white">Recent Purchases</h2>
+              <p className="text-sm text-gray-400">A snapshot of your latest checkouts across the marketplace.</p>
+            </div>
+          </div>
 
           <a
             href="/buyers/my-orders"
-            className="text-sm text-[#ff950e] hover:text-[#e88800] flex items-center transition-all duration-200 group/link"
+            className="inline-flex items-center gap-2 rounded-full border border-gray-800 bg-[#0c0c0c] px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-[#ff950e] hover:text-white"
           >
-            View All Orders
-            <ArrowRight className="w-4 h-4 ml-2 group-hover/link:translate-x-1 transition-transform" />
+            View all orders
+            <ArrowRight className="h-4 w-4" />
           </a>
         </div>
 
@@ -48,36 +49,44 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
           {purchases.map((purchase, index) => (
             <div
               key={index}
-              className="bg-black/30 rounded-xl p-5 border border-gray-800 hover:border-gray-700 hover:bg-black/50 transition-all duration-200 group/item"
+              className="group/item rounded-2xl border border-gray-800 bg-[#0c0c0c] p-5 transition-colors duration-200 hover:border-[#ff950e]/60"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-start space-x-4">
-                  <div className="bg-gradient-to-r from-purple-600/20 to-purple-500/20 p-2 rounded-lg group-hover/item:from-purple-600/30 group-hover/item:to-purple-500/30 transition-colors">
-                    <Package className="w-5 h-5 text-purple-400" />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-1 items-start gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+                    <Package className="h-5 w-5 text-[#ff950e]" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-white group-hover/item:text-[#ff950e] transition-colors">
-                      {purchase.title}
-                    </h3>
-                    <div className="flex items-center gap-4 mt-1">
-                      <p className="text-sm text-gray-400">From: {purchase.seller}</p>
-                      <div className="flex items-center text-xs text-gray-500">
-                        <Calendar className="w-3 h-3 mr-1" />
+                  <div className="space-y-2">
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                      <h3 className="text-base font-semibold text-white transition-colors group-hover/item:text-[#ff950e]">
+                        {purchase.title}
+                      </h3>
+                      <span className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 px-2.5 py-1 text-[11px] uppercase tracking-widest text-[#ff950e]">
+                        <Shield className="h-3.5 w-3.5 text-[#ff950e]" />
+                        Secure transaction
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400">
+                      <span className="font-medium text-white/80">Seller: {purchase.seller}</span>
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                        <Calendar className="h-3 w-3" />
                         {formatDate(purchase.date)}
-                      </div>
+                      </span>
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-[#ff950e]">
+
+                <div className="flex flex-col items-end">
+                  <p className="text-xl font-semibold text-[#ff950e]">
                     ${(purchase.markedUpPrice ?? purchase.price).toFixed(2)}
                   </p>
+                  <span className="text-xs uppercase tracking-widest text-gray-500">Paid in wallet</span>
                 </div>
               </div>
             </div>
           ))}
         </div>
       </div>
-    </div>
+    </section>
   );
 }

@@ -1,3 +1,4 @@
+// src/components/admin/bans/BanTabs.tsx
 'use client';
 
 import { Ban, Clock, MessageSquare, FileText, BarChart3 } from 'lucide-react';
@@ -39,7 +40,7 @@ export default function BanTabs({
   ];
 
   return (
-    <div className="flex flex-wrap gap-1 bg-[#1a1a1a] border border-gray-800 rounded-lg p-1 mb-6" role="tablist" aria-label="Ban tabs">
+    <div className="mb-6 flex flex-wrap gap-2" role="tablist" aria-label="Ban tabs">
       {tabs.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.key;
@@ -51,13 +52,15 @@ export default function BanTabs({
             aria-selected={isActive}
             aria-controls={`panel-${tab.key}`}
             onClick={() => onTabChange(tab.key)}
-            className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-              isActive ? 'bg-[#ff950e] text-black shadow-lg' : 'text-gray-300 hover:text-white hover:bg-[#333]'
+            className={`flex min-w-[140px] flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+              isActive
+                ? 'border-[#ff950e]/60 bg-[#ff950e]/10 text-[#ff950e]'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white'
             }`}
           >
             <Icon size={16} />
             <span className="hidden sm:inline">{tab.label}</span>
-            {tab.count !== null && <span className="ml-1">({tab.count})</span>}
+            {tab.count !== null && <span className="ml-1 text-xs text-zinc-400">({tab.count})</span>}
           </button>
         );
       })}

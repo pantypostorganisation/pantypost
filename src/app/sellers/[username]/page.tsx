@@ -58,6 +58,8 @@ export default function SellerProfilePage() {
     subscriptionPrice,
     galleryImages,
     sellerTierInfo,
+    country,
+    isLocationPublic,
 
     // Stats
     totalPhotos,
@@ -216,6 +218,8 @@ export default function SellerProfilePage() {
             bio={bio}
             isVerified={isVerified}
             sellerTierInfo={sellerTierInfo}
+            country={country ?? undefined}
+            isLocationPublic={isLocationPublic}
             user={user}
             onShowSubscribeModal={modalHandlers.onShowSubscribeModal}
             onShowUnsubscribeModal={modalHandlers.onShowUnsubscribeModal}

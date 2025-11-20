@@ -4,20 +4,36 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
+import { Mail, User, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
 import { authService } from '@/services/auth.service';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [emailOrUsername, setEmailOrUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [sentToEmail, setSentToEmail] = useState('');
   const redirectTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
+    // Check for prefilled email/username from login flow
+    try {
+      const prefillEmail = sessionStorage.getItem('prefillEmail');
+      const resetEmail = sessionStorage.getItem('resetEmail');
+      
+      if (prefillEmail) {
+        setEmailOrUsername(prefillEmail);
+        sessionStorage.removeItem('prefillEmail');
+      } else if (resetEmail) {
+        setEmailOrUsername(resetEmail);
+      }
+    } catch (err) {
+      console.error('Error checking prefill:', err);
+    }
+    
     // Cleanup any pending timer on unmount so we don't push after unmounting
     return () => {
       if (redirectTimerRef.current) {
@@ -26,40 +42,106 @@ export default function ForgotPasswordPage() {
     };
   }, []);
 
+  // NEW: Auto-redirect if password reset was completed in another tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const resetComplete = localStorage.getItem('resetComplete');
+          if (resetComplete === 'true') {
+            console.log('[Forgot Password] Reset completed in another tab, redirecting to login...');
+            localStorage.removeItem('resetComplete');
+            localStorage.removeItem('resetPending');
+            router.push('/login');
+          }
+        } catch (err) {
+          console.error('[Forgot Password] Error checking reset status:', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    // Check immediately on mount
+    handleVisibilityChange();
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Sanitize & normalize email before validating/sending
-    const cleanedEmail = sanitizeStrict(email).trim().toLowerCase();
+    // Sanitize & normalize input
+    const cleanedInput = sanitizeStrict(emailOrUsername).trim();
 
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!cleanedEmail) {
-      setError('Please enter your email address');
+    // Basic validation
+    if (!cleanedInput) {
+      setError('Please enter your email address or username');
       return;
     }
-    if (!emailRegex.test(cleanedEmail)) {
-      setError('Please enter a valid email address');
-      return;
+
+    // Check if it's an email or username
+    const isEmail = cleanedInput.includes('@');
+    
+    if (isEmail) {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanedInput.toLowerCase())) {
+        setError('Please enter a valid email address');
+        return;
+      }
+    } else {
+      // Validate username format
+      if (cleanedInput.length < 3 || cleanedInput.length > 20) {
+        setError('Username must be between 3 and 20 characters');
+        return;
+      }
+      if (!/^[a-zA-Z0-9._-]+$/.test(cleanedInput)) {
+        setError('Username can only contain letters, numbers, periods, underscores, and hyphens');
+        return;
+      }
     }
 
     setIsLoading(true);
 
     try {
-      const response = await authService.forgotPassword(cleanedEmail);
+      const response = await authService.forgotPassword(cleanedInput);
 
       if (response.success) {
+        // Store the email from response if provided, otherwise use the input if it was an email
+        const email = response.data?.email || (isEmail ? cleanedInput.toLowerCase() : '');
+        
         setSuccess(true);
+        setSentToEmail(email);
+        
         // Store email in session storage for the next step
-        try {
-          sessionStorage.setItem('resetEmail', cleanedEmail);
-        } catch {
-          // ignore storage errors (private mode, etc.)
+        if (email) {
+          try {
+            sessionStorage.setItem('resetEmail', email);
+          } catch {
+            // ignore storage errors (private mode, etc.)
+          }
         }
-        // Navigate to code verification page after 2 seconds
+
+        // NEW: Set localStorage flag that reset is pending
+        try {
+          localStorage.setItem('resetPending', 'true');
+        } catch (err) {
+          console.error('[Forgot Password] Error setting resetPending flag:', err);
+        }
+        
+        // FIXED: Navigate to code verification page with email in URL after 2 seconds
         redirectTimerRef.current = window.setTimeout(() => {
-          router.push('/verify-reset-code');
+          const params = new URLSearchParams();
+          if (email) {
+            params.set('email', email);
+          }
+          router.push(`/verify-reset-code?${params.toString()}`);
         }, 2000);
       } else {
         setError(response.error?.message || 'Failed to send reset code. Please try again.');
@@ -92,8 +174,14 @@ export default function ForgotPasswordPage() {
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">Verification Code Sent!</h2>
           <p className="text-gray-400 mb-6">
-            We've sent a 6-digit verification code to{' '}
-            <span className="text-[#ff950e] font-medium">{email}</span>
+            {sentToEmail ? (
+              <>
+                We've sent a 6-digit verification code to{' '}
+                <span className="text-[#ff950e] font-medium">{sentToEmail}</span>
+              </>
+            ) : (
+              'If that account exists, we\'ve sent a verification code to the registered email address.'
+            )}
           </p>
           <p className="text-sm text-gray-500 mb-4">Please check your email inbox for the code.</p>
           <p className="text-xs text-gray-600" aria-live="polite">
@@ -152,37 +240,40 @@ export default function ForgotPasswordPage() {
                 </div>
               )}
 
-              {/* Email Field */}
+              {/* Email or Username Field */}
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="email">
-                  Email Address
+                <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="emailOrUsername">
+                  Email Address or Username
                 </label>
                 <div className="relative">
                   <input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email address"
+                    id="emailOrUsername"
+                    type="text"
+                    value={emailOrUsername}
+                    onChange={(e) => setEmailOrUsername(e.target.value)}
+                    placeholder="Enter email or username"
                     className="w-full px-4 py-3 bg-black/50 backdrop-blur-sm border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors pl-10"
                     disabled={isLoading}
                     autoFocus
-                    autoComplete="email"
-                    inputMode="email"
+                    autoComplete="username email"
                   />
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  {emailOrUsername.includes('@') ? (
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  ) : (
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  )}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  We'll send a 6-digit verification code to this email address.
+                  We'll send a 6-digit verification code to your registered email address.
                 </p>
               </div>
 
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isLoading || !email}
+                disabled={isLoading || !emailOrUsername}
                 className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-                style={{ color: isLoading || !email ? undefined : '#000' }}
+                style={{ color: isLoading || !emailOrUsername ? undefined : '#000' }}
                 aria-busy={isLoading}
               >
                 {isLoading ? (

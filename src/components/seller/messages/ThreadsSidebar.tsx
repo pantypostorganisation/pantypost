@@ -72,9 +72,9 @@ export default function ThreadsSidebar({
   };
 
   return (
-    <div className="h-full bg-[#1a1a1a] border-r border-gray-800 flex flex-col">
+    <div className="flex h-full flex-col bg-[#1a1a1a] border-r border-gray-800">
       {/* Header */}
-      <div className="p-4 border-b border-gray-800">
+      <div className="flex-none p-4 border-b border-gray-800">
         <h2 className="text-xl font-bold text-white mb-3 flex items-center">
           <MessageSquare className="mr-2 text-[#ff950e]" size={20} />
           {isAdmin ? 'Admin Messages' : 'Messages'}
@@ -120,9 +120,9 @@ export default function ThreadsSidebar({
           </button>
         </div>
       </div>
-      
+
       {/* Thread List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {filteredThreads.length === 0 ? (
           <div className="p-4 text-center text-gray-400">
             <MessageSquare className="mx-auto mb-2 opacity-50" size={24} />

@@ -1,36 +1,29 @@
+// src/components/wallet/buyer/EmptyState.tsx
 'use client';
 
 import { ShoppingBag, ArrowRight } from 'lucide-react';
 
 export default function EmptyState() {
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-12 border border-gray-800 text-center relative overflow-hidden">
-      {/* Background pattern */}
-      <div className="absolute inset-0 opacity-5">
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: `radial-gradient(circle at 50% 50%, rgba(255, 149, 14, 0.3) 0%, transparent 50%)`,
-          }}
-        />
-      </div>
-
-      <div className="relative z-10">
-        <div className="bg-gradient-to-r from-gray-700 to-gray-600 p-4 rounded-2xl w-20 h-20 mx-auto mb-6 shadow-lg">
-          <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto" />
+    <section className="rounded-2xl border border-dashed border-gray-800 bg-[#111] p-12 text-center">
+      <div className="mx-auto flex max-w-lg flex-col items-center gap-6">
+        <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+          <ShoppingBag className="h-10 w-10 text-[#ff950e]" />
         </div>
-        <h3 className="text-2xl font-bold text-white mb-3">No Purchases Yet</h3>
-        <p className="text-gray-400 mb-8 max-w-md mx-auto">
-          Start exploring our marketplace to find amazing deals from verified sellers
-        </p>
+        <div className="space-y-3">
+          <h3 className="text-3xl font-semibold text-white">No purchases just yet</h3>
+          <p className="text-sm text-gray-400 sm:text-base">
+            Unlock the full buyer experience by topping up and discovering curated drops from trusted sellers.
+          </p>
+        </div>
         <a
           href="/browse"
-          className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-[#ff950e] to-orange-600 hover:from-[#e88800] hover:to-orange-700 text-black rounded-xl font-semibold transition-all duration-300 shadow-lg shadow-orange-500/25 hover:shadow-orange-500/40 group"
+          className="group inline-flex items-center gap-2 rounded-full bg-[#ff950e] px-6 py-3 text-sm font-semibold text-black transition-colors duration-200 hover:bg-[#e0850d]"
         >
-          Browse Listings
-          <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
+          Browse listings
+          <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
         </a>
       </div>
-    </div>
+    </section>
   );
 }

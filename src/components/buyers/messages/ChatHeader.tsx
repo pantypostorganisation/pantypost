@@ -1,3 +1,4 @@
+// src/components/buyers/messages/ChatHeader.tsx
 'use client';
 
 import React from 'react';

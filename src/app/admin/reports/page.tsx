@@ -486,83 +486,85 @@ export default function AdminReportsPage() {
 
   return (
     <RequireAuth role="admin">
-      <main className="p-8 max-w-7xl mx-auto">
-        <Suspense fallback={<div className="h-20 bg-gray-800 rounded mb-6 animate-pulse" />}>
-          <ReportsHeader banContextError={banContextError} lastRefresh={lastRefresh} onRefresh={loadReports} />
-        </Suspense>
+      <main className="min-h-screen w-full bg-[#060606] px-4 py-8 text-zinc-100 sm:px-8">
+        <div className="mx-auto w-full max-w-7xl">
+          <Suspense fallback={<div className="mb-6 h-20 rounded-xl border border-zinc-800/80 bg-zinc-900/60 animate-pulse" />}> 
+            <ReportsHeader banContextError={banContextError} lastRefresh={lastRefresh} onRefresh={loadReports} />
+          </Suspense>
 
-        <Suspense fallback={<AdminStatsSkeleton />}>
-          <ReportsStats reportStats={reportStats} />
-        </Suspense>
+          <Suspense fallback={<AdminStatsSkeleton />}>
+            <ReportsStats reportStats={reportStats} />
+          </Suspense>
 
-        <Suspense fallback={<FiltersSkeletons />}>
-          <ReportsFilters
-            searchTerm={searchTerm}
-            setSearchTerm={handleSearchTermChange}
-            filterBy={filterBy}
-            setFilterBy={setFilterBy}
-            severityFilter={severityFilter}
-            setSeverityFilter={setSeverityFilter}
-            categoryFilter={categoryFilter}
-            setCategoryFilter={setCategoryFilter}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            sortOrder={sortOrder}
-            setSortOrder={setSortOrder}
-          />
-        </Suspense>
-
-        {isLoadingReports ? (
-          <ReportListSkeleton count={5} />
-        ) : (
-          <Suspense fallback={<ReportListSkeleton count={5} />}>
-            <ReportsList
-              reports={filteredAndSortedReports}
+          <Suspense fallback={<FiltersSkeletons />}>
+            <ReportsFilters
               searchTerm={searchTerm}
-              expandedReports={expandedReports}
-              toggleExpanded={toggleExpanded}
-              onBan={handleBanFromReport}
-              onResolve={handleMarkResolved}
-              onDelete={handleDeleteReport}
-              onUpdateSeverity={updateReportSeverity}
-              onUpdateCategory={updateReportCategory}
-              onUpdateAdminNotes={updateAdminNotes}
-              getUserReportStats={getUserReportStats}
-              banContext={banContext}
-              reportBanInfo={reportBanInfo}
+              setSearchTerm={handleSearchTermChange}
+              filterBy={filterBy}
+              setFilterBy={setFilterBy}
+              severityFilter={severityFilter}
+              setSeverityFilter={setSeverityFilter}
+              categoryFilter={categoryFilter}
+              setCategoryFilter={setCategoryFilter}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
             />
           </Suspense>
-        )}
 
-        {showBanModal && (
-          <Suspense fallback={<ModalSkeleton />}>
-            <BanModal
-              isOpen={showBanModal}
-              banForm={banForm}
-              setBanForm={updateBanForm}
-              isProcessing={isProcessingBan}
-              onClose={() => {
-                setShowBanModal(false);
-                resetBanForm();
-              }}
-              onConfirm={handleManualBan}
-            />
-          </Suspense>
-        )}
+          {isLoadingReports ? (
+            <ReportListSkeleton count={5} />
+          ) : (
+            <Suspense fallback={<ReportListSkeleton count={5} />}>
+              <ReportsList
+                reports={filteredAndSortedReports}
+                searchTerm={searchTerm}
+                expandedReports={expandedReports}
+                toggleExpanded={toggleExpanded}
+                onBan={handleBanFromReport}
+                onResolve={handleMarkResolved}
+                onDelete={handleDeleteReport}
+                onUpdateSeverity={updateReportSeverity}
+                onUpdateCategory={updateReportCategory}
+                onUpdateAdminNotes={updateAdminNotes}
+                getUserReportStats={getUserReportStats}
+                banContext={banContext}
+                reportBanInfo={reportBanInfo}
+              />
+            </Suspense>
+          )}
 
-        {showResolveModal && (
-          <Suspense fallback={<ModalSkeleton />}>
-            <ResolveModal
-              isOpen={showResolveModal}
-              report={selectedReport}
-              onClose={() => {
-                setShowResolveModal(false);
-                setSelectedReport(null);
-              }}
-              onConfirm={confirmResolve}
-            />
-          </Suspense>
-        )}
+          {showBanModal && (
+            <Suspense fallback={<ModalSkeleton />}>
+              <BanModal
+                isOpen={showBanModal}
+                banForm={banForm}
+                setBanForm={updateBanForm}
+                isProcessing={isProcessingBan}
+                onClose={() => {
+                  setShowBanModal(false);
+                  resetBanForm();
+                }}
+                onConfirm={handleManualBan}
+              />
+            </Suspense>
+          )}
+
+          {showResolveModal && (
+            <Suspense fallback={<ModalSkeleton />}>
+              <ResolveModal
+                isOpen={showResolveModal}
+                report={selectedReport}
+                onClose={() => {
+                  setShowResolveModal(false);
+                  setSelectedReport(null);
+                }}
+                onConfirm={confirmResolve}
+              />
+            </Suspense>
+          )}
+        </div>
       </main>
     </RequireAuth>
   );

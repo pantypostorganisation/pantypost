@@ -315,7 +315,7 @@ export default function FeaturesSection() {
   const shouldAnimate = !skipAnimation && (isInView || hasAnimated);
 
   return (
-    <div className="bg-gradient-to-b from-black to-[#101010] pt-16 pb-16 md:pt-20 md:pb-20 relative z-30 overflow-hidden">
+    <div className="pt-16 pb-16 md:pt-20 md:pb-20 relative overflow-hidden">
       {/* Enhanced SEO structured data - secured */}
       {structuredData && (
         <script
@@ -334,7 +334,7 @@ export default function FeaturesSection() {
           animate={shouldAnimate ? "visible" : "hidden"}
           variants={itemVariants}
         >
-          How <span className="text-[#ff950e]">PantyPost</span> Works
+          How <span className="text-[#ff950e]">Panty Post</span> Works
         </motion.h2>
 
         {/* Error state for entire section */}

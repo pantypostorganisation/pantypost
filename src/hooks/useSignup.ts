@@ -13,7 +13,7 @@ import { z } from 'zod';
 
 export const useSignup = () => {
   const router = useRouter();
-  const { user, isAuthReady, apiClient, login } = useAuth();
+  const { user, isAuthReady, apiClient } = useAuth();
   
   // Security features
   const [csrfManager] = useState(() => new CSRFTokenManager());
@@ -28,6 +28,7 @@ export const useSignup = () => {
     email: '',
     password: '',
     confirmPassword: '',
+    country: '',
     role: null,
     termsAccepted: false,
     ageVerified: false,
@@ -41,6 +42,7 @@ export const useSignup = () => {
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [rateLimitMessage, setRateLimitMessage] = useState<string>();
   const [passwordWarning, setPasswordWarning] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState<string>('');
 
   // Initialize CSRF token
   useEffect(() => {
@@ -50,9 +52,19 @@ export const useSignup = () => {
     }
   }, [csrfManager]);
 
-  // Set mounted state
+  // Set mounted state and check for referral code in URL
   useEffect(() => {
     setState(prev => ({ ...prev, mounted: true }));
+    
+    // Check for referral code in URL parameters
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refCode = urlParams.get('ref') || urlParams.get('referral');
+      if (refCode) {
+        setReferralCode(refCode);
+        console.log('[useSignup] Referral code detected from URL:', refCode);
+      }
+    }
   }, []);
   
   // Redirect if already logged in
@@ -133,6 +145,19 @@ export const useSignup = () => {
         // Don't over-sanitize email - just trim whitespace
         sanitizedValue = value.trim();
         break;
+      case 'country':
+        sanitizedValue = typeof value === 'string' ? value : '';
+        // Clear country error when a valid country is selected
+        if (sanitizedValue) {
+          setState(prev => ({
+            ...prev,
+            errors: {
+              ...prev.errors,
+              country: undefined
+            }
+          }));
+        }
+        break;
       case 'role':
         if (value !== 'buyer' && value !== 'seller') {
           console.error('Invalid role value');
@@ -153,8 +178,13 @@ export const useSignup = () => {
     setState(prev => ({ ...prev, [field]: sanitizedValue }));
   }, []);
 
-  // Fixed handleSubmit - now uses apiClient properly
-  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
+  // Function to update referral code
+  const updateReferralCode = useCallback((code: string) => {
+    setReferralCode(code);
+  }, []);
+
+  // UPDATED: Handle signup submission with email verification flow and referral code support
+  const handleSubmit = async (e: React.FormEvent, customReferralCode?: string): Promise<void> => {
     e.preventDefault();
     
     // Clear rate limit messages
@@ -188,6 +218,7 @@ export const useSignup = () => {
       email: state.email,
       password: state.password,
       confirmPassword: state.confirmPassword,
+      country: state.country,
       role: state.role,
       termsAccepted: state.termsAccepted,
       ageVerified: state.ageVerified
@@ -210,78 +241,151 @@ export const useSignup = () => {
       }
     }
 
-    // Additional validation
+    // Additional validation - including mandatory country check
     const validationErrors = validateForm(formData);
     if (Object.keys(validationErrors).length > 0) {
       setState(prev => ({ ...prev, errors: validationErrors }));
       return;
     }
     
+    // Additional check for country field (mandatory)
+    if (!state.country || state.country.trim() === '') {
+      setState(prev => ({
+        ...prev,
+        errors: { 
+          ...prev.errors, 
+          country: 'Please select your country',
+          form: 'Please complete all required fields'
+        }
+      }));
+      return;
+    }
+    
     setState(prev => ({ ...prev, isSubmitting: true, errors: {} }));
     
     try {
-      console.log('[Signup] Making signup request via apiClient');
+      console.log('[useSignup] Making signup request via apiClient');
       
-      // Use apiClient which properly handles URL construction
-      const response = await apiClient.post('/auth/signup', {
+      // Determine which referral code to use (custom parameter takes precedence)
+      const finalReferralCode = customReferralCode || referralCode;
+      
+      // Build signup data object
+      const signupData: any = {
         username: state.username,
         email: state.email,
         password: state.password,
+        country: state.country,
         role: state.role
+      };
+      
+      // Include referral code if provided and user is signing up as seller
+      if (finalReferralCode && state.role === 'seller') {
+        // CRITICAL FIX: Sanitize and uppercase the referral code
+        signupData.referralCode = finalReferralCode.trim().toUpperCase();
+        console.log('[useSignup] Including referral code for seller signup:', signupData.referralCode);
+      }
+      
+      console.log('[useSignup] Signup request payload:', { 
+        username: signupData.username,
+        email: signupData.email,
+        country: signupData.country,
+        role: signupData.role,
+        hasReferralCode: !!signupData.referralCode,
+        referralCodeLength: signupData.referralCode ? signupData.referralCode.length : 0
       });
       
-      console.log('[Signup] Response:', { success: response.success });
+      // Use apiClient which properly handles URL construction
+      const response = await apiClient.post('/auth/signup', signupData);
+      
+      console.log('[useSignup] Response received:', { 
+        success: response.success,
+        hasData: !!response.data,
+        requiresVerification: response.data?.requiresVerification,
+        referralApplied: response.data?.referralApplied
+      });
       
       if (response.success && response.data) {
-        console.log('[Signup] Success! Now logging in...');
+        console.log('[useSignup] ✅ Account created successfully');
         
         // Clear rate limit on success
         resetSignupLimit(state.email);
         
-        // Use the login function from AuthContext to properly set up the session
-        const loginSuccess = await login(state.username, state.password, state.role || 'buyer');
+        // Clear sensitive data from state
+        setState(prev => ({
+          ...prev,
+          password: '',
+          confirmPassword: '',
+          errors: {}
+        }));
         
-        if (loginSuccess) {
-          console.log('[Signup] Auto-login successful, redirecting...');
+        // Clear referral code after successful signup
+        setReferralCode('');
+        
+        // Check if email verification is required
+        if (response.data.requiresVerification) {
+          console.log('[useSignup] Email verification required, redirecting to pending page...');
           
-          // Clear sensitive data from state
-          setState(prev => ({
-            ...prev,
-            password: '',
-            confirmPassword: '',
-            email: '',
-            errors: {}
-          }));
+          // Build redirect URL with parameters
+          const params = new URLSearchParams({
+            email: encodeURIComponent(response.data.email),
+            username: encodeURIComponent(response.data.username)
+          });
           
-          // Redirect to dashboard
-          router.push('/');
-        } else {
-          // Signup worked but login failed - this shouldn't happen
-          setState(prev => ({
-            ...prev,
-            errors: { 
-              form: 'Account created successfully! Please try logging in manually.'
+          // Add referral success info if applicable
+          if (response.data.referralApplied) {
+            params.append('referralSuccess', 'true');
+            console.log('[useSignup] ✅ Referral was successfully applied!');
+            if (response.data.referrerUsername) {
+              params.append('referrer', encodeURIComponent(response.data.referrerUsername));
+              console.log('[useSignup] Referrer:', response.data.referrerUsername);
             }
-          }));
+          }
           
-          // Redirect to login page
-          setTimeout(() => router.push('/login'), 2000);
+          router.push(`/verify-email-pending?${params.toString()}`);
+        } else {
+          // This shouldn't happen with the new flow, but handle it just in case
+          console.log('[useSignup] No verification required (unexpected), redirecting to browse...');
+          router.push('/browse');
         }
       } else {
         // Handle API error response
         const errorMessage = response.error?.message || 'Registration failed. Please try again.';
-        setState(prev => ({
-          ...prev,
-          errors: { 
-            ...prev.errors, 
-            form: errorMessage,
-            // If the error has a field, set that specific field error
-            ...(response.error?.field && { [response.error.field]: errorMessage })
-          }
-        }));
+        
+        console.error('[useSignup] ❌ Signup failed:', errorMessage);
+        
+        // Handle specific referral code errors
+        if (response.error?.code === 'INVALID_REFERRAL_CODE') {
+          setState(prev => ({
+            ...prev,
+            errors: { 
+              ...prev.errors, 
+              form: 'Invalid or expired referral code. You can still sign up without it.',
+              referralCode: 'This referral code is invalid or has expired'
+            }
+          }));
+        } else if (response.error?.code === 'REFERRAL_CODE_MAXED') {
+          setState(prev => ({
+            ...prev,
+            errors: { 
+              ...prev.errors, 
+              form: 'This referral code has reached its maximum usage limit.',
+              referralCode: 'This referral code has been used the maximum number of times'
+            }
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            errors: { 
+              ...prev.errors, 
+              form: errorMessage,
+              // If the error has a field, set that specific field error
+              ...(response.error?.field && { [response.error.field]: errorMessage })
+            }
+          }));
+        }
       }
     } catch (error: any) {
-      console.error('Signup error:', error);
+      console.error('[useSignup] ❌ Signup error:', error);
       
       // Handle network or unexpected errors
       const errorMessage = error.message?.includes('Network') 
@@ -297,6 +401,13 @@ export const useSignup = () => {
     }
   };
 
+  // Validate referral code format (optional utility function)
+  const validateReferralCode = useCallback((code: string): boolean => {
+    // Basic validation - alphanumeric and hyphens, 3-20 characters
+    const referralCodePattern = /^[A-Za-z0-9-]{3,20}$/;
+    return referralCodePattern.test(code);
+  }, []);
+
   return {
     // State
     ...state,
@@ -307,9 +418,14 @@ export const useSignup = () => {
     csrfToken,
     passwordWarning,
     
+    // Referral state
+    referralCode,
+    
     // Actions
     updateField,
     handleSubmit,
+    updateReferralCode,
+    validateReferralCode,
     
     // Navigation
     router

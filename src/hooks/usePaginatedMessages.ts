@@ -1,4 +1,5 @@
 // src/hooks/usePaginatedMessages.ts
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { z } from 'zod';
 import { sanitizeStrict, sanitizeHtml } from '@/utils/security/sanitization';

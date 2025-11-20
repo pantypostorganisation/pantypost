@@ -43,21 +43,52 @@ export default function WalletActionPanel({
   formatRole
 }: WalletActionPanelProps) {
   const [touched, setTouched] = useState({ amount: false, reason: false });
+  const [errors, setErrors] = useState<{ amount?: string; reason?: string }>({});
 
   const handleSecureAmountChange = (value: string) => {
     if (value === '') {
       setAmount('');
+      setErrors(prev => ({ ...prev, amount: undefined }));
     } else {
       const sanitized = sanitizeCurrency(value);
       setAmount(sanitized.toString());
+      
+      // Validate amount
+      const numAmount = parseFloat(sanitized.toString());
+      if (isNaN(numAmount) || numAmount <= 0) {
+        setErrors(prev => ({ ...prev, amount: 'Please enter a valid amount greater than 0' }));
+      } else if (numAmount > 10000) {
+        setErrors(prev => ({ ...prev, amount: 'Amount cannot exceed $10,000' }));
+      } else {
+        setErrors(prev => ({ ...prev, amount: undefined }));
+      }
     }
   };
 
-  const canSubmit = Boolean(amount) && Boolean(sanitizeStrict(reason).trim()) && !isLoading;
+  const handleReasonChange = (value: string) => {
+    setReason(value);
+    
+    // Validate reason - FIXED to match backend requirement (10 chars minimum)
+    const sanitized = sanitizeStrict(value).trim();
+    if (!sanitized || sanitized.length < 10) {
+      setErrors(prev => ({ ...prev, reason: 'Reason must be at least 10 characters' }));
+    } else if (sanitized.length > 500) {
+      setErrors(prev => ({ ...prev, reason: 'Reason cannot exceed 500 characters' }));
+    } else {
+      setErrors(prev => ({ ...prev, reason: undefined }));
+    }
+  };
+
+  const canSubmit = Boolean(amount) && 
+                   Boolean(sanitizeStrict(reason).trim()) && 
+                   sanitizeStrict(reason).trim().length >= 10 && // FIXED: Match backend requirement
+                   !isLoading && 
+                   !errors.amount && 
+                   !errors.reason;
 
   return (
-    <div className="bg-[#1a1a1a] p-6 rounded-xl border border-gray-800 shadow-lg h-fit">
-      <h2 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
+    <div className="h-fit rounded-2xl border border-white/5 bg-gradient-to-br from-[#111111]/85 via-[#0b0b0b]/70 to-[#050505]/70 p-6 shadow-[0_20px_45px_rgba(0,0,0,0.5)]">
+      <h2 className="mb-4 flex items-center gap-2 text-xl font-semibold text-white">
         <DollarSign className="h-5 w-5 text-[#ff950e]" />
         Wallet Actions
       </h2>
@@ -65,8 +96,8 @@ export default function WalletActionPanel({
       {selectedUser ? (
         <div className="space-y-4">
           {/* Selected User Info */}
-          <div className="bg-black/30 p-4 rounded-lg">
-            <div className="flex items-center justify-between mb-2">
+          <div className="rounded-xl border border-white/5 bg-white/5 p-4">
+            <div className="mb-2 flex items-center justify-between">
               <span className="font-medium text-white">
                 <SecureMessageDisplay content={selectedUser} allowBasicFormatting={false} className="inline" />
               </span>
@@ -74,7 +105,7 @@ export default function WalletActionPanel({
                 {formatRole(selectedUserRole)}
               </span>
             </div>
-            <div className="text-sm text-gray-400">
+            <div className="text-sm text-gray-300">
               Current Balance:{' '}
               <span className={getBalanceColor(getUserBalance(selectedUser))}>
                 ${Number(getUserBalance(selectedUser)).toFixed(2)}
@@ -84,12 +115,14 @@ export default function WalletActionPanel({
 
           {/* Action Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Action Type</label>
+            <label className="mb-2 block text-sm font-medium text-gray-300">Action Type</label>
             <div className="flex gap-2">
               <button
                 onClick={() => setActionType('credit')}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                  actionType === 'credit' ? 'bg-green-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                className={`flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                  actionType === 'credit'
+                    ? 'flex border-green-500/60 bg-green-500/20 text-green-100 shadow-[0_10px_30px_rgba(16,185,129,0.25)]'
+                    : 'flex border-white/10 bg-white/5 text-gray-300 hover:border-white/20 hover:bg-white/10'
                 }`}
                 aria-pressed={actionType === 'credit'}
               >
@@ -98,8 +131,10 @@ export default function WalletActionPanel({
               </button>
               <button
                 onClick={() => setActionType('debit')}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
-                  actionType === 'debit' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                className={`flex-1 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                  actionType === 'debit'
+                    ? 'flex border-red-500/60 bg-red-500/20 text-red-100 shadow-[0_10px_30px_rgba(239,68,68,0.2)]'
+                    : 'flex border-white/10 bg-white/5 text-gray-300 hover:border-white/20 hover:bg-white/10'
                 }`}
                 aria-pressed={actionType === 'debit'}
               >
@@ -119,30 +154,36 @@ export default function WalletActionPanel({
               onBlur={() => setTouched((prev) => ({ ...prev, amount: true }))}
               step="0.01"
               min="0"
-              max="999999.99"
-              className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
+              max="10000"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white backdrop-blur placeholder-gray-500 focus:border-[#ff950e] focus:outline-none"
               placeholder="0.00"
               touched={touched.amount}
+              error={errors.amount}
               sanitize={false}
             />
           </div>
 
-          {/* Reason */}
+          {/* Reason - FIXED with proper validation display */}
           <div>
             <SecureTextarea
-              label="Reason"
+              label="Reason (minimum 10 characters)"
               value={reason}
-              onChange={setReason}
+              onChange={handleReasonChange}
               onBlur={() => setTouched((prev) => ({ ...prev, reason: true }))}
-              className="w-full px-3 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e] resize-none"
+              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-white placeholder-gray-500 backdrop-blur focus:border-[#ff950e] focus:outline-none resize-none"
               rows={3}
-              placeholder="Reason for this action..."
+              placeholder="Enter a detailed reason for this action (at least 10 characters)..."
               maxLength={500}
               characterCount={true}
               touched={touched.reason}
+              error={errors.reason}
               sanitize={true}
               sanitizer={sanitizeStrict}
             />
+            {/* Show character count helper */}
+            <div className="mt-1 text-xs text-gray-400">
+              {sanitizeStrict(reason).trim().length}/10 minimum characters
+            </div>
           </div>
 
           {/* Action Buttons */}
@@ -151,15 +192,16 @@ export default function WalletActionPanel({
               onClick={() => {
                 clearSelection();
                 setTouched({ amount: false, reason: false });
+                setErrors({});
               }}
-              className="flex-1 py-2 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-gray-200 transition hover:border-white/20 hover:bg-white/10"
             >
               Clear
             </button>
             <button
               onClick={handleAction}
               disabled={!canSubmit}
-              className="flex-1 py-2 px-4 bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-gray-600 disabled:cursor-not-allowed text-black disabled:text-gray-400 rounded-lg transition-colors font-medium flex items-center justify-center gap-2"
+              className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#ff6b00] disabled:cursor-not-allowed disabled:bg-gray-600 disabled:text-gray-300"
             >
               {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {actionType === 'credit' ? 'Credit' : 'Debit'} Account
@@ -167,10 +209,10 @@ export default function WalletActionPanel({
           </div>
         </div>
       ) : (
-        <div className="text-center py-8">
-          <UserCheck className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-          <p className="text-gray-400 mb-2">No user selected</p>
-          <p className="text-sm text-gray-500">Select a user from the list to manage their wallet</p>
+        <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-gray-400">
+          <UserCheck className="mx-auto mb-4 h-12 w-12 text-gray-600" />
+          <p className="mb-2 text-sm">No user selected</p>
+          <p className="text-xs text-gray-500">Choose a wallet on the left to begin.</p>
         </div>
       )}
     </div>

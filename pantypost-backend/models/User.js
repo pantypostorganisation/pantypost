@@ -30,6 +30,16 @@ const userSchema = new mongoose.Schema({
     default: 'buyer'
   },
   
+  // EMAIL VERIFICATION FIELDS (NEW)
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerifiedAt: {
+    type: Date,
+    default: null
+  },
+  
   // PROFILE FIELDS
   bio: {
     type: String,
@@ -40,6 +50,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     maxlength: 56,
     default: ''
+  },
+  isLocationPublic: {
+    type: Boolean,
+    default: true
   },
   profilePic: {
     type: String,
@@ -202,6 +216,28 @@ const userSchema = new mongoose.Schema({
     default: Date.now
   },
   
+  // REFERRAL FIELDS (NEW)
+  referredBy: {
+    type: String,
+    ref: 'User'
+  },
+  referralCode: {
+    type: String
+  },
+  referredAt: {
+    type: Date
+  },
+  referralEarnings: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  referralCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  
   // TIMESTAMPS
   createdAt: {
     type: Date,
@@ -223,7 +259,9 @@ userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isVerified: 1 });
 userSchema.index({ isBanned: 1 });
+userSchema.index({ emailVerified: 1 });
 userSchema.index({ 'storage': 1 });
+userSchema.index({ referredBy: 1 }); // NEW: Index for referral queries
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -276,6 +314,18 @@ userSchema.methods.updateLastActive = function() {
 userSchema.methods.setOffline = function() {
   this.isOnline = false;
   this.lastActive = new Date();
+  return this.save();
+};
+
+// Check if email is verified (NEW)
+userSchema.methods.isEmailVerified = function() {
+  return this.emailVerified === true;
+};
+
+// Mark email as verified (NEW)
+userSchema.methods.markEmailAsVerified = async function() {
+  this.emailVerified = true;
+  this.emailVerifiedAt = new Date();
   return this.save();
 };
 

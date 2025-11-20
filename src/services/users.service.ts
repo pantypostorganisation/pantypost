@@ -32,6 +32,8 @@ export interface UserProfile {
   subscriptionPrice: number; // <-- normalized to number for UI reliability
   lastUpdated?: string;
   galleryImages?: string[];
+  country?: string | null;
+  isLocationPublic?: boolean;
 }
 
 export interface UpdateProfileRequest {
@@ -41,6 +43,8 @@ export interface UpdateProfileRequest {
   // backend accepts number; enhanced layer handles conversion.
   subscriptionPrice?: string;
   galleryImages?: string[];
+  country?: string;
+  isLocationPublic?: boolean;
 }
 
 export interface VerificationRequest {
@@ -80,7 +84,7 @@ const BASE_HOST = (() => {
     // API_BASE_URL can be "http://localhost:5000" or "http://localhost:5000/api"
     return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
   } catch {
-    return 'http://localhost:5000';
+    return process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com';
   }
 })();
 
@@ -194,6 +198,8 @@ export class UsersService {
         galleryImages: Array.isArray(raw.galleryImages)
           ? (raw.galleryImages.map(p => toAbsoluteUrl(p)!).filter(Boolean) as string[])
           : undefined,
+        country: typeof raw.country === 'string' ? raw.country : raw.country === null ? null : undefined,
+        isLocationPublic: typeof raw.isLocationPublic === 'boolean' ? raw.isLocationPublic : true,
       };
 
       return { success: true, data: profile };
@@ -242,6 +248,8 @@ export class UsersService {
         galleryImages: Array.isArray(raw.galleryImages)
           ? (raw.galleryImages.map((p: string) => toAbsoluteUrl(p)!).filter(Boolean) as string[])
           : undefined,
+        country: typeof raw.country === 'string' ? raw.country : raw.country === null ? null : undefined,
+        isLocationPublic: typeof raw.isLocationPublic === 'boolean' ? raw.isLocationPublic : true,
       };
 
       return { success: true, data: profile };

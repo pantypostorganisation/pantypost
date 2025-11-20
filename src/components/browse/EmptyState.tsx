@@ -1,3 +1,4 @@
+// src/components/browse/EmptyState.tsx
 'use client';
 
 import { ShoppingBag } from 'lucide-react';

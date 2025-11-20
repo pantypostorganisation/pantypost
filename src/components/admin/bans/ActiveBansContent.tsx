@@ -112,18 +112,20 @@ export default function ActiveBansContent({
       : `${validatedTotalCount}`;
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold text-white">Active Bans ({headerCount})</h2>
-        {validatedTotalCount > 0 && <p className="text-sm text-gray-400">Click on a ban to expand details</p>}
+    <div className="space-y-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-2xl font-semibold text-white">Active Bans ({headerCount})</h2>
+        {validatedTotalCount > 0 && (
+          <p className="text-sm text-zinc-500">Click on a ban to expand details</p>
+        )}
       </div>
 
       {filteredBans.length === 0 ? (
-        <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-8 text-center">
-          <UserCheck size={48} className="mx-auto text-gray-600 mb-4" />
-          <p className="text-gray-400 text-lg">No active bans found</p>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-950/80 p-8 text-center">
+          <UserCheck size={48} className="mx-auto mb-4 text-zinc-600" />
+          <p className="text-lg text-zinc-300">No active bans found</p>
           {filters.searchTerm && (
-            <p className="text-gray-500 text-sm mt-2">
+            <p className="mt-2 text-sm text-zinc-500">
               <SecureMessageDisplay content={`Try adjusting your search terms or filters`} allowBasicFormatting={false} />
             </p>
           )}

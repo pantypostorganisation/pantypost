@@ -1,3 +1,4 @@
+// src/components/admin/bans/BanStatsDashboard.tsx
 'use client';
 
 import { BanStats } from '@/types/ban';
@@ -21,36 +22,76 @@ export default function BanStatsDashboard({ banStats }: BanStatsDashboardProps) 
     appealStats,
   } = banStats || ({} as BanStats);
 
+  const cards: Array<{
+    label: string;
+    value: number;
+    valueClass: string;
+    labelClass: string;
+    borderClass?: string;
+  }> = [
+    {
+      label: 'Active Bans',
+      value: safeNumber(totalActiveBans),
+      valueClass: 'text-red-400',
+      labelClass: 'text-red-300/80',
+      borderClass: 'border-red-500/30 hover:border-red-400/60',
+    },
+    {
+      label: 'Temporary',
+      value: safeNumber(temporaryBans),
+      valueClass: 'text-amber-400',
+      labelClass: 'text-amber-300/80',
+      borderClass: 'border-amber-500/30 hover:border-amber-400/60',
+    },
+    {
+      label: 'Permanent',
+      value: safeNumber(permanentBans),
+      valueClass: 'text-rose-400',
+      labelClass: 'text-rose-300/80',
+      borderClass: 'border-rose-500/30 hover:border-rose-400/60',
+    },
+    {
+      label: 'Appeals',
+      value: safeNumber(pendingAppeals),
+      valueClass: 'text-purple-400',
+      labelClass: 'text-purple-300/80',
+      borderClass: 'border-purple-500/30 hover:border-purple-400/60',
+    },
+    {
+      label: '24h Bans',
+      value: safeNumber(recentBans24h),
+      valueClass: 'text-yellow-300',
+      labelClass: 'text-yellow-200/80',
+      borderClass: 'border-yellow-400/30 hover:border-yellow-300/60',
+    },
+    {
+      label: 'Approved',
+      value: safeNumber(appealStats?.approvedAppeals),
+      valueClass: 'text-emerald-400',
+      labelClass: 'text-emerald-300/80',
+      borderClass: 'border-emerald-500/30 hover:border-emerald-400/60',
+    },
+  ];
+
   return (
     <div
-      className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6"
+      className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6"
       role="group"
       aria-label="Ban statistics overview"
     >
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-red-400">{safeNumber(totalActiveBans)}</div>
-        <div className="text-xs text-gray-400">Active Bans</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-yellow-400">{safeNumber(temporaryBans)}</div>
-        <div className="text-xs text-gray-400">Temporary</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-purple-400">{safeNumber(permanentBans)}</div>
-        <div className="text-xs text-gray-400">Permanent</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-orange-400">{safeNumber(pendingAppeals)}</div>
-        <div className="text-xs text-gray-400">Appeals</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-blue-400">{safeNumber(recentBans24h)}</div>
-        <div className="text-xs text-gray-400">24h Bans</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-green-400">{safeNumber(appealStats?.approvedAppeals)}</div>
-        <div className="text-xs text-gray-400">Approved</div>
-      </div>
+      {cards.map(({ label, value, valueClass, labelClass, borderClass }) => (
+        <div
+          key={label}
+          className={`rounded-xl border bg-zinc-950/80 px-4 py-3 text-left transition-colors ${
+            borderClass ?? 'border-zinc-800/80 hover:border-zinc-700'
+          }`}
+        >
+          <div className={`text-2xl font-semibold ${valueClass}`}>{value}</div>
+          <div className={`mt-1 text-xs font-medium uppercase tracking-wide ${labelClass}`}>
+            {label}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

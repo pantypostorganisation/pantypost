@@ -1,4 +1,5 @@
 // src/hooks/useSellerMessages.ts
+
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
@@ -68,7 +69,9 @@ export function useSellerMessages() {
     getMessagesForUsers,
     refreshMessages,
     isLoading: messagesLoading,
-    isInitialized
+    isInitialized,
+    getSellerProfile,
+    sellerProfiles
   } = useMessages();
   const { requests, addRequest, getRequestsForUser, respondToRequest, markRequestAsPaid, getRequestById } = useRequests();
   const { getBuyerBalance, purchaseCustomRequest } = useWallet();
@@ -147,9 +150,62 @@ export function useSellerMessages() {
         console.log('[useSellerMessages] Initialization complete');
       }
     };
-    
+
     initializeMessages();
   }, [user, isInitialized, messages, refreshMessages, initialLoadAttempted]);
+
+  // Refresh messages when returning to the tab/app
+  useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+
+    let isRefreshing = false;
+    let lastRefresh = 0;
+
+    const refreshIfVisible = async (force = false) => {
+      if (!force && document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const now = Date.now();
+      // Throttle refreshes to avoid rapid consecutive calls
+      if (isRefreshing || now - lastRefresh < 1000) {
+        return;
+      }
+
+      isRefreshing = true;
+      try {
+        await refreshMessages();
+        setMessageUpdateCounter(prev => prev + 1);
+      } finally {
+        lastRefresh = Date.now();
+        isRefreshing = false;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      void refreshIfVisible();
+    };
+
+    const handleFocus = () => {
+      void refreshIfVisible();
+    };
+
+    const handlePageShow = () => {
+      void refreshIfVisible(true);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [mounted, refreshMessages]);
   
   // CRITICAL: Listen for new messages and handle optimistic updates
   useEffect(() => {
@@ -314,7 +370,7 @@ export function useSellerMessages() {
     }
   }, [searchParams, user, activeThread, mounted]);
   
-  // ENHANCED: Merge real messages with optimistic messages - FIXED to not require initialization
+  // ENHANCED: Merge real messages with optimistic messages - FIXED to include buyer profiles
   const { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount } = useMemo(() => {
     const threads: { [buyer: string]: Message[] } = {};
     const unreadCounts: { [buyer: string]: number } = {};
@@ -328,6 +384,7 @@ export function useSellerMessages() {
     
     console.log('[SellerMessages] Processing messages for seller:', user.username);
     console.log('[SellerMessages] Total conversation keys:', Object.keys(messages).length);
+    console.log('[SellerMessages] Available seller profiles:', sellerProfiles);
     
     // Process all conversations to find ones involving the seller
     Object.entries(messages).forEach(([conversationKey, msgs]) => {
@@ -400,20 +457,32 @@ export function useSellerMessages() {
         totalUnreadCount += threadUnreadCount;
       }
       
-      // Get buyer profile
-      const buyerInfo = users?.[otherParty];
-      const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+      // CRITICAL FIX: Get buyer profile from sellerProfiles (which contains ALL user profiles)
+      const profileFromContext = getSellerProfile(otherParty);
+      console.log(`[SellerMessages] Profile for buyer ${otherParty}:`, profileFromContext);
       
-      buyerProfiles[otherParty] = { 
-        pic: null,
-        verified: isVerified || false
-      };
+      if (profileFromContext) {
+        buyerProfiles[otherParty] = {
+          pic: profileFromContext.profilePic || null,
+          verified: profileFromContext.isVerified || false
+        };
+      } else {
+        // Fallback: try to get from users if available
+        const buyerInfo = users?.[otherParty];
+        const isVerified = buyerInfo?.verified || buyerInfo?.verificationStatus === 'verified';
+        
+        buyerProfiles[otherParty] = { 
+          pic: buyerInfo?.profilePic || buyerInfo?.profilePicture || null,
+          verified: isVerified || false
+        };
+      }
     });
     
     console.log('[SellerMessages] Final thread count:', Object.keys(threads).length);
+    console.log('[SellerMessages] Final buyer profiles:', buyerProfiles);
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
-  }, [user?.username, messages, users, optimisticMessages, messageUpdateCounter]);
+  }, [user?.username, messages, users, optimisticMessages, messageUpdateCounter, sellerProfiles, getSellerProfile]);
   
   // Get seller's requests with validation
   const sellerRequests = useMemo(() => {
@@ -560,7 +629,7 @@ export function useSellerMessages() {
       });
 
       // For image messages, allow empty text
-      const messageContent = sanitizedContent || (selectedImage ? 'Image shared' : '');
+      const messageContent = sanitizedContent;
 
       // Create optimistic message
       const tempId = uuidv4();
@@ -901,7 +970,7 @@ export function useSellerMessages() {
       
       // Upload to Cloudinary
       console.log('Uploading image to Cloudinary...');
-      const uploadResult = await uploadToCloudinary(file);
+      const uploadResult = await uploadToCloudinary(file, 'message');
       
       // Validate returned URL
       const urlValidation = z.string().url().safeParse(uploadResult.url);

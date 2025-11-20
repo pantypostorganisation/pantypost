@@ -135,10 +135,19 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     messagesService.initialize();
   }, []);
 
-  // Load initial data from API with profiles - UPDATED to use backend field names directly
+  // Load initial data from API with profiles - UPDATED to skip if not authenticated
   useEffect(() => {
     const loadData = async () => {
       if (typeof window === 'undefined') {
+        setIsLoading(false);
+        setIsInitialized(true);
+        return;
+      }
+
+      // CRITICAL FIX: Don't try to load messages if user isn't authenticated
+      const authTokens = sessionStorage.getItem('auth_tokens');
+      if (!authTokens) {
+        console.log('[MessageContext] No auth tokens found, skipping message load');
         setIsLoading(false);
         setIsInitialized(true);
         return;
@@ -389,11 +398,9 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         return;
       }
 
-      let sanitizedContent = content;
-      if (options?.type === 'image' && !sanitizedContent.trim() && options?.meta?.imageUrl) {
-        sanitizedContent = 'Image shared';
-      }
+      const isImageMessage = options?.type === 'image' || !!options?.meta?.imageUrl;
 
+      let sanitizedContent = content;
       if (sanitizedContent.trim()) {
         const contentValidation = messageSchemas.messageContent.safeParse(sanitizedContent);
         if (!contentValidation.success) {
@@ -401,6 +408,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
           return;
         }
         sanitizedContent = contentValidation.data;
+      } else if (!isImageMessage) {
+        console.error('Message content cannot be empty');
+        return;
+      } else {
+        sanitizedContent = '';
       }
 
       let sanitizedMeta = options?.meta;

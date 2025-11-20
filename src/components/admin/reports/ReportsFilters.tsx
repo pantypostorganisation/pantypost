@@ -1,3 +1,4 @@
+// src/components/admin/reports/ReportsFilters.tsx
 'use client';
 
 import { useCallback } from 'react';
@@ -76,17 +77,17 @@ export default function ReportsFilters({
   }, [setSortOrder, sortOrder]);
 
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 mb-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-5 gap-4">
+    <div className="mb-8 rounded-2xl border border-zinc-800/80 bg-zinc-950/70 p-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         {/* Search */}
         <div className="relative xl:col-span-2">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 z-10" size={16} aria-hidden />
+          <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={16} aria-hidden />
           <SecureInput
             type="text"
             placeholder="Search by username or notes..."
             value={searchTerm}
             onChange={setSearchTerm}
-            className="w-full pl-10 pr-4 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e] transition-all"
+            className="w-full rounded-lg border border-zinc-800 bg-zinc-900/80 py-2 pl-9 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
             maxLength={100}
             aria-label="Search reports"
           />
@@ -96,7 +97,7 @@ export default function ReportsFilters({
         <select
           value={(FILTER_STATES as readonly string[]).includes(filterBy as any) ? filterBy : 'all'}
           onChange={(e) => onFilterChange(e.target.value)}
-          className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+          className="h-full w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
           aria-label="Filter by status"
         >
           <option value="all">All Reports</option>
@@ -108,7 +109,7 @@ export default function ReportsFilters({
         <select
           value={(SEVERITIES as readonly string[]).includes(severityFilter as any) ? severityFilter : 'all'}
           onChange={(e) => onSeverityChange(e.target.value)}
-          className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+          className="h-full w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
           aria-label="Filter by severity"
         >
           <option value="all">All Severities</option>
@@ -122,7 +123,7 @@ export default function ReportsFilters({
         <select
           value={(CATEGORIES as readonly string[]).includes(categoryFilter as any) ? categoryFilter : 'all'}
           onChange={(e) => onCategoryChange(e.target.value)}
-          className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+          className="h-full w-full rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
           aria-label="Filter by category"
         >
           <option value="all">All Categories</option>
@@ -135,26 +136,29 @@ export default function ReportsFilters({
       </div>
 
       {/* Sort Controls */}
-      <div className="flex items-center gap-3 mt-4">
-        <span className="text-sm text-gray-400">Sort by:</span>
-        <select
-          value={(SORT_BY as readonly string[]).includes(sortBy as any) ? sortBy : 'date'}
-          onChange={(e) => onSortByChange(e.target.value)}
-          className="px-3 py-1.5 bg-[#222] border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-          aria-label="Sort reports by"
-        >
-          <option value="date">Date</option>
-          <option value="severity">Severity</option>
-          <option value="reporter">Reporter</option>
-        </select>
-        <button
-          type="button"
-          onClick={toggleSortOrder}
-          className="px-3 py-2 bg-[#222] border border-gray-700 rounded-lg text-white hover:bg-[#333] transition-colors"
-          aria-label={`Change sort order (currently ${sortOrder})`}
-        >
-          {sortOrder === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
+      <div className="mt-5 flex flex-col gap-3 border-t border-zinc-900 pt-4 text-sm text-zinc-400 sm:flex-row sm:items-center sm:justify-between">
+        <span className="font-medium text-zinc-300">Sort</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <select
+            value={(SORT_BY as readonly string[]).includes(sortBy as any) ? sortBy : 'date'}
+            onChange={(e) => onSortByChange(e.target.value)}
+            className="rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-100 focus:border-[#ff950e] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
+            aria-label="Sort reports by"
+          >
+            <option value="date">Date</option>
+            <option value="severity">Severity</option>
+            <option value="reporter">Reporter</option>
+          </select>
+          <button
+            type="button"
+            onClick={toggleSortOrder}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-700 hover:text-white"
+            aria-label={`Change sort order (currently ${sortOrder})`}
+          >
+            {sortOrder === 'asc' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            <span className="hidden sm:inline">{sortOrder === 'asc' ? 'Ascending' : 'Descending'}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

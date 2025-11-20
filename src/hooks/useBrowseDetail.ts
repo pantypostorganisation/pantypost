@@ -9,18 +9,20 @@ import { useWebSocket } from '@/context/WebSocketContext';
 import { useAuction } from '@/context/AuctionContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getUserProfileData } from '@/utils/profileUtils';
+import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { storageService, listingsService, reviewsService } from '@/services';
-import {
-  isAuctionActive,
-  calculateTotalPayable,
-  formatTimeRemaining,
+import { 
+  isAuctionActive, 
+  calculateTotalPayable, 
+  formatTimeRemaining, 
   formatRelativeTime,
-  extractSellerInfo,
+  extractSellerInfo 
 } from '@/utils/browseDetailUtils';
 import { getBuyerDebitAmount, hasSufficientBalance, getAmountNeeded, getAuctionTotalPayable } from '@/utils/pricing';
 import { DetailState, ListingWithDetails, BidHistoryItem } from '@/types/browseDetail';
 import { securityService, sanitize } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
+import { financialSchemas } from '@/utils/validation/schemas';
 import { ApiResponse } from '@/services/api.config';
 import { isAdmin } from '@/utils/security/permissions';
 import { resolveApiUrl } from '@/utils/url';
@@ -47,7 +49,7 @@ const initialState: DetailState = {
   isBidding: false,
   bidError: null,
   bidSuccess: null,
-  currentImageIndex: 0,
+  currentImageIndex: 0
 };
 
 interface Message {
@@ -65,21 +67,26 @@ export const useBrowseDetail = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useAuth();
-  const { getBuyerBalance, orderHistory } = useWallet();
-  const {
+  const { 
+    getBuyerBalance,
+    orderHistory
+  } = useWallet();
+  const { 
     listings,
     users,
     subscriptions,
     placeBid: listingsPlaceBid,
     purchaseListingAndRemove,
-    refreshListings,
+    refreshListings
   } = useListings();
+  const { processEndedAuction } = useAuction();
+  
   const wsContext = useWebSocket();
   const subscribe = wsContext?.subscribe || (() => () => {});
   const isConnected = wsContext?.isConnected || false;
-
+  
   const rateLimiter = getRateLimiter();
-
+  
   // State
   const [state, setState] = useState<DetailState>(initialState);
   const [listing, setListing] = useState<ListingWithDetails | undefined>();
@@ -92,7 +99,7 @@ export const useBrowseDetail = () => {
   const [auctionExpiryProcessed, setAuctionExpiryProcessed] = useState(false);
   const [realtimeBids, setRealtimeBids] = useState<BidHistoryItem[]>([]);
   const [lastBidUpdate, setLastBidUpdate] = useState<number>(Date.now());
-
+  
   // Refs
   const isPurchasingRef = useRef(false);
   const hasPurchasedRef = useRef(false);
@@ -100,15 +107,39 @@ export const useBrowseDetail = () => {
   const imageRef = useRef<HTMLDivElement>(null);
   const bidInputRef = useRef<HTMLInputElement>(null);
   const bidButtonRef = useRef<HTMLButtonElement>(null);
-  const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mountedRef = useRef(true);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fundingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const auctionExpiryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const fundingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const auctionExpiryTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasMarkedRef = useRef(false);
-  const viewIncrementedRef = useRef(false);
+  const viewTrackedRef = useRef(false);
+  const viewTrackingInProgressRef = useRef(false);
+  const listingLoadedRef = useRef(false);
+  
+  const listingRef = useRef<ListingWithDetails | undefined>(undefined);
+  
+  const optimisticViewRef = useRef<{ previousState: number; previousListing: number | null } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isProcessingAuctionEndRef = useRef(false);
+  
+  // CRITICAL FIX: Track current listing ID for view tracking
+  const currentListingIdRef = useRef<string | null>(null);
+
+  const listingsRef = useRef(listings);
+  const refreshListingsRef = useRef(refreshListings);
+
+  useEffect(() => {
+    listingsRef.current = listings;
+  }, [listings]);
+
+  useEffect(() => {
+    refreshListingsRef.current = refreshListings;
+  }, [refreshListings]);
+
+  useEffect(() => {
+    listingRef.current = listing;
+  }, [listing]);
 
   // Core data
   const rawListingId = params?.id as string;
@@ -134,7 +165,7 @@ export const useBrowseDetail = () => {
   // Helper functions
   const updateState = useCallback((updates: Partial<DetailState> | ((prev: DetailState) => Partial<DetailState>)) => {
     if (!mountedRef.current) return;
-    setState((prev) => {
+    setState(prev => {
       const newUpdates = typeof updates === 'function' ? updates(prev) : updates;
       return { ...prev, ...newUpdates };
     });
@@ -142,97 +173,102 @@ export const useBrowseDetail = () => {
 
   // WebSocket subscriptions for real-time updates
   useEffect(() => {
-    if (!isConnected || !isAuction || !listingId || !mountedRef.current || !subscribe) return () => {};
+    if (!isConnected || !isAuction || !listingId || !mountedRef.current || !subscribe) return;
 
     const unsubscribeBid = subscribe(WebSocketEvent.AUCTION_BID, (data: any) => {
       if (data.listingId !== listingId) return;
 
+      console.log('[BrowseDetail] Real-time bid received:', data);
+
       const newBidForHistory: BidHistoryItem = {
         bidder: data.bidder || data.username,
         amount: data.amount || 0,
-        date: data.timestamp || new Date().toISOString(),
+        date: data.timestamp || new Date().toISOString()
       };
 
       const newBidForListing = {
         id: data.id || `bid_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         bidder: data.bidder || data.username,
         amount: data.amount || 0,
-        date: data.timestamp || new Date().toISOString(),
+        date: data.timestamp || new Date().toISOString()
       };
 
-      setListing((prev) => {
+      setListing(prev => {
         if (!prev || !prev.auction) return prev;
-
+        
         const updatedBids = [...(prev.auction.bids || []), newBidForListing]
           .sort((a, b) => b.amount - a.amount)
           .slice(0, 20);
-
+        
         return {
           ...prev,
           auction: {
             ...prev.auction,
             highestBid: newBidForListing.amount,
             highestBidder: newBidForListing.bidder,
-            bids: updatedBids,
-          },
+            bids: updatedBids
+          }
         } as ListingWithDetails;
       });
 
-      setRealtimeBids((prev) => {
+      setRealtimeBids(prev => {
         const updated = [newBidForHistory, ...prev]
-          .filter(
-            (bid, index, self) => index === self.findIndex((b) => b.bidder === bid.bidder && b.amount === bid.amount),
+          .filter((bid, index, self) => 
+            index === self.findIndex(b => b.bidder === bid.bidder && b.amount === bid.amount)
           )
           .sort((a, b) => b.amount - a.amount)
           .slice(0, 5);
         return updated;
       });
 
-      updateState((prevState) => ({
-        bidsHistory: [newBidForHistory, ...prevState.bidsHistory].sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-        ),
+      updateState(prevState => ({
+        bidsHistory: [newBidForHistory, ...prevState.bidsHistory]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       }));
 
       setLastBidUpdate(Date.now());
 
       if (newBidForHistory.bidder === currentUsername) {
-        updateState({
+        updateState({ 
           bidSuccess: 'Your bid was placed successfully!',
-          bidError: null,
+          bidError: null 
         });
       }
     });
 
     const unsubscribeEnded = subscribe(WebSocketEvent.AUCTION_ENDED, (data: any) => {
       if (data.listingId === listingId) {
-        setListing((prev) => {
+        console.log('[BrowseDetail] Auction ended event received');
+        
+        setListing(prev => {
           if (!prev || !prev.auction) return prev;
-
+          
           return {
             ...prev,
             auction: {
               ...prev.auction,
-              status: data.status === 'reserve_not_met' ? 'reserve_not_met' : 'ended',
-            },
+              status: data.status === 'reserve_not_met' ? 'reserve_not_met' : 'ended'
+            }
           } as ListingWithDetails;
         });
-
+        
         refreshListings();
       }
     });
 
     const unsubscribeReserve = subscribe('auction:reserve_not_met' as WebSocketEvent, (data: any) => {
       if (data.listingId === listingId) {
-        setListing((prev) => {
+        console.log('[BrowseDetail] Reserve not met event received');
+        
+        setListing(prev => {
           if (!prev || !prev.auction) return prev;
-
+          
           return {
             ...prev,
             auction: {
               ...prev.auction,
-              status: 'reserve_not_met',
-            },
+              status: 'reserve_not_met'
+            }
           } as ListingWithDetails;
         });
       }
@@ -240,10 +276,14 @@ export const useBrowseDetail = () => {
 
     // Listen for auction won event
     const unsubscribeWon = subscribe('auction:won' as WebSocketEvent, (data: any) => {
+      console.log('[BrowseDetail] Auction won event received:', data);
+      
+      // Check if this is for the current listing and user
       if (data.listingId === listingId || data.listingId === listing?.id) {
         if (currentUsername && (data.winner === currentUsername || data.winnerId === currentUsername)) {
+          console.log('[BrowseDetail] Current user won the auction!');
           updateState({ showAuctionSuccess: true });
-
+          
           // Navigate to orders after a delay
           setTimeout(() => {
             if (mountedRef.current) {
@@ -254,7 +294,6 @@ export const useBrowseDetail = () => {
       }
     });
 
-    // Always return a cleanup
     return () => {
       unsubscribeBid();
       unsubscribeEnded();
@@ -265,28 +304,34 @@ export const useBrowseDetail = () => {
 
   // Auto-check and process expired auctions
   useEffect(() => {
-    if (!isAuction || !listing?.auction || auctionExpiryProcessed || !mountedRef.current) return () => {};
+    if (!isAuction || !listing?.auction || auctionExpiryProcessed || !mountedRef.current) return;
+    if (isProcessingAuctionEndRef.current) return;
 
     const checkAuctionExpiry = async () => {
       if (!listing.auction?.endTime) return;
-
+      
       const now = new Date();
       const endTime = new Date(listing.auction.endTime);
-
+      
       if (endTime <= now && listing.auction.status === 'active') {
-        if (isProcessingAuctionEndRef.current) return;
-
+        console.log('[BrowseDetail] Auction has expired, needs processing');
+        
+        if (isProcessingAuctionEndRef.current) {
+          console.log('[BrowseDetail] Already processing auction end');
+          return;
+        }
+        
         isProcessingAuctionEndRef.current = true;
         setAuctionExpiryProcessed(true);
 
-        setListing((prev) => {
+        setListing(prev => {
           if (!prev || !prev.auction) return prev;
           return {
             ...prev,
             auction: {
               ...prev.auction,
-              status: reserveMet ? 'ended' : ('reserve_not_met' as any),
-            },
+              status: reserveMet ? 'ended' : ('reserve_not_met' as any)
+            }
           } as ListingWithDetails;
         });
 
@@ -294,20 +339,25 @@ export const useBrowseDetail = () => {
 
         // Always trigger backend processing
         try {
+          console.log('[BrowseDetail] Triggering backend auction end processing');
           const response = await listingsService.endAuction(listing.id);
-
+          
           if (response.success) {
+            console.log('[BrowseDetail] Auction end processed successfully');
             await refreshListings();
-
+            
             if (listing.auction.highestBidder === currentUsername && reserveMet) {
               updateState({ showAuctionSuccess: true });
               setTimeout(() => {
-                if (mountedRef.current) router.push('/buyers/my-orders');
+                if (mountedRef.current) {
+                  router.push('/buyers/my-orders');
+                }
               }, 5000);
             }
           } else {
             const msg = (response.error?.message || '').toLowerCase();
             if (msg.includes('already processed') || msg.includes('auction is not active')) {
+              console.log('[BrowseDetail] Auction already processed on backend');
               await refreshListings();
             } else {
               console.warn('[BrowseDetail] Failed to process auction end:', response.error);
@@ -316,11 +366,8 @@ export const useBrowseDetail = () => {
         } catch (error) {
           const m = (error as any)?.message?.toLowerCase?.() || '';
           if (m.includes('already processed') || m.includes('auction is not active')) {
-            try {
-              await refreshListings();
-            } catch {
-              // ignore
-            }
+            console.log('[BrowseDetail] Auction already ended, refreshing');
+            try { await refreshListings(); } catch {}
           } else {
             console.warn('[BrowseDetail] Error processing auction end:', error);
           }
@@ -330,10 +377,9 @@ export const useBrowseDetail = () => {
       }
     };
 
-    void checkAuctionExpiry();
+    checkAuctionExpiry();
     auctionExpiryTimerRef.current = setInterval(checkAuctionExpiry, AUCTION_EXPIRY_CHECK_INTERVAL);
 
-    // Always return a cleanup
     return () => {
       if (auctionExpiryTimerRef.current) {
         clearInterval(auctionExpiryTimerRef.current);
@@ -342,41 +388,46 @@ export const useBrowseDetail = () => {
     };
   }, [isAuction, listing, auctionExpiryProcessed, currentUsername, refreshListings, router, updateState, reserveMet]);
 
-  // Load listing
+  // CRITICAL FIX: Load listing with FRESH data fetch
   useEffect(() => {
+    listingLoadedRef.current = false;
+    viewTrackedRef.current = false;
+    viewTrackingInProgressRef.current = false;
+
     const loadListing = async () => {
       if (!listingId) return;
 
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+
       abortControllerRef.current = new AbortController();
 
       setIsLoading(true);
       setError(null);
 
       try {
-        const contextListing = listings.find((l) => l.id === listingId);
+        // CRITICAL FIX: Always fetch fresh data from backend to get latest view count
+        console.log('[BrowseDetail] Fetching FRESH listing data:', listingId);
+        const result = await listingsService.getListing(listingId);
 
-        if (contextListing) {
-          setListing(contextListing as ListingWithDetails);
-          setState((prev) => ({ ...prev, viewCount: contextListing.views || 0 }));
-          setIsLoading(false);
-        } else {
-          const result = await listingsService.getListing(listingId);
+        if (!mountedRef.current) return;
 
-          if (!mountedRef.current) return;
+        if (result.success && result.data) {
+          setListing(result.data as ListingWithDetails);
+          setState(prev => ({ ...prev, viewCount: result.data?.views || 0 }));
+          listingLoadedRef.current = true;
 
-          if (result.success && result.data) {
-            setListing(result.data as ListingWithDetails);
-            setState((prev) => ({ ...prev, viewCount: result.data?.views || 0 }));
-            await refreshListings();
-          } else {
-            setError(result.error?.message || 'Listing not found');
+          try {
+            await refreshListingsRef.current?.();
+          } catch (refreshError) {
+            console.warn('[BrowseDetail] Failed to refresh listings after load:', refreshError);
           }
-
-          setIsLoading(false);
+        } else {
+          setError(result.error?.message || 'Listing not found');
         }
+
+        setIsLoading(false);
       } catch (error: any) {
         if (!mountedRef.current) return;
 
@@ -391,40 +442,50 @@ export const useBrowseDetail = () => {
       }
     };
 
-    void loadListing();
+    loadListing();
 
-    // Always return a cleanup (abort any in-flight request)
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
     };
-  }, [listingId, listings, refreshListings]);
+  }, [listingId]);
 
-  // Load seller reviews from backend API (sanitized)
+  // Load seller reviews from backend API
   useEffect(() => {
     const loadSellerReviews = async () => {
-      if (!listing?.seller) return;
+      if (!listing?.seller) {
+        console.log('[BrowseDetail] No seller found in listing');
+        return;
+      }
 
       try {
+        console.log('[BrowseDetail] Loading reviews for seller:', listing.seller);
+        
         const reviewsResponse = await reviewsService.getSellerReviews(listing.seller);
-
+        
+        console.log('[BrowseDetail] Reviews API response:', reviewsResponse);
+        
         if (reviewsResponse.success && reviewsResponse.data) {
           const { reviews, stats } = reviewsResponse.data;
-
+          
+          console.log('[BrowseDetail] Loaded reviews:', reviews?.length || 0, 'Stats:', stats);
+          
           setSellerReviews(reviews || []);
           setSellerReviewStats(stats || null);
-
-          // Set average rating
+          
           if (stats && typeof stats.avgRating === 'number') {
             setSellerAverageRating(stats.avgRating);
+            console.log('[BrowseDetail] Set average rating:', stats.avgRating);
           } else if (reviews && reviews.length > 0) {
             const totalRating = reviews.reduce((sum: number, review: any) => sum + (review.rating || 0), 0);
             const avgRating = totalRating / reviews.length;
             setSellerAverageRating(Math.round(avgRating * 10) / 10);
+            console.log('[BrowseDetail] Calculated average rating:', Math.round(avgRating * 10) / 10);
           } else {
             setSellerAverageRating(null);
+            console.log('[BrowseDetail] No reviews found, setting rating to null');
           }
         } else {
           console.warn('[BrowseDetail] Failed to load reviews:', reviewsResponse.error);
@@ -438,23 +499,18 @@ export const useBrowseDetail = () => {
       }
     };
 
-    void loadSellerReviews();
-
-    return () => {};
+    loadSellerReviews();
   }, [listing?.seller]);
 
   // Merge realtime bids with existing bids
   const mergedBidsHistory = useMemo(() => {
     const allBids = [...realtimeBids, ...state.bidsHistory];
-    const uniqueBids = allBids.filter(
-      (bid, index, self) =>
-        index ===
-        self.findIndex(
-          (b) =>
-            b.bidder === bid.bidder &&
-            b.amount === bid.amount &&
-            Math.abs(new Date(b.date).getTime() - new Date(bid.date).getTime()) < 1000,
-        ),
+    const uniqueBids = allBids.filter((bid, index, self) =>
+      index === self.findIndex(b => 
+        b.bidder === bid.bidder && 
+        b.amount === bid.amount && 
+        Math.abs(new Date(b.date).getTime() - new Date(bid.date).getTime()) < 1000
+      )
     );
     return uniqueBids.sort((a, b) => b.amount - a.amount);
   }, [realtimeBids, state.bidsHistory]);
@@ -463,62 +519,204 @@ export const useBrowseDetail = () => {
   const images = listing?.imageUrls || [];
   const currentHighestBid = listing?.auction?.highestBid || 0;
   const currentTotalPayable = isAuction ? getAuctionTotalPayable(currentHighestBid) : 0;
-  const didUserBid = listing?.auction?.bids?.some((bid) => bid.bidder === currentUsername) ?? false;
+  const didUserBid = listing?.auction?.bids?.some(bid => bid.bidder === currentUsername) ?? false;
   const isUserHighestBidder = listing?.auction?.highestBidder === currentUsername;
   const buyerBalance = user ? getBuyerBalance(user.username) : 0;
-
+  
   // Check subscription
-  const isSubscribed = useCallback(
-    (buyerUsername: string, sellerUsername: string): boolean => {
-      const buyerSubs = subscriptions[buyerUsername] || [];
-      return buyerSubs.includes(sellerUsername);
-    },
-    [subscriptions],
-  );
+  const isSubscribed = useCallback((buyerUsername: string, sellerUsername: string): boolean => {
+    const buyerSubs = subscriptions[buyerUsername] || [];
+    return buyerSubs.includes(sellerUsername);
+  }, [subscriptions]);
 
-  const needsSubscription =
-    listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
+  const needsSubscription = listing?.isPremium && currentUsername && listing?.seller ? !isSubscribed(currentUsername, listing.seller) : false;
 
-  // Track view count
-  useEffect(() => {
-    const trackView = async () => {
-      if (!listing) return;
+  const listingLoaded = listingLoadedRef.current;
 
-      if (listing.views !== undefined && !viewIncrementedRef.current) {
-        setState((prev) => ({ ...prev, viewCount: listing.views || 0 }));
+  // CRITICAL FIX: Enhanced view tracking with immediate refresh
+  const trackView = useCallback(
+    async ({ force = false }: { force?: boolean } = {}) => {
+      if (!listingId || !listingLoadedRef.current) {
+        return;
       }
 
-      if (!viewIncrementedRef.current) {
-        viewIncrementedRef.current = true;
+      // Check if we're tracking the same listing
+      if (currentListingIdRef.current !== listingId) {
+        console.log('[BrowseDetail] New listing detected, resetting view tracking');
+        viewTrackedRef.current = false;
+        currentListingIdRef.current = listingId;
+      }
 
-        try {
-          if (user && user.username !== listing.seller) {
-            await listingsService.updateViews({
-              listingId: listing.id,
-              viewerId: user.username,
-            });
-          } else if (!user) {
-            await listingsService.updateViews({
-              listingId: listing.id,
-            });
-          }
+      if (force) {
+        viewTrackedRef.current = false;
+      }
 
-          const viewsResponse: ApiResponse<number> = await listingsService.getListingViews(listing.id);
-          if (viewsResponse.success && viewsResponse.data !== undefined) {
-            setState((prev) => ({ ...prev, viewCount: viewsResponse.data as number }));
-          }
-        } catch (error) {
-          console.error('Error tracking view:', error);
-          if (listing.views !== undefined) {
-            setState((prev) => ({ ...prev, viewCount: listing.views || 0 }));
-          }
+      if (viewTrackingInProgressRef.current || viewTrackedRef.current) {
+        return;
+      }
+
+      viewTrackingInProgressRef.current = true;
+
+      try {
+        console.log('[BrowseDetail] Tracking view for listing:', listingId);
+
+        // Track the view
+        const updateResult = await listingsService.updateViews({
+          listingId,
+          viewerId: user?.username,
+        });
+
+        if (!updateResult.success) {
+          console.warn('[BrowseDetail] Failed to update view:', updateResult.error);
+          viewTrackedRef.current = false;
+          return;
         }
+
+        const viewCount = typeof updateResult.data === 'number' ? updateResult.data : Number(updateResult.data ?? 0);
+
+        if (!Number.isFinite(viewCount)) {
+          console.warn('[BrowseDetail] Invalid view count returned from update:', updateResult.data);
+          viewTrackedRef.current = false;
+          return;
+        }
+
+        if (!mountedRef.current) {
+          return;
+        }
+
+        viewTrackedRef.current = true;
+
+        console.log('[BrowseDetail] Updated view count:', viewCount);
+
+        // CRITICAL FIX: Immediately update the UI with the new count
+        const sanitizedServerCount = Math.max(0, Math.round(viewCount));
+
+        setState(prev => ({
+          ...prev,
+          viewCount: sanitizedServerCount
+        }));
+
+        setListing(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            views: sanitizedServerCount
+          };
+        });
+
+        // CRITICAL FIX: Fetch fresh listing data to ensure everything is in sync
+        console.log('[BrowseDetail] Fetching fresh listing data after view track');
+        const freshResult = await listingsService.getListing(listingId);
+        
+        if (freshResult.success && freshResult.data && mountedRef.current) {
+          setListing(freshResult.data as ListingWithDetails);
+          setState(prev => ({
+            ...prev,
+            viewCount: freshResult.data?.views || sanitizedServerCount
+          }));
+          console.log('[BrowseDetail] Refreshed listing with view count:', freshResult.data.views);
+        }
+
+      } catch (error) {
+        console.error('[BrowseDetail] Error tracking view:', error);
+        viewTrackedRef.current = false;
+      } finally {
+        viewTrackingInProgressRef.current = false;
+      }
+    },
+    [listingId, user?.username]
+  );
+
+  // CRITICAL FIX: Track view when listing loads OR when user navigates back
+  useEffect(() => {
+    if (!listingId || !listingLoaded) {
+      return;
+    }
+
+    // Track view whenever the listing changes or loads
+    trackView();
+  }, [listingId, listingLoaded, trackView]);
+
+  // CRITICAL FIX: Enhanced navigation detection for back/forward navigation
+  useEffect(() => {
+    if (!listingId) {
+      return;
+    }
+
+    const resetTracking = () => {
+      console.log('[BrowseDetail] Page hide - resetting tracking');
+      viewTrackedRef.current = false;
+      viewTrackingInProgressRef.current = false;
+    };
+
+    const handlePageShow = (event: Event) => {
+      const pageEvent = event as Event & { persisted?: boolean };
+      
+      const navigationEntries =
+        typeof performance !== 'undefined' && 'getEntriesByType' in performance
+          ? (performance.getEntriesByType('navigation') as PerformanceNavigationTiming[])
+          : [];
+
+      const isBackForwardNavigation =
+        (pageEvent?.persisted ?? false) ||
+        navigationEntries.some(entry => entry.type === 'back_forward');
+
+      console.log('[BrowseDetail] Page show event:', { 
+        persisted: pageEvent?.persisted,
+        navigationType: navigationEntries[0]?.type,
+        isBackForward: isBackForwardNavigation,
+        currentListingId: listingId,
+        previousListingId: currentListingIdRef.current
+      });
+
+      if (isBackForwardNavigation || currentListingIdRef.current !== listingId) {
+        console.log('[BrowseDetail] Back/forward navigation detected or listing changed - forcing view track');
+        viewTrackedRef.current = false;
+        viewTrackingInProgressRef.current = false;
+        currentListingIdRef.current = listingId;
+        
+        setTimeout(() => {
+          if (listingLoadedRef.current && mountedRef.current) {
+            trackView({ force: true });
+          }
+        }, 100);
       }
     };
 
-    void trackView();
-    return () => {};
-  }, [listing, user]);
+    const handlePopState = () => {
+      console.log('[BrowseDetail] Popstate event detected');
+      viewTrackedRef.current = false;
+      viewTrackingInProgressRef.current = false;
+      
+      setTimeout(() => {
+        if (listingLoadedRef.current && mountedRef.current) {
+          trackView({ force: true });
+        }
+      }, 100);
+    };
+
+    window.addEventListener('pagehide', resetTracking);
+    window.addEventListener('pageshow', handlePageShow);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('pagehide', resetTracking);
+      window.removeEventListener('pageshow', handlePageShow);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [listingId, trackView]);
+
+  // CRITICAL FIX: Reset tracking when listing ID changes
+  useEffect(() => {
+    console.log('[BrowseDetail] Listing ID changed:', listingId);
+    viewTrackedRef.current = false;
+    viewTrackingInProgressRef.current = false;
+    listingLoadedRef.current = false;
+    
+    if (listingId) {
+      currentListingIdRef.current = listingId;
+    }
+  }, [listingId]);
 
   const getTimerProgress = useCallback(() => {
     if (!isAuction || !listing?.auction?.endTime || isAuctionEnded) return 0;
@@ -530,73 +728,76 @@ export const useBrowseDetail = () => {
     return Math.min(Math.max((elapsed / totalDuration) * 100, 0), 100);
   }, [isAuction, listing?.auction?.endTime, listing?.date, isAuctionEnded]);
 
-  // Check current user funds
   const checkCurrentUserFunds = useCallback(() => {
     if (!isAuction || !listing?.auction) {
-      updateState({
+      updateState({ 
         biddingEnabled: true,
-        bidStatus: {},
+        bidStatus: {}
       });
       return;
     }
-
-    if (!user || user.role !== 'buyer') return;
-
+    
+    if (!user || user.role !== "buyer") return;
+    
     if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
-      updateState({
+      updateState({ 
         biddingEnabled: true,
-        bidStatus: {},
+        bidStatus: {}
       });
       return;
     }
 
     const balance = getBuyerBalance(user.username);
-
+    console.log('[useBrowseDetail] Checking funds - current balance:', balance);
+    
     const startingBid = listing.auction.startingPrice || 0;
     const minimumBid = (listing.auction.highestBid || startingBid) + 1;
     const totalRequired = getAuctionTotalPayable(minimumBid);
     const hasEnoughFunds = balance >= totalRequired;
 
-    updateState({
+    console.log('[useBrowseDetail] Fund check:', {
+      balance,
+      minimumBid,
+      totalRequired,
+      hasEnoughFunds
+    });
+
+    updateState({ 
       biddingEnabled: hasEnoughFunds,
-      bidStatus: hasEnoughFunds
-        ? {}
-        : {
-            success: false,
-            message: `Insufficient funds. You need $${totalRequired.toFixed(2)} to place this bid.`,
-          },
+      bidStatus: hasEnoughFunds ? {} : {
+        success: false,
+        message: `Insufficient funds. You need $${totalRequired.toFixed(2)} to place this bid.`
+      }
     });
   }, [user, isAuction, listing?.auction, getBuyerBalance, updateState, state.isProcessing]);
 
   const formatBidDate = useCallback((date: string) => formatRelativeTime(date), []);
 
-  // Suggested bid amount calculation (FIXED TYPO)
   const suggestedBidAmount = useMemo(() => {
     if (!isAuction || !listing?.auction) return null;
-
+    
     const currentBid = listing.auction.highestBid || 0;
     const startingBid = listing.auction.startingPrice || 0;
     const minBidAmount = currentBid > 0 ? currentBid + 1 : startingBid;
-
+    
     return minBidAmount.toString();
   }, [isAuction, listing?.auction]);
 
-  // Mark messages as read (local storage based)
   const markMessagesAsRead = useCallback(async (receiverUsername: string, senderUsername: string) => {
     try {
       const messagesKey = `messages`;
       const allMessages = await storageService.getItem<Record<string, Message[]>>(messagesKey, {});
-
+      
       const conversationKey = [receiverUsername, senderUsername].sort().join('-');
-      const msgs = allMessages[conversationKey] || [];
-
-      const updatedMessages = msgs.map((msg) => {
+      const messages = allMessages[conversationKey] || [];
+      
+      const updatedMessages = messages.map(msg => {
         if (msg.receiver === receiverUsername && msg.sender === senderUsername && !msg.read) {
           return { ...msg, read: true, isRead: true };
         }
         return msg;
       });
-
+      
       allMessages[conversationKey] = updatedMessages;
       await storageService.setItem(messagesKey, allMessages);
     } catch (error) {
@@ -604,84 +805,85 @@ export const useBrowseDetail = () => {
     }
   }, []);
 
-  // Listen for wallet balance updates and refunds
   useEffect(() => {
-    if (!isAuction || !user || user.role !== 'buyer') return () => {};
-    if (typeof window === 'undefined') return () => {};
-
-    const handleBalanceUpdate = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      if (detail?.username === user.username) {
+    if (!isAuction || !user || user.role !== 'buyer') return;
+    
+    const handleBalanceUpdate = (event: CustomEvent) => {
+      console.log('[useBrowseDetail] Balance update received:', event.detail);
+      
+      if (event.detail.username === user.username) {
         checkCurrentUserFunds();
-        updateState({
+        updateState({ 
           bidError: null,
-          bidSuccess: null,
+          bidSuccess: null
         });
       }
     };
-
-    const handleUserRefunded = (event: Event) => {
-      const detail = (event as CustomEvent).detail;
-      if (detail?.username === user.username && detail?.listingId === listing?.id) {
-        updateState({
+    
+    const handleUserRefunded = (event: CustomEvent) => {
+      console.log('[useBrowseDetail] User refunded:', event.detail);
+      
+      if (event.detail.username === user.username && 
+          event.detail.listingId === listing?.id) {
+        updateState({ 
           bidStatus: {
             success: true,
-            message: `You were outbid! Your funds ($${detail.amount.toFixed(2)}) have been refunded.`,
+            message: `You were outbid! Your funds ($${event.detail.amount.toFixed(2)}) have been refunded.`
           },
           bidError: null,
-          bidSuccess: null,
+          bidSuccess: null
         });
-
+        
         setTimeout(() => {
           checkCurrentUserFunds();
         }, 100);
       }
     };
-
+    
     const handleCheckBidStatus = () => {
+      console.log('[useBrowseDetail] Checking bid status after balance change');
       checkCurrentUserFunds();
     };
-
+    
     window.addEventListener('wallet:buyer-balance-updated', handleBalanceUpdate as EventListener);
     window.addEventListener('wallet:user-refunded', handleUserRefunded as EventListener);
-    window.addEventListener('auction:check-bid-status', handleCheckBidStatus as EventListener);
-
+    window.addEventListener('auction:check-bid-status', handleCheckBidStatus);
+    
     return () => {
       window.removeEventListener('wallet:buyer-balance-updated', handleBalanceUpdate as EventListener);
       window.removeEventListener('wallet:user-refunded', handleUserRefunded as EventListener);
-      window.removeEventListener('auction:check-bid-status', handleCheckBidStatus as EventListener);
+      window.removeEventListener('auction:check-bid-status', handleCheckBidStatus);
     };
   }, [isAuction, user, listing?.id, checkCurrentUserFunds, updateState]);
 
-  // Load seller profile with proper URL resolution
   useEffect(() => {
     const loadProfileData = async () => {
       if (listing?.seller) {
         try {
           const listingWithProfile = listing as any;
           if (listingWithProfile.sellerProfile) {
-            const profilePic = listingWithProfile.sellerProfile.pic
-              ? resolveApiUrl(listingWithProfile.sellerProfile.pic)
-              : null;
-
-            updateState({
-              sellerProfile: {
+            const profilePic = listingWithProfile.sellerProfile.pic ? 
+              resolveApiUrl(listingWithProfile.sellerProfile.pic) : null;
+            
+            updateState({ 
+              sellerProfile: { 
                 bio: listingWithProfile.sellerProfile.bio || null,
                 pic: profilePic,
-                subscriptionPrice: listingWithProfile.sellerProfile.subscriptionPrice || null,
-              },
+                subscriptionPrice: listingWithProfile.sellerProfile.subscriptionPrice || null
+              } 
             });
           } else {
             const profileData = await getUserProfileData(listing.seller);
             if (profileData) {
-              const profilePic = profileData.profilePic ? resolveApiUrl(profileData.profilePic) : null;
-
-              updateState({
-                sellerProfile: {
+              const profilePic = profileData.profilePic ? 
+                resolveApiUrl(profileData.profilePic) : null;
+              
+              updateState({ 
+                sellerProfile: { 
                   bio: profileData.bio ? sanitize.strict(profileData.bio) : null,
                   pic: profilePic,
-                  subscriptionPrice: profileData.subscriptionPrice,
-                },
+                  subscriptionPrice: profileData.subscriptionPrice
+                } 
               });
             }
           }
@@ -691,9 +893,7 @@ export const useBrowseDetail = () => {
       }
     };
 
-    void loadProfileData();
-
-    return () => {};
+    loadProfileData();
   }, [listing?.seller, listing, updateState]);
 
   useEffect(() => {
@@ -701,66 +901,61 @@ export const useBrowseDetail = () => {
       markMessagesAsRead(currentUsername, listing.seller);
       hasMarkedRef.current = true;
     }
-    return () => {};
   }, [listing?.seller, currentUsername, markMessagesAsRead]);
 
   useEffect(() => {
     if (isAuction && listing?.auction?.bids) {
-      const historyItems: BidHistoryItem[] = listing.auction.bids.map((bid) => ({
+      const historyItems: BidHistoryItem[] = listing.auction.bids.map(bid => ({
         bidder: bid.bidder,
         amount: bid.amount,
-        date: bid.date,
+        date: bid.date
       }));
-
-      const sortedBids = historyItems.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      const sortedBids = historyItems.sort((a, b) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
       updateState({ bidsHistory: sortedBids });
     } else {
       updateState({ bidsHistory: [] });
     }
-    return () => {};
   }, [isAuction, listing?.auction?.bids, updateState]);
 
   useEffect(() => {
-    if (isAuction && isAuctionEnded && user?.role === 'buyer' && isUserHighestBidder && !state.showAuctionSuccess) {
-      const t = setTimeout(() => {
+    if (isAuction && isAuctionEnded && user?.role === "buyer" && isUserHighestBidder && !state.showAuctionSuccess) {
+      setTimeout(() => {
         updateState({ showAuctionSuccess: true });
-        const t2 = setTimeout(() => {
+        setTimeout(() => {
           router.push('/buyers/my-orders');
         }, 10000);
-        // t2 will auto-clear after firing
       }, 1000);
-
-      return () => clearTimeout(t);
     }
-    // Always return a cleanup (no-op)
-    return () => {};
   }, [isAuction, isAuctionEnded, user?.role, isUserHighestBidder, state.showAuctionSuccess, router, updateState]);
 
   useEffect(() => {
     if (!isAuction) {
-      updateState({
+      updateState({ 
         biddingEnabled: true,
-        bidStatus: {},
+        bidStatus: {}
       });
-      return () => {};
+      return;
     }
-
-    if (isAuctionEnded) return () => {};
-
+    
+    if (isAuctionEnded) return;
+    
     if (isPurchasingRef.current || hasPurchasedRef.current || state.isProcessing) {
-      updateState({
+      updateState({ 
         biddingEnabled: true,
-        bidStatus: {},
+        bidStatus: {}
       });
-      return () => {};
+      return;
     }
-
+    
     checkCurrentUserFunds();
-
+    
     fundingTimerRef.current = setInterval(() => {
       checkCurrentUserFunds();
     }, FUNDING_CHECK_INTERVAL);
-
+    
     return () => {
       if (fundingTimerRef.current) {
         clearInterval(fundingTimerRef.current);
@@ -770,7 +965,7 @@ export const useBrowseDetail = () => {
   }, [isAuction, isAuctionEnded, state.isProcessing, checkCurrentUserFunds, updateState]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return () => {};
+    if (typeof window === 'undefined') return;
     const handleScroll = () => {
       if (!imageRef.current) return;
       const rect = imageRef.current.getBoundingClientRect();
@@ -787,7 +982,7 @@ export const useBrowseDetail = () => {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      return () => {};
+      return;
     }
 
     timerRef.current = setInterval(() => {
@@ -807,38 +1002,35 @@ export const useBrowseDetail = () => {
   // Action handlers
   const handlePurchase = useCallback(async () => {
     if (!user || !listing || state.isProcessing) return;
-
+    
     if (user.role !== 'buyer') {
-      updateState({
+      updateState({ 
         purchaseStatus: 'Only buyers can make purchases',
-        isProcessing: false,
+        isProcessing: false 
       });
       return;
     }
 
     setRateLimitError(null);
 
-    const rateLimitResult = rateLimiter.check('API_CALL', {
-      ...RATE_LIMITS.API_CALL,
-      identifier: user.username + ':purchase',
-    });
+    const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
     if (!rateLimitResult.allowed) {
       setRateLimitError(`Too many requests. Please wait ${rateLimitResult.waitTime} seconds.`);
-      updateState({
+      updateState({ 
         purchaseStatus: `Please wait ${rateLimitResult.waitTime} seconds before trying again.`,
-        isProcessing: false,
+        isProcessing: false 
       });
       return;
     }
 
     const freshBalance = getBuyerBalance(user.username);
     const requiredAmount = getBuyerDebitAmount(listing);
-
+    
     if (!hasSufficientBalance(freshBalance, listing)) {
       const amountNeeded = getAmountNeeded(freshBalance, listing);
-      updateState({
+      updateState({ 
         purchaseStatus: `Insufficient balance. You need ${amountNeeded.toFixed(2)} more.`,
-        isProcessing: false,
+        isProcessing: false 
       });
       return;
     }
@@ -846,29 +1038,32 @@ export const useBrowseDetail = () => {
     isPurchasingRef.current = true;
     hasPurchasedRef.current = false;
 
-    updateState({
-      isProcessing: true,
-      purchaseStatus: 'Processing...',
+    updateState({ 
+      isProcessing: true, 
+      purchaseStatus: 'Processing...', 
       bidStatus: {},
       biddingEnabled: true,
       bidError: null,
-      bidSuccess: null,
+      bidSuccess: null
     });
 
     try {
       const success = await purchaseListingAndRemove(listing, user.username);
-
+      
       if (success) {
         hasPurchasedRef.current = true;
-        updateState({
+        updateState({ 
           showPurchaseSuccess: true,
           purchaseStatus: 'Purchase successful!',
           isProcessing: false,
           bidStatus: {},
-          biddingEnabled: true,
+          biddingEnabled: true
         });
-
-        if (navigationTimeoutRef.current) clearTimeout(navigationTimeoutRef.current);
+        
+        if (navigationTimeoutRef.current) {
+          clearTimeout(navigationTimeoutRef.current);
+        }
+        
         navigationTimeoutRef.current = setTimeout(() => {
           if (mountedRef.current) {
             router.push('/buyers/my-orders');
@@ -876,29 +1071,20 @@ export const useBrowseDetail = () => {
         }, 3000);
       } else {
         isPurchasingRef.current = false;
-        updateState({
+        updateState({ 
           purchaseStatus: 'Purchase failed. Please check your wallet balance.',
-          isProcessing: false,
+          isProcessing: false 
         });
       }
     } catch (error) {
       console.error('Purchase error:', error);
       isPurchasingRef.current = false;
-      updateState({
+      updateState({ 
         purchaseStatus: 'An error occurred. Please try again.',
-        isProcessing: false,
+        isProcessing: false 
       });
     }
-  }, [
-    user,
-    listing,
-    state.isProcessing,
-    purchaseListingAndRemove,
-    router,
-    updateState,
-    rateLimiter,
-    getBuyerBalance,
-  ]);
+  }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState, rateLimiter, getBuyerBalance]);
 
   const handleBidSubmit = useCallback(async () => {
     if (!isAuction || !listing || state.isBidding || !user || user.role !== 'buyer') return;
@@ -908,13 +1094,13 @@ export const useBrowseDetail = () => {
 
     const bidValidation = securityService.validateAmount(state.bidAmount, {
       min: 0.01,
-      max: 10000,
+      max: 10000
     });
 
     if (!bidValidation.valid || !bidValidation.value) {
-      updateState({
+      updateState({ 
         bidError: bidValidation.error || 'Please enter a valid bid amount',
-        bidSuccess: null,
+        bidSuccess: null 
       });
       return;
     }
@@ -926,51 +1112,48 @@ export const useBrowseDetail = () => {
     const minBidAmount = currentBid > 0 ? currentBid + 1 : startingBid;
 
     if (bidValue < minBidAmount) {
-      updateState({
+      updateState({ 
         bidError: `Minimum bid is $${minBidAmount.toFixed(2)}`,
-        bidSuccess: null,
+        bidSuccess: null 
       });
       return;
     }
 
-    const rateLimitResult = rateLimiter.check('API_CALL', {
-      ...RATE_LIMITS.API_CALL,
-      identifier: user.username + ':bid',
-    });
+    const rateLimitResult = rateLimiter.check('API_CALL', RATE_LIMITS.API_CALL);
     if (!rateLimitResult.allowed) {
       setRateLimitError(`Too many bids. Please wait ${rateLimitResult.waitTime} seconds.`);
-      updateState({
+      updateState({ 
         bidError: `Please wait ${rateLimitResult.waitTime} seconds before bidding again.`,
-        bidSuccess: null,
+        bidSuccess: null 
       });
       return;
     }
 
-    updateState({
-      isBidding: true,
-      bidError: null,
-      bidSuccess: null,
+    updateState({ 
+      isBidding: true, 
+      bidError: null, 
+      bidSuccess: null 
     });
 
     try {
       const success = await listingsPlaceBid(listing.id, user.username, bidValue);
-
+      
       if (success) {
-        updateState({
+        updateState({ 
           bidAmount: '',
           bidSuccess: 'Bid placed successfully!',
           bidError: null,
           isBidding: false,
           bidStatus: {
             success: true,
-            message: 'You are now the highest bidder!',
-          },
+            message: 'You are now the highest bidder!'
+          }
         });
 
         const result = await listingsService.getListing(listing.id);
         if (result.success && result.data) {
           setListing(result.data as ListingWithDetails);
-          setState((prev) => ({ ...prev, viewCount: result.data?.views || prev.viewCount }));
+          setState(prev => ({ ...prev, viewCount: result.data?.views || prev.viewCount }));
         }
 
         setTimeout(() => {
@@ -979,85 +1162,77 @@ export const useBrowseDetail = () => {
           }
         }, 3000);
       } else {
-        updateState({
+        updateState({ 
           bidError: 'Failed to place bid. Please check your balance and try again.',
           bidSuccess: null,
-          isBidding: false,
+          isBidding: false 
         });
       }
     } catch (error) {
       console.error('Bid submission error:', error);
-      updateState({
+      updateState({ 
         bidError: 'An error occurred while placing your bid.',
         bidSuccess: null,
-        isBidding: false,
+        isBidding: false 
       });
     }
   }, [isAuction, listing, state.isBidding, state.bidAmount, user, listingsPlaceBid, updateState, rateLimiter]);
 
-  const handleImageNavigation = useCallback(
-    (newIndex: number) => {
-      const sanitizedIndex = Math.floor(newIndex);
-      if (sanitizedIndex >= 0 && sanitizedIndex < images.length) {
-        updateState({ currentImageIndex: sanitizedIndex });
-      }
-    },
-    [images.length, updateState],
-  );
+  const handleImageNavigation = useCallback((newIndex: number) => {
+    const sanitizedIndex = Math.floor(newIndex);
+    if (sanitizedIndex >= 0 && sanitizedIndex < images.length) {
+      updateState({ currentImageIndex: sanitizedIndex });
+    }
+  }, [images.length, updateState]);
 
   const handleBidAmountChange = useCallback((value: string) => {
     updateState({ bidAmount: value });
   }, [updateState]);
 
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
     mountedRef.current = true;
-
+    
     return () => {
       mountedRef.current = false;
       isPurchasingRef.current = false;
       hasPurchasedRef.current = false;
+      viewTrackedRef.current = false;
+      viewTrackingInProgressRef.current = false;
+      listingLoadedRef.current = false;
+      currentListingIdRef.current = null;
       if (navigationTimeoutRef.current) {
         clearTimeout(navigationTimeoutRef.current);
-        navigationTimeoutRef.current = null;
       }
       if (timerRef.current) {
         clearInterval(timerRef.current);
-        timerRef.current = null;
       }
       if (fundingTimerRef.current) {
         clearInterval(fundingTimerRef.current);
-        fundingTimerRef.current = null;
       }
       if (auctionExpiryTimerRef.current) {
         clearInterval(auctionExpiryTimerRef.current);
-        auctionExpiryTimerRef.current = null;
       }
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
-        abortControllerRef.current = null;
       }
     };
   }, []);
 
-  // Extract seller info with reviews
   const sellerInfo = useMemo(() => {
     if (!listing) return null;
     const info = extractSellerInfo(listing, users || {}, orderHistory as any);
-    return info
-      ? {
-          ...info,
-          averageRating: sellerAverageRating,
-          reviewCount: sellerReviews.length,
-        }
-      : null;
+    return info ? {
+      ...info,
+      averageRating: sellerAverageRating,
+      reviewCount: sellerReviews.length
+    } : null;
   }, [listing, users, orderHistory, sellerAverageRating, sellerReviews.length]);
 
   const calculateTotalPayableFixed = useCallback((amount: number) => {
     return getAuctionTotalPayable(amount);
   }, []);
 
-  // If loading, return loading state
   if (isLoading) {
     return {
       user,
@@ -1099,11 +1274,10 @@ export const useBrowseDetail = () => {
       sellerReviewCount: 0,
       isLoading: true,
       error: null,
-      rateLimitError: null,
+      rateLimitError: null
     };
   }
 
-  // Return everything including the review data
   return {
     user,
     listing,
@@ -1131,8 +1305,7 @@ export const useBrowseDetail = () => {
     sellerProfile: state.sellerProfile,
     showStickyBuy: state.showStickyBuy,
     bidAmount: state.bidAmount,
-    bidStatus:
-      isAuction && !isPurchasingRef.current && !hasPurchasedRef.current && !state.isProcessing ? state.bidStatus : {},
+    bidStatus: (isAuction && !isPurchasingRef.current && !hasPurchasedRef.current && !state.isProcessing) ? state.bidStatus : {},
     biddingEnabled: state.biddingEnabled,
     bidsHistory: state.bidsHistory,
     showBidHistory: state.showBidHistory,
@@ -1161,6 +1334,6 @@ export const useBrowseDetail = () => {
     sellerReviewCount: sellerReviews.length,
     isLoading: false,
     error,
-    rateLimitError,
+    rateLimitError
   };
 };

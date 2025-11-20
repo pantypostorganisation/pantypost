@@ -2,10 +2,8 @@
 'use client';
 
 import React from 'react';
-import { Calendar, Tag, MapPin, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Tag, MapPin, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { Order } from '@/context/WalletContext';
-import { formatOrderDate, getShippingStatusBadge } from '@/utils/orderUtils';
-import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface OrderDetailsProps {
   order: Order;
@@ -29,78 +27,66 @@ export default function OrderDetails({
 
   return (
     <>
-      {/* Streamlined Meta Info */}
-      <div className="flex flex-wrap items-center gap-6 mt-4 text-sm">
-        <div className="flex items-center gap-2 text-gray-400">
-          <Calendar className="w-4 h-4 opacity-60" />
-          <span>{formatOrderDate(order.date)}</span>
-        </div>
-        
-        {order.tags && order.tags.length > 0 && (
-          <div className="flex items-center gap-2 text-gray-400">
-            <Tag className="w-4 h-4 opacity-60" />
+      {order.tags && order.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-gray-400 sm:text-xs">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2 py-1">
+            <Tag className="h-4 w-4 text-white/60" />
             <span className="opacity-80">
               {order.tags.slice(0, 2).join(', ')}
               {order.tags.length > 2 && ` +${order.tags.length - 2}`}
             </span>
           </div>
-        )}
-
-        {/* Inline status badge */}
-        {getShippingStatusBadge(order.shippingStatus)}
-      </div>
+        </div>
+      )}
 
       {/* Type-specific highlight - More subtle */}
       {isAuction && (
-        <div className="mt-4 pl-4 border-l-2 border-purple-500/30">
-          <p className="text-sm text-purple-300">
-            Winning bid: <span className="font-semibold">${order.finalBid?.toFixed(2) || order.price.toFixed(2)}</span>
-          </p>
+        <div className="mt-3 rounded-xl border border-purple-500/30 bg-purple-500/10 px-4 py-2.5 text-sm text-purple-100">
+          Winning bid
+          <span className="ml-2 font-semibold text-white">${order.finalBid?.toFixed(2) || order.price.toFixed(2)}</span>
         </div>
       )}
 
       {isCustom && order.originalRequestId && (
-        <div className="mt-4 pl-4 border-l-2 border-blue-500/30">
-          <p className="text-sm text-blue-300">
-            Custom Request • <span className="font-mono text-xs opacity-60">#{order.originalRequestId.slice(0, 8)}</span>
-          </p>
+        <div className="mt-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-2.5 text-sm text-sky-100">
+          Custom Request •
+          <span className="ml-2 font-mono text-xs text-sky-200/80">#{order.originalRequestId.slice(0, 8)}</span>
         </div>
       )}
 
-      {/* Simplified Actions Bar */}
-      <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
+      <div className="mt-4 flex flex-col gap-2 rounded-xl border border-white/5 bg-black/30 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         {!hasDeliveryAddress ? (
           <button
             onClick={() => onOpenAddressModal(order.id)}
-            className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 rounded-lg transition-all text-sm font-medium"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3.5 py-1.5 text-sm font-semibold text-amber-200 transition-colors hover:border-amber-300/60 hover:bg-amber-500/15 sm:w-auto sm:justify-start"
           >
-            <MapPin className="w-4 h-4" />
-            Add Delivery Address
+            <MapPin className="h-4 w-4" />
+            Confirm delivery address
           </button>
         ) : (
-          <div className="flex items-center gap-2 text-green-400 text-sm">
-            <CheckCircle className="w-4 h-4" />
-            <span>Address Confirmed</span>
+          <div className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-3.5 py-1.5 text-sm font-semibold text-emerald-200 sm:w-auto sm:justify-start">
+            <CheckCircle className="h-4 w-4" />
+            Address confirmed
           </div>
         )}
-        
+
         <button
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-medium ${
-            isExpanded 
-              ? 'text-gray-400 hover:text-white' 
-              : 'text-[#ff950e] hover:bg-[#ff950e]/10'
+          className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3.5 py-1.5 text-sm font-semibold transition-colors sm:w-auto sm:justify-start ${
+            isExpanded
+              ? 'text-gray-300 hover:text-white'
+              : 'bg-[#ff950e]/15 text-[#ffb469] hover:bg-[#ff950e]/25'
           }`}
           onClick={() => onToggleExpanded(isExpanded ? null : order.id)}
         >
           {isExpanded ? (
             <>
-              <ChevronUp className="w-4 h-4" />
-              Less
+              <ChevronUp className="h-4 w-4" />
+              Hide details
             </>
           ) : (
             <>
-              Details
-              <ChevronDown className="w-4 h-4" />
+              View details
+              <ChevronDown className="h-4 w-4" />
             </>
           )}
         </button>

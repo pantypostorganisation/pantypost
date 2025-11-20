@@ -8,6 +8,9 @@ const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
+// CRITICAL FIX: Import Referral correctly from the module that exports both Referral and ReferralCommission
+const { Referral, ReferralCommission } = require('../models/Referral');
+const { incrementPaymentStats } = require('../utils/paymentStats');
 const authMiddleware = require('../middleware/auth.middleware');
 const tierService = require('../services/tierService');
 const TIER_CONFIG = require('../config/tierConfig');
@@ -150,12 +153,49 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const actualPrice = Number(price) || 0;
     const actualMarkedUpPrice = Number(markedUpPrice) || Math.round(actualPrice * 1.1 * 100) / 100;
+
+    // CRITICAL FIX: Check for referral BEFORE calculating earnings
+    const activeReferral = await Referral.findActiveReferral(seller);
+    const hasReferral = activeReferral && activeReferral.isActive;
+    const referralCommissionRate = hasReferral ? activeReferral.commissionRate : 0;
+
+    // FIXED CALCULATION:
+    // 1. Base platform fee is always 10% of base price (without tier consideration)
+    const basePlatformFee = Math.round((actualPrice * 0.10) * 100) / 100; // Always 10%
     
-    const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(actualPrice, sellerTier);
-    const platformFee = TIER_CONFIG.calculatePlatformFee(actualPrice, sellerTier);
+    // 2. Tier bonus comes from the platform's share
     const tierBonus = Math.round((actualPrice * tierInfo.bonusPercentage) * 100) / 100;
+    
+    // 3. Buyer markup fee (10% on top)
     const buyerMarkupFee = Math.round((actualMarkedUpPrice - actualPrice) * 100) / 100;
-    const totalPlatformRevenue = Math.round((platformFee + buyerMarkupFee) * 100) / 100;
+    
+    // 4. Total platform revenue BEFORE tier bonus
+    const totalPlatformRevenueBeforeBonus = Math.round((basePlatformFee + buyerMarkupFee) * 100) / 100;
+    
+    // 5. Platform keeps the revenue minus tier bonus
+    const totalPlatformRevenue = Math.round((totalPlatformRevenueBeforeBonus - tierBonus) * 100) / 100;
+
+    // 6. Calculate referral commission from BASE PRICE (5% of base price)
+    let referralCommission = 0;
+    if (hasReferral) {
+      referralCommission = Math.round(actualPrice * referralCommissionRate * 100) / 100;
+      console.log(`[Order] Referral detected - Commission: $${referralCommission} (${(referralCommissionRate * 100)}% of $${actualPrice}) to ${activeReferral.referrer}`);
+    }
+
+    // 7. Calculate seller earnings:
+    // Base 90% + tier bonus - referral commission
+    const baseSellerEarnings = Math.round((actualPrice * 0.90) * 100) / 100; // Always 90%
+    const sellerEarnings = Math.round((baseSellerEarnings + tierBonus - referralCommission) * 100) / 100;
+
+    console.log(`[Order] Payment breakdown:`, {
+      basePrice: actualPrice,
+      buyerPays: actualMarkedUpPrice,
+      platformFee: basePlatformFee,
+      tierBonus: tierBonus,
+      referralCommission: referralCommission,
+      sellerEarnings: sellerEarnings,
+      totalPlatformRevenue: totalPlatformRevenue
+    });
 
     const buyerWallet = await Wallet.findOne({ username: buyer });
     if (!buyerWallet) {
@@ -186,15 +226,41 @@ router.post('/', authMiddleware, async (req, res) => {
       await platformWallet.save();
     }
 
+    // Get referrer wallet if needed
+    let referrerWallet = null;
+    if (hasReferral && referralCommission > 0) {
+      referrerWallet = await Wallet.findOne({ username: activeReferral.referrer });
+      if (!referrerWallet) {
+        const referrerUser = await User.findOne({ username: activeReferral.referrer });
+        if (referrerUser) {
+          referrerWallet = new Wallet({ 
+            username: activeReferral.referrer, 
+            role: referrerUser.role, 
+            balance: 0 
+          });
+          await referrerWallet.save();
+        }
+      }
+    }
+
     const previousBuyerBalance = buyerWallet.balance;
     const previousSellerBalance = sellerWallet.balance;
     const previousPlatformBalance = platformWallet.balance;
+    const previousReferrerBalance = referrerWallet ? referrerWallet.balance : 0;
 
     try {
+      // Process the transaction
       await buyerWallet.withdraw(actualMarkedUpPrice);
       await sellerWallet.deposit(sellerEarnings);
-      const netPlatformRevenue = totalPlatformRevenue - tierBonus;
-      await platformWallet.deposit(netPlatformRevenue);
+      
+      // Process referral commission if applicable
+      if (hasReferral && referrerWallet && referralCommission > 0) {
+        await referrerWallet.deposit(referralCommission);
+        console.log(`[Order] Deposited $${referralCommission} to referrer ${activeReferral.referrer}`);
+      }
+      
+      // FIXED: Deposit the correct platform revenue (fees minus tier bonus)
+      await platformWallet.deposit(totalPlatformRevenue);
 
       if (listingId) {
         const listing = await Listing.findById(listingId);
@@ -242,18 +308,111 @@ router.post('/', authMiddleware, async (req, res) => {
         shippingStatus: 'pending',
         paymentStatus: 'completed',
         paymentCompletedAt: new Date(),
-        platformFee: platformFee,
+        platformFee: basePlatformFee,
         buyerMarkupFee,
-        sellerPlatformFee: platformFee,
+        sellerPlatformFee: basePlatformFee,
         sellerEarnings,
         tierCreditAmount: tierBonus,
-        sellerTier
+        sellerTier,
+        // Add referral fields
+        referralCommission: referralCommission,
+        referrer: hasReferral ? activeReferral.referrer : undefined,
+        adjustedSellerEarnings: sellerEarnings
       });
 
       await order.save();
 
+      // Process referral commission recording
+      if (hasReferral && referralCommission > 0) {
+        try {
+          // Record the commission in the Referral model
+          await activeReferral.recordCommission(referralCommission, order._id.toString());
+          
+          // Create commission transaction for tracking
+          const commissionTransaction = new Transaction({
+            type: 'sale', // Use 'sale' type as 'referral_commission' might not be in enum
+            amount: referralCommission,
+            from: seller,
+            to: activeReferral.referrer,
+            fromRole: 'seller',
+            toRole: 'seller',
+            description: `Referral commission (5%) for sale: ${order.title}`,
+            status: 'completed',
+            completedAt: new Date(),
+            metadata: {
+              orderId: order._id.toString(),
+              orderTitle: order.title,
+              referralId: activeReferral._id.toString(),
+              commissionRate: referralCommissionRate,
+              originalPrice: actualPrice,
+              adjustedSellerEarnings: sellerEarnings,
+              buyer: buyer,
+              seller: seller,
+              isReferralCommission: true
+            }
+          });
+          await commissionTransaction.save();
+          
+          // Update referrer's User stats
+          await User.findOneAndUpdate(
+            { username: activeReferral.referrer },
+            {
+              $inc: {
+                referralEarnings: referralCommission
+              }
+            }
+          );
+          
+          // Create notification for referrer
+          const referrerNotification = new Notification({
+            recipient: activeReferral.referrer,
+            type: 'sale', // Use 'sale' type as 'referral_commission' might not be in enum
+            title: '💰 Referral Commission Earned!',
+            message: `You earned $${referralCommission.toFixed(2)} from ${seller}'s sale of "${order.title}"`,
+            link: '/sellers/profile',
+            priority: 'normal',
+            metadata: {
+              amount: referralCommission,
+              seller: seller,
+              orderId: order._id.toString(),
+              orderTitle: order.title,
+              isReferralCommission: true
+            }
+          });
+          await referrerNotification.save();
+          
+          // WebSocket notification for referrer
+          if (global.webSocketService) {
+            global.webSocketService.emitToUser(activeReferral.referrer, 'notification:new', {
+              id: referrerNotification._id,
+              type: referrerNotification.type,
+              title: referrerNotification.title,
+              message: referrerNotification.message,
+              link: referrerNotification.link,
+              createdAt: referrerNotification.createdAt
+            });
+            
+            // Emit balance update for referrer
+            global.webSocketService.emitBalanceUpdate(
+              activeReferral.referrer, 
+              'seller', 
+              previousReferrerBalance, 
+              referrerWallet.balance, 
+              'referral_commission'
+            );
+            
+            // Emit the commission transaction
+            global.webSocketService.emitTransaction(commissionTransaction.toObject());
+          }
+          
+          console.log(`[Order] Referral commission processed successfully: ${activeReferral.referrer} earned $${referralCommission}`);
+        } catch (referralError) {
+          console.error('[Order] Error recording referral commission:', referralError);
+          // Don't fail the order, commission was already transferred
+        }
+      }
+
       // CRITICAL: Create the sale notification ONCE using the standardized method
-      // This creates the notification with the proper emoji format: 💰🛍️ New sale: ...
       await Notification.createSaleNotification(seller, buyer, { 
         _id: order._id, 
         title: order.title 
@@ -280,7 +439,9 @@ router.post('/', authMiddleware, async (req, res) => {
           buyer,
           sellerTier,
           tierBonus,
-          isPremium
+          isPremium,
+          hasReferral,
+          referralCommission
         }
       });
       await purchaseTransaction.save();
@@ -300,14 +461,15 @@ router.post('/', authMiddleware, async (req, res) => {
           listingId,
           listingTitle: title,
           buyerFee: buyerMarkupFee,
-          sellerFee: platformFee,
+          sellerFee: basePlatformFee,
           totalFee: totalPlatformRevenue,
           originalPrice: actualPrice,
           buyerPayment: actualMarkedUpPrice,
           seller,
           buyer,
           sellerTier,
-          tierAdjustedFee: platformFee
+          tierAdjustedFee: basePlatformFee,
+          tierBonus: tierBonus
         }
       });
       await feeTransaction.save();
@@ -368,8 +530,6 @@ router.post('/', authMiddleware, async (req, res) => {
         global.webSocketService.emitTransaction(purchaseTransaction.toObject());
         global.webSocketService.emitTransaction(feeTransaction.toObject());
 
-        // NOTE: This emitOrderCreated is for updating order lists in the UI, not for creating notifications
-        // The notification has already been created above via Notification.createSaleNotification
         if (global.webSocketService.emitOrderCreated) {
           global.webSocketService.emitOrderCreated({
             _id: order._id,
@@ -390,6 +550,12 @@ router.post('/', authMiddleware, async (req, res) => {
             totalSales: tierUpdateResult.stats.totalSales
           });
         }
+      }
+
+      try {
+        await incrementPaymentStats(actualPrice);
+      } catch (statsError) {
+        console.error('[Order] Failed to increment payment stats:', statsError);
       }
 
       res.json({
@@ -414,7 +580,9 @@ router.post('/', authMiddleware, async (req, res) => {
           platformFee: order.platformFee,
           sellerEarnings: order.sellerEarnings,
           tierCreditAmount: order.tierCreditAmount,
-          sellerTier
+          sellerTier,
+          referralCommission: order.referralCommission,
+          referrer: order.referrer
         }
       });
 
@@ -432,6 +600,10 @@ router.post('/', authMiddleware, async (req, res) => {
         if (platformWallet.balance > previousPlatformBalance) {
           platformWallet.balance = previousPlatformBalance;
           await platformWallet.save();
+        }
+        if (referrerWallet && referrerWallet.balance > previousReferrerBalance) {
+          referrerWallet.balance = previousReferrerBalance;
+          await referrerWallet.save();
         }
       } catch (rollbackError) {
         console.error('[Order] Rollback failed:', rollbackError);
@@ -508,11 +680,37 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
 
     const actualPrice = Number(price) || 0;
     const actualMarkedUpPrice = Math.round(actualPrice * 1.1 * 100) / 100;
-    const sellerEarnings = TIER_CONFIG.calculateSellerEarnings(actualPrice, sellerTier);
-    const platformFee = TIER_CONFIG.calculatePlatformFee(actualPrice, sellerTier);
+    
+    // CRITICAL FIX: Check for referral for custom requests too
+    const activeReferral = await Referral.findActiveReferral(seller);
+    const hasReferral = activeReferral && activeReferral.isActive;
+    const referralCommissionRate = hasReferral ? activeReferral.commissionRate : 0;
+
+    // FIXED CALCULATION (same as regular orders):
+    const basePlatformFee = Math.round((actualPrice * 0.10) * 100) / 100;
     const tierBonus = Math.round((actualPrice * tierInfo.bonusPercentage) * 100) / 100;
     const buyerMarkupFee = Math.round((actualMarkedUpPrice - actualPrice) * 100) / 100;
-    const totalPlatformRevenue = Math.round((platformFee + buyerMarkupFee) * 100) / 100;
+    const totalPlatformRevenueBeforeBonus = Math.round((basePlatformFee + buyerMarkupFee) * 100) / 100;
+    const totalPlatformRevenue = Math.round((totalPlatformRevenueBeforeBonus - tierBonus) * 100) / 100;
+
+    let referralCommission = 0;
+    if (hasReferral) {
+      referralCommission = Math.round(actualPrice * referralCommissionRate * 100) / 100;
+      console.log(`[Order] Custom request referral detected - Commission: $${referralCommission} (${(referralCommissionRate * 100)}% of $${actualPrice}) to ${activeReferral.referrer}`);
+    }
+
+    const baseSellerEarnings = Math.round((actualPrice * 0.90) * 100) / 100;
+    const sellerEarnings = Math.round((baseSellerEarnings + tierBonus - referralCommission) * 100) / 100;
+
+    console.log(`[Order] Custom request payment breakdown:`, {
+      basePrice: actualPrice,
+      buyerPays: actualMarkedUpPrice,
+      platformFee: basePlatformFee,
+      tierBonus: tierBonus,
+      referralCommission: referralCommission,
+      sellerEarnings: sellerEarnings,
+      totalPlatformRevenue: totalPlatformRevenue
+    });
 
     const buyerWallet = await Wallet.findOne({ username: buyer });
     if (!buyerWallet) {
@@ -540,15 +738,40 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
       await platformWallet.save();
     }
 
+    // Get referrer wallet if needed
+    let referrerWallet = null;
+    if (hasReferral && referralCommission > 0) {
+      referrerWallet = await Wallet.findOne({ username: activeReferral.referrer });
+      if (!referrerWallet) {
+        const referrerUser = await User.findOne({ username: activeReferral.referrer });
+        if (referrerUser) {
+          referrerWallet = new Wallet({ 
+            username: activeReferral.referrer, 
+            role: referrerUser.role, 
+            balance: 0 
+          });
+          await referrerWallet.save();
+        }
+      }
+    }
+
     const previousBuyerBalance = buyerWallet.balance;
     const previousSellerBalance = sellerWallet.balance;
     const previousPlatformBalance = platformWallet.balance;
+    const previousReferrerBalance = referrerWallet ? referrerWallet.balance : 0;
 
     try {
       await buyerWallet.withdraw(actualMarkedUpPrice);
       await sellerWallet.deposit(sellerEarnings);
-      const netPlatformRevenue = totalPlatformRevenue - tierBonus;
-      await platformWallet.deposit(netPlatformRevenue);
+      
+      // Process referral commission if applicable
+      if (hasReferral && referrerWallet && referralCommission > 0) {
+        await referrerWallet.deposit(referralCommission);
+        console.log(`[Order] Custom request: Deposited $${referralCommission} to referrer ${activeReferral.referrer}`);
+      }
+      
+      // FIXED: Deposit the correct platform revenue
+      await platformWallet.deposit(totalPlatformRevenue);
 
       const order = new Order({
         title,
@@ -566,15 +789,103 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         shippingStatus: 'pending',
         paymentStatus: 'completed',
         paymentCompletedAt: new Date(),
-        platformFee: platformFee,
+        platformFee: basePlatformFee,
         buyerMarkupFee,
-        sellerPlatformFee: platformFee,
+        sellerPlatformFee: basePlatformFee,
         sellerEarnings,
         tierCreditAmount: tierBonus,
-        sellerTier
+        sellerTier,
+        // Add referral fields
+        referralCommission: referralCommission,
+        referrer: hasReferral ? activeReferral.referrer : undefined,
+        adjustedSellerEarnings: sellerEarnings
       });
 
       await order.save();
+
+      // Process referral commission recording for custom request
+      if (hasReferral && referralCommission > 0) {
+        try {
+          await activeReferral.recordCommission(referralCommission, order._id.toString());
+          
+          const commissionTransaction = new Transaction({
+            type: 'sale',
+            amount: referralCommission,
+            from: seller,
+            to: activeReferral.referrer,
+            fromRole: 'seller',
+            toRole: 'seller',
+            description: `Referral commission (5%) for custom request: ${order.title}`,
+            status: 'completed',
+            completedAt: new Date(),
+            metadata: {
+              orderId: order._id.toString(),
+              orderTitle: order.title,
+              referralId: activeReferral._id.toString(),
+              commissionRate: referralCommissionRate,
+              originalPrice: actualPrice,
+              adjustedSellerEarnings: sellerEarnings,
+              buyer: buyer,
+              seller: seller,
+              isCustomRequest: true,
+              isReferralCommission: true
+            }
+          });
+          await commissionTransaction.save();
+          
+          await User.findOneAndUpdate(
+            { username: activeReferral.referrer },
+            {
+              $inc: {
+                referralEarnings: referralCommission
+              }
+            }
+          );
+          
+          const referrerNotification = new Notification({
+            recipient: activeReferral.referrer,
+            type: 'sale',
+            title: '💰 Referral Commission Earned!',
+            message: `You earned $${referralCommission.toFixed(2)} from ${seller}'s custom request sale: "${order.title}"`,
+            link: '/sellers/profile',
+            priority: 'normal',
+            metadata: {
+              amount: referralCommission,
+              seller: seller,
+              orderId: order._id.toString(),
+              orderTitle: order.title,
+              isCustomRequest: true,
+              isReferralCommission: true
+            }
+          });
+          await referrerNotification.save();
+          
+          if (global.webSocketService) {
+            global.webSocketService.emitToUser(activeReferral.referrer, 'notification:new', {
+              id: referrerNotification._id,
+              type: referrerNotification.type,
+              title: referrerNotification.title,
+              message: referrerNotification.message,
+              link: referrerNotification.link,
+              createdAt: referrerNotification.createdAt
+            });
+            
+            global.webSocketService.emitBalanceUpdate(
+              activeReferral.referrer, 
+              'seller', 
+              previousReferrerBalance, 
+              referrerWallet.balance, 
+              'referral_commission'
+            );
+            
+            global.webSocketService.emitTransaction(commissionTransaction.toObject());
+          }
+          
+          console.log(`[Order] Custom request referral commission processed: ${activeReferral.referrer} earned $${referralCommission}`);
+        } catch (referralError) {
+          console.error('[Order] Error recording custom request referral commission:', referralError);
+        }
+      }
 
       // Use the new helper for custom request paid notification
       await Notification.createCustomRequestPaidNotification(seller, buyer, {
@@ -626,7 +937,9 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
           buyer,
           sellerTier,
           tierBonus,
-          isPremium
+          isPremium,
+          hasReferral,
+          referralCommission
         }
       });
       await purchaseTransaction.save();
@@ -646,13 +959,14 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
           requestId,
           customRequest: true,
           buyerFee: buyerMarkupFee,
-          sellerFee: platformFee,
+          sellerFee: basePlatformFee,
           totalFee: totalPlatformRevenue,
           originalPrice: actualPrice,
           buyerPayment: actualMarkedUpPrice,
           seller,
           buyer,
-          sellerTier
+          sellerTier,
+          tierBonus: tierBonus
         }
       });
       await feeTransaction.save();
@@ -725,6 +1039,12 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         }
       }
 
+      try {
+        await incrementPaymentStats(actualPrice);
+      } catch (statsError) {
+        console.error('[Order] Failed to increment payment stats:', statsError);
+      }
+
       res.json({
         success: true,
         data: {
@@ -747,7 +1067,9 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
           platformFee: order.platformFee,
           sellerEarnings: order.sellerEarnings,
           tierCreditAmount: order.tierCreditAmount,
-          sellerTier
+          sellerTier,
+          referralCommission: order.referralCommission,
+          referrer: order.referrer
         }
       });
 
@@ -765,6 +1087,10 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         if (platformWallet.balance > previousPlatformBalance) {
           platformWallet.balance = previousPlatformBalance;
           await platformWallet.save();
+        }
+        if (referrerWallet && referrerWallet.balance > previousReferrerBalance) {
+          referrerWallet.balance = previousReferrerBalance;
+          await referrerWallet.save();
         }
       } catch (rollbackError) {
         console.error('[Order] Rollback failed:', rollbackError);
@@ -834,7 +1160,9 @@ router.get('/', authMiddleware, async (req, res) => {
       tierCreditAmount: order.tierCreditAmount,
       sellerTier: order.sellerTier,
       isCustomRequest: order.isCustomRequest,
-      originalRequestId: order.originalRequestId
+      originalRequestId: order.originalRequestId,
+      referralCommission: order.referralCommission,
+      referrer: order.referrer
     }));
 
     res.json({
@@ -897,7 +1225,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
         tierCreditAmount: order.tierCreditAmount,
         sellerTier: order.sellerTier,
         isCustomRequest: order.isCustomRequest,
-        originalRequestId: order.originalRequestId
+        originalRequestId: order.originalRequestId,
+        referralCommission: order.referralCommission,
+        referrer: order.referrer
       }
     });
 
@@ -1263,7 +1593,9 @@ router.patch('/:id', authMiddleware, async (req, res) => {
         paymentStatus: order.paymentStatus,
         sellerTier: order.sellerTier,
         isCustomRequest: order.isCustomRequest,
-        originalRequestId: order.originalRequestId
+        originalRequestId: order.originalRequestId,
+        referralCommission: order.referralCommission,
+        referrer: order.referrer
       }
     });
 

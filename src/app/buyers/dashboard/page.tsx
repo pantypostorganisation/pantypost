@@ -1,7 +1,7 @@
 // src/app/buyers/dashboard/page.tsx
 'use client';
 
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useFavorites } from '@/context/FavoritesContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -11,12 +11,12 @@ import DashboardHeader from '@/components/buyers/dashboard/DashboardHeader';
 import StatsGrid from '@/components/buyers/dashboard/StatsGrid';
 import QuickActions from '@/components/buyers/dashboard/QuickActions';
 import RecentActivity from '@/components/buyers/dashboard/RecentActivity';
-import SubscribedSellers from '@/components/buyers/dashboard/SubscribedSellers';
-import { Truck, Clock, CheckCircle, Heart, Star, X, AlertCircle } from 'lucide-react';
+import { Truck, Clock, CheckCircle, Heart, Star, X, AlertCircle, Crown, ChevronDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import TierBadge from '@/components/TierBadge';
+import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
+import { sanitizeUsername } from '@/utils/security/sanitization';
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -68,6 +68,59 @@ function DashboardErrorFallback({ error, reset }: { error: Error; reset: () => v
   );
 }
 
+interface CollapsibleSectionProps {
+  id: string;
+  title: string;
+  description: string;
+  summary?: React.ReactNode;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}
+
+function CollapsibleSection({ id, title, description, summary, isOpen, onToggle, children }: CollapsibleSectionProps) {
+  return (
+    <section
+      id={id}
+      className="rounded-3xl border border-white/10 bg-[#111111]/85 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.8)]"
+    >
+      <div className="p-6">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isOpen}
+          aria-controls={`${id}-content`}
+          className="flex w-full items-start justify-between gap-6 text-left"
+        >
+          <div>
+            <h2 className="text-lg font-semibold text-white">{title}</h2>
+            <p className="mt-1 text-sm text-gray-500">{description}</p>
+          </div>
+          <ChevronDown
+            className={`mt-1 h-5 w-5 flex-shrink-0 text-gray-500 transition-transform ${isOpen ? 'rotate-180 text-white' : ''}`}
+          />
+        </button>
+        {summary ? <div className="mt-4 flex flex-wrap gap-2">{summary}</div> : null}
+      </div>
+      <div
+        id={`${id}-content`}
+        className={`border-t border-white/5 p-6 ${isOpen ? 'block' : 'hidden'}`}
+      >
+        {isOpen ? children : null}
+      </div>
+    </section>
+  );
+}
+
+function SummaryPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs text-gray-400">
+      <span className="font-semibold text-white">{value}</span>
+      <span className="uppercase tracking-wide">{label}</span>
+    </span>
+  );
+}
+
 // Dashboard Content Component
 function DashboardContent() {
   const { user: authUser } = useAuth();
@@ -85,13 +138,34 @@ function DashboardContent() {
     isLoading
   } = useDashboardData();
 
+  type SectionId = 'overview' | 'connections' | 'activity' | 'insights';
+
+  const [openSections, setOpenSections] = useState<Record<SectionId, boolean>>({
+    overview: true,
+    connections: false,
+    activity: false,
+    insights: false,
+  });
+  const [openCollections, setOpenCollections] = useState<{ favorites: boolean; subscriptions: boolean }>({
+    favorites: true,
+    subscriptions: false,
+  });
+
   // Track component mount status
   useEffect(() => {
     isMountedRef.current = true;
-    
+
     return () => {
       isMountedRef.current = false;
     };
+  }, []);
+
+  const toggleSection = useCallback((sectionId: SectionId) => {
+    setOpenSections((prev) => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  }, []);
+
+  const toggleCollection = useCallback((collection: 'favorites' | 'subscriptions') => {
+    setOpenCollections((prev) => ({ ...prev, [collection]: !prev[collection] }));
   }, []);
 
   const handleRemoveFavorite = useCallback(async (favorite: any) => {
@@ -181,220 +255,470 @@ function DashboardContent() {
 
   // Safe favorites list
   const safeFavorites = Array.isArray(favorites) ? favorites : [];
+  const safeBalance =
+    typeof balance === 'number' && Number.isFinite(balance) ? balance : 0;
+  const safeSubscriptions = useMemo(
+    () => (Array.isArray(subscribedSellers) ? subscribedSellers : []),
+    [subscribedSellers]
+  );
+  const safeRecentActivity = useMemo(
+    () => (Array.isArray(recentActivity) ? recentActivity : []),
+    [recentActivity]
+  );
+
+  const favoritesPreview = safeFavorites.slice(0, 3);
+  const subscriptionsPreview = safeSubscriptions.slice(0, 3);
+  const activityPreview = safeRecentActivity.slice(0, 3);
+
+  const formatCurrency = useCallback((value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: value >= 1000 ? 0 : 2,
+    }).format(value);
+  }, []);
+
+  const formatNumber = useCallback((value: number) => {
+    return new Intl.NumberFormat('en-US').format(value);
+  }, []);
+
+  const renderFavoritePreview = () => {
+    if (loadingFavorites) {
+      return (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[...Array(3)].map((_, index) => (
+            <Skeleton key={`favorite-skeleton-${index}`} className="h-24 rounded-2xl bg-[#181818]" />
+          ))}
+        </div>
+      );
+    }
+
+    if (favoriteCount === 0) {
+      return (
+        <div className="rounded-2xl border border-dashed border-white/10 bg-[#181818] p-8 text-center">
+          <Heart className="mx-auto mb-4 h-7 w-7 text-gray-600" />
+          <p className="text-sm text-gray-400">You haven&apos;t saved any sellers yet.</p>
+          <button
+            onClick={() => router.push('/browse')}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
+          >
+            Explore marketplace
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {favoritesPreview.map((favorite) => {
+          if (!favorite?.sellerId || !favorite?.sellerUsername) return null;
+
+          return (
+            <div
+              key={favorite.sellerId}
+              className="group rounded-2xl border border-white/5 bg-black/30 p-4 transition hover:border-[#ff950e]/40"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                  className="flex items-center gap-3 text-left"
+                >
+                  <div className="relative h-11 w-11 overflow-hidden rounded-full border border-white/10 bg-black/40">
+                    {favorite.profilePicture && !imageErrors[favorite.sellerId] ? (
+                      <Image
+                        src={favorite.profilePicture}
+                        alt={favorite.sellerUsername}
+                        fill
+                        className="object-cover"
+                        onError={() => handleImageError(favorite.sellerId)}
+                        onLoad={() => handleImageLoad(favorite.sellerId)}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-gray-600">
+                        <Heart className="h-4 w-4" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-white transition group-hover:text-[#ff950e]">
+                      {favorite.sellerUsername}
+                    </p>
+                    <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                      {favorite.isVerified && (
+                        <span className="flex items-center gap-1 text-blue-300">
+                          <Star className="h-3 w-3" /> Verified
+                        </span>
+                      )}
+                      {favorite.tier && (
+                        <span className="rounded-full bg-black/40 px-2 py-0.5 text-gray-400">{favorite.tier}</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleRemoveFavorite(favorite)}
+                  className="rounded-full border border-transparent p-1 text-gray-600 transition hover:border-[#ff950e]/40 hover:text-[#ff950e]"
+                  aria-label="Remove from favorites"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-[11px] uppercase tracking-wide text-gray-500">
+                <button
+                  onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
+                  className="inline-flex items-center gap-1 font-semibold text-[#ff950e] transition hover:text-[#ffb347]"
+                >
+                  View profile
+                </button>
+                <span className="rounded-full bg-black/40 px-2 py-0.5 text-white/60">Favorite</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderSubscriptionPreview = () => {
+    if (isLoading) {
+      return (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {[...Array(3)].map((_, index) => (
+            <Skeleton key={`subscription-skeleton-${index}`} className="h-24 rounded-2xl bg-[#181818]" />
+          ))}
+        </div>
+      );
+    }
+
+    if (safeSubscriptions.length === 0) {
+      return (
+        <div className="rounded-2xl border border-dashed border-white/10 bg-[#181818] p-8 text-center">
+          <Crown className="mx-auto mb-4 h-8 w-8 text-gray-600" />
+          <p className="text-sm text-gray-400">No active subscriptions yet.</p>
+          <button
+            onClick={() => router.push('/browse')}
+            className="mt-6 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
+          >
+            Browse sellers
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {subscriptionsPreview.map((sub) => {
+          const sanitizedUsername = sanitizeUsername(sub.seller);
+          const monthlyPrice =
+            typeof sub.price === 'number'
+              ? sub.price
+              : typeof sub.price === 'string'
+              ? Number(sub.price)
+              : 0;
+          const priceDisplay = Number.isFinite(monthlyPrice) ? monthlyPrice.toFixed(2) : '0.00';
+          const newListings =
+            typeof sub.newListings === 'number'
+              ? Math.max(0, sub.newListings)
+              : Number.isFinite(Number(sub.newListings))
+              ? Math.max(0, Number(sub.newListings))
+              : 0;
+
+          return (
+            <div
+              key={`${sub.seller}-${sub.tier ?? 'tier'}`}
+              className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-black/30 p-4 transition hover:border-[#ff950e]/40"
+            >
+              <div className="flex items-center gap-3">
+                {sub.pic ? (
+                  <SecureImage
+                    src={sub.pic}
+                    alt={sub.seller}
+                    className="h-11 w-11 rounded-full border border-white/10 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-amber-200">
+                    <Crown className="h-4 w-4" />
+                  </div>
+                )}
+                <div>
+                  <button
+                    onClick={() => router.push(`/sellers/${sanitizedUsername}`)}
+                    className="text-sm font-medium text-white transition hover:text-[#ff950e]"
+                  >
+                    <SecureMessageDisplay content={sub.seller} allowBasicFormatting={false} className="inline" />
+                  </button>
+                  <div className="mt-1 text-[11px] uppercase tracking-wide text-gray-500">
+                    ${priceDisplay}/month
+                    <span className="mx-2 text-white/20">•</span>
+                    {newListings} new listings
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push(`/sellers/${sanitizedUsername}`)}
+                className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-gray-300 transition hover:border-[#ff950e] hover:text-[#ff950e]"
+              >
+                View
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <main className="min-h-screen bg-black text-white">
-          <div className="max-w-7xl mx-auto px-6 py-8">
-            {/* Header Section */}
+        <main className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#080808] text-gray-100">
+          <div className="mx-auto max-w-5xl px-4 pb-16 pt-12 sm:px-6 lg:px-8">
             {isLoading ? (
-              <div className="mb-12">
-                <Skeleton className="h-10 w-64 mb-4" />
-                <Skeleton className="h-6 w-48" />
-              </div>
+              <Skeleton className="h-44 rounded-3xl bg-[#1a1a1a]" />
             ) : (
               <DashboardHeader username={user?.username || authUser?.username || ''} />
             )}
 
-            {/* Stats Grid */}
-            {isLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                {[...Array(4)].map((_, i) => (
-                  <Skeleton key={i} className="h-32" />
-                ))}
-              </div>
-            ) : (
-              <StatsGrid stats={safeStats} />
-            )}
-
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-              {/* Main Content Area */}
-              <div className="xl:col-span-2 space-y-8">
-                {/* Quick Actions */}
-                <QuickActions />
-
-                {/* Favorite Sellers Section */}
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center justify-between mb-5">
-                    <div className="flex items-center gap-2">
-                      <Heart className="w-5 h-5 text-[#ff950e]" />
-                      <h2 className="text-xl font-bold text-white">Favorite Sellers</h2>
-                      <span className="text-sm text-gray-400">({favoriteCount})</span>
-                    </div>
-                    {favoriteCount > 3 && (
-                      <button
-                        onClick={() => router.push('/browse')}
-                        className="text-sm text-[#ff950e] hover:text-[#ff7a00] transition-colors"
-                      >
-                        Browse more →
-                      </button>
-                    )}
-                  </div>
-
-                  {loadingFavorites ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[...Array(3)].map((_, i) => (
-                        <Skeleton key={i} className="h-24" />
+            <div className="mt-8 space-y-6">
+              <CollapsibleSection
+                id="overview"
+                title="Overview"
+                description="Quick stats and shortcuts"
+                summary={
+                  <>
+                    <SummaryPill label="spent" value={formatCurrency(safeStats.totalSpent)} />
+                    <SummaryPill label="orders" value={formatNumber(safeStats.totalOrders)} />
+                    <SummaryPill label="unread" value={formatNumber(safeStats.unreadMessages)} />
+                  </>
+                }
+                isOpen={openSections.overview}
+                onToggle={() => toggleSection('overview')}
+              >
+                <div className="space-y-5">
+                  {isLoading ? (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                      {[...Array(4)].map((_, index) => (
+                        <Skeleton key={`overview-stat-${index}`} className="h-28 rounded-2xl bg-[#181818]" />
                       ))}
                     </div>
-                  ) : favoriteCount === 0 ? (
-                    <div className="text-center py-8">
-                      <Heart className="mx-auto mb-3 text-gray-600" size={32} />
-                      <p className="text-gray-400 mb-4">No favorite sellers yet</p>
+                  ) : (
+                    <StatsGrid stats={safeStats} />
+                  )}
+
+                  <div className="rounded-2xl border border-white/5 bg-black/30 p-4">
+                    <QuickActions />
+                  </div>
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection
+                id="connections"
+                title="Connections"
+                description="Stay close to the creators you trust"
+                summary={
+                  <>
+                    <SummaryPill label="favorites" value={formatNumber(favoriteCount)} />
+                    <SummaryPill label="subscriptions" value={formatNumber(safeStats.activeSubscriptions)} />
+                  </>
+                }
+                isOpen={openSections.connections}
+                onToggle={() => toggleSection('connections')}
+              >
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-white/5 bg-black/20">
+                    <button
+                      type="button"
+                      onClick={() => toggleCollection('favorites')}
+                      aria-expanded={openCollections.favorites}
+                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+                    >
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">Favorites</h3>
+                        <p className="text-xs text-gray-500">Sellers you&apos;ve saved for quick access.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-gray-300">
+                          {formatNumber(favoriteCount)}
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-gray-500 transition-transform ${openCollections.favorites ? 'rotate-180 text-white' : ''}`}
+                        />
+                      </div>
+                    </button>
+                    <div
+                      className={`space-y-4 border-t border-white/5 px-5 py-4 ${openCollections.favorites ? 'block' : 'hidden'}`}
+                    >
+                      {renderFavoritePreview()}
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                        <span>Showing a curated preview</span>
+                        <button
+                          type="button"
+                          onClick={() => router.push('/browse')}
+                          className="font-semibold text-[#ff950e] transition hover:text-[#ffb347]"
+                        >
+                          Discover more sellers
+                        </button>
+                      </div>
+                      {favError ? (
+                        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                          {favError}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/5 bg-black/20">
+                    <button
+                      type="button"
+                      onClick={() => toggleCollection('subscriptions')}
+                      aria-expanded={openCollections.subscriptions}
+                      className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+                    >
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">Subscriptions</h3>
+                        <p className="text-xs text-gray-500">Active memberships and recurring support.</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-gray-300">
+                          {formatNumber(safeStats.activeSubscriptions)}
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-gray-500 transition-transform ${openCollections.subscriptions ? 'rotate-180 text-white' : ''}`}
+                        />
+                      </div>
+                    </button>
+                    <div
+                      className={`space-y-4 border-t border-white/5 px-5 py-4 ${openCollections.subscriptions ? 'block' : 'hidden'}`}
+                    >
+                      {renderSubscriptionPreview()}
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                        <span>Recent membership updates</span>
+                        <button
+                          type="button"
+                          onClick={() => router.push('/buyers/profile')}
+                          className="font-semibold text-[#ff950e] transition hover:text-[#ffb347]"
+                        >
+                          Manage subscriptions
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CollapsibleSection>
+
+              <CollapsibleSection
+                id="activity"
+                title="Activity"
+                description="Latest movements across your account"
+                summary={
+                  <>
+                    <SummaryPill label="processing" value={formatNumber(safeStats.pendingShipments)} />
+                    <SummaryPill label="delivered" value={formatNumber(safeStats.completedOrders)} />
+                  </>
+                }
+                isOpen={openSections.activity}
+                onToggle={() => toggleSection('activity')}
+              >
+                {isLoading ? (
+                  <Skeleton className="h-[260px] rounded-2xl bg-[#1a1a1a]" />
+                ) : (
+                  <RecentActivity activities={activityPreview} />
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection
+                id="insights"
+                title="Insights"
+                description="Balance, orders, and spending snapshots"
+                summary={
+                  <>
+                    <SummaryPill label="balance" value={formatCurrency(safeBalance)} />
+                    <SummaryPill label="week spend" value={formatCurrency(safeStats.thisWeekSpent)} />
+                  </>
+                }
+                isOpen={openSections.insights}
+                onToggle={() => toggleSection('insights')}
+              >
+                {isLoading ? (
+                  <Skeleton className="h-[260px] rounded-2xl bg-[#1a1a1a]" />
+                ) : (
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-white/5 bg-black/30 p-5">
+                      <p className="text-sm text-gray-500">Current balance</p>
+                      <p className="mt-3 text-3xl font-semibold text-white">{formatCurrency(safeBalance)}</p>
+                      <p className="mt-2 text-xs text-gray-500">Available wallet balance</p>
+                      <dl className="mt-5 space-y-3 text-sm text-gray-400">
+                        <div className="flex items-center justify-between">
+                          <dt>Orders this month</dt>
+                          <dd className="font-semibold text-white">{formatNumber(safeStats.thisMonthOrders)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <dt>Active subscriptions</dt>
+                          <dd className="font-semibold text-white">{formatNumber(safeStats.activeSubscriptions)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <dt>Open requests</dt>
+                          <dd className="font-semibold text-white">{formatNumber(safeStats.pendingRequests)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/5 bg-black/30 p-5">
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/15 text-blue-200">
+                          <Truck className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <h3 className="text-base font-semibold text-white">Order status</h3>
+                          <p className="text-xs text-gray-500">Snapshot of your active deliveries.</p>
+                        </div>
+                      </div>
+                      <div className="mt-6 space-y-3 text-sm text-gray-400">
+                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-yellow-300" />
+                            Processing
+                          </div>
+                          <span className="font-semibold text-white">{formatNumber(safeStats.pendingShipments)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle className="h-4 w-4 text-emerald-300" />
+                            Delivered
+                          </div>
+                          <span className="font-semibold text-white">{formatNumber(safeStats.completedOrders)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/5 bg-black/30 p-5">
+                      <h3 className="text-base font-semibold text-white">Spending insights</h3>
+                      <p className="mt-1 text-xs text-gray-500">Keep tabs on your purchasing habits.</p>
+                      <div className="mt-5 space-y-3 text-sm text-gray-400">
+                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
+                          <span className="text-gray-500">This week</span>
+                          <span className="font-semibold text-white">{formatCurrency(safeStats.thisWeekSpent)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
+                          <span className="text-gray-500">Average order</span>
+                          <span className="font-semibold text-white">{formatCurrency(safeStats.averageOrderValue)}</span>
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
+                          <span className="text-gray-500">Favorite sellers</span>
+                          <span className="font-semibold text-white">{formatNumber(favoriteCount)}</span>
+                        </div>
+                      </div>
                       <button
-                        onClick={() => router.push('/browse')}
-                        className="px-4 py-2 bg-[#ff950e] text-black rounded-lg text-sm font-medium hover:bg-[#ff7a00] transition-colors"
+                        type="button"
+                        onClick={() => router.push('/wallet/buyer')}
+                        className="mt-5 inline-flex items-center justify-center rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-gray-300 transition hover:border-[#ff950e] hover:text-[#ff950e]"
                       >
-                        Browse Sellers
+                        Manage funds
                       </button>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {safeFavorites.slice(0, 6).map((favorite) => {
-                        if (!favorite?.sellerId || !favorite?.sellerUsername) return null;
-                        
-                        return (
-                          <div
-                            key={favorite.sellerId}
-                            className="bg-[#111] rounded-lg p-4 hover:bg-[#222] transition-colors group"
-                          >
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-3">
-                                <div 
-                                  className="relative w-10 h-10 rounded-full overflow-hidden bg-gray-800 cursor-pointer"
-                                  onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                                >
-                                  {favorite.profilePicture && !imageErrors[favorite.sellerId] ? (
-                                    <Image
-                                      src={favorite.profilePicture}
-                                      alt={favorite.sellerUsername}
-                                      fill
-                                      className="object-cover"
-                                      onError={() => handleImageError(favorite.sellerId)}
-                                      onLoad={() => handleImageLoad(favorite.sellerId)}
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-600">
-                                      <Heart size={16} />
-                                    </div>
-                                  )}
-                                </div>
-                                <div>
-                                  <h3 
-                                    className="font-medium text-white hover:text-[#ff950e] cursor-pointer transition-colors"
-                                    onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                                  >
-                                    {favorite.sellerUsername}
-                                  </h3>
-                                  <div className="flex items-center gap-1 mt-0.5">
-                                    {favorite.isVerified && (
-                                      <Star className="text-[#ff950e]" size={12} />
-                                    )}
-                                    {favorite.tier && (
-                                      <span className="text-xs text-gray-400">{favorite.tier}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                              <button
-                                onClick={() => handleRemoveFavorite(favorite)}
-                                className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
-                                aria-label="Remove from favorites"
-                              >
-                                <X size={16} />
-                              </button>
-                            </div>
-                            <button
-                              onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                              className="w-full px-3 py-1.5 bg-[#222] text-white rounded text-xs font-medium hover:bg-[#333] transition-colors"
-                            >
-                              View Profile
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                  
-                  {/* Error message for favorites */}
-                  {favError && (
-                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-                      <p className="text-red-400 text-sm">{favError}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Recent Activity */}
-                {isLoading ? (
-                  <Skeleton className="h-96" />
-                ) : (
-                  <RecentActivity activities={recentActivity || []} />
-                )}
-              </div>
-
-              {/* Sidebar */}
-              <div className="xl:col-span-1 space-y-8">
-                {/* Subscriptions */}
-                {isLoading ? (
-                  <Skeleton className="h-64" />
-                ) : (
-                  <SubscribedSellers subscriptions={subscribedSellers || []} />
-                )}
-
-                {/* Order Status */}
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <div className="flex items-center gap-2 mb-5">
-                    <Truck className="w-5 h-5 text-blue-400" />
-                    <h2 className="text-xl font-bold text-white">Order Status</h2>
                   </div>
-                  
-                  {isLoading ? (
-                    <div className="space-y-2">
-                      <Skeleton className="h-16" />
-                      <Skeleton className="h-16" />
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 bg-[#111111] rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Clock className="w-4 h-4 text-yellow-400" />
-                          <span className="text-sm text-gray-300">Processing</span>
-                        </div>
-                        <span className="text-sm font-bold text-white">{safeStats.pendingShipments}</span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between p-3 bg-[#111111] rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                          <span className="text-sm text-gray-300">Delivered</span>
-                        </div>
-                        <span className="text-sm font-bold text-white">{safeStats.completedOrders}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Quick Stats */}
-                <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
-                  <h2 className="text-lg font-bold text-white mb-4">Quick Stats</h2>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">This Week Spent</span>
-                      <span className="text-white font-bold">${safeStats.thisWeekSpent.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">Average Order</span>
-                      <span className="text-white font-bold">${safeStats.averageOrderValue.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">Favorite Sellers</span>
-                      <span className="text-white font-bold">{favoriteCount}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                )}
+              </CollapsibleSection>
             </div>
           </div>
         </main>

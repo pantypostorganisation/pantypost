@@ -123,6 +123,64 @@ interface BackendListing {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 const VIEW_CACHE_DURATION = 30 * 1000; // 30 seconds
 
+const VIEW_RESPONSE_KEYS = ['views', 'viewCount', 'count', 'totalViews'];
+
+function parseViewNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return undefined;
+}
+
+function extractViewCount(payload: unknown, depth: number = 0): number | undefined {
+  if (payload === null || payload === undefined || depth > 5) {
+    return undefined;
+  }
+
+  const direct = parseViewNumber(payload);
+  if (direct !== undefined) {
+    return direct;
+  }
+
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const nested = extractViewCount(item, depth + 1);
+      if (nested !== undefined) {
+        return nested;
+      }
+    }
+    return undefined;
+  }
+
+  if (typeof payload === 'object') {
+    for (const key of VIEW_RESPONSE_KEYS) {
+      const candidate = parseViewNumber((payload as Record<string, unknown>)[key]);
+      if (candidate !== undefined) {
+        return candidate;
+      }
+    }
+
+    for (const nestedKey of ['data', 'result', 'payload', 'attributes', 'response']) {
+      if (nestedKey in (payload as Record<string, unknown>)) {
+        const nested = extractViewCount((payload as Record<string, unknown>)[nestedKey], depth + 1);
+        if (nested !== undefined) {
+          return nested;
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
 // Create a custom schema for listing creation that handles number conversion properly
 const createListingValidationSchema = z.object({
   title: listingSchemas.title,
@@ -866,6 +924,13 @@ export class ListingsService {
           // Invalidate cache
           this.invalidateCache();
           
+          // CRITICAL FIX: Broadcast update event to refresh browse pages
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('listing:updated', { 
+              detail: { listingId: sanitizedId, listing: convertedListing } 
+            }));
+          }
+          
           return {
             success: true,
             data: convertedListing,
@@ -899,6 +964,13 @@ export class ListingsService {
 
       // Invalidate cache
       this.invalidateCache();
+
+      // CRITICAL FIX: Broadcast update event
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('listing:updated', { 
+          detail: { listingId: sanitizedId, listing: updatedListing } 
+        }));
+      }
 
       return {
         success: true,
@@ -1355,19 +1427,52 @@ export class ListingsService {
   }
 
   /**
-   * Update listing views
+   * Update listing views - RETURNS the new count
    */
-  async updateViews(update: ListingViewUpdate): Promise<ApiResponse<void>> {
+  async updateViews(update: ListingViewUpdate): Promise<ApiResponse<number>> {
     try {
       // Sanitize inputs
       const sanitizedId = sanitize.strict(update.listingId);
       const sanitizedViewerId = update.viewerId ? sanitize.username(update.viewerId) : undefined;
 
       if (FEATURES.USE_API_LISTINGS) {
-        return await apiCall<void>(`/listings/${sanitizedId}/views`, {
+        const response = await apiCall<any>(`/listings/${sanitizedId}/views`, {
           method: 'POST',
           body: JSON.stringify({ viewerId: sanitizedViewerId }),
         });
+
+        if (response.success) {
+          const primaryPayload = response.data ?? response;
+          let viewCount = extractViewCount(primaryPayload);
+
+          if (viewCount === undefined) {
+            viewCount = extractViewCount(response);
+          }
+
+          if (viewCount === undefined) {
+            console.warn('[ListingsService] Unable to extract view count from update response:', response);
+            return {
+              success: false,
+              error: response.error || { message: 'Failed to parse view count from response' },
+            };
+          }
+
+          console.log('[ListingsService] Update views response payload:', primaryPayload);
+          console.log('[ListingsService] Extracted view count:', viewCount);
+
+          // Update cache with new count
+          this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: Date.now() });
+
+          return {
+            success: true,
+            data: viewCount
+          };
+        }
+        
+        return {
+          success: false,
+          error: response.error || { message: 'Failed to update views' }
+        };
       }
 
       // LocalStorage implementation
@@ -1379,10 +1484,13 @@ export class ListingsService {
       viewsData[sanitizedId] = (viewsData[sanitizedId] || 0) + 1;
       await storageService.setItem('listing_views', viewsData);
 
-      // Invalidate view cache for this listing
-      this.viewsCache.delete(sanitizedId);
+      // Update cache
+      this.viewsCache.set(sanitizedId, { count: viewsData[sanitizedId], timestamp: Date.now() });
 
-      return { success: true };
+      return { 
+        success: true,
+        data: viewsData[sanitizedId]
+      };
     } catch (error) {
       console.error('Update views error:', error);
       return {
@@ -1412,11 +1520,29 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        const response = await apiCall<{ views: number }>(`/listings/${sanitizedId}/views`);
-        
-        if (response.success && response.data) {
-          const viewCount = (response.data as any).views || 0;
+        const response = await apiCall<any>(`/listings/${sanitizedId}/views`);
+
+        if (response.success) {
+          const primaryPayload = response.data ?? response;
+          let viewCount = extractViewCount(primaryPayload);
+
+          if (viewCount === undefined) {
+            viewCount = extractViewCount(response);
+          }
+
+          if (viewCount === undefined) {
+            console.warn('[ListingsService] Unable to extract view count from getListingViews response:', response);
+            return {
+              success: false,
+              error: response.error || { message: 'Failed to parse view count from response' },
+            };
+          }
+
+          console.log('[ListingsService] getListingViews response payload:', primaryPayload);
+          console.log('[ListingsService] Extracted view count:', viewCount);
+
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: now });
+
           return {
             success: true,
             data: viewCount,

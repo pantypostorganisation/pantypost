@@ -23,9 +23,7 @@ jest.mock('@/components/wallet/seller/WalletHeader', () => ({
 jest.mock('@/components/wallet/seller/BalanceCard', () => ({
   __esModule: true,
   default: ({ balance }: { balance: number }) => (
-    <div data-testid="balance-card">
-      Available: ${(balance / 100).toFixed(2)}
-    </div>
+    <div data-testid="balance-card">Available: ${balance.toFixed(2)}</div>
   ),
 }));
 
@@ -33,8 +31,8 @@ jest.mock('@/components/wallet/seller/EarningsCard', () => ({
   __esModule: true,
   default: ({ totalEarnings, totalWithdrawn, salesCount }: any) => (
     <div data-testid="earnings-card">
-      <div>Total Earnings: ${(totalEarnings / 100).toFixed(2)}</div>
-      <div>Withdrawn: ${(totalWithdrawn / 100).toFixed(2)}</div>
+      <div>Total Earnings: ${totalEarnings.toFixed(2)}</div>
+      <div>Withdrawn: ${totalWithdrawn.toFixed(2)}</div>
       <div>Sales: {salesCount}</div>
     </div>
   ),
@@ -44,7 +42,7 @@ jest.mock('@/components/wallet/seller/WithdrawSection', () => ({
   __esModule: true,
   default: ({ balance, withdrawAmount, onAmountChange, onWithdraw, message, messageType }: any) => (
     <div data-testid="withdraw-section">
-      <div>Available: ${(balance / 100).toFixed(2)}</div>
+      <div>Available: ${balance.toFixed(2)}</div>
       <input
         type="number"
         value={withdrawAmount}
@@ -68,7 +66,7 @@ jest.mock('@/components/wallet/seller/RecentWithdrawals', () => ({
     <div data-testid="recent-withdrawals">
       {withdrawals.map((w: any) => (
         <div key={w.id} data-testid={`withdrawal-${w.id}`}>
-          ${(w.amount / 100).toFixed(2)} - {w.status}
+          ${w.amount.toFixed(2)} - {w.status}
         </div>
       ))}
     </div>
@@ -120,7 +118,7 @@ describe('Seller Wallet Page', () => {
   const mockUseAuth = require('@/context/AuthContext').useAuth;
 
   const createMockWalletState = (overrides = {}) => ({
-    balance: 25000, // $250.00 in cents
+    balance: 250,
     withdrawAmount: '',
     message: '',
     messageType: 'success',
@@ -128,9 +126,18 @@ describe('Seller Wallet Page', () => {
     showConfirmation: false,
     sortedWithdrawals: [],
     totalWithdrawn: 0,
-    totalEarnings: 25000,
+    totalEarnings: 250,
     recentWithdrawals: [],
     sellerSales: [],
+    todaysWithdrawals: 0,
+    remainingDailyLimit: 10000,
+    withdrawalLimits: {
+      MIN_AMOUNT: 20,
+      MAX_AMOUNT: 10000,
+      DAILY_LIMIT: 10000,
+      MIN_BALANCE_REMAINING: 0,
+    },
+    validationError: null,
     handleWithdrawClick: jest.fn(),
     handleConfirmWithdraw: jest.fn(),
     handleAmountChange: jest.fn(),
@@ -160,8 +167,8 @@ describe('Seller Wallet Page', () => {
     it('displays earnings information', () => {
       mockUseSellerWallet.mockReturnValue(
         createMockWalletState({
-          totalEarnings: 50000, // $500
-          totalWithdrawn: 25000, // $250
+          totalEarnings: 500,
+          totalWithdrawn: 250,
           sellerSales: [1, 2, 3], // 3 sales
         })
       );
@@ -259,16 +266,16 @@ describe('Seller Wallet Page', () => {
 
   describe('Withdrawal History', () => {
     it('shows recent withdrawals', () => {
-      const withdrawals = [
-        { id: '1', amount: 10000, status: 'completed' }, // $100
-        { id: '2', amount: 15000, status: 'pending' }, // $150
+        const withdrawals = [
+          { id: '1', amount: 100, status: 'completed' },
+          { id: '2', amount: 150, status: 'pending' },
       ];
 
       mockUseSellerWallet.mockReturnValue(
         createMockWalletState({
           sortedWithdrawals: withdrawals,
           recentWithdrawals: withdrawals,
-          totalWithdrawn: 25000,
+          totalWithdrawn: 250,
         })
       );
 
@@ -339,10 +346,10 @@ describe('Seller Wallet Page', () => {
 
   describe('Balance Validation', () => {
     it('prevents withdrawal exceeding balance', () => {
-      mockUseSellerWallet.mockReturnValue(
-        createMockWalletState({
-          balance: 5000, // $50
-          withdrawAmount: '100', // Trying to withdraw $100
+        mockUseSellerWallet.mockReturnValue(
+          createMockWalletState({
+            balance: 50,
+            withdrawAmount: '100',
           message: 'Amount exceeds available balance',
           messageType: 'error',
         })

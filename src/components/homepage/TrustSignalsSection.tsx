@@ -37,7 +37,7 @@ const TRUST_SIGNALS = [
 
 export default function TrustSignalsSection() {
   return (
-    <div className="bg-gradient-to-b from-[#101010] to-black pt-8 md:pt-12 pb-16 md:pb-20 relative z-20 overflow-hidden">
+    <div className="pt-8 md:pt-12 pb-16 md:pb-20 relative overflow-hidden">
       {/* Shape Divider 1 (Background Glow) */}
       <motion.div
         className="absolute -top-40 left-1/2 -translate-x-1/2 w-[150%] md:w-[100%] lg:w-[80%] h-80 pointer-events-none z-0"

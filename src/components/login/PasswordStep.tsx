@@ -3,11 +3,13 @@
 
 import { Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface PasswordStepProps {
   username: string;
   password: string;
   error: string | null;
+  errorData?: any;
   onPasswordChange: (password: string) => void;
   onBack: () => void;
   onSubmit: (e?: React.FormEvent) => void;
@@ -23,12 +25,15 @@ interface PasswordStepProps {
     icon: any;
   }>;
   onRoleSelect: (role: string) => void;
+  rememberMe: boolean;
+  onRememberMeChange: (remember: boolean) => void;
 }
 
 export default function PasswordStep({
   username,
   password,
   error,
+  errorData,
   onPasswordChange,
   onBack,
   onSubmit,
@@ -38,70 +43,117 @@ export default function PasswordStep({
   rateLimitWaitTime = 0,
   role,
   roleOptions,
-  onRoleSelect
+  onRoleSelect,
+  rememberMe,
+  onRememberMeChange,
 }: PasswordStepProps) {
+  const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
-  
-  // Reset attempt flag when error changes
+
+  // debug (optional)
+  useEffect(() => {
+    console.log('[PasswordStep] error update:', { error, errorData });
+  }, [error, errorData]);
+
   useEffect(() => {
     if (!error) {
       setHasAttemptedSubmit(false);
     }
   }, [error]);
-  
-  // Format wait time for display
-  const formatWaitTime = (totalSeconds: number): string => {
-    if (totalSeconds < 60) {
-      return `${totalSeconds} second${totalSeconds === 1 ? '' : 's'}`;
+
+  // email verification -> redirect
+  useEffect(() => {
+    if (errorData?.requiresVerification) {
+      const params = new URLSearchParams();
+      if (errorData?.email) params.set('email', errorData.email);
+      if (errorData?.username) {
+        params.set('username', errorData.username);
+      } else if (username) {
+        params.set('username', username);
+      }
+      router.push(`/verify-email-pending?${params.toString()}`);
     }
+  }, [errorData, username, router]);
+
+  // password reset pending -> redirect
+  useEffect(() => {
+    const looksLikeReset =
+      error &&
+      (error.includes('reset') ||
+        error.includes('expired') ||
+        error.includes('verification code') ||
+        error.includes('password reset is pending'));
+
+    if (looksLikeReset || errorData?.pendingPasswordReset) {
+      if (errorData?.email) {
+        sessionStorage.setItem('resetEmail', errorData.email);
+      } else if (username) {
+        sessionStorage.setItem('prefillEmail', username);
+      }
+      setTimeout(() => {
+        router.push('/forgot-password');
+      }, 2000);
+    }
+  }, [error, errorData, username, router]);
+
+  const formatWaitTime = (totalSeconds: number): string => {
+    if (totalSeconds < 60) return `${totalSeconds} second${totalSeconds === 1 ? '' : 's'}`;
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes} minute${minutes === 1 ? '' : 's'} ${seconds} second${seconds === 1 ? '' : 's'}`;
   };
 
-  // Basic sanitization for password
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/<[^>]*>/g, ''); // Remove HTML tags
+    const value = e.target.value.replace(/<[^>]*>/g, '');
     onPasswordChange(value);
-    
-    // Clear error when user starts typing after a failed attempt
-    if (hasAttemptedSubmit && error) {
-      // This will trigger the parent to clear the error
-      onPasswordChange(value);
-    }
   };
 
-  // Handle Enter key in password field
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && password && role && !isLoading && !isRateLimited) {
       e.preventDefault();
-      handleSubmit(e);
+      handleSubmit(e as any);
     }
   };
 
-  // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[PasswordStep] Form submitted', { 
-      password: !!password, 
-      role, 
-      isLoading, 
-      isRateLimited,
-      error
-    });
-    
     setHasAttemptedSubmit(true);
-    
+
     if (!isLoading && !isRateLimited && role && password) {
-      console.log('[PasswordStep] Calling onSubmit...');
       onSubmit(e);
     }
   };
-  
+
+  // detect special states
+  const isPasswordResetPending = Boolean(
+    errorData?.pendingPasswordReset ||
+      (error &&
+        (error.includes('password reset is pending') ||
+          error.includes('verification code') ||
+          error.includes('reset')))
+  );
+
+  const isRateLimitError =
+    (isRateLimited && rateLimitWaitTime > 0) || (error && error.includes('Too many'));
+
+  // fallback for empty error strings
+  const rawError = error ? error.trim() : '';
+  const shouldShowGeneric =
+    !rawError &&
+    hasAttemptedSubmit &&
+    !isLoading &&
+    !isPasswordResetPending &&
+    !isRateLimitError &&
+    !errorData?.requiresVerification;
+
+  const displayError =
+    !isPasswordResetPending && !isRateLimitError && !errorData?.requiresVerification
+      ? rawError || (shouldShowGeneric ? 'Incorrect username or password. Please try again.' : '')
+      : '';
+
   return (
     <div className="transition-all duration-300">
-      {/* Back Button */}
       <button
         onClick={onBack}
         disabled={isLoading}
@@ -110,7 +162,6 @@ export default function PasswordStep({
         ← Back to username
       </button>
 
-      {/* Username Display */}
       <div className="mb-4 p-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg">
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-400">Signing in as:</span>
@@ -118,22 +169,32 @@ export default function PasswordStep({
         </div>
       </div>
 
-      {/* Error display - Show authentication errors prominently */}
-      {error && !error.includes('Too many') && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
-          <div className="flex items-center gap-2 text-sm text-red-400">
+      {isPasswordResetPending && (
+        <div className="mb-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 text-sm text-orange-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>{error}</span>
+            <span>A password reset is pending for this account. Redirecting to password reset...</span>
           </div>
         </div>
       )}
 
-      {/* Rate limit warning */}
-      {((isRateLimited && rateLimitWaitTime > 0) || (error && error.includes('Too many'))) && (
+      {displayError && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 text-sm text-red-400">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{displayError}</span>
+          </div>
+        </div>
+      )}
+
+      {isRateLimitError && (
         <div className="mb-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg">
           <div className="flex items-center gap-2 text-sm text-orange-400">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>Too many attempts. Please wait {formatWaitTime(rateLimitWaitTime || 0)} before trying again.</span>
+            <span>
+              Too many attempts. Please wait {formatWaitTime(rateLimitWaitTime || 0)} before trying
+              again.
+            </span>
           </div>
         </div>
       )}
@@ -145,16 +206,16 @@ export default function PasswordStep({
           </label>
           <div className="relative">
             <input
-              type={showPassword ? "text" : "password"}
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={handleChange}
               onKeyPress={handleKeyPress}
               placeholder="Enter your password"
               className={`w-full px-4 py-3 pr-10 bg-black/50 backdrop-blur-sm border ${
-                error && !error.includes('Too many') ? 'border-red-500/50' : 'border-gray-700'
+                displayError ? 'border-red-500/50' : 'border-gray-700'
               } rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] focus:ring-1 focus:ring-[#ff950e] transition-colors`}
               autoFocus
-              disabled={isLoading || isRateLimited}
+              disabled={isLoading || isRateLimited || isPasswordResetPending}
             />
             <button
               type="button"
@@ -166,14 +227,8 @@ export default function PasswordStep({
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
-          {error && error.includes('Invalid') && (
-            <p className="text-xs text-gray-500 mt-2">
-              Please check your password and try again
-            </p>
-          )}
         </div>
 
-        {/* Role Selection */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-300 mb-3">
             Select your role
@@ -183,17 +238,19 @@ export default function PasswordStep({
               const Icon = option.icon;
               const isSelected = role === option.key;
               const isAdminOption = option.key === 'admin';
-              
+
               return (
                 <button
                   key={option.key}
                   type="button"
                   onClick={() => onRoleSelect(option.key)}
-                  disabled={isLoading || isRateLimited}
+                  disabled={isLoading || isRateLimited || isPasswordResetPending}
                   className={`w-full p-3 rounded-lg border transition-all duration-200 text-left relative overflow-hidden group hover:scale-[1.02] active:scale-[0.98] ${
-                    isLoading || isRateLimited ? 'opacity-50 cursor-not-allowed' : ''
+                    isLoading || isRateLimited || isPasswordResetPending
+                      ? 'opacity-50 cursor-not-allowed'
+                      : ''
                   } ${
-                    isSelected 
+                    isSelected
                       ? isAdminOption
                         ? 'bg-purple-900/20 border-purple-500/70 text-white'
                         : 'bg-[#ff950e]/10 border-[#ff950e] text-white'
@@ -202,19 +259,20 @@ export default function PasswordStep({
                         : 'bg-black/50 border-gray-700 text-gray-300 hover:border-gray-600 hover:bg-black/70'
                   }`}
                 >
-                  {/* Sheen Effect for All Role Options */}
                   <div className="absolute inset-0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12" />
-                  
+
                   <div className="flex items-center gap-3 relative z-10">
-                    <div className={`p-2 rounded-lg transition-colors ${
-                      isSelected 
-                        ? isAdminOption
-                          ? 'bg-purple-500 text-white'
-                          : 'bg-[#ff950e] text-black' 
-                        : isAdminOption
-                          ? 'bg-purple-800 text-purple-300'
-                          : 'bg-gray-800 text-gray-400'
-                    }`}>
+                    <div
+                      className={`p-2 rounded-lg transition-colors ${
+                        isSelected
+                          ? isAdminOption
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-[#ff950e] text-black'
+                          : isAdminOption
+                            ? 'bg-purple-800 text-purple-300'
+                            : 'bg-gray-800 text-gray-400'
+                      }`}
+                    >
                       <Icon className="w-4 h-4" />
                     </div>
                     <div>
@@ -228,13 +286,31 @@ export default function PasswordStep({
           </div>
         </div>
 
+        <div className="mb-6 flex items-center justify-between text-sm text-gray-300">
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(event) => onRememberMeChange(event.target.checked)}
+              disabled={isLoading || isRateLimited || isPasswordResetPending}
+              className="h-4 w-4 rounded border-gray-600 bg-black text-[#ff950e] focus:ring-[#ff950e]"
+            />
+            <span>Keep me signed in</span>
+          </label>
+          <span className="text-xs text-gray-500">Use on trusted devices only</span>
+        </div>
+
         <button
           type="submit"
-          disabled={!role || !password || isLoading || hasUser || isRateLimited}
-          className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
-          style={{ color: (!role || !password || isLoading || hasUser || isRateLimited) ? undefined : '#000' }}
+          disabled={!role || !password || isLoading || hasUser || isRateLimited || isPasswordResetPending}
+          className="w-full bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-gray-700 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
         >
-          {isRateLimited ? (
+          {isPasswordResetPending ? (
+            <>
+              <AlertCircle className="w-4 h-4" />
+              Redirecting to Password Reset...
+            </>
+          ) : isRateLimited ? (
             <>
               <AlertCircle className="w-4 h-4" />
               Too Many Attempts
@@ -258,12 +334,12 @@ export default function PasswordStep({
         </button>
       </form>
 
-      {/* Help text for authentication failures */}
-      {error && error.includes('Invalid') && !isLoading && (
+      {displayError && !isLoading && !isPasswordResetPending && (
         <div className="mt-4 text-center">
           <p className="text-xs text-gray-500">
-            Having trouble? <button 
-              onClick={() => window.location.href = '/forgot-password'} 
+            Having trouble?{' '}
+            <button
+              onClick={() => (window.location.href = '/forgot-password')}
               className="text-[#ff950e] hover:underline"
               type="button"
             >

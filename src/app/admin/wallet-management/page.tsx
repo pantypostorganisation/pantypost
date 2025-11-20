@@ -1,6 +1,7 @@
+// src/app/admin/wallet-management/page.tsx
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import RequireAuth from '@/components/RequireAuth';
@@ -11,10 +12,10 @@ import WalletActionPanel from '@/components/admin/wallet/WalletActionPanel';
 import BulkActionModal from '@/components/admin/wallet/BulkActionModal';
 import ConfirmationModal from '@/components/admin/wallet/ConfirmationModal';
 import WalletToast from '@/components/admin/wallet/WalletToast';
+import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import { Loader2 } from 'lucide-react';
 import { WalletProvider, useWallet } from '@/context/WalletContext';
 import { useWebSocket } from '@/context/WebSocketContext';
-import { subscribeToWalletUpdates, getWalletBalanceListener } from '@/utils/walletSync';
 import { WebSocketEvent } from '@/types/websocket';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
@@ -36,10 +37,6 @@ function AdminWalletContent() {
   const wsContext = useWebSocket();
   const subscribe = wsContext?.subscribe || (() => () => {});
   const isConnected = wsContext?.isConnected || false;
-  
-  // Force re-render hook
-  const [, forceUpdate] = useState({});
-  const forceRender = useCallback(() => forceUpdate({}), []);
   
   // Track component mount status
   const isMountedRef = useRef(true);
@@ -64,8 +61,8 @@ function AdminWalletContent() {
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
   const [showMessage, setShowMessage] = useState(false);
-  const [allUsers, setAllUsers] = useState<{username: string, role: string}[]>([]);
-  const [displayedUsers, setDisplayedUsers] = useState<{username: string, role: string}[]>([]);
+  const [allUsers, setAllUsers] = useState<{username: string, role: string, balance?: number}[]>([]);
+  const [displayedUsers, setDisplayedUsers] = useState<{username: string, role: string, balance?: number}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -76,6 +73,9 @@ function AdminWalletContent() {
   
   // Advanced features
   const [showBalances, setShowBalances] = useState(true);
+  
+  // Balance cache to prevent resets
+  const balanceCacheRef = useRef<{ [username: string]: number }>({});
 
   // Cleanup on unmount
   useEffect(() => {
@@ -84,24 +84,26 @@ function AdminWalletContent() {
     };
   }, []);
 
-  // Subscribe to WebSocket balance updates
+  // Subscribe to WebSocket balance updates - FIXED to prevent balance resets
   useEffect(() => {
     if (!isConnected || !isMountedRef.current) return;
 
     // Subscribe to wallet balance updates
     const unsubBalance = subscribe(WebSocketEvent.WALLET_BALANCE_UPDATE, (data: any) => {
       console.log('[AdminWallet] Received balance update:', data);
-      // Force component re-render when any balance updates
-      if (isMountedRef.current) {
-        forceRender();
+      
+      // Update cache instead of forcing re-render
+      if (data.username && typeof data.balance === 'number') {
+        balanceCacheRef.current[data.username] = data.balance;
       }
     });
 
     // Subscribe to wallet transactions
     const unsubTransaction = subscribe(WebSocketEvent.WALLET_TRANSACTION, (data: any) => {
       console.log('[AdminWallet] Received transaction:', data);
-      if (isMountedRef.current) {
-        forceRender();
+      // Only reload if it affects current view
+      if (isMountedRef.current && data.from && data.to) {
+        setTimeout(() => reloadData(), 1000);
       }
     });
 
@@ -109,53 +111,13 @@ function AdminWalletContent() {
       unsubBalance();
       unsubTransaction();
     };
-  }, [isConnected, subscribe, forceRender]);
+  }, [isConnected, subscribe, reloadData]);
 
-  // Subscribe to custom wallet updates
-  useEffect(() => {
-    const unsubscribe = subscribeToWalletUpdates((data) => {
-      console.log('[AdminWallet] Custom wallet update:', data);
-      if (isMountedRef.current) {
-        forceRender();
-      }
-    });
-
-    return unsubscribe;
-  }, [forceRender]);
-
-  // Subscribe to real-time balance updates for specific users
-  useEffect(() => {
-    const balanceListener = getWalletBalanceListener();
-    const subscriptions: (() => void)[] = [];
-
-    // Subscribe to balance updates for all displayed users
-    displayedUsers.forEach(user => {
-      const unsubscribe = balanceListener.subscribe(
-        user.username,
-        user.role as 'buyer' | 'seller',
-        (newBalance) => {
-          console.log(`[AdminWallet] Balance updated for ${user.username}: ${newBalance}`);
-          if (isMountedRef.current) {
-            forceRender();
-          }
-        }
-      );
-      subscriptions.push(unsubscribe);
-    });
-
-    return () => {
-      subscriptions.forEach(unsub => unsub());
-    };
-  }, [displayedUsers, forceRender]);
-
-  // Load all users - now using combined wallet data
+  // Load all users - FIXED to preserve balances
   useEffect(() => {
     if (!isMountedRef.current) return;
     
     console.log('=== LOADING USERS WITH REAL-TIME DATA ===');
-    console.log('Buyer balances:', buyerBalances);
-    console.log('Seller balances:', sellerBalances);
-    console.log('Wallet object:', wallet);
     
     let allUsersMap: {[key: string]: any} = {};
     
@@ -166,33 +128,49 @@ function AdminWalletContent() {
       });
     }
     
-    // Add buyers from buyerBalances
+    // Add buyers from buyerBalances with cached balance
     Object.keys(buyerBalances).forEach(username => {
+      const cachedBalance = balanceCacheRef.current[username] ?? buyerBalances[username];
       if (!allUsersMap[username]) {
         allUsersMap[username] = {
           username: username,
           role: 'buyer',
+          balance: cachedBalance
         };
+      } else {
+        allUsersMap[username].balance = cachedBalance;
       }
+      // Update cache
+      balanceCacheRef.current[username] = cachedBalance;
     });
     
-    // Add sellers from sellerBalances
+    // Add sellers from sellerBalances with cached balance
     Object.keys(sellerBalances).forEach(username => {
+      const cachedBalance = balanceCacheRef.current[username] ?? sellerBalances[username];
       if (!allUsersMap[username] || allUsersMap[username].role !== 'seller') {
         allUsersMap[username] = {
           username: username,
           role: 'seller',
+          balance: cachedBalance
         };
+      } else {
+        allUsersMap[username].balance = cachedBalance;
       }
+      // Update cache
+      balanceCacheRef.current[username] = cachedBalance;
     });
     
     // Add any remaining users from wallet object
     Object.keys(wallet).forEach(username => {
       if (!allUsersMap[username] && username !== 'admin') {
+        const cachedBalance = balanceCacheRef.current[username] ?? wallet[username];
         allUsersMap[username] = {
           username: username,
           role: 'buyer', // Default to buyer if not specified
+          balance: cachedBalance
         };
+        // Update cache
+        balanceCacheRef.current[username] = cachedBalance;
       }
     });
     
@@ -203,7 +181,8 @@ function AdminWalletContent() {
       })
       .map(([username, userData]) => ({
         username: sanitizeStrict(username),
-        role: userData.role || 'buyer'
+        role: userData.role || 'buyer',
+        balance: userData.balance ?? 0
       }));
     
     // Sort users
@@ -215,7 +194,7 @@ function AdminWalletContent() {
       return a.username.localeCompare(b.username);
     });
     
-    console.log('Final users:', sortedUsers);
+    console.log('Final users:', sortedUsers.length, 'users loaded');
     console.log('=== END LOADING ===');
     
     if (isMountedRef.current) {
@@ -223,46 +202,102 @@ function AdminWalletContent() {
     }
   }, [listingUsers, wallet, buyerBalances, sellerBalances, user]);
 
-  // Get user balance - Fixed to handle all possible data formats
-  const getUserBalance = (username: string) => {
+  // Get user balance - FIXED to use cached values
+  const getUserBalance = useCallback((username: string) => {
     // Validate username
     if (!username || typeof username !== 'string') return 0;
+    
+    // First check cache
+    if (balanceCacheRef.current[username] !== undefined) {
+      return balanceCacheRef.current[username];
+    }
     
     // Check if user is a buyer or seller
     const user = allUsers.find(u => u.username === username);
     let balance = 0;
     
-    if (user?.role === 'seller') {
-      const sellerBalance = sellerBalances[username];
-      // Handle case where balance might be an object
-      if (typeof sellerBalance === 'number') {
-        balance = sellerBalance;
-      } else if (sellerBalance && typeof sellerBalance === 'object' && 'balance' in sellerBalance) {
-        balance = (sellerBalance as any).balance;
+    if (user) {
+      // Use balance from user object if available
+      if (user.balance !== undefined) {
+        balance = user.balance;
+      } else if (user.role === 'seller') {
+        balance = sellerBalances[username] ?? 0;
       } else {
-        balance = 0;
+        balance = buyerBalances[username] ?? wallet[username] ?? 0;
       }
     } else {
-      // Default to buyer balance
-      const buyerBalance = buyerBalances[username];
-      if (typeof buyerBalance === 'number') {
-        balance = buyerBalance;
-      } else if (buyerBalance && typeof buyerBalance === 'object' && 'balance' in buyerBalance) {
-        balance = (buyerBalance as any).balance;
-      } else {
-        // Fallback to wallet
-        const walletBalance = wallet[username];
-        if (typeof walletBalance === 'number') {
-          balance = walletBalance;
-        } else {
-          balance = 0;
-        }
-      }
+      // Fallback to checking balances directly
+      balance = buyerBalances[username] ?? sellerBalances[username] ?? wallet[username] ?? 0;
     }
+    
+    // Update cache
+    balanceCacheRef.current[username] = balance;
     
     // Ensure we always return a valid number
     return isNaN(balance) ? 0 : balance;
-  };
+  }, [allUsers, buyerBalances, sellerBalances, wallet]);
+
+  // Helper for formatting currency consistently
+  const formatCurrency = useCallback((amount: number) => {
+    const safeAmount = Number.isFinite(amount) ? amount : 0;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(safeAmount);
+  }, []);
+
+  const summaryStats = useMemo(() => {
+    const safeUsers = Array.isArray(allUsers) ? allUsers : [];
+    let buyerCount = 0;
+    let sellerCount = 0;
+    let totalBalance = 0;
+    let positiveBalance = 0;
+    let negativeBalance = 0;
+    let zeroBalance = 0;
+
+    safeUsers.forEach(user => {
+      if (user.role === 'seller') {
+        sellerCount += 1;
+      } else {
+        buyerCount += 1;
+      }
+
+      const balance = getUserBalance(user.username);
+      totalBalance += balance;
+
+      if (balance > 0) {
+        positiveBalance += 1;
+      } else if (balance < 0) {
+        negativeBalance += 1;
+      } else {
+        zeroBalance += 1;
+      }
+    });
+
+    const totalUsersCount = safeUsers.length;
+    const safeDivisor = totalUsersCount > 0 ? totalUsersCount : 1;
+
+    return {
+      buyerCount,
+      sellerCount,
+      totalBalance,
+      positiveBalance,
+      negativeBalance,
+      zeroBalance,
+      averageBalance: totalBalance / safeDivisor,
+      totalUsersCount,
+      positivePercentage: (positiveBalance / safeDivisor) * 100,
+      zeroPercentage: (zeroBalance / safeDivisor) * 100,
+      negativePercentage: (negativeBalance / safeDivisor) * 100
+    };
+  }, [allUsers, getUserBalance]);
+
+  const selectedUserBalance = useMemo(() => {
+    if (!selectedUser) return 0;
+    return getUserBalance(selectedUser);
+  }, [selectedUser, getUserBalance]);
 
   // Handle search term change with sanitization
   const handleSearchTermChange = (term: string) => {
@@ -304,7 +339,7 @@ function AdminWalletContent() {
     if (isMountedRef.current) {
       setDisplayedUsers(filtered);
     }
-  }, [searchTerm, allUsers, roleFilter, balanceFilter, wallet, buyerBalances, sellerBalances]);
+  }, [searchTerm, allUsers, roleFilter, balanceFilter, getUserBalance]);
 
   // Handle user selection
   const handleSelectUser = (username: string, role: string) => {
@@ -354,7 +389,7 @@ function AdminWalletContent() {
     }, 4000);
   };
 
-  // Validate amount and reason
+  // FIXED: Validate amount and reason with proper backend requirements
   const validateAction = (amount: string, reason: string): { valid: boolean; error?: string } => {
     const numAmount = parseFloat(amount);
     
@@ -366,12 +401,13 @@ function AdminWalletContent() {
       return { valid: false, error: 'Amount cannot exceed $10,000' };
     }
     
-    if (!reason || reason.trim().length < 3) {
-      return { valid: false, error: 'Please provide a reason (minimum 3 characters)' };
+    // FIXED: Backend requires minimum 10 characters for reason
+    if (!reason || reason.trim().length < 10) {
+      return { valid: false, error: 'Please provide a reason (minimum 10 characters)' };
     }
     
-    if (reason.length > 200) {
-      return { valid: false, error: 'Reason cannot exceed 200 characters' };
+    if (reason.length > 500) {
+      return { valid: false, error: 'Reason cannot exceed 500 characters' };
     }
     
     return { valid: true };
@@ -399,15 +435,12 @@ function AdminWalletContent() {
     }
   };
 
-  // Execute the wallet action
+  // Execute the wallet action - FIXED to handle balance updates properly
   const executeAction = async (numAmount: number) => {
     if (!isMountedRef.current) return;
     
     setIsLoading(true);
     
-    // Small delay for UI feedback
-    await new Promise(resolve => setTimeout(resolve, 500));
-
     const roleForWallet: 'buyer' | 'seller' = selectedUserRole === 'admin' ? 'buyer' : selectedUserRole as 'buyer' | 'seller';
     const sanitizedReason = sanitizeStrict(reason);
 
@@ -424,8 +457,15 @@ function AdminWalletContent() {
         setAmount('');
         setReason('');
         
-        // Force a re-render to show updated balance immediately
-        forceRender();
+        // Update balance cache immediately
+        const currentBalance = getUserBalance(selectedUser!);
+        const newBalance = actionType === 'credit' 
+          ? currentBalance + numAmount 
+          : currentBalance - numAmount;
+        balanceCacheRef.current[selectedUser!] = newBalance;
+        
+        // Reload data after a short delay
+        setTimeout(() => reloadData(), 500);
       } else {
         showMessageHelper(`Failed to ${actionType} account. ${actionType === 'debit' ? 'Check if user has sufficient balance.' : ''}`, 'error');
       }
@@ -436,7 +476,7 @@ function AdminWalletContent() {
     }
   };
 
-  // Handle bulk actions with validation
+  // Handle bulk actions with validation - FIXED
   const handleBulkAction = async (action: 'credit' | 'debit', amount: number, reason: string) => {
     if (!isMountedRef.current) return;
     
@@ -463,8 +503,17 @@ function AdminWalletContent() {
         success = await adminDebitUser(username, userRole, amount, sanitizedReason);
       }
 
-      if (success) successCount++;
-      else failCount++;
+      if (success) {
+        successCount++;
+        // Update cache for this user
+        const currentBalance = getUserBalance(username);
+        const newBalance = action === 'credit' 
+          ? currentBalance + amount 
+          : currentBalance - amount;
+        balanceCacheRef.current[username] = newBalance;
+      } else {
+        failCount++;
+      }
     }
 
     if (isMountedRef.current) {
@@ -477,12 +526,12 @@ function AdminWalletContent() {
       setShowBulkModal(false);
       setIsBulkLoading(false);
       
-      // Force re-render to show updated balances
-      forceRender();
+      // Reload data to get fresh balances
+      setTimeout(() => reloadData(), 500);
     }
   };
 
-  // Refresh data
+  // Refresh data - FIXED to preserve balance cache
   const handleRefresh = async () => {
     if (!isMountedRef.current) return;
     
@@ -499,7 +548,6 @@ function AdminWalletContent() {
     if (isMountedRef.current) {
       setIsRefreshing(false);
       showMessageHelper('Data refreshed successfully');
-      forceRender();
     }
   };
 
@@ -570,69 +618,181 @@ function AdminWalletContent() {
   };
 
   return (
-    <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6">
-      <div className="max-w-7xl mx-auto">
-        <WalletHeader
-          totalUsers={allUsers.length}
-          onRefresh={handleRefresh}
-          onExport={exportUserData}
-          isRefreshing={isRefreshing}
-        />
+    <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+      <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-10">
+          <section className="space-y-6">
+            <WalletHeader
+              totalUsers={summaryStats.totalUsersCount}
+              onRefresh={handleRefresh}
+              onExport={exportUserData}
+              isRefreshing={isRefreshing}
+            />
 
-        <WalletFilters
-          searchTerm={searchTerm}
-          setSearchTerm={handleSearchTermChange}
-          roleFilter={roleFilter}
-          setRoleFilter={setRoleFilter}
-          balanceFilter={balanceFilter}
-          setBalanceFilter={setBalanceFilter}
-          showBalances={showBalances}
-          setShowBalances={setShowBalances}
-          selectedUsers={selectedUsers}
-          setSelectedUsers={setSelectedUsers}
-          displayedUsers={displayedUsers}
-          handleSelectAll={handleSelectAll}
-          setShowBulkModal={setShowBulkModal}
-        />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="relative flex flex-col gap-3">
+                  <span className="text-sm text-gray-400">Platform Balance</span>
+                  <span className="text-3xl font-semibold text-white">{formatCurrency(summaryStats.totalBalance)}</span>
+                  <span className="text-xs text-gray-500">Across {summaryStats.totalUsersCount} wallets</span>
+                </div>
+              </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <WalletUserList
-            displayedUsers={displayedUsers}
-            selectedUsers={selectedUsers}
-            selectedUser={selectedUser}
-            showBalances={showBalances}
-            handleSelectUser={handleSelectUser}
-            handleBulkSelect={handleBulkSelect}
-            getUserBalance={getUserBalance}
-            getRoleBadgeColor={getRoleBadgeColor}
-            getBalanceColor={getBalanceColor}
-            formatRole={formatRole}
-          />
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="relative flex flex-col gap-3">
+                  <span className="text-sm text-gray-400">Average Wallet</span>
+                  <span className="text-3xl font-semibold text-white">{formatCurrency(summaryStats.averageBalance)}</span>
+                  <span className="text-xs text-gray-500">Buyers • Sellers combined</span>
+                </div>
+              </div>
 
-          <WalletActionPanel
-            selectedUser={selectedUser}
-            selectedUserRole={selectedUserRole}
-            actionType={actionType}
-            setActionType={setActionType}
-            amount={amount}
-            setAmount={setAmount}
-            reason={reason}
-            setReason={setReason}
-            isLoading={isLoading}
-            handleAction={handleAction}
-            clearSelection={clearSelection}
-            getUserBalance={getUserBalance}
-            getRoleBadgeColor={getRoleBadgeColor}
-            getBalanceColor={getBalanceColor}
-            formatRole={formatRole}
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="relative space-y-3">
+                  <span className="text-sm text-gray-400">Active Accounts</span>
+                  <div className="flex items-center justify-between text-white">
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Buyers</p>
+                      <p className="text-2xl font-semibold">{summaryStats.buyerCount}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Sellers</p>
+                      <p className="text-2xl font-semibold">{summaryStats.sellerCount}</p>
+                    </div>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff6b00] to-purple-500"
+                      style={{ width: `${summaryStats.totalUsersCount > 0 ? (summaryStats.buyerCount / summaryStats.totalUsersCount) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="group relative overflow-hidden rounded-2xl border border-white/5 bg-white/5 p-5 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="relative space-y-3">
+                  <span className="text-sm text-gray-400">Balance Health</span>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between text-green-400">
+                      <span>Positive</span>
+                      <span>{summaryStats.positiveBalance}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gray-300">
+                      <span>Neutral</span>
+                      <span>{summaryStats.zeroBalance}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-red-400">
+                      <span>Negative</span>
+                      <span>{summaryStats.negativeBalance}</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-green-500 via-green-400 to-emerald-500"
+                        style={{ width: `${Math.min(summaryStats.positivePercentage, 100)}%` }}
+                      />
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-gray-500 via-gray-400 to-gray-200"
+                        style={{ width: `${Math.min(summaryStats.zeroPercentage, 100)}%` }}
+                      />
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-gradient-to-r from-red-500 via-red-400 to-rose-500"
+                        style={{ width: `${Math.min(summaryStats.negativePercentage, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <AdminMoneyFlow />
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+            <div className="space-y-6 xl:col-span-2">
+              <div className="rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Wallet Explorer</h2>
+                    <p className="text-sm text-gray-400">Slice and dice the user base to surface accounts worth reviewing.</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="rounded-full border border-white/10 px-3 py-1 text-gray-300">
+                      {displayedUsers.length} shown
+                    </span>
+                    <span className="rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-[#ffb347]">
+                      {selectedUsers.length} selected
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-6">
+                  <WalletFilters
+                    searchTerm={searchTerm}
+                    setSearchTerm={handleSearchTermChange}
+                    roleFilter={roleFilter}
+                    setRoleFilter={setRoleFilter}
+                    balanceFilter={balanceFilter}
+                    setBalanceFilter={setBalanceFilter}
+                    showBalances={showBalances}
+                    setShowBalances={setShowBalances}
+                    selectedUsers={selectedUsers}
+                    setSelectedUsers={setSelectedUsers}
+                    displayedUsers={displayedUsers}
+                    handleSelectAll={handleSelectAll}
+                    setShowBulkModal={setShowBulkModal}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/5 bg-black/40 p-1 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <WalletUserList
+                  displayedUsers={displayedUsers}
+                  selectedUsers={selectedUsers}
+                  selectedUser={selectedUser}
+                  showBalances={showBalances}
+                  handleSelectUser={handleSelectUser}
+                  handleBulkSelect={handleBulkSelect}
+                  getUserBalance={getUserBalance}
+                  getRoleBadgeColor={getRoleBadgeColor}
+                  getBalanceColor={getBalanceColor}
+                  formatRole={formatRole}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-white/5 bg-black/40 p-1 backdrop-blur-xl shadow-[0_20px_45px_rgba(0,0,0,0.45)]">
+                <WalletActionPanel
+                  selectedUser={selectedUser}
+                  selectedUserRole={selectedUserRole}
+                  actionType={actionType}
+                  setActionType={setActionType}
+                  amount={amount}
+                  setAmount={setAmount}
+                  reason={reason}
+                  setReason={setReason}
+                  isLoading={isLoading}
+                  handleAction={handleAction}
+                  clearSelection={clearSelection}
+                  getUserBalance={getUserBalance}
+                  getRoleBadgeColor={getRoleBadgeColor}
+                  getBalanceColor={getBalanceColor}
+                  formatRole={formatRole}
+                />
+              </div>
+            </div>
+          </div>
+
+          <WalletToast
+            message={message}
+            type={messageType}
+            isVisible={showMessage}
           />
         </div>
-
-        <WalletToast
-          message={message}
-          type={messageType}
-          isVisible={showMessage}
-        />
       </div>
 
       <ConfirmationModal

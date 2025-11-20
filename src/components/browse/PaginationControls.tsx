@@ -1,3 +1,4 @@
+// src/components/browse/PaginationControls.tsx
 'use client';
 
 import { PaginationControlsProps } from '@/types/browse';

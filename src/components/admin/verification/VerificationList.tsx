@@ -34,12 +34,12 @@ export default function VerificationList({
 
   if (!Array.isArray(users) || users.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 md:px-6">
-        <div className="bg-[#0e0e0e] border border-[#222] rounded-xl p-8 text-center">
+      <section className="max-w-7xl mx-auto px-4 md:px-6">
+        <div className="rounded-2xl border border-white/5 bg-black/40 px-8 py-12 text-center">
           {searchTerm ? (
             <>
-              <AlertCircle className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-              <p className="text-gray-400">
+              <AlertCircle className="mx-auto mb-4 h-12 w-12 text-white/30" />
+              <p className="text-sm text-white/60">
                 No pending verification requests found for "
                 <SecureMessageDisplay
                   content={searchTerm}
@@ -51,20 +51,20 @@ export default function VerificationList({
             </>
           ) : (
             <>
-              <Shield className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-              <p className="text-gray-400">
+              <Shield className="mx-auto mb-4 h-12 w-12 text-white/30" />
+              <p className="text-sm text-white/60">
                 No pending verification requests at the moment
               </p>
             </>
           )}
         </div>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 md:px-6">
-      <div className="space-y-4">
+    <section className="max-w-7xl mx-auto px-4 md:px-6">
+      <div className="space-y-3">
         {users.map((user) => (
           <VerificationCard
             key={user.username}
@@ -74,6 +74,6 @@ export default function VerificationList({
           />
         ))}
       </div>
-    </div>
+    </section>
   );
 }

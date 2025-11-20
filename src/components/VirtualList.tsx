@@ -44,6 +44,7 @@ export function VirtualList<T>({
         {virtualizer.getVirtualItems().map((virtualItem) => (
           <div
             key={virtualItem.key}
+            ref={virtualizer.measureElement}
             style={{
               position: 'absolute',
               top: 0,

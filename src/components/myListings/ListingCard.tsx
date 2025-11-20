@@ -4,7 +4,6 @@
 import { Eye, Edit, Trash2, Gavel, Crown, Clock, Calendar, X } from 'lucide-react';
 import { ListingCardProps } from '@/types/myListings';
 import { timeSinceListed, formatTimeRemaining } from '@/utils/myListingsUtils';
-import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { useConfirmation } from '@/components/ui/ConfirmationModal';
 
 export default function ListingCard({
@@ -60,13 +59,13 @@ export default function ListingCard({
     <>
       {ConfirmationModal}
       <div
-        className={`border rounded-xl overflow-hidden shadow-lg hover:shadow-xl transition relative flex flex-col h-full ${
+        className={`border rounded-xl overflow-hidden transition relative flex flex-col h-full ${
           isAuctionListing ? 'border-purple-700 bg-black' : listing.isPremium ? 'border-[#ff950e] bg-black' : 'border-gray-700 bg-black'
         }`}
       >
         {isAuctionListing && (
           <div className="absolute top-4 right-4 z-10">
-            <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+            <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
               <Gavel className="w-4 h-4 mr-1" /> Auction
             </span>
           </div>
@@ -74,7 +73,7 @@ export default function ListingCard({
 
         {!isAuctionListing && listing.isPremium && (
           <div className="absolute top-4 right-4 z-10">
-            <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+            <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
               <Crown className="w-4 h-4 mr-1" /> Premium
             </span>
           </div>
@@ -82,9 +81,19 @@ export default function ListingCard({
 
         <div className="relative w-full h-48 sm:h-56 overflow-hidden">
           {cover ? (
-            <SecureImage src={cover} alt={listing.title} className="w-full h-full object-cover" />
+            <img 
+              src={cover} 
+              alt={listing.title} 
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                console.error('Image failed to load:', cover);
+                (e.target as HTMLImageElement).src = '/placeholder-image.png';
+              }}
+            />
           ) : (
-            <div className="w-full h-full bg-gray-800" />
+            <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+              <span className="text-gray-600">No image</span>
+            </div>
           )}
         </div>
 

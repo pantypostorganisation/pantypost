@@ -1,6 +1,5 @@
 // pantypost-backend/server.js
 const express = require('express');
-const cors = require('cors');
 const bodyParser = require('body-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
@@ -13,6 +12,9 @@ const connectDB = require('./config/database');
 
 // Import WebSocket service
 const webSocketService = require('./config/websocket');
+
+// Import public WebSocket service for guest users
+const publicWebSocketService = require('./config/publicWebsocket');
 
 // Import models
 const User = require('./models/User');
@@ -43,14 +45,20 @@ const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
 const banRoutes = require('./routes/ban.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
+const statsRoutes = require('./routes/stats.routes');
 // NEW
 const profileBuyerRoutes = require('./routes/profilebuyer.routes');
+const referralRoutes = require('./routes/referral.routes');
+const cryptoRoutes = require('./routes/crypto.routes'); // CRYPTO DIRECT DEPOSITS
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
 
 // Import auction settlement service
 const AuctionSettlementService = require('./services/auctionSettlement');
+
+// Import subscription renewal service
+const SubscriptionRenewalService = require('./services/subscriptionRenewal');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -62,54 +70,17 @@ const server = http.createServer(app);
 // Initialize WebSocket service
 webSocketService.initialize(server);
 
-// Make webSocketService globally available for routes
+// Initialize public WebSocket service for guests
+publicWebSocketService.initialize(server, webSocketService);
+
+// Make both services globally available for routes
 global.webSocketService = webSocketService;
+global.publicWebSocketService = publicWebSocketService;
 
 // Connect to MongoDB
 connectDB();
 
-// CORS Configuration - FIXED for development network access
-const corsOptions = {
-  origin: function(origin, callback) {
-    // In development, allow ALL origins (this fixes network IP access)
-    if (process.env.NODE_ENV !== 'production') {
-      return callback(null, true);
-    }
-    
-    // In production, use a whitelist
-    const allowedOrigins = [
-      'https://pantypost.com',
-      'https://www.pantypost.com',
-      // Add any other production domains here
-    ];
-    
-    // Allow requests with no origin (like mobile apps or Postman)
-    if (!origin) return callback(null, true);
-    
-    // Check if the origin is in the allowed list
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-CSRF-Token',
-    'X-Client-Version',
-    'X-App-Name',
-    'X-Content-Type-Options',
-    'X-Frame-Options',
-    'X-XSS-Protection',
-    'X-Request-ID',
-  ],
-  optionsSuccessStatus: 200 // For legacy browser support
-};
-
-app.use(cors(corsOptions)); // (duplicate removed)
+// CORS REMOVED - Nginx handles all CORS now
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
@@ -126,6 +97,7 @@ app.get('/api/health', (req, res) => {
     features: {
       tiers: true,
       websocket: true,
+      publicWebsocket: true,
       favorites: true,
       notifications: true,
       verification: true,
@@ -133,7 +105,11 @@ app.get('/api/health', (req, res) => {
       bans: true,
       analytics: true,
       auctions: true,
-      storage: true  // Added storage feature flag
+      storage: true,
+      referrals: true,
+      subscriptionRenewals: true,
+      cryptoDeposits: true, // NEW FEATURE
+      cryptoAutoVerification: true // AUTOMATED VERIFICATION
     },
   });
 });
@@ -157,6 +133,14 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin', banRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES
+
+// NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
+app.use('/api/profilebuyer', profileBuyerRoutes);
+
+// NEW: referral system routes
+app.use('/api/referral', referralRoutes);
 
 // NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
 app.use('/api/profilebuyer', profileBuyerRoutes);
@@ -167,13 +151,11 @@ app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
     const { key } = req.params;
     const userId = req.user.id;
     
-    // Find the user and get their storage object
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
     
-    // Initialize storage if it doesn't exist
     if (!user.storage) {
       user.storage = {};
     }
@@ -195,18 +177,15 @@ app.post('/api/storage/set', authMiddleware, async (req, res) => {
     const { key, value } = req.body;
     const userId = req.user.id;
     
-    // Validate input
     if (!key || typeof key !== 'string') {
       return res.status(400).json({ success: false, error: 'Invalid key' });
     }
     
-    // Size limit check (1MB)
     const valueSize = JSON.stringify(value).length;
     if (valueSize > 1024 * 1024) {
       return res.status(413).json({ success: false, error: 'Value too large (max 1MB)' });
     }
     
-    // Update user's storage
     const result = await User.findByIdAndUpdate(
       userId,
       { 
@@ -232,7 +211,6 @@ app.delete('/api/storage/delete/:key', authMiddleware, async (req, res) => {
     const { key } = req.params;
     const userId = req.user.id;
     
-    // Remove the key from storage
     const result = await User.findByIdAndUpdate(
       userId,
       { 
@@ -258,13 +236,11 @@ app.post('/api/storage/keys', authMiddleware, async (req, res) => {
     const { pattern } = req.body;
     const userId = req.user.id;
     
-    // Get user's storage
     const user = await User.findById(userId);
     if (!user || !user.storage) {
       return res.json({ success: true, data: { keys: [] } });
     }
     
-    // Get all keys, optionally filtered by pattern
     let keys = Object.keys(user.storage);
     
     if (pattern) {
@@ -305,7 +281,6 @@ app.post('/api/storage/clear', authMiddleware, async (req, res) => {
     const userId = req.user.id;
     
     if (preserveKeys && preserveKeys.length > 0) {
-      // Get current storage and preserve specified keys
       const user = await User.findById(userId);
       const preserved = {};
       
@@ -317,13 +292,11 @@ app.post('/api/storage/clear', authMiddleware, async (req, res) => {
         });
       }
       
-      // Clear and restore preserved keys
       await User.findByIdAndUpdate(userId, { 
         storage: preserved,
         'storageUpdatedAt': new Date()
       });
     } else {
-      // Clear all storage
       await User.findByIdAndUpdate(userId, { 
         storage: {},
         'storageUpdatedAt': new Date()
@@ -344,9 +317,8 @@ app.get('/api/storage/info', authMiddleware, async (req, res) => {
     const user = await User.findById(userId);
     const storage = user?.storage || {};
     
-    // Calculate storage size
     const used = JSON.stringify(storage).length;
-    const quota = 5 * 1024 * 1024; // 5MB quota per user
+    const quota = 5 * 1024 * 1024;
     
     res.json({ 
       success: true, 
@@ -363,15 +335,12 @@ app.get('/api/storage/info', authMiddleware, async (req, res) => {
   }
 });
 
-// UI preferences endpoint (can work without auth for initial load)
 app.post('/api/storage/ui-preference', async (req, res) => {
   try {
     const { key, value } = req.body;
     
-    // If user is authenticated, save to their profile
     if (req.headers.authorization) {
       try {
-        // Verify token
         const token = req.headers.authorization.split(' ')[1];
         const decoded = jwt.verify(token, JWT_SECRET);
         
@@ -384,7 +353,6 @@ app.post('/api/storage/ui-preference', async (req, res) => {
       }
     }
     
-    // Always return success for UI preferences
     res.json({ success: true });
   } catch (error) {
     console.error('UI preference error:', error);
@@ -409,11 +377,10 @@ app.get('/api/storage/ui-preferences', authMiddleware, async (req, res) => {
   }
 });
 
-// --- Compatibility mounts (support old clients that forget '/api') ---
+// --- Compatibility mounts ---
 app.use('/subscriptions', subscriptionRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/subscription', subscriptionRoutes);
-// --------------------------------------------------------
 
 // WebSocket status endpoint
 app.get('/api/ws/status', authMiddleware, (req, res) => {
@@ -421,6 +388,22 @@ app.get('/api/ws/status', authMiddleware, (req, res) => {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
   res.json({ success: true, data: webSocketService.getConnectionStats() });
+});
+
+// Public WebSocket status endpoint (admin only)
+app.get('/api/public-ws/status', authMiddleware, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  
+  const publicStats = {
+    connected: publicWebSocketService.io ? publicWebSocketService.io.engine.clientsCount : 0,
+    roomMembers: publicWebSocketService.io 
+      ? publicWebSocketService.io.sockets.adapter.rooms.get('public:stats')?.size || 0 
+      : 0
+  };
+  
+  res.json({ success: true, data: publicStats });
 });
 
 // Add WebSocket methods for admin notifications
@@ -540,6 +523,60 @@ app.get('/api/tiers/system-status', authMiddleware, async (req, res) => {
   }
 });
 
+// Crypto deposits system status endpoint (admin only) - NEW
+app.get('/api/crypto/system-status', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  try {
+    const CryptoDeposit = require('./models/CryptoDeposit');
+    
+    const totalDeposits = await CryptoDeposit.countDocuments();
+    const pendingDeposits = await CryptoDeposit.countDocuments({ status: 'pending' });
+    const confirmingDeposits = await CryptoDeposit.countDocuments({ status: 'confirming' });
+    const completedDeposits = await CryptoDeposit.countDocuments({ status: 'completed' });
+    
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentVolume = await CryptoDeposit.aggregate([
+      { $match: { status: 'completed', completedAt: { $gte: last24Hours } } },
+      { $group: { _id: null, total: { $sum: '$actualUSDCredited' } } }
+    ]);
+    
+    const currencyDistribution = await CryptoDeposit.aggregate([
+      { $group: { _id: '$cryptoCurrency', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        statistics: {
+          total: totalDeposits,
+          pending: pendingDeposits,
+          confirming: confirmingDeposits,
+          completed: completedDeposits,
+          volume24h: recentVolume[0]?.total || 0
+        },
+        currencyDistribution,
+        walletAddresses: {
+          polygon: process.env.CRYPTO_WALLET_POLYGON ? '✓ Configured' : '✗ Not configured',
+          tron: process.env.CRYPTO_WALLET_USDT_TRC20 ? '✓ Configured' : '✗ Not configured',
+          bitcoin: process.env.CRYPTO_WALLET_BTC ? '✓ Configured' : '✗ Not configured'
+        },
+        autoVerification: {
+          enabled: true,
+          checkInterval: '30 seconds',
+          supportedTokens: ['USDT', 'USDC', 'MATIC']
+        },
+        timestamp: new Date()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Auction system status endpoint (admin only)
 app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
@@ -573,7 +610,6 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
       'auction.status': 'error'
     });
 
-    // Get auctions ending soon (within next hour)
     const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000);
     const endingSoon = await Listing.find({
       'auction.isAuction': true,
@@ -602,7 +638,9 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
   }
 });
 
-// Ban system scheduled task - check and expire bans
+// ==================== SCHEDULED TASKS ====================
+
+// Ban system - Check every 5 minutes
 setInterval(async () => {
   try {
     const expiredCount = await Ban.checkAndExpireBans();
@@ -612,14 +650,76 @@ setInterval(async () => {
   } catch (error) {
     console.error('[Ban System] Error checking expired bans:', error);
   }
-}, 5 * 60 * 1000); // Check every 5 minutes
+}, 5 * 60 * 1000);
 
-// PERMANENT FIX: Cleanup stuck auctions every 5 minutes
+// Subscription renewals - Check once per day at 2 AM
+// Runs every 24 hours
+const RENEWAL_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+// Calculate time until next 2 AM
+function getTimeUntilNextRenewalCheck() {
+  const now = new Date();
+  const next2AM = new Date();
+  next2AM.setHours(2, 0, 0, 0);
+  
+  // If it's past 2 AM today, schedule for 2 AM tomorrow
+  if (now > next2AM) {
+    next2AM.setDate(next2AM.getDate() + 1);
+  }
+  
+  return next2AM.getTime() - now.getTime();
+}
+
+// Schedule the first run
+setTimeout(async () => {
+  console.log('[Subscription Renewal] Starting daily renewal check at 2 AM...');
+  
+  try {
+    const results = await SubscriptionRenewalService.processAllRenewals();
+    console.log('[Subscription Renewal] Daily check completed:', results);
+  } catch (error) {
+    console.error('[Subscription Renewal] Error in scheduled renewal check:', error);
+  }
+  
+  // Schedule subsequent runs every 24 hours
+  setInterval(async () => {
+    console.log('[Subscription Renewal] Starting daily renewal check...');
+    
+    try {
+      const results = await SubscriptionRenewalService.processAllRenewals();
+      console.log('[Subscription Renewal] Daily check completed:', results);
+    } catch (error) {
+      console.error('[Subscription Renewal] Error in scheduled renewal check:', error);
+    }
+  }, RENEWAL_CHECK_INTERVAL);
+  
+}, getTimeUntilNextRenewalCheck());
+
+// Manual subscription renewal endpoint (admin only)
+app.post('/api/subscriptions/process-renewals-manual', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+  
+  try {
+    const results = await SubscriptionRenewalService.processAllRenewals();
+    res.json({
+      success: true,
+      data: results
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Cleanup stuck auctions every 5 minutes
 setInterval(async () => {
   try {
-    const oneHourAgo = new Date(Date.now() - 3600000); // 1 hour ago
+    const oneHourAgo = new Date(Date.now() - 3600000);
     
-    // Reset auctions that have been stuck in processing for over an hour
     const resetResult = await Listing.updateMany(
       {
         'auction.isAuction': true,
@@ -634,7 +734,6 @@ setInterval(async () => {
     if (resetResult.modifiedCount > 0) {
       console.log(`[Auction] Reset ${resetResult.modifiedCount} stuck auctions`);
       
-      // Notify admins about stuck auctions being reset
       if (global.webSocketService) {
         global.webSocketService.emitToAdmins('auction:stuck_reset', {
           count: resetResult.modifiedCount,
@@ -643,7 +742,6 @@ setInterval(async () => {
       }
     }
     
-    // Also reset error status auctions older than 30 minutes
     const thirtyMinutesAgo = new Date(Date.now() - 1800000);
     const errorResetResult = await Listing.updateMany(
       {
@@ -662,15 +760,14 @@ setInterval(async () => {
   } catch (error) {
     console.error('[Auction] Error resetting stuck auctions:', error);
   }
-}, 5 * 60 * 1000); // Every 5 minutes
+}, 5 * 60 * 1000);
 
-// INSTANT AUCTION PROCESSOR - Checks every second for just-expired auctions
+// Instant auction processor
 setInterval(async () => {
   try {
     const now = new Date();
     const fiveSecondsAgo = new Date(now - 5000);
     
-    // Find auctions that JUST expired (within last 5 seconds)
     const justExpired = await Listing.findOne({
       'auction.isAuction': true,
       'auction.status': 'active',
@@ -683,7 +780,6 @@ setInterval(async () => {
     if (justExpired) {
       console.log(`[Auction] Instant processing auction ${justExpired._id} that just expired`);
       
-      // Process immediately without waiting
       AuctionSettlementService.processEndedAuction(justExpired._id)
         .then(result => {
           if (!result.alreadyProcessed) {
@@ -691,15 +787,15 @@ setInterval(async () => {
           }
         })
         .catch(err => {
-          // Don't log - let the main processor handle errors
+          // Silent catch
         });
     }
   } catch (error) {
-    // Silent catch - main processor will handle any we miss
+    // Silent catch
   }
-}, 1000); // Check every second for instant processing
+}, 1000);
 
-// Main auction processor - catches anything the instant processor misses
+// Main auction processor
 setInterval(async () => {
   try {
     const results = await AuctionSettlementService.processExpiredAuctions();
@@ -726,9 +822,9 @@ setInterval(async () => {
       });
     }
   }
-}, 3000); // Check every 3 seconds as backup
+}, 3000);
 
-// Manual auction processing endpoint (admin only)
+// Manual auction processing endpoint
 app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
   if (req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
@@ -748,7 +844,7 @@ app.post('/api/auctions/process-expired', authMiddleware, async (req, res) => {
   }
 });
 
-// Instant auction check endpoint - can be called by frontend
+// Instant auction check endpoint
 app.get('/api/auctions/check/:id', async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -968,7 +1064,7 @@ app.post('/api/admin/cleanup-verification-docs', authMiddleware, async (req, res
   }
 });
 
-// Error handling middleware (should be last)
+// Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
   res.status(err.status || 500).json({
@@ -982,7 +1078,7 @@ app.use((req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
 });
 
-// Initialize tier system on startup
+// Initialize functions
 async function initializeTierSystem() {
   try {
     const TIER_CONFIG = require('./config/tierConfig');
@@ -995,7 +1091,6 @@ async function initializeTierSystem() {
   }
 }
 
-// Initialize notification system on startup
 async function initializeNotificationSystem() {
   try {
     const cutoffDate = new Date();
@@ -1007,7 +1102,6 @@ async function initializeNotificationSystem() {
   }
 }
 
-// Initialize verification system on startup
 async function initializeVerificationSystem() {
   try {
     const fs = require('fs').promises;
@@ -1053,7 +1147,6 @@ async function initializeVerificationSystem() {
   }
 }
 
-// Initialize report & ban system on startup
 async function initializeReportSystem() {
   try {
     const Report = require('./models/Report');
@@ -1066,7 +1159,6 @@ async function initializeReportSystem() {
     console.log(`   - ${pendingReports} pending reports`);
     console.log(`   - ${activeBans} active bans`);
     
-    // Check and expire old bans
     const expiredCount = await Ban.checkAndExpireBans();
     if (expiredCount > 0) {
       console.log(`   - Expired ${expiredCount} bans`);
@@ -1076,16 +1168,13 @@ async function initializeReportSystem() {
   }
 }
 
-// Initialize auction system on startup
 async function initializeAuctionSystem() {
   try {
-    // Count active auctions
     const activeAuctions = await Listing.countDocuments({ 
       'auction.isAuction': true,
       'auction.status': 'active'
     });
     
-    // Check for any expired auctions that need processing
     const now = new Date();
     const expiredAuctions = await Listing.countDocuments({
       'auction.isAuction': true,
@@ -1097,7 +1186,6 @@ async function initializeAuctionSystem() {
     console.log(`   - ${activeAuctions} active auctions`);
     console.log(`   - ${expiredAuctions} expired auctions to process`);
     
-    // Process any expired auctions on startup
     if (expiredAuctions > 0) {
       console.log(`   - Processing ${expiredAuctions} expired auctions...`);
       const results = await AuctionSettlementService.processExpiredAuctions();
@@ -1108,10 +1196,8 @@ async function initializeAuctionSystem() {
   }
 }
 
-// Initialize storage system on startup
 async function initializeStorageSystem() {
   try {
-    // Add storage field to User schema if it doesn't exist
     const usersWithoutStorage = await User.countDocuments({ storage: { $exists: false } });
     if (usersWithoutStorage > 0) {
       console.log(`   - Adding storage field to ${usersWithoutStorage} users...`);
@@ -1129,16 +1215,101 @@ async function initializeStorageSystem() {
   }
 }
 
-// Start server - UPDATED TO LISTEN ON ALL INTERFACES
-const HOST = '0.0.0.0'; // Listen on all network interfaces
+async function initializePublicWebSocketSystem() {
+  try {
+    console.log(`✅ Public WebSocket system initialized`);
+    console.log(`   - Guest users can receive real-time stats`);
+    console.log(`   - Path: /public-ws`);
+  } catch (error) {
+    console.error('⚠️ Error initializing public WebSocket system:', error);
+  }
+}
+
+async function initializeSubscriptionRenewalSystem() {
+  try {
+    const Subscription = require('./models/Subscription');
+    
+    const activeSubscriptions = await Subscription.countDocuments({ 
+      status: 'active',
+      autoRenew: true
+    });
+    
+    const dueSubscriptions = await Subscription.countDocuments({
+      status: 'active',
+      autoRenew: true,
+      nextBillingDate: { $lte: new Date() }
+    });
+    
+    console.log(`✅ Subscription renewal system initialized`);
+    console.log(`   - ${activeSubscriptions} active auto-renewing subscriptions`);
+    console.log(`   - ${dueSubscriptions} subscriptions due for renewal`);
+    console.log(`   - Daily renewal check scheduled for 2:00 AM`);
+    
+    if (dueSubscriptions > 0) {
+      console.log(`   - Note: ${dueSubscriptions} subscriptions are overdue and will be processed at next check`);
+    }
+  } catch (error) {
+    console.error('⚠️ Error initializing subscription renewal system:', error);
+  }
+}
+
+async function initializeCryptoDepositSystem() {
+  try {
+    const CryptoDeposit = require('./models/CryptoDeposit');
+    
+    const pendingDeposits = await CryptoDeposit.countDocuments({ status: 'pending' });
+    const confirmingDeposits = await CryptoDeposit.countDocuments({ status: 'confirming' });
+    const completedDeposits = await CryptoDeposit.countDocuments({ status: 'completed' });
+    
+    console.log(`✅ Crypto deposit system initialized`);
+    console.log(`   - ${pendingDeposits} pending deposits`);
+    console.log(`   - ${confirmingDeposits} deposits awaiting verification`);
+    console.log(`   - ${completedDeposits} completed deposits`);
+    console.log(`   - Polygon wallet: ${process.env.CRYPTO_WALLET_POLYGON ? '✓' : '✗ Not configured'}`);
+    console.log(`   - TRC-20 wallet: ${process.env.CRYPTO_WALLET_USDT_TRC20 ? '✓' : '✗ Not configured'}`);
+    console.log(`   - Bitcoin wallet: ${process.env.CRYPTO_WALLET_BTC ? '✓' : '✗ Not configured'}`);
+    
+    // Initialize automated crypto monitoring
+    const cryptoMonitor = require('./services/cryptoMonitor');
+    const monitoringStarted = cryptoMonitor.startMonitoring();
+    if (monitoringStarted) {
+      console.log('🤖 Automated crypto verification enabled!');
+    } else {
+      console.log('⚠️ Automated crypto monitoring disabled - manual verification required');
+    }
+    
+    if (confirmingDeposits > 0 && global.webSocketService) {
+      const admins = await User.find({ role: 'admin' }).select('username');
+      for (const admin of admins) {
+        const notification = new Notification({
+          recipient: admin.username,
+          type: 'admin_alert',
+          title: 'Pending Crypto Deposits',
+          message: `There are ${confirmingDeposits} crypto deposits awaiting verification`,
+          link: '/admin/crypto-deposits',
+          priority: 'high',
+        });
+        await notification.save();
+
+        global.webSocketService.sendToUser(admin.username, {
+          type: 'notification',
+          data: notification
+        });
+      }
+    }
+  } catch (error) {
+    console.error('⚠️ Error initializing crypto deposit system:', error);
+  }
+}
+
+// Start server
+const HOST = '0.0.0.0';
 const os = require('os');
 
-// Function to get network IP
 function getNetworkIP() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
-      // Skip internal and non-IPv4 addresses
       if (!iface.internal && iface.family === 'IPv4') {
         return iface.address;
       }
@@ -1154,6 +1325,7 @@ server.listen(PORT, HOST, async () => {
   console.log(`   - Local: http://localhost:${PORT}`);
   console.log(`   - Network: http://${networkIP}:${PORT}`);
   console.log(`🔌 WebSocket server ready for connections`);
+  console.log(`📡 Public WebSocket ready for guest connections`);
 
   await initializeTierSystem();
   console.log(`🏆 Tier system ready`);
@@ -1172,6 +1344,15 @@ server.listen(PORT, HOST, async () => {
   
   await initializeStorageSystem();
   console.log(`💾 Storage system ready - backend storage enabled`);
+  
+  await initializePublicWebSocketSystem();
+  console.log(`🌐 Public WebSocket ready - guest real-time updates enabled`);
+  
+  await initializeSubscriptionRenewalSystem();
+  console.log(`🔄 Subscription renewal system ready - daily checks at 2:00 AM`);
+  
+  await initializeCryptoDepositSystem();
+  console.log(`💰 Crypto deposit system ready - Direct wallet deposits enabled!`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -1180,6 +1361,7 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Orders:        /api/orders/*');
   console.log('  - Messages:      /api/messages/*');
   console.log('  - Wallet:        /api/wallet/*');
+  console.log('  - Crypto:        /api/crypto/*         🆕 AUTO-VERIFIED!');
   console.log('  - Subscriptions: /api/subscriptions/*');
   console.log('  - Reviews:       /api/reviews/*');
   console.log('  - Upload:        /api/upload/*');
@@ -1195,5 +1377,8 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Auctions:      /api/auctions/*');
   console.log('  - Storage:       /api/storage/*');
   console.log('  - ProfileBuyer:  /api/profilebuyer');
+  console.log('  - Referral:      /api/referral/*');
+  console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
+  console.log('🏆 POLYGON CRYPTO DEPOSITS = 0% FEES + AUTO-VERIFICATION! 🏆\n');
 });

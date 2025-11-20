@@ -73,6 +73,9 @@ export default function BrowsePage() {
 
   const hasActiveFilters = !!(searchTerm || minPrice || maxPrice || selectedHourRange.label !== 'Any Hours' || sortBy !== 'newest');
 
+  // Check if user is a guest (non-authenticated)
+  const isGuest = !user;
+
   // Track component mount status
   useEffect(() => {
     isMountedRef.current = true;
@@ -278,9 +281,15 @@ export default function BrowsePage() {
     }
   }, [searchTerm, setSearchTerm, trackEvent]);
 
-  // Enhanced click handler with analytics
+  // Enhanced click handler with analytics - Modified for guest users
   const handleListingClickWithAnalytics = useCallback((listingId: string) => {
     if (!isMountedRef.current) return;
+    
+    // Prevent navigation for guest users
+    if (isGuest) {
+      console.log('[BrowsePage] Guest user attempted to click listing');
+      return;
+    }
     
     const listing = filteredListings.find(l => l.id === listingId);
     if (listing) {
@@ -314,7 +323,7 @@ export default function BrowsePage() {
     }
     // Pass false for isLocked parameter since we're allowing the click
     handleListingClick(listingId, false);
-  }, [filteredListings, paginatedListings, trackEvent, handleListingClick]);
+  }, [filteredListings, paginatedListings, trackEvent, handleListingClick, isGuest]);
 
   // Track page navigation
   const handlePageChangeWithAnalytics = useCallback((newPage: number, direction: 'previous' | 'next' | 'direct') => {
@@ -363,8 +372,18 @@ export default function BrowsePage() {
 
   return (
     <BanCheck>
-      <RequireAuth role={user?.role || 'buyer'}>
+      {/* Pass allowGuest prop to RequireAuth */}
+      <RequireAuth role={user?.role || 'buyer'} allowGuest={true}>
         <main className="min-h-screen bg-black text-white pb-16 pt-8">
+          {/* Show banner for guest users */}
+          {isGuest && (
+            <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 border border-[#ff950e]/50 text-[#ff950e] p-4 rounded-lg mb-6 max-w-4xl mx-auto">
+              <p className="text-sm flex items-center justify-center gap-2 font-semibold">
+                👀 You're browsing as a guest • Sign up or log in to view full details and make purchases
+              </p>
+            </div>
+          )}
+
           <BrowseHeader
             user={user}
             filteredListingsCount={filteredListings.length}
@@ -421,6 +440,7 @@ export default function BrowsePage() {
                   formatTimeRemaining={formatTimeRemaining}
                   listingErrors={listingErrors}
                   onListingError={handleListingError}
+                  isGuest={isGuest}
                 />
 
                 {totalPages > 1 && (

@@ -1,3 +1,4 @@
+// src/components/admin/messages/MessagesHeader.tsx
 'use client';
 
 import { MessageCircle, Filter, User, BellRing, Users, Search } from 'lucide-react';
@@ -35,7 +36,7 @@ export default function MessagesHeader({
 
   return (
     <>
-      <div className="px-4 pt-4 pb-2">
+      <div className="flex-none px-4 pt-4 pb-2">
         <h2 className="text-2xl font-bold text-[#ff950e] mb-2 flex items-center">
           <MessageCircle size={24} className="mr-2 text-[#ff950e]" />
           Admin Messages
@@ -107,7 +108,7 @@ export default function MessagesHeader({
         </div>
       </div>
 
-      <div className="px-4 pb-3">
+      <div className="flex-none px-4 pb-3">
         <div className="relative">
           <SecureInput
             type="text"

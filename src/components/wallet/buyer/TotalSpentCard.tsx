@@ -1,3 +1,4 @@
+// src/components/wallet/buyer/TotalSpentCard.tsx
 'use client';
 
 import { ShoppingBag } from 'lucide-react';
@@ -9,18 +10,14 @@ interface TotalSpentCardProps {
 
 export default function TotalSpentCard({ totalSpent, totalOrders }: TotalSpentCardProps) {
   return (
-    <div className="bg-[#1a1a1a] rounded-2xl p-8 border border-gray-800 hover:border-gray-700 transition-all duration-300 relative overflow-hidden group">
-      {/* Background gradient effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-      <div className="relative z-10">
+    <div className="rounded-2xl border border-gray-800 bg-[#111] p-8 transition-colors duration-200">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-sm font-medium text-gray-400 mb-1">Total Spent</h2>
             <p className="text-xs text-gray-500">Lifetime purchases</p>
           </div>
-          <div className="bg-gradient-to-r from-green-600 to-emerald-500 p-3 rounded-xl shadow-lg shadow-green-500/20">
-            <ShoppingBag className="w-6 h-6 text-white" />
+          <div className="rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10 p-3">
+            <ShoppingBag className="w-6 h-6 text-[#ff950e]" />
           </div>
         </div>
 
@@ -42,7 +39,6 @@ export default function TotalSpentCard({ totalSpent, totalOrders }: TotalSpentCa
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }

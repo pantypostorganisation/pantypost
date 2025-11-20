@@ -1,3 +1,4 @@
+// src/components/seller/wallet/SellerWalletStats.tsx
 'use client';
 
 import { DollarSign, TrendingUp, ArrowDownCircle } from 'lucide-react';

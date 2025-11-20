@@ -56,7 +56,7 @@ function makeAbsoluteUrl(base: string | undefined, candidate?: string): string |
 export function MetaTags(rawProps: MetaTagsProps) {
   const pathname = usePathname() || '/';
 
-  // Parse & validate props (won’t throw; falls back to minimal safe set)
+  // Parse & validate props (won't throw; falls back to minimal safe set)
   const parsed = MetaPropsSchema.safeParse(rawProps);
   const props = parsed.success
     ? parsed.data
@@ -81,8 +81,8 @@ export function MetaTags(rawProps: MetaTagsProps) {
   const safePath = pathname.startsWith('/') ? pathname : `/${pathname}`;
   const canonicalUrl = makeAbsoluteUrl(baseUrl, safePath);
 
-  // Absolute OG/Twitter image if possible
-  const ogImageAbs = makeAbsoluteUrl(baseUrl, props.image) || props.image || makeAbsoluteUrl(baseUrl, '/og-image.png') || '/og-image.png';
+  // Absolute OG/Twitter image if possible - UPDATED to use googlesearchimage.png as fallback
+  const ogImageAbs = makeAbsoluteUrl(baseUrl, props.image) || props.image || makeAbsoluteUrl(baseUrl, '/googlesearchimage.png') || '/googlesearchimage.png';
 
   // Sanitize text fields
   const safeTitle = sanitizeStrict(props.title).slice(0, 150);
@@ -102,7 +102,7 @@ export function MetaTags(rawProps: MetaTagsProps) {
   return (
     <Head>
       {/* Basic Meta Tags */}
-      <title>{safeTitle ? `${safeTitle} | PantyPost` : 'PantyPost'}</title>
+      <title>{safeTitle ? `${safeTitle} | Panty Post` : 'Panty Post'}</title>
       {safeDesc && <meta name="description" content={safeDesc} />}
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
@@ -113,7 +113,7 @@ export function MetaTags(rawProps: MetaTagsProps) {
       <meta property="og:type" content={props.type || 'website'} />
       {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
       {ogImageAbs && <meta property="og:image" content={ogImageAbs} />}
-      <meta property="og:site_name" content="PantyPost" />
+      <meta property="og:site_name" content="Panty Post" />
 
       {/* Twitter Card Tags */}
       <meta name="twitter:card" content="summary_large_image" />

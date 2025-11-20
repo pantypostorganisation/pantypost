@@ -1,4 +1,5 @@
 ﻿// src/hooks/useBuyerWallet.ts
+
 'use client';
 
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
@@ -9,7 +10,7 @@ import { WalletValidation } from '@/services/wallet.validation';
 import { Money } from '@/types/common';
 import { useRateLimit } from '@/utils/security/rate-limiter';
 import { sanitizeStrict } from '@/utils/security/sanitization';
-import { securityService } from '@/services/security.service';
+import { securityService } from '@/services';
 
 interface EnhancedBuyerWalletState {
   balance: number;
@@ -31,9 +32,9 @@ interface EnhancedBuyerWalletState {
 
 export const useBuyerWallet = () => {
   const { user } = useAuth();
-  const {
+  const { 
     getBuyerBalance,
-    setBuyerBalance,
+    setBuyerBalance, 
     orderHistory,
     addDeposit,
     getTransactionHistory,
@@ -42,10 +43,10 @@ export const useBuyerWallet = () => {
     isInitialized: walletInitialized,
   } = useWallet();
   const toast = useToast();
-
+  
   // Rate limiting
   const { checkLimit: checkDepositLimit } = useRateLimit('DEPOSIT');
-
+  
   const [state, setState] = useState<EnhancedBuyerWalletState>({
     balance: 0,
     availableBalance: 0,
@@ -64,7 +65,7 @@ export const useBuyerWallet = () => {
     rateLimitError: null,
   });
 
-  const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastActivityCheckRef = useRef<Date>(new Date());
   const initialSyncDone = useRef(false);
 
@@ -78,22 +79,22 @@ export const useBuyerWallet = () => {
       orderHistoryLength: orderHistory?.length,
       orderHistory: orderHistory
     });
-
+    
     if (!user?.username) {
       console.log('[BuyerWallet] No username, returning empty array');
       return [];
     }
-
+    
     if (!orderHistory) {
       console.log('[BuyerWallet] orderHistory is null/undefined, returning empty array');
       return [];
     }
-
+    
     if (!Array.isArray(orderHistory)) {
       console.log('[BuyerWallet] orderHistory is not an array, returning empty array');
       return [];
     }
-
+    
     try {
       const filtered = orderHistory.filter(order => order && order.buyer === user.username);
       console.log('[BuyerWallet] Successfully filtered purchases:', filtered.length);
@@ -103,13 +104,13 @@ export const useBuyerWallet = () => {
       return [];
     }
   }, [user?.username, orderHistory]);
-
+  
   // Sort purchases by date (newest first)
   const recentPurchases = useMemo(() => {
     if (!Array.isArray(buyerPurchases) || buyerPurchases.length === 0) {
       return [];
     }
-
+    
     try {
       return [...buyerPurchases]
         .sort((a, b) => {
@@ -134,11 +135,11 @@ export const useBuyerWallet = () => {
     if (!Array.isArray(buyerPurchases)) {
       return 0;
     }
-
+    
     try {
       return buyerPurchases.reduce((sum, order) => {
         if (!order) return sum;
-
+        
         const price = order.markedUpPrice || order.price;
         if (typeof price === 'number' && price > 0) {
           return sum + price;
@@ -177,19 +178,19 @@ export const useBuyerWallet = () => {
       // Get balance from WalletContext (which gets it from API)
       const balance = getBuyerBalance(user.username);
       console.log('[BuyerWallet] Context balance:', balance);
-
+      
       // Update local state
       updateState({
         balance: balance,
         availableBalance: balance,
         lastSyncTime: new Date(),
       });
-
+      
       // Get transaction history for additional info
       try {
         const history = await getTransactionHistory(user.username, 20);
         const transactionArray = Array.isArray(history) ? history : [];
-
+        
         // Calculate daily limit usage
         const todaysDeposits = transactionArray.filter((t: any) => {
           const isDeposit = t.type === 'deposit' || (t.displayType === 'Deposit' && t.isCredit);
@@ -198,7 +199,7 @@ export const useBuyerWallet = () => {
           const isToday = new Date(transactionDate).toDateString() === new Date().toDateString();
           return isDeposit && isToday;
         });
-
+        
         const todaysDepositTotal = todaysDeposits.reduce((sum: number, t: any) => {
           const amount = t.amount || (t.rawTransaction?.amount ? Money.toDollars(t.rawTransaction.amount) : 0);
           if (typeof amount === 'number' && amount > 0) {
@@ -206,9 +207,9 @@ export const useBuyerWallet = () => {
           }
           return sum;
         }, 0);
-
+        
         const remainingLimit = Money.toDollars(WalletValidation.LIMITS.DAILY_DEPOSIT_LIMIT) - todaysDepositTotal;
-
+        
         updateState({
           remainingDepositLimit: Math.max(0, remainingLimit),
           transactionHistory: transactionArray,
@@ -219,7 +220,7 @@ export const useBuyerWallet = () => {
           transactionHistory: [],
         });
       }
-
+      
     } catch (error) {
       console.error('[BuyerWallet] Balance sync error:', error);
       updateState({
@@ -258,7 +259,7 @@ export const useBuyerWallet = () => {
       syncIntervalRef.current = setInterval(() => {
         syncBalance();
       }, 15000);
-
+      
       return () => {
         if (syncIntervalRef.current) {
           clearInterval(syncIntervalRef.current);
@@ -280,15 +281,15 @@ export const useBuyerWallet = () => {
       });
       return;
     }
-
-    updateState({
-      isLoading: true,
+    
+    updateState({ 
+      isLoading: true, 
       validationErrors: [],
-      rateLimitError: null
+      rateLimitError: null 
     });
-
+    
     if (!user?.username) {
-      updateState({
+      updateState({ 
         message: 'You must be logged in to add funds.',
         messageType: 'error',
         isLoading: false
@@ -304,7 +305,7 @@ export const useBuyerWallet = () => {
     });
 
     if (!validationResult.valid || !validationResult.value) {
-      updateState({
+      updateState({ 
         message: validationResult.error || 'Invalid amount',
         messageType: 'error',
         isLoading: false,
@@ -318,7 +319,7 @@ export const useBuyerWallet = () => {
 
     // Check daily limit
     if (amount > state.remainingDepositLimit) {
-      updateState({
+      updateState({ 
         message: `Daily deposit limit exceeded. You can add up to $${state.remainingDepositLimit.toFixed(2)} today.`,
         messageType: 'error',
         isLoading: false,
@@ -332,38 +333,38 @@ export const useBuyerWallet = () => {
       const activityCheck = await checkSuspiciousActivity(user.username!);
       if (activityCheck.suspicious) {
         toast.warning(
-          'Security Alert',
+          'Security Alert', 
           'Unusual activity detected. Please contact support if you need assistance.'
         );
       }
 
       // Use WalletContext addDeposit (server-side)
       console.log('[BuyerWallet] Processing deposit via WalletContext addDeposit...');
-
+      
       const depositSuccess = await addDeposit(
         user.username!,
         amount,
         'credit_card',
         sanitizeStrict('Wallet deposit via buyer dashboard')
       );
-
+      
       if (depositSuccess) {
         // Wait a moment for the deposit to process
         await new Promise(resolve => setTimeout(resolve, 500));
-
+        
         // Force sync balance from server
         await syncBalance();
-
+        
         updateState({
           amountToAdd: '',
           message: `Successfully added ${Money.format(amountInCents)} to your wallet.`,
           messageType: 'success',
           isLoading: false
         });
-
+        
         toast.success('Funds Added', `${Money.format(amountInCents)} has been added to your wallet`);
       } else {
-        updateState({
+        updateState({ 
           message: 'Failed to process deposit. Please try again.',
           messageType: 'error',
           isLoading: false
@@ -371,7 +372,7 @@ export const useBuyerWallet = () => {
       }
     } catch (error) {
       console.error('Add funds error:', error);
-      updateState({
+      updateState({ 
         message: 'An unexpected error occurred. Please try again.',
         messageType: 'error',
         isLoading: false
@@ -380,11 +381,11 @@ export const useBuyerWallet = () => {
 
     // Clear message after 5 seconds
     setTimeout(() => {
-      updateState({
-        message: '',
-        messageType: '',
+      updateState({ 
+        message: '', 
+        messageType: '', 
         validationErrors: [],
-        rateLimitError: null
+        rateLimitError: null 
       });
     }, 5000);
   }, [state.amountToAdd, state.remainingDepositLimit, user, checkSuspiciousActivity, addDeposit, syncBalance, toast, updateState, checkDepositLimit]);
@@ -392,11 +393,11 @@ export const useBuyerWallet = () => {
   // Validate amount as user types
   const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-
+    
     // Allow empty string or valid decimal numbers
     if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
       updateState({ amountToAdd: value });
-
+      
       // Real-time validation
       if (value) {
         const validation = securityService.validateAmount(value, {
@@ -404,12 +405,12 @@ export const useBuyerWallet = () => {
           max: Money.toDollars(WalletValidation.LIMITS.MAX_DEPOSIT),
           allowDecimals: true
         });
-
+        
         if (!validation.valid) {
           updateState({ validationErrors: [validation.error || 'Invalid amount'] });
         } else if (validation.value && validation.value > state.remainingDepositLimit) {
-          updateState({
-            validationErrors: [`Daily limit: $${state.remainingDepositLimit.toFixed(2)} remaining`]
+          updateState({ 
+            validationErrors: [`Daily limit: $${state.remainingDepositLimit.toFixed(2)} remaining`] 
           });
         } else {
           updateState({ validationErrors: [] });
@@ -440,14 +441,14 @@ export const useBuyerWallet = () => {
     }
 
     const numAmount = validation.value;
-
+    
     // Check if amount exceeds daily limit
     if (numAmount > state.remainingDepositLimit) {
       toast.warning(
-        'Limit Exceeded',
+        'Limit Exceeded', 
         `This amount exceeds your daily limit. Maximum: $${state.remainingDepositLimit.toFixed(2)}`
       );
-      updateState({
+      updateState({ 
         amountToAdd: state.remainingDepositLimit.toFixed(2),
         validationErrors: []
       });
@@ -459,18 +460,18 @@ export const useBuyerWallet = () => {
   // Load transaction history
   const loadTransactionHistory = useCallback(async () => {
     if (!user?.username) return;
-
+    
     updateState({ isLoadingHistory: true });
     try {
       const history = await getTransactionHistory(user.username, 50);
       const transactionArray = Array.isArray(history) ? history : [];
-      updateState({
+      updateState({ 
         transactionHistory: transactionArray,
-        isLoadingHistory: false
+        isLoadingHistory: false 
       });
     } catch (error) {
       console.error('Error loading transaction history:', error);
-      updateState({
+      updateState({ 
         isLoadingHistory: false,
         message: 'Failed to load transaction history',
         messageType: 'error',
@@ -483,10 +484,10 @@ export const useBuyerWallet = () => {
   useEffect(() => {
     const checkActivity = async () => {
       if (!user?.username) return;
-
+      
       const now = new Date();
       const timeSinceLastCheck = now.getTime() - lastActivityCheckRef.current.getTime();
-
+      
       // Check every 5 minutes
       if (timeSinceLastCheck > 5 * 60 * 1000) {
         try {
@@ -513,7 +514,7 @@ export const useBuyerWallet = () => {
     if (typeof amount !== 'number' || isNaN(amount)) {
       return '$0.00';
     }
-
+    
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
@@ -525,13 +526,13 @@ export const useBuyerWallet = () => {
   return {
     // State
     ...state,
-
+    
     // Computed values
     buyerPurchases,
     recentPurchases,
     totalSpent,
     user,
-
+    
     // Formatted values
     formattedBalance: formatCurrency(state.balance),
     formattedAvailableBalance: formatCurrency(state.availableBalance),
@@ -539,7 +540,7 @@ export const useBuyerWallet = () => {
     formattedTotalSpent: formatCurrency(totalSpent),
     formattedDailyLimit: formatCurrency(state.dailyDepositLimit),
     formattedRemainingLimit: formatCurrency(state.remainingDepositLimit),
-
+    
     // Actions
     handleAddFunds,
     handleAmountChange,
@@ -547,7 +548,7 @@ export const useBuyerWallet = () => {
     handleQuickAmountSelect,
     loadTransactionHistory,
     syncBalance,
-
+    
     // Utilities
     formatCurrency,
   };

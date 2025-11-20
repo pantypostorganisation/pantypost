@@ -200,23 +200,23 @@ export const validateImageFile = (
       error: `Invalid file type. Allowed types: ${allowedTypes.join(', ')}`
     };
   }
-  
+
   // Check file size
   const maxSizeBytes = maxSizeMB * 1024 * 1024;
   if (file.size > maxSizeBytes) {
     return {
       valid: false,
-      error: `File size exceeds the ${maxSizeMB}MB limit`
+      error: `File is too large. Maximum size is ${maxSizeMB}MB`
     };
   }
-  
+
   return { valid: true };
 };
 
 /**
- * Loads and processes multiple image files
- * @param files - Array of files to process
- * @param maxDimension - Max dimension for compression
+ * Process multiple images with progress tracking
+ * @param files - Array of image files
+ * @param maxDimension - Maximum dimension for resizing
  * @param progressCallback - Optional callback for progress updates
  * @returns Promise resolving to array of processed image data URLs
  */
@@ -227,7 +227,7 @@ export const processMultipleImages = async (
 ): Promise<string[]> => {
   const results: string[] = [];
   const errors: string[] = [];
-  
+
   for (let i = 0; i < files.length; i++) {
     try {
       // Validate the file
@@ -237,27 +237,26 @@ export const processMultipleImages = async (
         errors.push(`${files[i].name}: ${validation.error}`);
         continue;
       }
-      
+
       // Compress the image
       const compressed = await compressImage(files[i], maxDimension);
       results.push(compressed);
-      
+
       // Update progress if callback provided
       progressCallback?.((i + 1) / files.length);
 
       // Force garbage collection hint by yielding control
       await new Promise((resolve) => setTimeout(resolve, 0));
-      
     } catch (error) {
       console.error(`Error processing image ${files[i].name}:`, error);
       errors.push(`${files[i].name}: Processing failed`);
     }
   }
-  
+
   // Log any errors that occurred
   if (errors.length > 0) {
     console.warn('Image processing completed with errors:', errors);
   }
-  
+
   return results;
 };

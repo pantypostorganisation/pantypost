@@ -131,6 +131,7 @@ export type {
   UsernameFieldProps,
   EmailFieldProps,
   PasswordFieldProps,
+  CountryFieldProps,
   RoleSelectorProps,
   TermsCheckboxesProps,
   SignupFooterProps,

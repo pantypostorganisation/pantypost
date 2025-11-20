@@ -2,20 +2,42 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState, useEffect } from 'react';
-import { ShoppingBag, TrendingUp, CheckCircle } from 'lucide-react';
+import Image from 'next/image';
+import { useRef, useState, useEffect, type ButtonHTMLAttributes } from 'react';
+import { ShoppingBag, TrendingUp } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { itemVariants, containerVariants, fadeInVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
+import { useRouter } from 'next/navigation';
+import {
+  itemVariants,
+  containerVariants,
+  fadeInVariants,
+  VIEWPORT_CONFIG
+} from '@/utils/motion.config';
 import { HERO_CONTENT } from '@/utils/homepage-constants';
 import TrustBadges from './TrustBadges';
-import FloatingParticles from './FloatingParticles';
+import AnimatedUserCounter from './AnimatedUserCounter';
+import PaymentsProcessedCounter from './PaymentsProcessedCounter';
+import styles from './HeroSection.module.css';
 
-// Suppress Framer Motion's false positive positioning warning in development
+// Lazy load FloatingParticles for better initial load
+import dynamic from 'next/dynamic';
+const FloatingParticles = dynamic(() => import('./FloatingParticles'), {
+  ssr: false,
+  loading: () => null
+});
+
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement>;
+
+function Button({ type = 'button', ...props }: ButtonProps) {
+  return <button type={type} {...props} />;
+}
+
+// Suppress Framer Motion’s false positive positioning warning in development
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   const originalWarn = console.warn;
   console.warn = (...args) => {
     if (
-      typeof args[0] === 'string' && 
+      typeof args[0] === 'string' &&
       args[0].includes('ensure scroll offset is calculated correctly')
     ) {
       return; // Suppress this specific warning
@@ -26,12 +48,97 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
 
 export default function HeroSection() {
   const heroRef = useRef<HTMLElement>(null);
-  const [imgError, setImgError] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [phoneImageLoaded, setPhoneImageLoaded] = useState(false);
+  const router = useRouter();
+
+  const handleStartSelling = () => {
+    router.push(HERO_CONTENT.ctaSecondary.href);
+  };
+
+  const handleBrowseListings = () => {
+    router.push(HERO_CONTENT.ctaPrimary.href);
+  };
 
   // Only apply animations after mount to ensure smooth loading
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const wrapper = document.getElementById('hero-ctas');
+    if (!wrapper) {
+      return;
+    }
+
+    const buttons = Array.from(
+      wrapper.querySelectorAll<HTMLButtonElement>('.cta-btn')
+    );
+
+    if (buttons.length !== 2) {
+      return;
+    }
+
+    const gapBetween = (a: HTMLElement, b: HTMLElement) => {
+      const rectA = a.getBoundingClientRect();
+      const rectB = b.getBoundingClientRect();
+      const horizontalGap = Math.max(0, rectB.left - rectA.right);
+      const verticalOverlap = rectB.top < rectA.bottom && rectA.top < rectB.bottom;
+      return verticalOverlap ? horizontalGap : 0;
+    };
+
+    let raf = 0;
+
+    const updateTrack = () => {
+      const [first, second] = buttons;
+      if (!first || !second) {
+        return;
+      }
+
+      const firstRect = first.getBoundingClientRect();
+      const secondRect = second.getBoundingClientRect();
+      const gap = gapBetween(first, second);
+      const total = firstRect.width + secondRect.width + gap;
+
+      if (!total) {
+        return;
+      }
+
+      const firstFraction = firstRect.width / total;
+      const secondStart = (firstRect.width + gap) / total;
+      const secondFraction = secondRect.width / total;
+
+      first.style.setProperty('--track-start', '0');
+      first.style.setProperty('--track-length', String(firstFraction));
+      second.style.setProperty('--track-start', String(secondStart));
+      second.style.setProperty('--track-length', String(secondFraction));
+      wrapper.style.setProperty('--track-duration', '4.6s');
+    };
+
+    const scheduleUpdate = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(updateTrack);
+    };
+
+    const observer =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            scheduleUpdate();
+          })
+        : null;
+
+    buttons.forEach((button) => observer?.observe(button));
+    observer?.observe(wrapper);
+
+    window.addEventListener('resize', scheduleUpdate, { passive: true });
+
+    scheduleUpdate();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      observer?.disconnect();
+      window.removeEventListener('resize', scheduleUpdate);
+    };
   }, []);
 
   const { scrollYProgress } = useScroll({
@@ -44,16 +151,17 @@ export default function HeroSection() {
   return (
     <section
       ref={heroRef}
-      className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 bg-gradient-to-b from-black via-[#080808] to-[#101010] overflow-hidden z-10"
+      className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 overflow-hidden"
     >
       {/* Subtle Noise Overlay */}
       <div
         className="absolute inset-0 opacity-[0.02] bg-[url('/noise.png')] bg-repeat pointer-events-none"
         role="presentation"
+        style={{ willChange: 'opacity' }}
       />
 
       {/* Floating particles */}
-      <FloatingParticles />
+      {mounted && <FloatingParticles />}
 
       <div className="relative max-w-7xl mx-auto px-6 sm:px-8 flex flex-col md:flex-row items-center justify-between min-h-[70vh] md:min-h-[75vh] z-10">
         {/* LEFT: Info/CTA */}
@@ -65,21 +173,25 @@ export default function HeroSection() {
             viewport={VIEWPORT_CONFIG}
             variants={containerVariants}
           >
-            <motion.div className="flex items-center mb-3 gap-2" variants={itemVariants}>
-              <CheckCircle className="h-5 w-5 text-[#ff950e] animate-pulse-slow" aria-hidden="true" />
-              <span className="text-[#ff950e] font-semibold text-xs tracking-wider uppercase">
-                {HERO_CONTENT.badge}
-              </span>
-            </motion.div>
+            {/* Counters */}
+            <div className="mb-4 md:mb-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4 justify-center md:justify-start">
+              <AnimatedUserCounter compact={true} />
+              <PaymentsProcessedCounter compact className="" />
+            </div>
 
+            {/* Title */}
             <motion.h1
               className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-tight text-white mb-5 tracking-tighter"
               variants={itemVariants}
             >
-              {HERO_CONTENT.title} <span className="text-[#ff950e]">{HERO_CONTENT.titleHighlight}</span>{' '}
+              {HERO_CONTENT.title}{' '}
+              <span className="text-[#ff950e]">
+                {HERO_CONTENT.titleHighlight}
+              </span>{' '}
               {HERO_CONTENT.titleEnd}
             </motion.h1>
 
+            {/* Description */}
             <motion.p
               className="text-gray-400 text-base md:text-lg mb-8 max-w-xl font-medium"
               variants={itemVariants}
@@ -87,36 +199,47 @@ export default function HeroSection() {
               {HERO_CONTENT.description}
             </motion.p>
 
+            {/* CTA Buttons */}
             <motion.div
-              className="flex gap-4 mb-8 flex-col sm:flex-row w-full md:w-auto justify-center md:justify-start"
+              id="hero-ctas"
+              className={`flex gap-4 mb-8 flex-col sm:flex-row w-full md:w-auto justify-center md:justify-start ${styles.ctaGroup}`}
               variants={itemVariants}
               role="group"
               aria-label="Primary navigation actions"
             >
-              <Link
-                href={HERO_CONTENT.ctaPrimary.href}
-                className="group relative inline-flex items-center justify-center gap-2.5 rounded-full px-6 py-2.5 bg-gradient-to-r from-[#ff950e] to-[#ffb347] text-black font-semibold text-sm transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg hover:shadow-[#ff950e]/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                style={{ color: '#000' }}
+              {/* Browse Listings Button */}
+              <Button
+                className={`${styles.browseListingsBtn} cta-btn`}
+                onClick={handleBrowseListings}
                 aria-label="Browse available listings on PantyPost marketplace"
               >
-                <ShoppingBag
-                  className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-[-2px]"
-                  aria-hidden="true"
-                />
-                <span className="relative z-10">{HERO_CONTENT.ctaPrimary.text}</span>
-              </Link>
+                <span className={styles.ctaInner}>
+                  <ShoppingBag
+                    className={styles.browseListingsIcon}
+                    aria-hidden="true"
+                  />
+                  <span className={styles.ctaLabel}>
+                    {HERO_CONTENT.ctaPrimary.text}
+                  </span>
+                </span>
+              </Button>
 
-              <Link
-                href={HERO_CONTENT.ctaSecondary.href}
-                className="group relative inline-flex items-center justify-center gap-2.5 rounded-full px-6 py-2.5 bg-black border border-[#ff950e]/60 text-[#ff950e] font-semibold text-sm transition-all duration-300 ease-out hover:scale-105 hover:bg-[#111] hover:border-[#ff950e] hover:text-white active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                aria-label="Start selling on PantyPost platform"
+              {/* Start Selling Button */}
+              <Button
+                className={`${styles.startSellingBtn} cta-btn`}
+                onClick={handleStartSelling}
+                aria-label="Start Selling"
               >
-                <TrendingUp
-                  className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-[-2px]"
-                  aria-hidden="true"
-                />
-                {HERO_CONTENT.ctaSecondary.text}
-              </Link>
+                <span className={styles.ctaInner}>
+                  <TrendingUp
+                    className={styles.startSellingIcon}
+                    aria-hidden="true"
+                  />
+                  <span className={styles.ctaLabel}>
+                    {HERO_CONTENT.ctaSecondary.text}
+                  </span>
+                </span>
+              </Button>
             </motion.div>
 
             {/* Trust Badges */}
@@ -124,7 +247,7 @@ export default function HeroSection() {
           </motion.div>
         </div>
 
-        {/* RIGHT: Phone Image - with parallax effect */}
+        {/* RIGHT: Phone Image */}
         <div className="w-full md:w-1/2 lg:w-[50%] xl:w-[50%] flex justify-center md:justify-end items-center h-full mt-8 md:mt-0 z-10 perspective pr-0 md:pr-12 lg:pr-20 xl:pr-24 relative">
           <motion.div
             initial="hidden"
@@ -132,23 +255,48 @@ export default function HeroSection() {
             viewport={{ once: true, amount: 0.5 }}
             variants={fadeInVariants}
             style={mounted ? { y } : {}}
+            className="relative"
           >
-            {!imgError ? (
-              <img
+            {/* Loading skeleton for phone image */}
+            {!phoneImageLoaded && (
+              <div
+                className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 rounded-[2rem] animate-pulse"
+                style={{
+                  width: '300px',
+                  height: '520px'
+                }}
+              />
+            )}
+
+            {/* Optimized Image */}
+            <div
+              className={`transition-opacity duration-500 ${
+                phoneImageLoaded ? 'opacity-100' : 'opacity-0'
+              }`}
+              style={{
+                filter:
+                  'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))'
+              }}
+            >
+              <Image
                 src="/phone-mockup.png"
                 alt="PantyPost mobile app interface showcasing the marketplace"
-                className="h-[340px] sm:h-96 md:h-[440px] lg:h-[520px] w-auto transform transition-all duration-500 hover:scale-105 hover:rotate-3"
+                width={300}
+                height={520}
+                priority
+                quality={85}
+                placeholder="blur"
+                blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAGCAYAAADkOT91AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAM0lEQVR4nGNgQAX/gZgRiP8D8X8kNhMSH6oOmwZsYjg1YBPDqgGbGE4N2MRwasDhLwYGADm3EQXVn3lFAAAAAElFTkSuQmCC"
+                className="h-auto w-auto transform transition-all duration-500 hover:scale-105 hover:rotate-3"
                 style={{
-                  filter:
-                    'drop-shadow(0 25px 50px rgba(0,0,0,0.6)) drop-shadow(0 0 30px rgba(255,149,14,0.1))',
+                  maxHeight: '520px',
+                  width: 'auto',
+                  height: 'auto'
                 }}
-                onError={() => setImgError(true)}
+                sizes="(max-width: 640px) 340px, (max-width: 768px) 400px, (max-width: 1024px) 440px, 520px"
+                onLoadingComplete={() => setPhoneImageLoaded(true)}
               />
-            ) : (
-              <div className="h-[340px] sm:h-96 md:h-[440px] lg:h-[520px] w-[200px] sm:w-[220px] md:w-[250px] lg:w-[300px] bg-gradient-to-br from-gray-800 to-gray-900 rounded-[2rem] border border-gray-700 flex items-center justify-center">
-                <span className="text-gray-400 text-sm">App Preview</span>
-              </div>
-            )}
+            </div>
           </motion.div>
         </div>
       </div>

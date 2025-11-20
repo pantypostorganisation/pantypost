@@ -1,3 +1,4 @@
+// src/components/admin/reports/ReportsHeader.tsx
 'use client';
 
 import { Shield, RefreshCw, AlertTriangle } from 'lucide-react';
@@ -8,18 +9,20 @@ export default function ReportsHeader({ banContextError, lastRefresh, onRefresh 
   const last = lastRefresh instanceof Date ? lastRefresh : new Date();
 
   return (
-    <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
-      <div>
-        <h1 className="text-3xl font-bold text-[#ff950e] flex items-center">
-          <Shield className="mr-3" />
+    <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className="space-y-2">
+        <h1 className="flex items-center gap-3 text-3xl font-semibold text-white">
+          <span className="rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 p-1.5 text-[#ff950e]">
+            <Shield size={24} />
+          </span>
           Reports & Moderation
         </h1>
-        <p className="text-gray-400 mt-1">
+        <p className="max-w-2xl text-sm text-zinc-400">
           Review user reports and make manual ban decisions
         </p>
         {banContextError && (
-          <p className="text-red-400 text-sm mt-2 flex items-center">
-            <AlertTriangle size={14} className="mr-1" />
+          <p className="flex items-start gap-2 text-sm text-red-400">
+            <AlertTriangle size={16} className="mt-0.5" />
             <SecureMessageDisplay
               content={banContextError}
               allowBasicFormatting={false}
@@ -29,17 +32,15 @@ export default function ReportsHeader({ banContextError, lastRefresh, onRefresh 
         )}
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="text-sm text-gray-400">
-          Last refresh: {last.toLocaleTimeString()}
-        </div>
+      <div className="flex w-full flex-col items-start gap-3 text-sm text-zinc-400 sm:flex-row sm:items-center sm:justify-end">
+        <span>Last refresh: {last.toLocaleTimeString()}</span>
         <button
           type="button"
           onClick={onRefresh}
-          className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] flex items-center font-medium transition-colors"
+          className="inline-flex items-center gap-2 rounded-lg border border-[#ff950e]/60 bg-[#ff950e] px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-[#e88800]"
           aria-label="Refresh reports"
         >
-          <RefreshCw size={16} className="mr-2" />
+          <RefreshCw size={16} />
           Refresh
         </button>
       </div>

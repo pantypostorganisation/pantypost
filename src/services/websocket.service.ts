@@ -208,7 +208,12 @@ class WebSocketService {
       this.emit(WebSocketEvent.LISTING_SOLD, data);
       this.emit('listing:sold', data);
     });
-    
+
+    this.socket.on('stats:payments_processed', (data: any) => {
+      this.emit(WebSocketEvent.STATS_PAYMENTS_PROCESSED, data);
+      this.emit('stats:payments_processed', data);
+    });
+
     // Thread events
     this.socket.on('thread:user_viewing', (data: any) => {
       this.emit('thread:user_viewing', data);

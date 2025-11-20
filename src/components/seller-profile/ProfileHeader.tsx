@@ -3,6 +3,13 @@
 
 import Link from 'next/link';
 import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
+import {
   Mail,
   Gift,
   DollarSign,
@@ -12,6 +19,7 @@ import {
   Star,
   AlertTriangle,
   Heart,
+  ChevronDown,
 } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -21,6 +29,8 @@ import { useUserActivityStatus } from '@/hooks/useUserActivityStatus';
 import { z } from 'zod';
 import { resolveApiUrl } from '@/utils/url';
 import type { TierLevel } from '@/utils/sellerTiers';
+import { getCountryCode } from '@/utils/countries';
+import { flagFromIso2 } from '@/constants/countries';
 
 /** Valid TierLevel literals we accept */
 const VALID_TIERS: TierLevel[] = ['None', 'Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'];
@@ -81,6 +91,8 @@ const PropsSchema = z.object({
   bio: z.string().default(''),
   isVerified: z.boolean().default(false),
   sellerTierInfo: SellerTierInfoSchema,
+  country: z.string().nullable().optional(),
+  isLocationPublic: z.boolean().optional(),
   user: UserSchema,
   onShowSubscribeModal: z.function().args().returns(z.void()),
   onShowUnsubscribeModal: z.function().args().returns(z.void()),
@@ -98,6 +110,9 @@ const PropsSchema = z.object({
 
 interface ProfileHeaderProps extends z.infer<typeof PropsSchema> {}
 
+const ACTION_BUTTON_BASE =
+  'group inline-flex h-12 min-w-[13rem] flex-shrink-0 items-center justify-center gap-2 rounded-xl px-6 text-sm sm:text-base font-semibold transition-all duration-150 shadow-[0_8px_20px_rgba(0,0,0,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/70 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900';
+
 export default function ProfileHeader(rawProps: ProfileHeaderProps) {
   // Validate props (safe defaults to avoid crashes)
   const parsed = PropsSchema.safeParse(rawProps);
@@ -107,6 +122,8 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
     bio,
     isVerified,
     sellerTierInfo,
+    country,
+    isLocationPublic,
     user,
     onShowSubscribeModal,
     onShowUnsubscribeModal,
@@ -122,13 +139,90 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
     onToggleFavorite,
   } = parsed.success ? parsed.data : rawProps;
 
-  const showSubscribeButton = user?.role === 'buyer' && user.username !== username && !hasAccess;
-  const showUnsubscribeButton = user?.role === 'buyer' && user.username !== username && !!hasAccess;
+  const [subscriptionMenuOpen, setSubscriptionMenuOpen] = useState(false);
+  const subscriptionButtonRef = useRef<HTMLDivElement | null>(null);
+
+  const shouldShowSubscriptionButton = user?.role === 'buyer' && user.username !== username;
+  const isSubscribed = !!hasAccess;
+  const subscribeLabel =
+    typeof subscriptionPrice === 'number' && subscriptionPrice > 0
+      ? `Subscribe ($${subscriptionPrice.toFixed(2)}/mo)`
+      : 'Subscribe';
 
   const sanitizedUsername = sanitizeStrict(username);
+  const sanitizedCountry = country ? sanitizeStrict(country) : '';
+  const normalizedLocationPublic =
+    typeof isLocationPublic === 'boolean' ? isLocationPublic : true;
+  const canDisplayLocation = Boolean(normalizedLocationPublic && sanitizedCountry);
+  const isoCode = canDisplayLocation ? getCountryCode(sanitizedCountry) : '';
+  const normalizedIso = isoCode ? isoCode.toUpperCase() : '';
+  const hasValidIso = normalizedIso && normalizedIso !== 'XX';
+  const countryFlag = canDisplayLocation
+    ? hasValidIso
+      ? flagFromIso2(normalizedIso)
+      : '🌐'
+    : '';
 
   // Get user activity status using the hook
   const { activityStatus, loading: activityLoading } = useUserActivityStatus(username);
+
+  useEffect(() => {
+    if (!subscriptionMenuOpen) {
+      return;
+    }
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (subscriptionButtonRef.current && !subscriptionButtonRef.current.contains(event.target as Node)) {
+        setSubscriptionMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [subscriptionMenuOpen]);
+
+  useEffect(() => {
+    if (!isSubscribed) {
+      setSubscriptionMenuOpen(false);
+    }
+  }, [isSubscribed]);
+
+  const handleSubscriptionClick = () => {
+    if (isSubscribed) {
+      if (subscriptionMenuOpen) {
+        setSubscriptionMenuOpen(false);
+      }
+      return;
+    }
+    onShowSubscribeModal();
+  };
+
+  const handleToggleMenu = (event?: ReactMouseEvent<HTMLElement>) => {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    if (isSubscribed) {
+      setSubscriptionMenuOpen(prev => !prev);
+    }
+  };
+
+  const handleArrowKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      handleToggleMenu();
+    }
+  };
+
+  const handleUnsubscribeClick = () => {
+    setSubscriptionMenuOpen(false);
+    onShowUnsubscribeModal();
+  };
 
   // Format the activity status for display
   const getActivityDisplay = () => {
@@ -252,7 +346,16 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
           {getStatusBadge()}
         </div>
 
-        <div className="text-sm text-gray-400 mb-1">Location: Private</div>
+        {canDisplayLocation && (
+          <div className="mb-2 flex justify-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/30 bg-black/60 px-3 py-1 text-xs font-semibold text-gray-100 shadow-[0_0_18px_rgba(255,149,14,0.15)]">
+              <span aria-hidden="true" className="text-base">
+                {countryFlag}
+              </span>
+              <span className="text-sm">{sanitizedCountry}</span>
+            </span>
+          </div>
+        )}
 
         <div className="text-base text-gray-300 font-medium max-w-2xl leading-relaxed mt-3">
           <SecureMessageDisplay
@@ -298,37 +401,59 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 justify-center w-full max-w-lg">
-        {showSubscribeButton && (
-          <button
-            onClick={onShowSubscribeModal}
-            className="flex items-center gap-2 bg-[#ff950e] text-black font-bold px-6 py-3 rounded-full shadow-lg hover:bg-[#e0850d] transition text-base"
-            type="button"
-          >
-            <DollarSign className="w-5 h-5" />
-            {typeof subscriptionPrice === 'number' && subscriptionPrice > 0
-              ? `Subscribe ($${subscriptionPrice.toFixed(2)}/mo)`
-              : 'Subscribe'}
-          </button>
-        )}
+      <div className="flex flex-wrap sm:flex-nowrap justify-center items-center gap-2 sm:gap-4 w-full max-w-3xl mx-auto">
+        {shouldShowSubscriptionButton && (
+          <div className="relative flex-shrink-0" ref={subscriptionButtonRef}>
+            <button
+              type="button"
+              onClick={handleSubscriptionClick}
+              className={`${ACTION_BUTTON_BASE} ${
+                isSubscribed
+                  ? 'bg-[#121212] border border-[#ff950e]/70 text-[#ff950e] hover:bg-[#1b1b1b]'
+                  : 'bg-[#151515] border border-[#ff950e] text-white hover:bg-[#1f1f1f]'
+              } hover:scale-[1.02]`}
+              aria-haspopup={isSubscribed ? 'menu' : undefined}
+              aria-expanded={isSubscribed ? subscriptionMenuOpen : undefined}
+            >
+              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-[#ff950e]" />
+              <span>{isSubscribed ? 'Subscribed' : subscribeLabel}</span>
+              {isSubscribed && (
+                <span
+                  className="ml-1 flex items-center rounded-lg bg-[#ff950e]/10 p-1 text-[#ff950e] transition duration-150 group-hover:bg-[#ff950e]/20"
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Subscription options"
+                  aria-haspopup="menu"
+                  aria-expanded={subscriptionMenuOpen}
+                  onClick={handleToggleMenu}
+                  onKeyDown={handleArrowKeyDown}
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${subscriptionMenuOpen ? 'rotate-180' : ''}`} />
+                </span>
+              )}
+            </button>
 
-        {showUnsubscribeButton && (
-          <button
-            onClick={onShowUnsubscribeModal}
-            className="flex items-center gap-2 bg-gray-700 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-red-600 transition text-base"
-            type="button"
-          >
-            Unsubscribe
-          </button>
+            {isSubscribed && subscriptionMenuOpen && (
+              <div className="absolute right-0 mt-2 w-40 rounded-lg border border-gray-700 bg-[#111111] py-2 shadow-xl ring-1 ring-black/5">
+                <button
+                  type="button"
+                  onClick={handleUnsubscribeClick}
+                  className="flex w-full items-center justify-start px-4 py-2 text-sm font-medium text-white transition duration-150 hover:bg-[#1f1f1f] hover:text-[#ff950e]"
+                >
+                  Unsubscribe
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {user?.role === 'buyer' && user.username !== username && (
           <button
-            className="flex items-center gap-2 bg-gray-800 text-[#ff950e] font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
+            className={`${ACTION_BUTTON_BASE} bg-[#0e0e0e] text-[#ff950e] hover:bg-[#050505] hover:shadow-[0_0_12px_rgba(255,149,14,0.25)]`}
             onClick={onShowTipModal}
             type="button"
           >
-            <Gift className="w-5 h-5" />
+            <Gift className="h-4 w-4 sm:h-5 sm:w-5 text-[#ff950e]" />
             Tip Seller
           </button>
         )}
@@ -336,9 +461,9 @@ export default function ProfileHeader(rawProps: ProfileHeaderProps) {
         {user?.role === 'buyer' && user.username !== username && (
           <Link
             href={`/buyers/messages?thread=${encodeURIComponent(username)}`}
-            className="flex items-center gap-2 bg-gray-800 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:bg-gray-700 transition text-base"
+            className={`${ACTION_BUTTON_BASE} bg-[#0e0e0e] text-[#ff950e] hover:bg-[#050505] hover:shadow-[0_0_12px_rgba(255,149,14,0.25)]`}
           >
-            <Mail className="w-5 h-5" />
+            <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-[#ff950e]" />
             Message
           </Link>
         )}

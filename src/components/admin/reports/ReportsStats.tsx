@@ -1,3 +1,4 @@
+// src/components/admin/reports/ReportsStats.tsx
 'use client';
 
 import { ReportsStatsProps } from './types';
@@ -18,32 +19,80 @@ export default function ReportsStats({ reportStats }: ReportsStatsProps) {
     withBans: safeNumber(reportStats?.withBans),
   };
 
+  const cards: Array<{
+    label: string;
+    value: number;
+    valueClass?: string;
+    labelClass?: string;
+    borderClass?: string;
+  }> = [
+    {
+      label: 'Total Reports',
+      value: totals.total,
+      valueClass: 'text-slate-100',
+      labelClass: 'text-zinc-400',
+      borderClass: 'border-zinc-800/80 hover:border-zinc-700',
+    },
+    {
+      label: 'Pending',
+      value: totals.unprocessed,
+      valueClass: 'text-[#ff950e]',
+      labelClass: 'text-[#ff950e]/80',
+      borderClass: 'border-[#ff950e]/30 hover:border-[#ff950e]/60',
+    },
+    {
+      label: 'Critical',
+      value: totals.critical,
+      valueClass: 'text-red-400',
+      labelClass: 'text-red-300/80',
+      borderClass: 'border-red-500/30 hover:border-red-400/60',
+    },
+    {
+      label: 'Today',
+      value: totals.today,
+      valueClass: 'text-indigo-400',
+      labelClass: 'text-indigo-300/80',
+      borderClass: 'border-indigo-500/30 hover:border-indigo-400/60',
+    },
+    {
+      label: 'Processed',
+      value: totals.processed,
+      valueClass: 'text-emerald-400',
+      labelClass: 'text-emerald-300/80',
+      borderClass: 'border-emerald-500/30 hover:border-emerald-400/60',
+    },
+    {
+      label: 'Resulted in Bans',
+      value: totals.withBans,
+      valueClass: 'text-rose-400',
+      labelClass: 'text-rose-300/80',
+      borderClass: 'border-rose-500/30 hover:border-rose-400/60',
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-white">{totals.total}</div>
-        <div className="text-xs text-gray-400">Total Reports</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-yellow-400">{totals.unprocessed}</div>
-        <div className="text-xs text-gray-400">Pending</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-red-400">{totals.critical}</div>
-        <div className="text-xs text-gray-400">Critical</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-blue-400">{totals.today}</div>
-        <div className="text-xs text-gray-400">Today</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-green-400">{totals.processed}</div>
-        <div className="text-xs text-gray-400">Processed</div>
-      </div>
-      <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 text-center hover:border-gray-700 transition-colors">
-        <div className="text-2xl font-bold text-purple-400">{totals.withBans}</div>
-        <div className="text-xs text-gray-400">Resulted in Bans</div>
-      </div>
+    <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      {cards.map(({ label, value, valueClass, labelClass, borderClass }) => (
+        <div
+          key={label}
+          className={`rounded-xl border bg-zinc-950/80 px-4 py-3 text-left shadow-none transition-colors ${
+            borderClass ?? 'border-zinc-800/80 hover:border-zinc-700'
+          }`}
+        >
+          <div
+            className={`text-2xl font-semibold tracking-tight ${valueClass ?? 'text-white'}`}
+          >
+            {value}
+          </div>
+          <div
+            className={`mt-1 text-xs font-medium uppercase tracking-wide ${
+              labelClass ?? 'text-zinc-500'
+            }`}
+          >
+            {label}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

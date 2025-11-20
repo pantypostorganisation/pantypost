@@ -37,7 +37,7 @@ const RATING_STYLES: Record<
 
 const buildPlaceholderMetrics = (): MetricData[] => {
   const timestamp = new Date().toISOString();
-  return PLACEHOLDER_METRICS.map(metric => ({
+  return PLACEHOLDER_METRICS.map((metric) => ({
     ...metric,
     timestamp
   }));

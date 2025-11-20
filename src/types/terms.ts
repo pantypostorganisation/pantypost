@@ -1,4 +1,5 @@
 // src/types/terms.ts
+
 export interface TermsSection {
   id: string;
   title: string;

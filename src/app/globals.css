@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+
 :root {
   --background: #0a0a0a;
   --foreground: #ededed;
@@ -29,15 +30,41 @@ a:hover {
   color: var(--color-primary-light);
 }
 
-/* REMOVED the global button styling that was making everything pill-shaped
-   Let individual buttons define their own border-radius */
-
 .card {
   background: var(--color-card);
   border-radius: 1rem;
   box-shadow: 0 2px 12px 0 rgba(0,0,0,0.12);
   padding: 1.5rem;
   color: var(--color-foreground);
+}
+
+/* ======== SMOOTH APP FADE-IN ======== */
+@keyframes appFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.app-fade-in {
+  animation: appFadeIn 1s ease-in-out;
+}
+
+/* Loading screen that shows during initialization */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 9999;
+  opacity: 1;
+  transition: opacity 1s ease-in-out;
+  pointer-events: none;
+}
+
+.loading-screen.fade-out {
+  opacity: 0;
 }
 
 /* ======== Verification Page Enhancements ======== */
@@ -75,6 +102,42 @@ a:hover {
 
 .verification-badge {
   animation: pulse 2s infinite;
+}
+
+/* Live listings badge pulse */
+@keyframes livePulseGreen {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes livePulseRed {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(244, 63, 94, 0);
+  }
+}
+
+.live-badge {
+  animation-duration: 2.4s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  box-shadow: 0 0 0 0 transparent;
+}
+
+.live-badge--active {
+  animation-name: livePulseGreen;
+}
+
+.live-badge--inactive {
+  animation-name: livePulseRed;
 }
 
 /* Glassmorphism effect for modals */
@@ -136,6 +199,71 @@ a:hover {
   box-shadow: 0 4px 6px -1px rgba(56, 161, 105, 0.2);
 }
 
+/* Save All button glow inspired by Button 2 */
+.save-all-glow-wrapper {
+  position: relative;
+  display: inline-flex;
+  border-radius: 9999px;
+  overflow: visible;
+}
+
+.save-all-button {
+  position: relative;
+  z-index: 1;
+  border-radius: 9999px;
+  background: #000;
+  color: #fff;
+  border: none;
+  padding: 0.75rem 2.5rem;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.save-all-glow-wrapper::before,
+.save-all-glow-wrapper::after {
+  content: "";
+  position: absolute;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-out;
+}
+
+.save-all-glow-wrapper::before {
+  inset: -1px;
+  padding: 1px;
+  background: conic-gradient(
+    #ff950e,
+    #ff4ecd,
+    #4f46e5,
+    #06b6d4,
+    #ff950e
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  z-index: 0;
+}
+
+.save-all-glow-wrapper::after {
+  inset: -16px;
+  background: conic-gradient(
+    #ff950e,
+    #ff4ecd,
+    #4f46e5,
+    #06b6d4,
+    #ff950e
+  );
+  filter: blur(26px);
+  z-index: -1;
+}
+
+.save-all-glow-wrapper:hover::before,
+.save-all-glow-wrapper:hover::after {
+  opacity: 1;
+}
+
 .btn-approve:hover {
   background: linear-gradient(to right, #48bb78, #68d391);
   box-shadow: 0 10px 15px -3px rgba(56, 161, 105, 0.3);
@@ -192,8 +320,6 @@ a:hover {
   box-shadow: 0 0 0 2px rgba(255, 149, 14, 0.2);
   background: rgba(26, 26, 26, 1);
 }
-
-/* ... (other styles remain unchanged) ... */
 
 /* ======== NEW: Breathing green hover for Verify button text ======== */
 @keyframes breathe-green {

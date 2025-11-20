@@ -7,7 +7,11 @@ import BanCheck from '@/components/BanCheck';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 import Image from 'next/image';
 import Link from 'next/link';
+import { CalendarDays, MapPin, MessageCircle } from 'lucide-react';
 import { getGlobalAuthToken } from '@/context/AuthContext';
+import { API_BASE_URL } from '@/services/api.config';
+import { flagFromCountryName } from '@/constants/countries';
+import { resolveApiUrl } from '@/utils/url';
 
 /* ==== Types ==== */
 type NormalizedBuyerProfile = {
@@ -44,64 +48,161 @@ function formatDate(dateLike?: string) {
     return '—';
   }
 }
-function normalizeProfileFromBackend(raw: any): NormalizedBuyerProfile | null {
-  if (!raw || raw.success === false) return null;
-  const d = raw.data;
-  if (!d || !d.username || !d.role) return null;
+
+type BackendProfileData = {
+  username?: unknown;
+  role?: unknown;
+  joinedDate?: unknown;
+  createdAt?: unknown;
+  isBanned?: unknown;
+  banReason?: unknown;
+  bio?: unknown;
+  profilePic?: unknown;
+  country?: unknown;
+};
+
+type BackendProfileResponse = {
+  success?: boolean;
+  data?: BackendProfileData | null;
+  error?: { message?: string } | null;
+};
+
+// Type guard for role validation
+function isValidRole(role: unknown): role is 'buyer' | 'seller' | 'admin' {
+  return typeof role === 'string' && ['buyer', 'seller', 'admin'].includes(role);
+}
+
+function normalizeProfileFromBackend(raw: unknown): NormalizedBuyerProfile | null {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const response = raw as BackendProfileResponse;
+  if (response.success === false) return null;
+
+  const data = response.data;
+  if (!data || typeof data !== 'object') return null;
+
+  const username = 'username' in data ? data.username : undefined;
+  const role = 'role' in data ? data.role : undefined;
+
+  if (typeof username !== 'string') return null;
+  if (!isValidRole(role)) return null;
+
+  const joinedAt =
+    typeof data.joinedDate === 'string'
+      ? data.joinedDate
+      : typeof data.createdAt === 'string'
+      ? data.createdAt
+      : undefined;
+
+  const createdAt = typeof data.createdAt === 'string' ? data.createdAt : undefined;
+  const isBanned = typeof data.isBanned === 'boolean' ? data.isBanned : undefined;
+  const banReason = typeof data.banReason === 'string' ? data.banReason : undefined;
+  const bio = typeof data.bio === 'string' ? data.bio : '';
+  const profilePic =
+    typeof data.profilePic === 'string'
+      ? data.profilePic
+      : data.profilePic === null
+      ? null
+      : undefined;
+  const country =
+    typeof data.country === 'string'
+      ? data.country
+      : data.country === null
+      ? null
+      : undefined;
+
   return {
     user: {
-      username: String(d.username),
-      role: d.role,
-      joinedAt: d.joinedDate ?? d.createdAt,
-      createdAt: d.createdAt,
-      isBanned: d.isBanned,
-      banReason: d.banReason,
+      username,
+      role, // Now TypeScript knows this is the correct type
+      joinedAt,
+      createdAt,
+      isBanned,
+      banReason,
     },
     profile: {
-      bio: d.bio ?? '',
-      profilePic: d.profilePic ?? null,
-      country: d.country ?? null,
+      bio,
+      profilePic: profilePic ?? null,
+      country: country ?? null,
     },
   };
 }
+
+const API_ORIGIN = (() => {
+  try {
+    const parsed = new URL(API_BASE_URL);
+    return parsed.origin;
+  } catch {
+    return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
+  }
+})();
+
 function resolveAvatarUrl(raw?: string | null): string | null {
   if (!raw) return null;
+
   const src = String(raw).trim();
-  if (src.toLowerCase().includes('placeholder') || src === '-' || src === 'none') return null;
-  if (src.startsWith('http://') || src.startsWith('https://')) return src;
-  if (src.startsWith('/')) {
-    // Use current origin for relative assets from API
-    if (typeof window !== 'undefined') {
-      return `${window.location.origin}${src}`;
-    }
+  if (!src) return null;
+
+  const lower = src.toLowerCase();
+  if (lower.includes('placeholder') || lower === '-' || lower === 'none') return null;
+  if (lower.startsWith('data:image/')) return src;
+
+  if (src.startsWith('http://') || src.startsWith('https://')) {
+    return lower.includes('api.pantypost.com') ? src.replace('http://', 'https://') : src;
   }
+
+  const ensureLeadingSlash = src.startsWith('/') ? src : `/${src}`;
+  const resolved = resolveApiUrl(ensureLeadingSlash);
+  if (resolved) {
+    return resolved;
+  }
+
+  if (API_ORIGIN) {
+    return `${API_ORIGIN}${ensureLeadingSlash}`;
+  }
+
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}${ensureLeadingSlash}`;
+  }
+
   return null;
 }
 
-/** Minimal map for flag emoji */
-const COUNTRY_TO_CODE: Record<string, string> = {
-  Australia: 'AU',
-  Canada: 'CA',
-  'United States': 'US',
-  'United Kingdom': 'GB',
-  Germany: 'DE',
-  France: 'FR',
-  Japan: 'JP',
-  India: 'IN',
-  'New Zealand': 'NZ',
-};
-function flagFromIso2(code?: string | null): string {
-  if (!code || code.length !== 2) return '🌐';
-  const base = 0x1f1e6;
-  const A = 'A'.charCodeAt(0);
-  const chars = code.toUpperCase().split('');
-  const cps = chars.map((c) => base + (c.charCodeAt(0) - A));
-  return String.fromCodePoint(...cps);
+function isRegionalIndicator(cp?: number | null): boolean {
+  if (typeof cp !== 'number') return false;
+  return cp >= 0x1f1e6 && cp <= 0x1f1ff;
 }
-function flagFromCountryName(name?: string | null): string {
-  if (!name) return '🌐';
-  const code = COUNTRY_TO_CODE[name] || null;
-  return flagFromIso2(code);
+
+function deriveCountryDisplay(raw?: string | null): { flag: string; name: string } {
+  if (!raw) {
+    return { flag: '🌐', name: '' };
+  }
+
+  const sanitized = sanitizeStrict(raw).trim();
+  if (!sanitized) {
+    return { flag: '🌐', name: '' };
+  }
+
+  const characters = Array.from(sanitized);
+  if (characters.length >= 2) {
+    const first = characters[0]?.codePointAt(0);
+    const second = characters[1]?.codePointAt(0);
+
+    if (isRegionalIndicator(first) && isRegionalIndicator(second)) {
+      const flag = `${characters[0]}${characters[1]}`;
+      const remaining = characters.slice(2).join('').trim();
+
+      return {
+        flag,
+        name: remaining || '',
+      };
+    }
+  }
+
+  return {
+    flag: flagFromCountryName(sanitized),
+    name: sanitized,
+  };
 }
 
 /* ==== Safe avatar ==== */
@@ -123,10 +224,10 @@ function SafeAvatar({
   }
   if (url) {
     // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={alt} className="w-full h-full rounded-full object-cover" />;
+    return <img src={url} alt={alt} className="h-full w-full rounded-full object-cover" />;
   }
   return (
-    <div className="w-full h-full rounded-full bg-neutral-800 flex items-center justify-center text-2xl">
+    <div className="flex h-full w-full items-center justify-center rounded-full bg-neutral-800 text-2xl">
       {letterFallback}
     </div>
   );
@@ -210,7 +311,7 @@ export default function BuyerProfilePage() {
 
       const resp = await fetch(url, { method: 'GET', headers });
       setHttpStatus(resp.status);
-      const json: any = await resp.json().catch(() => null);
+      const json = (await resp.json().catch(() => null)) as BackendProfileResponse | null;
 
       if (!resp.ok) {
         const msg =
@@ -236,8 +337,8 @@ export default function BuyerProfilePage() {
         return;
       }
       setProfileData(normalized);
-    } catch (e: any) {
-      console.error('[BuyerProfilePage] loadProfile error:', e);
+    } catch (error) {
+      console.error('[BuyerProfilePage] loadProfile error:', error);
       setError('Failed to load profile.');
     } finally {
       setLoading(false);
@@ -254,100 +355,175 @@ export default function BuyerProfilePage() {
 
   const isOwner = !!me && me.username === usernameForRequest;
 
+  const sanitizedBio = useMemo(() => {
+    const rawBio = profileData?.profile?.bio;
+    if (!rawBio) return '';
+    return sanitizeStrict(rawBio);
+  }, [profileData?.profile?.bio]);
+
+  const countryDisplay = useMemo(() => deriveCountryDisplay(profileData?.profile?.country), [
+    profileData?.profile?.country,
+  ]);
+
+  const messageHref = useMemo(() => {
+    if (me?.role === 'seller') {
+      const encodedUsername = usernameForRequest ? encodeURIComponent(usernameForRequest) : '';
+      return encodedUsername ? `/sellers/messages?thread=${encodedUsername}` : '/sellers/messages';
+    }
+
+    if (me?.role === 'buyer') {
+      return '/buyers/messages';
+    }
+
+    return '/buyers/messages';
+  }, [me?.role, usernameForRequest]);
+
   if (!usernameForRequest) {
     return (
-      <div className="min-h-screen bg-black text-white p-6">
-        <div className="max-w-4xl mx-auto pt-24">
-          <h1 className="text-2xl font-bold mb-4">Invalid username</h1>
-          <p className="text-gray-300">Please provide a valid username in the URL.</p>
+      <BanCheck>
+        <div className="min-h-screen bg-neutral-950 text-white px-6">
+          <div className="mx-auto max-w-3xl pt-24 text-center">
+            <h1 className="text-3xl font-semibold">Invalid username</h1>
+            <p className="mt-3 text-neutral-400">Please provide a valid username in the URL.</p>
+          </div>
         </div>
-      </div>
+      </BanCheck>
     );
   }
 
   return (
     <BanCheck>
-      <div className="min-h-screen bg-black text-white">
-        <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-10">
-          <div className="bg-[var(--color-card,#171717)] rounded-2xl shadow-lg p-6 md:p-8 border border-neutral-800">
-            {loading ? (
-              <div className="animate-pulse">
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-full bg-neutral-800" />
-                  <div className="flex-1">
-                    <div className="h-5 w-40 bg-neutral-800 rounded mb-3" />
-                    <div className="h-4 w-64 bg-neutral-800 rounded" />
+      <div className="min-h-screen bg-neutral-950 text-white">
+        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-10">
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111111]/85 shadow-[0_18px_60px_-30px_rgba(0,0,0,0.9)]">
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.18),rgba(255,255,255,0)_55%)]"
+              aria-hidden="true"
+            />
+            <div className="relative p-6 sm:p-10">
+              {loading ? (
+                <div className="space-y-10 animate-pulse">
+                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+                    <div className="h-28 w-28 rounded-2xl bg-neutral-800/80" />
+                    <div className="flex-1 space-y-4">
+                      <div className="h-6 w-48 rounded bg-neutral-800/80" />
+                      <div className="h-4 w-72 rounded bg-neutral-800/80" />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="h-20 rounded-2xl bg-neutral-800/80" />
+                        <div className="h-20 rounded-2xl bg-neutral-800/80" />
+                      </div>
+                    </div>
                   </div>
+                  <div className="h-11 w-40 rounded-full bg-neutral-800/80" />
                 </div>
-                <div className="h-4 w-56 bg-neutral-800 rounded mt-6" />
-              </div>
-            ) : error ? (
-              <div className="text-red-400">
-                <p className="font-semibold mb-2">Could not load buyer profile</p>
-                <p className="text-sm text-red-300">{error}</p>
-                {httpStatus === 403 && (
-                  <p className="text-xs text-red-300 mt-2">Tip: Buyer profiles are private. Log in to view.</p>
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-col md:flex-row md:items-center gap-6">
-                  <div className="relative w-24 h-24 md:w-28 md:h-28">
-                    <div className="absolute inset-0 rounded-full ring-2 ring-[#ff950e]/40" />
-                    <SafeAvatar
-                      src={profileData?.profile?.profilePic || null}
-                      alt={`${usernameForDisplay}'s avatar`}
-                      letterFallback={profileData?.user?.username?.[0]?.toUpperCase() ?? 'B'}
-                    />
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <h1 className="text-2xl md:text-3xl font-bold">{usernameForDisplay}</h1>
-                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-neutral-800 border border-neutral-700">
-                        Buyer
-                      </span>
+              ) : error ? (
+                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-200">
+                  <p className="text-lg font-semibold">Could not load buyer profile</p>
+                  <p className="mt-2 text-sm text-red-100/80">{error}</p>
+                  {httpStatus === 403 && (
+                    <p className="mt-4 text-xs text-red-100/70">
+                      Tip: Buyer profiles are private. Log in to view.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
+                    <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
+                      <div className="flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
+                        <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-[#a855f7] bg-neutral-950 shadow-[0_0_32px_-18px_rgba(168,85,247,0.8)]">
+                          <SafeAvatar
+                            src={profileData?.profile?.profilePic || null}
+                            alt={`${usernameForDisplay}'s avatar`}
+                            letterFallback={profileData?.user?.username?.[0]?.toUpperCase() ?? 'B'}
+                          />
+                        </div>
+                      </div>
                     </div>
 
-                    {profileData?.profile?.bio && (
-                      <p className="text-gray-300 mt-2">{sanitizeStrict(profileData.profile.bio!)}</p>
-                    )}
+                    <div className="flex-1 space-y-6">
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <h1 className="text-3xl font-bold sm:text-4xl">{usernameForDisplay}</h1>
+                          <span className="rounded-full border border-neutral-700/60 bg-neutral-900/70 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-300">
+                            Buyer
+                          </span>
+                        </div>
 
-                    <div className="text-sm text-gray-400 mt-3 space-y-1">
-                      <div>Joined: {formatDate(profileData?.user?.joinedAt || profileData?.user?.createdAt)}</div>
+                        {sanitizedBio && (
+                          <p className="max-w-2xl text-base leading-relaxed text-neutral-300 sm:text-lg">
+                            {sanitizedBio}
+                          </p>
+                        )}
+                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <span>
-                          {flagFromCountryName(profileData?.profile?.country)}{' '}
-                          {profileData?.profile?.country
-                            ? sanitizeStrict(profileData.profile.country!)
-                            : 'Country not set'}
-                        </span>
+                      <div className="flex flex-wrap gap-3">
+                        <Link
+                          href={messageHref}
+                          className="inline-flex items-center gap-2 rounded-full bg-[#ff950e] px-5 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-[#ffb347] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
+                        >
+                          <MessageCircle size={18} className="text-neutral-950" />
+                          <span className="text-neutral-950">Message</span>
+                        </Link>
 
                         {isOwner && (
                           <Link
                             href={`/buyers/profile`}
-                            className="ml-2 text-xs px-2 py-1 rounded-md bg-neutral-800 border border-neutral-700 hover:border-neutral-600"
-                            title="Edit country and profile details"
+                            className="inline-flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/50 focus:ring-offset-2 focus:ring-offset-black"
+                            title="Edit your buyer profile"
                           >
-                            Edit
+                            Edit profile
                           </Link>
                         )}
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Link
-                    href={`/buyers/messages`}
-                    className="px-4 py-2 rounded-xl bg-neutral-800 border border-neutral-700 hover:border-neutral-600 transition"
-                  >
-                    Message
-                  </Link>
-                </div>
-              </>
-            )}
+                  <div className="mt-12 grid gap-5 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+                      <div className="flex items-start gap-4">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-800/80 text-[#ffb347]">
+                          <CalendarDays size={18} />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Member since</p>
+                          <p className="mt-2 text-lg font-semibold text-white">
+                            {formatDate(profileData?.user?.joinedAt || profileData?.user?.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+                      <div className="flex items-start gap-4">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-800/80 text-[#ffb347]">
+                          <MapPin size={18} />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Location</p>
+                          <p className="mt-2 text-lg font-semibold text-white">
+                            {profileData?.profile?.country ? (
+                              <span>
+                                {countryDisplay.flag}
+                                {countryDisplay.name ? ` ${countryDisplay.name}` : ''}
+                              </span>
+                            ) : (
+                              'Not shared yet'
+                            )}
+                          </p>
+                          {isOwner && !profileData?.profile?.country && (
+                            <p className="mt-1 text-sm text-neutral-400">
+                              Add your country so sellers know where you are shopping from.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>
