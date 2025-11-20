@@ -3,15 +3,14 @@
 
 import { motion } from 'framer-motion';
 import Image from 'next/image';
-import { Shield, CreditCard, Users } from 'lucide-react';
 import { itemVariants, containerVariants, shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
-// Define trust signals directly here with the verification badge
+// Define trust signals with new badge images
 const TRUST_SIGNALS = [
   {
-    icon: Shield,
-    iconType: 'component',
+    icon: '/security_badge.png',
+    iconType: 'image',
     title: 'Privacy First',
     desc: 'Your identity is always protected.'
   },
@@ -22,14 +21,14 @@ const TRUST_SIGNALS = [
     desc: 'Manually reviewed for authenticity.'
   },
   {
-    icon: CreditCard,
-    iconType: 'component',
+    icon: '/card_badge.png',
+    iconType: 'image',
     title: 'Secure Payments',
     desc: 'Encrypted and safe transactions.'
   },
   {
-    icon: Users,
-    iconType: 'component',
+    icon: '/support_badge.png',
+    iconType: 'image',
     title: '24/7 Support',
     desc: 'Our team is here to help anytime.'
   }
@@ -60,19 +59,15 @@ export default function TrustSignalsSection() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {TRUST_SIGNALS.map((item, index) => (
             <motion.div key={index} className="flex flex-col items-center" variants={itemVariants}>
-              {item.iconType === 'image' ? (
-                <div className="h-7 w-7 mb-3 transition-transform duration-300 hover:scale-110 relative">
-                  <Image
-                    src={item.icon as string}
-                    alt="Verification Badge"
-                    width={28}
-                    height={28}
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-              ) : (
-                <item.icon className="h-7 w-7 text-[#ff950e] mb-3 transition-transform duration-300 hover:scale-110" />
-              )}
+              <div className="h-7 w-7 mb-3 transition-transform duration-300 hover:scale-110 relative">
+                <Image
+                  src={item.icon}
+                  alt={`${item.title} Badge`}
+                  width={28}
+                  height={28}
+                  className="w-full h-full object-contain"
+                />
+              </div>
               <span className="text-white font-medium text-sm">{sanitizeStrict(item.title)}</span>
               <p className="text-gray-400 text-xs mt-1">{sanitizeStrict(item.desc)}</p>
             </motion.div>
