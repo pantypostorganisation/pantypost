@@ -15,11 +15,6 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
 
-  // Dynamic base URL that works on local network
-  const baseUrl = typeof window !== 'undefined' && window.location.hostname.match(/192\.168\.|10\.|172\./)
-    ? `http://${window.location.hostname}:5000`
-    : 'http://localhost:5000';
-
   // Fix URLs that incorrectly have /api/ in the path for static uploads
   const getSafeImageUrl = (url?: string): string => {
     if (!url) return '';
@@ -33,26 +28,23 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
     // Backend serves uploads directly from /uploads/, not /api/uploads/
     if (url.includes('/api/uploads/')) {
       // Extract the base URL and the path
-      const baseUrlPart = url.substring(0, url.indexOf('/api/uploads/'));
+      const baseUrl = url.substring(0, url.indexOf('/api/uploads/'));
       const path = url.substring(url.indexOf('/api/uploads/') + 4); // Remove '/api' prefix
-      const fixedUrl = `${baseUrlPart}${path}`;
+      const fixedUrl = `${baseUrl}${path}`;
       console.log('[DocumentCard] Fixed URL from:', url, 'to:', fixedUrl);
       return fixedUrl;
     }
     
     // If it's a relative upload path, construct the correct URL
     if (url.startsWith('/uploads/')) {
-      // Use dynamic base URL
+      // Use base URL without /api
+      const baseUrl = 'http://localhost:5000';
       return `${baseUrl}${url}`;
     }
     
-    // If it's already a correct absolute URL from our backend, update the hostname if needed
+    // If it's already a correct absolute URL from our backend, return as is
     if (url.startsWith('http://localhost:5000/uploads/') || 
         url.startsWith('https://localhost:5000/uploads/')) {
-      // Replace localhost with current hostname if on network
-      if (typeof window !== 'undefined' && window.location.hostname.match(/192\.168\.|10\.|172\./)) {
-        return url.replace(/localhost/, window.location.hostname);
-      }
       return url;
     }
     

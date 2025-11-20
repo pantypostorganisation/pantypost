@@ -142,9 +142,6 @@ app.use('/api/profilebuyer', profileBuyerRoutes);
 // NEW: referral system routes
 app.use('/api/referral', referralRoutes);
 
-// NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
-app.use('/api/profilebuyer', profileBuyerRoutes);
-
 // ---------------------- Storage API Routes ----------------------
 app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
   try {

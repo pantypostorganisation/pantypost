@@ -1,3 +1,4 @@
+// src/app/sellers/my-listings/page.tsx
 'use client';
 
 import './createListingBtn.css';
@@ -311,8 +312,6 @@ function MyListingsContent() {
                     </div>
                   </div>
                 </div>
-
-                {/* Verify CTA with breathing text */}
                 <Link
                   href="/sellers/verify"
                   aria-label="Verify My Account"

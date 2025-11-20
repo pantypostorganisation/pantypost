@@ -29,6 +29,7 @@ type NormalizedBuyerProfile = {
     country?: string | null;
   };
 };
+
 type MeProfile = {
   username: string;
   role: 'buyer' | 'seller' | 'admin';
