@@ -2,9 +2,7 @@
 'use client';
 
 import Image, { StaticImageData } from 'next/image';
-import React, { useMemo, useState } from 'react';
-import { cn } from '@/utils/cn';
-import { sanitizeStrict } from '@/utils/security/sanitization';
+import React, { useState, useCallback, useMemo } from 'react';
 
 interface OptimizedImageProps {
   src: string | StaticImageData;
@@ -17,86 +15,141 @@ interface OptimizedImageProps {
   quality?: number;
   placeholder?: 'blur' | 'empty';
   blurDataURL?: string;
+  fill?: boolean;
+  style?: React.CSSProperties;
+  objectFit?: 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
+  onError?: () => void;
 }
 
 const DEFAULT_BLUR_DATA_URL =
   'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXz/2wBDARUXFx4aHjshITt8U0ZTfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHz/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWEREiMxUf/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q==';
 
-/** Safe URL check (prevents javascript: and other unsafe schemes) */
-function isSafeSrc(src: string | StaticImageData): boolean {
-  if (typeof src !== 'string') return true; // StaticImageData is safe
-  try {
-    const trimmed = src.trim();
-    // Allow data:, http:, https: only (Next/Image will also enforce remote patterns)
-    if (trimmed.startsWith('data:')) return true;
-    const u = new URL(trimmed, 'http://example.com'); // base for relative parsing
-    return ['http:', 'https:'].includes(u.protocol);
-  } catch {
-    return false;
-  }
-}
-
-/** Clamp helper */
-const clamp = (v: number | undefined, min: number, max: number, fallback: number) =>
-  typeof v === 'number' && Number.isFinite(v) ? Math.min(Math.max(v, min), max) : fallback;
+const PLACEHOLDER_IMAGE = '/placeholder-panty.png';
 
 export default function OptimizedImage({
   src,
   alt,
-  width,
-  height,
+  width = 300,
+  height = 300,
   priority = false,
-  className,
+  className = '',
   sizes = '100vw',
-  quality = 85,
+  quality = 75,
   placeholder = 'blur',
   blurDataURL = DEFAULT_BLUR_DATA_URL,
+  fill = false,
+  style,
+  objectFit = 'cover',
+  onError,
 }: OptimizedImageProps) {
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(src);
 
-  // Sanitize textual props
-  const safeAlt = useMemo(() => sanitizeStrict(alt || 'image'), [alt]);
-  const safeClassName = useMemo(() => sanitizeStrict(className || ''), [className]);
+  // Process the image source to ensure it's a valid URL
+  const processedSrc = useMemo(() => {
+    // If it's a StaticImageData object, return as is
+    if (typeof currentSrc !== 'string') {
+      return currentSrc;
+    }
 
-  // Guard dimensions and quality
-  const safeWidth = clamp(width, 1, 4096, 500);
-  const safeHeight = clamp(height, 1, 4096, 500);
-  const safeQuality = clamp(quality, 1, 100, 85);
+    // If it's already a full URL, return as is
+    if (currentSrc.startsWith('http://') || currentSrc.startsWith('https://')) {
+      return currentSrc;
+    }
 
-  // Validate source
-  const safeSrcOk = isSafeSrc(src);
+    // If it's a data URL, return as is
+    if (currentSrc.startsWith('data:')) {
+      return currentSrc;
+    }
 
-  const handleLoad = () => setIsLoading(false);
-  const handleError = () => {
-    setError(true);
+    // If it starts with /uploads/, prepend the API URL
+    if (currentSrc.startsWith('/uploads/')) {
+      return `${process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com'}${currentSrc}`;
+    }
+
+    // If it's just a filename (no path), assume it's in /uploads/listings/
+    if (!currentSrc.includes('/')) {
+      return `${process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com'}/uploads/listings/${currentSrc}`;
+    }
+
+    // Otherwise, assume it's a local public folder path
+    return currentSrc;
+  }, [currentSrc]);
+
+  const handleLoad = useCallback(() => {
     setIsLoading(false);
-  };
+    setImageError(false);
+  }, []);
 
-  if (error || !safeSrcOk) {
+  const handleError = useCallback(() => {
+    console.warn(`[OptimizedImage] Failed to load: ${processedSrc}`);
+    setIsLoading(false);
+    setImageError(true);
+
+    // If we haven't already tried the placeholder, use it
+    if (currentSrc !== PLACEHOLDER_IMAGE && typeof currentSrc === 'string') {
+      console.log('[OptimizedImage] Falling back to placeholder');
+      setCurrentSrc(PLACEHOLDER_IMAGE);
+      setImageError(false); // Reset error for placeholder attempt
+      setIsLoading(true);
+    }
+
+    if (onError) {
+      onError();
+    }
+  }, [currentSrc, processedSrc, onError]);
+
+  // For fill mode
+  if (fill) {
     return (
-      <div className={cn('bg-gray-800 flex items-center justify-center', safeClassName)}>
-        <span className="text-gray-500 text-sm">Failed to load image</span>
+      <div className={`relative ${className}`} style={style}>
+        {isLoading && (
+          <div className="absolute inset-0 bg-gray-200 animate-pulse rounded" />
+        )}
+        <Image
+          src={processedSrc}
+          alt={alt}
+          fill
+          sizes={sizes}
+          quality={quality}
+          priority={priority}
+          placeholder={placeholder}
+          blurDataURL={blurDataURL}
+          style={{ objectFit }}
+          className={`${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+          onLoad={handleLoad}
+          onError={handleError}
+          unoptimized={true} // Important: disable Next.js optimization for external URLs
+        />
       </div>
     );
   }
 
+  // For fixed dimensions
   return (
-    <div className={cn('relative overflow-hidden', safeClassName)}>
-      {isLoading && <div className="absolute inset-0 bg-gray-800 animate-pulse" />}
+    <div className={`relative ${className}`} style={{ width, height, ...style }}>
+      {isLoading && (
+        <div 
+          className="absolute inset-0 bg-gray-200 animate-pulse rounded"
+          style={{ width, height }}
+        />
+      )}
       <Image
-        src={src}
-        alt={safeAlt}
-        width={safeWidth}
-        height={safeHeight}
+        src={processedSrc}
+        alt={alt}
+        width={width}
+        height={height}
+        quality={quality}
         priority={priority}
         sizes={sizes}
-        quality={safeQuality}
         placeholder={placeholder}
         blurDataURL={blurDataURL}
+        style={{ objectFit, ...style }}
+        className={`${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
         onLoad={handleLoad}
         onError={handleError}
-        className={cn('transition-opacity duration-300', isLoading ? 'opacity-0' : 'opacity-100')}
+        unoptimized={true} // Important: disable Next.js optimization for external URLs
       />
     </div>
   );

@@ -85,13 +85,16 @@ connectDB();
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
-// FIXED: Serve static files BEFORE other middleware
-// This ensures uploaded files are accessible
+// =====================================================
+// CRITICAL FIX: SERVE STATIC FILES BEFORE OTHER ROUTES
+// =====================================================
+
+// Serve uploaded files with proper headers
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   maxAge: '7d',
   etag: true,
   setHeaders: (res, filePath) => {
-    // Set proper headers for images
+    // Set proper MIME types for images
     if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
       res.setHeader('Content-Type', 'image/jpeg');
     } else if (filePath.endsWith('.png')) {
@@ -101,14 +104,27 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
     } else if (filePath.endsWith('.webp')) {
       res.setHeader('Content-Type', 'image/webp');
     }
-    // Allow CORS for images
+    
+    // Allow CORS for images (in case nginx doesn't catch it)
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=604800');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    
+    // Enable caching for better performance
+    res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days
   }
 }));
 
-// Also serve static files from root for backward compatibility
-app.use(express.static(__dirname));
+// Debug middleware to log static file requests
+app.use('/uploads', (req, res, next) => {
+  console.log(`[Static] Serving file: ${req.path}`);
+  next();
+});
+
+// Also serve files from the backend root (for backward compatibility)
+app.use(express.static(path.join(__dirname), {
+  maxAge: '1d'
+}));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1398,5 +1414,5 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Referral:      /api/referral/*');
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
-  
+  console.log('🏆 POLYGON CRYPTO DEPOSITS = 0% FEES + AUTO-VERIFICATION! 🏆\n');
 });
