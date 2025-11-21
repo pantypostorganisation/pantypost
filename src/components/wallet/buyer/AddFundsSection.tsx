@@ -9,6 +9,7 @@ import { sanitizeCurrency } from '@/utils/security/sanitization';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
+import Image from 'next/image';
 
 interface AddFundsSectionProps {
   amountToAdd: string;
@@ -224,73 +225,87 @@ export default function AddFundsSection({
 
           {/* Right: Card Preview */}
           <div className="space-y-4">
-            {/* Animated Card */}
+            {/* Animated Card with Brand Colors */}
             <div className="relative">
-              {/* Glow effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-indigo-500/20 blur-3xl animate-pulse" />
+              {/* Subtle glow effect */}
+              <div className="absolute inset-0 bg-[#ff950e]/10 blur-3xl animate-pulse" />
               
-              {/* Card */}
-              <div className="relative bg-gradient-to-br from-pink-500 via-purple-600 to-indigo-600 rounded-3xl p-6 shadow-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02]">
-                {/* Background pattern */}
-                <div className="absolute inset-0 opacity-10">
-                  <div className="absolute top-0 right-0 w-48 h-48 bg-white rounded-full blur-3xl -translate-y-24 translate-x-24" />
-                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full blur-3xl translate-y-24 -translate-x-24" />
+              {/* Card - Dark grey to black gradient (NW to SE) with subtle accent */}
+              <div className="relative bg-gradient-to-br from-[#2a2a2a] via-[#1a1a1a] to-black rounded-3xl p-6 shadow-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] border border-gray-800">
+                {/* Subtle background pattern */}
+                <div className="absolute inset-0 opacity-[0.02]">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-[#ff950e] rounded-full blur-3xl -translate-y-24 translate-x-24" />
                 </div>
 
                 <div className="relative flex flex-col gap-6">
-                  {/* Header */}
+                  {/* Header with Logos */}
                   <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.3em] text-white/60 font-medium">
-                        PantyPost Wallet
-                      </p>
-                      <p className="text-[10px] text-white/40 mt-1">
-                        Secured by SegPay
+                    {/* PantyPost Logo - 70% of header size */}
+                    <div className="flex flex-col">
+                      <Image
+                        src="/logo.png"
+                        alt="PantyPost"
+                        width={67}
+                        height={67}
+                        quality={90}
+                        className="w-[67px] h-auto"
+                      />
+                      <p className="text-[8px] text-gray-500 mt-1">
+                        Secured Payment
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5">
-                      <Sparkles className="h-3 w-3 text-white" />
-                      <span className="text-xs font-semibold text-white">Secure</span>
+
+                    {/* SegPay Logo */}
+                    <div className="flex flex-col items-end">
+                      <Image
+                        src="/SegPayLogo.png"
+                        alt="SegPay"
+                        width={80}
+                        height={32}
+                        quality={90}
+                        className="h-8 w-auto"
+                      />
+                      <div className="flex items-center gap-1.5 bg-white/5 backdrop-blur-sm rounded-full px-2.5 py-1 mt-1.5 border border-gray-700">
+                        <Sparkles className="h-2.5 w-2.5 text-gray-400" />
+                        <span className="text-[9px] font-semibold text-gray-400">Secure</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Chip */}
-                  <div className="w-12 h-9 rounded-lg bg-gradient-to-br from-yellow-200 to-yellow-400 shadow-lg" />
+                  {/* Chip with subtle gradient */}
+                  <div className="w-12 h-9 rounded-lg bg-gradient-to-br from-[#212121] to-[#000000] shadow-lg border border-gray-800" />
 
                   {/* Card Number (masked) */}
-                  <div className="text-xl font-mono font-semibold tracking-[0.3em] text-white">
+                  <div className="text-xl font-mono font-semibold tracking-[0.3em] text-gray-300">
                     •••• •••• •••• ••••
                   </div>
 
                   {/* Bottom Info */}
                   <div className="flex justify-between items-end">
                     <div className="flex-1">
-                      <p className="text-[10px] uppercase text-white/50 tracking-wider mb-1">
+                      <p className="text-[10px] uppercase text-gray-500 tracking-wider mb-1">
                         Cardholder
                       </p>
-                      <p className="text-sm font-semibold text-white truncate">
+                      <p className="text-sm font-semibold text-gray-200 truncate">
                         {cardholderName || 'YOUR NAME'}
                       </p>
                     </div>
                     
                     <div className="text-right">
-                      <p className="text-[10px] uppercase text-white/50 tracking-wider mb-1">
+                      <p className="text-[10px] uppercase text-gray-500 tracking-wider mb-1">
                         Amount
                       </p>
-                      <p className="text-lg font-bold text-white">
+                      <p className="text-lg font-bold text-[#ff950e]">
                         {numAmount > 0 ? `$${numAmount.toFixed(2)}` : '—'}
                       </p>
-                      <p className="text-[10px] text-white/60">USD</p>
+                      <p className="text-[10px] text-gray-500">USD</p>
                     </div>
                   </div>
-
-                  {/* Decorative element */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-white/5 rounded-full blur-2xl" />
                 </div>
               </div>
 
-              {/* Card shadow */}
-              <div className="absolute -bottom-2 left-4 right-4 h-4 bg-gradient-to-r from-transparent via-purple-500/20 to-transparent blur-xl rounded-full" />
+              {/* Subtle card shadow */}
+              <div className="absolute -bottom-2 left-4 right-4 h-4 bg-gradient-to-r from-transparent via-black/30 to-transparent blur-xl rounded-full" />
             </div>
 
             {/* Summary Card */}
