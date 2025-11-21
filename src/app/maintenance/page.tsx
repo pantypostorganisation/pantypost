@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Image from 'next/image';
 
 interface Particle {
   id: number;
@@ -179,11 +180,55 @@ export default function MaintenancePage() {
             </div>
           </div>
 
-          {/* Trust indicators */}
-          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
-            <span>🔒 Secure</span>
-            <span>🛡️ Encrypted</span>
-            <span>✓ Verified</span>
+          {/* Updated Trust indicators with new badges and labels */}
+          <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-400">
+            {/* Private */}
+            <span className="flex items-center gap-1.5">
+              <Image
+                src="/security_badge.png"
+                alt="Security Badge"
+                width={16}
+                height={16}
+                className="w-4 h-4 object-contain"
+              />
+              Private
+            </span>
+            
+            {/* Encrypted */}
+            <span className="flex items-center gap-1.5">
+              <Image
+                src="/encrypted_badge.png"
+                alt="Encrypted Badge"
+                width={16}
+                height={16}
+                className="w-4 h-4 object-contain"
+              />
+              Encrypted
+            </span>
+            
+            {/* Safe Payments */}
+            <span className="flex items-center gap-1.5">
+              <Image
+                src="/card_badge.png"
+                alt="Card Badge"
+                width={16}
+                height={16}
+                className="w-4 h-4 object-contain"
+              />
+              Safe Payments
+            </span>
+            
+            {/* Verified Sellers */}
+            <span className="flex items-center gap-1.5">
+              <Image
+                src="/verification_badge.png"
+                alt="Verification Badge"
+                width={16}
+                height={16}
+                className="w-4 h-4 object-contain"
+              />
+              Verified Sellers
+            </span>
           </div>
         </div>
       </div>
