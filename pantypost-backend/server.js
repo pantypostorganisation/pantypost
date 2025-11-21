@@ -84,10 +84,31 @@ connectDB();
 
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static(__dirname));
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// FIXED: Serve static files BEFORE other middleware
+// This ensures uploaded files are accessible
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: '7d',
+  etag: true,
+  setHeaders: (res, filePath) => {
+    // Set proper headers for images
+    if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (filePath.endsWith('.png')) {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (filePath.endsWith('.gif')) {
+      res.setHeader('Content-Type', 'image/gif');
+    } else if (filePath.endsWith('.webp')) {
+      res.setHeader('Content-Type', 'image/webp');
+    }
+    // Allow CORS for images
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=604800');
+  }
+}));
+
+// Also serve static files from root for backward compatibility
+app.use(express.static(__dirname));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -1377,5 +1398,5 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Referral:      /api/referral/*');
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
-  console.log('🏆 POLYGON CRYPTO DEPOSITS = 0% FEES + AUTO-VERIFICATION! 🏆\n');
+  
 });
