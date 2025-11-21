@@ -1,13 +1,14 @@
 // src/components/wallet/buyer/AddFundsSection.tsx
 'use client';
 
-import { PlusCircle, CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
+import { PlusCircle, CreditCard, CheckCircle, AlertCircle, Sparkles, Shield } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeCurrency } from '@/utils/security/sanitization';
 import { RATE_LIMITS } from '@/utils/security/rate-limiter';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 
 interface AddFundsSectionProps {
   amountToAdd: string;
@@ -30,7 +31,16 @@ export default function AddFundsSection({
   onAddFunds,
   onQuickAmountSelect,
 }: AddFundsSectionProps) {
+  const { user } = useAuth();
   const [amountError, setAmountError] = useState<string>('');
+  const [cardholderName, setCardholderName] = useState('');
+
+  // Initialize cardholder name from user
+  useEffect(() => {
+    if (user?.username) {
+      setCardholderName(user.username);
+    }
+  }, [user]);
 
   const handleAmountChange = (value: string) => {
     setAmountError('');
@@ -61,6 +71,7 @@ export default function AddFundsSection({
   };
 
   const displayAmount = amountToAdd ? sanitizeCurrency(amountToAdd).toFixed(2) : '0.00';
+  const numAmount = parseFloat(amountToAdd) || 0;
 
   const messageClasses =
     messageType === 'success'
@@ -80,90 +91,249 @@ export default function AddFundsSection({
             </div>
             <div>
               <h2 className="text-xl font-semibold text-white sm:text-2xl">Add Funds</h2>
-              <p className="text-sm text-gray-400">Choose an amount, confirm, and spend immediately.</p>
+              <p className="text-sm text-gray-400">Secure card payment powered by SegPay</p>
             </div>
           </div>
         </div>
 
-        {/* Form */}
-        <SecureForm
-          onSubmit={handleSubmit}
-          rateLimitKey="deposit"
-          rateLimitConfig={RATE_LIMITS.DEPOSIT}
-          className="space-y-6"
-        >
-          <SecureInput
-            id="amount"
-            type="text"
-            inputMode="decimal"
-            pattern="^\d*\.?\d{0,2}$"
-            label="Amount to add (USD)"
-            value={amountToAdd}
-            onChange={handleAmountChange}
-            onKeyDown={onKeyPress}
-            placeholder="0.00"
-            error={amountError}
-            touched={!!amountToAdd}
-            disabled={isLoading}
-            className="text-lg"
-            sanitize={false}
-            helpText="Minimum $5.00, Maximum $5,000.00"
-          />
+        {/* Trust Badges */}
+        <div className="flex flex-wrap gap-2">
+          <div className="inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400">
+            <Shield className="h-3 w-3" />
+            PCI-DSS Compliant
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400">
+            <Shield className="h-3 w-3" />
+            256-bit SSL
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400">
+            <CheckCircle className="h-3 w-3" />
+            Instant Deposit
+          </div>
+        </div>
 
-          {/* Quick amount buttons */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[25, 50, 100, 200].map((quickAmount) => (
+        {/* Two Column Layout */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+          {/* Left: Form */}
+          <SecureForm
+            onSubmit={handleSubmit}
+            rateLimitKey="deposit"
+            rateLimitConfig={RATE_LIMITS.DEPOSIT}
+            className="space-y-6"
+          >
+            <SecureInput
+              id="amount"
+              type="text"
+              inputMode="decimal"
+              pattern="^\d*\.?\d{0,2}$"
+              label="Amount to add (USD)"
+              value={amountToAdd}
+              onChange={handleAmountChange}
+              onKeyDown={onKeyPress}
+              placeholder="0.00"
+              error={amountError}
+              touched={!!amountToAdd}
+              disabled={isLoading}
+              className="text-lg"
+              sanitize={false}
+              helpText="Minimum $5.00, Maximum $5,000.00"
+            />
+
+            {/* Quick amount buttons */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[25, 50, 100, 200].map((quickAmount) => (
+                <button
+                  key={quickAmount}
+                  type="button"
+                  onClick={() => onQuickAmountSelect(quickAmount.toString())}
+                  className="rounded-xl border border-gray-800 bg-[#0c0c0c] py-2.5 text-sm font-semibold text-gray-200 transition-colors duration-200 hover:border-[#ff950e] hover:text-white disabled:opacity-50"
+                  disabled={isLoading}
+                >
+                  ${quickAmount}
+                </button>
+              ))}
+            </div>
+
+            {/* Cardholder Name */}
+            <SecureInput
+              id="cardholderName"
+              type="text"
+              label="Cardholder Name"
+              value={cardholderName}
+              onChange={setCardholderName}
+              placeholder="Full name on card"
+              touched={!!cardholderName}
+              disabled={isLoading}
+              sanitize={true}
+            />
+
+            {/* SegPay Iframe Placeholder */}
+            <div className="rounded-xl border-2 border-dashed border-gray-800 bg-[#0c0c0c] p-6">
+              <div className="text-center">
+                <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-700 bg-gray-800/50 mb-3">
+                  <CreditCard className="h-7 w-7 text-gray-500" />
+                </div>
+                <p className="text-sm font-medium text-gray-400 mb-2">
+                  Secure Card Entry
+                </p>
+                <p className="text-xs text-gray-600 max-w-sm mx-auto">
+                  SegPay's secure payment form will appear here. No card data touches our servers.
+                </p>
+              </div>
+            </div>
+
+            {/* Message */}
+            {message && (
+              <div className={`mt-2 flex items-start gap-2 rounded-2xl border p-4 text-sm ${messageClasses}`}>
+                {messageType === 'success' ? (
+                  <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
+                ) : messageType === 'error' ? (
+                  <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
+                ) : null}
+                <SecureMessageDisplay content={message} allowBasicFormatting={false} className="font-medium" />
+              </div>
+            )}
+
+            {/* Submit */}
+            <div className="flex justify-center">
               <button
-                key={quickAmount}
-                type="button"
-                onClick={() => onQuickAmountSelect(quickAmount.toString())}
-                className="rounded-xl border border-gray-800 bg-[#0c0c0c] py-2.5 text-sm font-semibold text-gray-200 transition-colors duration-200 hover:border-[#ff950e] hover:text-white disabled:opacity-50"
-                disabled={isLoading}
+                type="submit"
+                className="flex items-center justify-center rounded-full bg-[#ff950e] px-10 py-3.5 font-semibold text-black transition-colors duration-200 hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  isLoading ||
+                  !amountToAdd ||
+                  Number.isNaN(parseFloat(amountToAdd)) ||
+                  parseFloat(amountToAdd) <= 0 ||
+                  !!amountError
+                }
               >
-                ${quickAmount}
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Deposit ${displayAmount}
+                  </>
+                )}
               </button>
-            ))}
-          </div>
+            </div>
+          </SecureForm>
 
-          {/* Submit */}
-          <div className="flex justify-center">
-            <button
-              type="submit"
-              className="flex items-center justify-center rounded-full bg-[#ff950e] px-10 py-3.5 font-semibold text-black transition-colors duration-200 hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={
-                isLoading ||
-                !amountToAdd ||
-                Number.isNaN(parseFloat(amountToAdd)) ||
-                parseFloat(amountToAdd) <= 0 ||
-                !!amountError
-              }
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Deposit ${displayAmount}
-                </>
-              )}
-            </button>
-          </div>
-        </SecureForm>
+          {/* Right: Card Preview */}
+          <div className="space-y-4">
+            {/* Animated Card */}
+            <div className="relative">
+              {/* Glow effect */}
+              <div className="absolute inset-0 bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-indigo-500/20 blur-3xl animate-pulse" />
+              
+              {/* Card */}
+              <div className="relative bg-gradient-to-br from-pink-500 via-purple-600 to-indigo-600 rounded-3xl p-6 shadow-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02]">
+                {/* Background pattern */}
+                <div className="absolute inset-0 opacity-10">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-white rounded-full blur-3xl -translate-y-24 translate-x-24" />
+                  <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full blur-3xl translate-y-24 -translate-x-24" />
+                </div>
 
-        {/* Message */}
-        {message && (
-          <div className={`mt-2 flex items-start gap-2 rounded-2xl border p-4 text-sm ${messageClasses}`}>
-            {messageType === 'success' ? (
-              <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
-            ) : messageType === 'error' ? (
-              <AlertCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
-            ) : null}
-            <SecureMessageDisplay content={message} allowBasicFormatting={false} className="font-medium" />
+                <div className="relative flex flex-col gap-6">
+                  {/* Header */}
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.3em] text-white/60 font-medium">
+                        PantyPost Wallet
+                      </p>
+                      <p className="text-[10px] text-white/40 mt-1">
+                        Secured by SegPay
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm rounded-full px-3 py-1.5">
+                      <Sparkles className="h-3 w-3 text-white" />
+                      <span className="text-xs font-semibold text-white">Secure</span>
+                    </div>
+                  </div>
+
+                  {/* Chip */}
+                  <div className="w-12 h-9 rounded-lg bg-gradient-to-br from-yellow-200 to-yellow-400 shadow-lg" />
+
+                  {/* Card Number (masked) */}
+                  <div className="text-xl font-mono font-semibold tracking-[0.3em] text-white">
+                    •••• •••• •••• ••••
+                  </div>
+
+                  {/* Bottom Info */}
+                  <div className="flex justify-between items-end">
+                    <div className="flex-1">
+                      <p className="text-[10px] uppercase text-white/50 tracking-wider mb-1">
+                        Cardholder
+                      </p>
+                      <p className="text-sm font-semibold text-white truncate">
+                        {cardholderName || 'YOUR NAME'}
+                      </p>
+                    </div>
+                    
+                    <div className="text-right">
+                      <p className="text-[10px] uppercase text-white/50 tracking-wider mb-1">
+                        Amount
+                      </p>
+                      <p className="text-lg font-bold text-white">
+                        {numAmount > 0 ? `$${numAmount.toFixed(2)}` : '—'}
+                      </p>
+                      <p className="text-[10px] text-white/60">USD</p>
+                    </div>
+                  </div>
+
+                  {/* Decorative element */}
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-white/5 rounded-full blur-2xl" />
+                </div>
+              </div>
+
+              {/* Card shadow */}
+              <div className="absolute -bottom-2 left-4 right-4 h-4 bg-gradient-to-r from-transparent via-purple-500/20 to-transparent blur-xl rounded-full" />
+            </div>
+
+            {/* Summary Card */}
+            <div className="rounded-xl border border-gray-800 bg-[#0c0c0c] p-4">
+              <h3 className="text-sm font-semibold text-white mb-3">
+                Deposit Summary
+              </h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Deposit amount</span>
+                  <span className="text-white font-medium">
+                    ${displayAmount}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Processing fee</span>
+                  <span className="text-green-400 font-medium">$0.00</span>
+                </div>
+                <div className="h-px bg-gray-800 my-2" />
+                <div className="flex justify-between">
+                  <span className="text-white font-semibold">Total to pay</span>
+                  <span className="text-[#ff950e] font-bold">
+                    ${displayAmount}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Security Notice */}
+            <div className="rounded-xl border border-gray-800 bg-[#0c0c0c] p-4">
+              <div className="flex items-start gap-3">
+                <Shield className="h-5 w-5 text-[#ff950e] flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-gray-400 leading-relaxed">
+                  <p className="font-medium text-gray-300 mb-1">Your Security Matters</p>
+                  <p>
+                    Card details are processed directly by SegPay. We never store your 
+                    full card number or CVV.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        )}
+        </div>
       </div>
     </section>
   );
