@@ -248,7 +248,7 @@ export default function AddFundsSection({
                         width={50}
                         height={50}
                         quality={90}
-                        className="w-[50px] h-[50px] object-contain"
+                        className="w-[60px] h-[60px] object-contain"
                       />
                     </div>
 
