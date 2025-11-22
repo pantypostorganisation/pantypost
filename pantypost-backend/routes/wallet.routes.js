@@ -548,6 +548,95 @@ router.get('/transactions/:username', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/wallet/deposits/history - Get unified deposit history (card + crypto)
+router.get('/deposits/history', authMiddleware, async (req, res) => {
+  try {
+    const username = req.user.username;
+    const { limit = 50, offset = 0 } = req.query;
+
+    // Get card deposits from Transaction model
+    const cardDeposits = await Transaction.find({
+      type: 'deposit',
+      to: username,
+      status: 'completed'
+    })
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(offset));
+
+    // Get crypto deposits from CryptoDeposit model
+    const CryptoDeposit = require('../models/CryptoDeposit');
+    const cryptoDeposits = await CryptoDeposit.find({
+      username,
+      status: { $in: ['completed', 'confirming', 'pending'] }
+    })
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .skip(parseInt(offset));
+
+    // Format card deposits
+    const formattedCardDeposits = cardDeposits.map(d => ({
+      id: d._id.toString(),
+      type: 'card',
+      amount: d.amount,
+      status: 'completed',
+      createdAt: d.createdAt.toISOString(),
+      completedAt: d.completedAt ? d.completedAt.toISOString() : null,
+      paymentMethod: d.metadata?.paymentMethod || 'credit_card',
+      notes: d.metadata?.notes
+    }));
+
+    // Format crypto deposits
+    const formattedCryptoDeposits = cryptoDeposits.map(d => ({
+      id: d._id.toString(),
+      type: 'crypto',
+      amount: d.status === 'completed' ? d.actualUSDCredited : d.amountUSD,
+      currency: d.cryptoCurrency,
+      status: d.status,
+      createdAt: d.createdAt.toISOString(),
+      completedAt: d.completedAt ? d.completedAt.toISOString() : null,
+      txHash: d.txHash,
+      network: d.metadata?.network,
+      processingFee: 0, // Direct crypto deposits have 0 fee
+      depositId: d.depositId
+    }));
+
+    // Combine and sort by date
+    const allDeposits = [...formattedCardDeposits, ...formattedCryptoDeposits]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, parseInt(limit));
+
+    // Calculate totals
+    const totalCard = formattedCardDeposits
+      .filter(d => d.status === 'completed')
+      .reduce((sum, d) => sum + d.amount, 0);
+    
+    const totalCrypto = formattedCryptoDeposits
+      .filter(d => d.status === 'completed')
+      .reduce((sum, d) => sum + d.amount, 0);
+
+    res.json({
+      success: true,
+      data: allDeposits,
+      meta: {
+        total: allDeposits.length,
+        limit: parseInt(limit),
+        offset: parseInt(offset),
+        totalCard,
+        totalCrypto,
+        totalDeposited: totalCard + totalCrypto
+      }
+    });
+
+  } catch (error) {
+    console.error('[Wallet] Get deposit history error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to get deposit history'
+    });
+  }
+});
+
 // POST /api/wallet/admin-actions - Admin credit/debit (admin only)
 router.post('/admin-actions', authMiddleware, async (req, res) => {
   try {

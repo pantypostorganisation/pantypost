@@ -30,11 +30,12 @@ export default function PaymentsProcessedCounter({
   const [isLoading, setIsLoading] = useState(true);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
 
-  const mountedRef = useRef(false);
+  const mountedRef = useRef(true);
   const animationFrameRef = useRef<number | null>(null);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitialFetchRef = useRef(true);
   const lastTargetRef = useRef(0);
+  const pendingUpdateRef = useRef<number | null>(null);
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const formatCurrency = useCallback((value: number) => {
     const normalized = Math.max(0, Math.round(Number(value || 0) * 100) / 100);
@@ -52,7 +53,6 @@ export default function PaymentsProcessedCounter({
     
     console.log('[PaymentsProcessedCounter] Animating from', from, 'to', to);
     
-    // Cancel any existing animation
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -61,7 +61,6 @@ export default function PaymentsProcessedCounter({
     const startTime = Date.now();
     const difference = to - from;
 
-    // Cubic ease-out function for smooth deceleration
     const easeOutCubic = (t: number): number => {
       return 1 - Math.pow(1 - t, 3);
     };
@@ -73,7 +72,6 @@ export default function PaymentsProcessedCounter({
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      // Apply easing function for smooth deceleration
       const easedProgress = easeOutCubic(progress);
       const currentValue = from + (difference * easedProgress);
       
@@ -82,7 +80,6 @@ export default function PaymentsProcessedCounter({
       if (progress < 1) {
         animationFrameRef.current = requestAnimationFrame(animate);
       } else {
-        // Ensure we end exactly at the target value
         setDisplayValue(to);
         animationFrameRef.current = null;
       }
@@ -109,58 +106,99 @@ export default function PaymentsProcessedCounter({
     }, 3000);
   }, []);
 
-  const applyNewTotal = useCallback((total: number, isInitial: boolean = false) => {
-    if (!Number.isFinite(total)) return;
+  // Debounced update function
+  const applyUpdate = useCallback((total: number, isFromFetch: boolean = false) => {
+    if (!mountedRef.current || !Number.isFinite(total)) return;
 
     const normalizedTotal = Math.round(total * 100) / 100;
-    console.log('[PaymentsProcessedCounter] Applying new total:', normalizedTotal, 'isInitial:', isInitial);
     
-    // For initial load, start from 0 and animate up
-    if (isInitial && normalizedTotal > 0) {
-      setDisplayValue(0); // Start from 0 immediately
-      // Small delay to ensure the component is mounted
-      setTimeout(() => {
-        animateValue(0, normalizedTotal, 2000); // 2 second initial animation
-      }, 100);
-    } else if (!isInitial) {
-      // For updates, animate from current display value
-      const currentDisplay = lastTargetRef.current || 0;
-      const increment = normalizedTotal - currentDisplay;
-      if (Math.abs(increment) > 0.01) {
-        animateValue(currentDisplay, normalizedTotal, 1000); // 1 second for updates
-        if (increment > 0) {
-          triggerAnimation(increment);
+    // Clear pending update
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+      updateTimeoutRef.current = null;
+    }
+
+    // Apply immediately if from fetch
+    if (isFromFetch) {
+      console.log('[PaymentsProcessedCounter] Applying fetched total:', normalizedTotal);
+      
+      if (!hasInitialLoad) {
+        setDisplayValue(0);
+        setTimeout(() => {
+          if (mountedRef.current) {
+            animateValue(0, normalizedTotal, 2000);
+          }
+        }, 100);
+        setHasInitialLoad(true);
+      } else {
+        const currentDisplay = lastTargetRef.current;
+        const increment = normalizedTotal - currentDisplay;
+        if (Math.abs(increment) > 0.01) {
+          animateValue(currentDisplay, normalizedTotal, 1000);
+          if (increment > 0) {
+            triggerAnimation(increment);
+          }
         }
       }
+      
+      lastTargetRef.current = normalizedTotal;
+      pendingUpdateRef.current = null;
+      paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalizedTotal });
+      return;
     }
+
+    // For WebSocket updates, debounce
+    pendingUpdateRef.current = normalizedTotal;
     
-    lastTargetRef.current = normalizedTotal;
-    paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalizedTotal });
-  }, [animateValue, triggerAnimation]);
+    updateTimeoutRef.current = setTimeout(() => {
+      if (!mountedRef.current || pendingUpdateRef.current === null) return;
+      
+      const finalTotal = pendingUpdateRef.current;
+      const currentTarget = lastTargetRef.current;
+      
+      if (finalTotal !== currentTarget) {
+        console.log('[PaymentsProcessedCounter] Applying WebSocket update:', { from: currentTarget, to: finalTotal });
+        
+        const increment = finalTotal - currentTarget;
+        animateValue(currentTarget, finalTotal, 1000);
+        
+        if (increment > 0 && hasInitialLoad) {
+          triggerAnimation(increment);
+        }
+        
+        lastTargetRef.current = finalTotal;
+        paymentStatsService.updateCachedStats({ totalPaymentsProcessed: finalTotal });
+      }
+      
+      pendingUpdateRef.current = null;
+    }, 300); // 300ms debounce
+  }, [animateValue, triggerAnimation, hasInitialLoad]);
 
   const fetchStats = useCallback(async () => {
     try {
+      console.log('[PaymentsProcessedCounter] Fetching initial stats...');
       const response = await paymentStatsService.getPaymentsProcessed();
-      console.log('[PaymentsProcessedCounter] Fetched stats:', response);
       
       if (response.success && response.data && mountedRef.current) {
         const total = response.data.totalPaymentsProcessed ?? 0;
-        applyNewTotal(total, !hasInitialLoad);
-
-        if (!hasInitialLoad) {
-          setHasInitialLoad(true);
-          isInitialFetchRef.current = false;
-        }
+        console.log('[PaymentsProcessedCounter] Got initial stats:', total);
+        applyUpdate(total, true);
+        setIsLoading(false);
       }
     } catch (error) {
       console.error('[PaymentsProcessedCounter] Failed to fetch stats:', error);
-    } finally {
-      isInitialFetchRef.current = false;
-      if (mountedRef.current) {
-        setIsLoading(false);
+      setIsLoading(false);
+      
+      // Retry after 2 seconds if initial load hasn't happened
+      if (!hasInitialLoad && mountedRef.current) {
+        setTimeout(() => {
+          if (mountedRef.current && !hasInitialLoad) {
+            fetchStats();
+          }
+        }, 2000);
       }
     }
-  }, [applyNewTotal, hasInitialLoad]);
+  }, [applyUpdate, hasInitialLoad]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -174,66 +212,80 @@ export default function PaymentsProcessedCounter({
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
       }
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
     };
-  }, [fetchStats]);
+  }, []);
 
+  // Handle WebSocket subscriptions
   useEffect(() => {
     const handleUpdate = (data: any) => {
-      console.log('[PaymentsProcessedCounter] WebSocket update received:', data);
-      
-      if (!mountedRef.current || isInitialFetchRef.current) {
+      if (!mountedRef.current || !hasInitialLoad) {
         return;
       }
 
+      console.log('[PaymentsProcessedCounter] WebSocket update received:', data);
+
       const total = Number(data?.totalPaymentsProcessed);
-      if (Number.isFinite(total) && total !== lastTargetRef.current) {
-        applyNewTotal(total, false);
+      if (Number.isFinite(total) && total >= 0) {
+        applyUpdate(total, false);
       }
     };
 
     let unsubscribe: (() => void) | undefined;
-    const subscribe = () => {
-      if (user && authenticatedWebSocket) {
-        unsubscribe = authenticatedWebSocket.subscribe('stats:payments_processed', handleUpdate);
-      } else if (publicWebSocket) {
-        unsubscribe = publicWebSocket.subscribe('stats:payments_processed', handleUpdate);
-      }
-    };
 
-    // Small delay to ensure WebSocket is ready
-    const timeout = setTimeout(subscribe, 250);
+    // Wait for WebSocket to be ready
+    const subscribeTimeout = setTimeout(() => {
+      if (user && authenticatedWebSocket) {
+        console.log('[PaymentsProcessedCounter] Using authenticated WebSocket');
+        unsubscribe = authenticatedWebSocket.subscribe('stats:payments_processed', handleUpdate);
+      } else if (!user && publicWebSocket.isConnected) {
+        console.log('[PaymentsProcessedCounter] Using public WebSocket');
+        unsubscribe = publicWebSocket.subscribe('stats:payments_processed', handleUpdate);
+      } else if (!user) {
+        // Try to connect public WebSocket
+        console.log('[PaymentsProcessedCounter] Connecting public WebSocket...');
+        publicWebSocket.connect();
+        
+        // Subscribe after a delay
+        setTimeout(() => {
+          if (publicWebSocket.isConnected && mountedRef.current) {
+            unsubscribe = publicWebSocket.subscribe('stats:payments_processed', handleUpdate);
+          }
+        }, 1000);
+      }
+    }, 500);
 
     return () => {
-      clearTimeout(timeout);
+      clearTimeout(subscribeTimeout);
       if (unsubscribe) {
         unsubscribe();
       }
     };
-  }, [authenticatedWebSocket, publicWebSocket, user, applyNewTotal]);
+  }, [authenticatedWebSocket, publicWebSocket, user, applyUpdate, hasInitialLoad]);
 
-  // Fallback polling if WebSocket not available
+  // Fallback polling
   useEffect(() => {
-    if (!authenticatedWebSocket && !publicWebSocket) {
-      const interval = setInterval(() => {
-        fetchStats();
-      }, 15000);
-
-      return () => clearInterval(interval);
+    if (authenticatedWebSocket?.isConnected || publicWebSocket.isConnected || !hasInitialLoad) {
+      return;
     }
 
-    return undefined;
-  }, [authenticatedWebSocket, publicWebSocket, fetchStats]);
+    console.log('[PaymentsProcessedCounter] Starting fallback polling');
+    
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [authenticatedWebSocket?.isConnected, publicWebSocket.isConnected, fetchStats, hasInitialLoad]);
 
   const formattedValue = isLoading && !hasInitialLoad ? 'Loading...' : formatCurrency(displayValue);
   const formattedIncrement = useMemo(() => {
     if (incrementAmount <= 0) return '';
-    const currency = formatCurrency(incrementAmount);
-    return `+${currency.replace('$', '')}`;
-  }, [incrementAmount, formatCurrency]);
+    return `+$${incrementAmount.toFixed(2)}`;
+  }, [incrementAmount]);
   
-  // IMPROVED MOBILE RESPONSIVE DESIGN
-  // Mobile: Smaller text and icon, tighter spacing
-  // Desktop: Keep original size
   const containerClasses = compact
     ? `flex items-center gap-1 sm:gap-2 relative ${className}`
     : `flex items-center gap-3 relative ${className}`;

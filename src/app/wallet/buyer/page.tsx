@@ -52,13 +52,16 @@ function BuyerWalletContent() {
     }
   }, [user?.username, isInitialized, reloadData]);
 
-  // Load deposit history
+  // Load deposit history - FIXED to use correct endpoint
   const loadDepositHistory = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/deposits/history', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com/api';
+      
+      const res = await fetch(`${API_URL}/wallet/deposits/history`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
+      
       const data = await res.json();
       if (data.success) {
         setDepositHistory(data.data || []);

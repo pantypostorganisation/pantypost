@@ -1,21 +1,23 @@
 // src/components/wallet/buyer/AllDepositsSection.tsx
 'use client';
 
-import { Clock, DollarSign, CheckCircle2, AlertCircle, RefreshCw, Bitcoin, CreditCard, ArrowUpRight, Calendar, TrendingUp, Filter } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { Clock, DollarSign, CheckCircle2, AlertCircle, RefreshCw, Bitcoin, CreditCard, ArrowUpRight, Calendar, TrendingUp, Filter, ExternalLink } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
 
 interface Deposit {
   id: string;
   type: 'card' | 'crypto';
   amount: number;
   currency?: string;
-  status: 'pending' | 'completed' | 'failed';
+  status: 'pending' | 'completed' | 'failed' | 'confirming';
   createdAt: string;
   completedAt?: string;
   txHash?: string;
   paymentMethod?: string;
   network?: string;
   processingFee?: number;
+  depositId?: string;
+  notes?: string;
 }
 
 interface AllDepositsSectionProps {
@@ -27,6 +29,11 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
   const [filter, setFilter] = useState<'all' | 'card' | 'crypto'>('all');
   const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Auto-refresh on mount
+  useEffect(() => {
+    onRefresh();
+  }, []);
 
   // Filter and sort deposits
   const filteredDeposits = useMemo(() => {
@@ -52,7 +59,7 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
     const total = deposits.reduce((sum, d) => d.status === 'completed' ? sum + d.amount : sum, 0);
     const cardDeposits = deposits.filter(d => d.type === 'card' && d.status === 'completed').reduce((sum, d) => sum + d.amount, 0);
     const cryptoDeposits = deposits.filter(d => d.type === 'crypto' && d.status === 'completed').reduce((sum, d) => sum + d.amount, 0);
-    const pending = deposits.filter(d => d.status === 'pending').length;
+    const pending = deposits.filter(d => d.status === 'pending' || d.status === 'confirming').length;
     const failed = deposits.filter(d => d.status === 'failed').length;
     
     return { total, cardDeposits, cryptoDeposits, pending, failed };
@@ -91,6 +98,8 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
     switch (status) {
       case 'completed':
         return 'text-green-400 bg-green-500/10 border-green-500/30';
+      case 'confirming':
+        return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
       case 'pending':
         return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       case 'failed':
@@ -100,12 +109,42 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
     }
   };
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'confirming':
+        return 'Verifying';
+      case 'pending':
+        return 'Pending';
+      case 'completed':
+        return 'Completed';
+      case 'failed':
+        return 'Failed';
+      default:
+        return status;
+    }
+  };
+
   const getTypeIcon = (type: string) => {
     return type === 'crypto' ? (
       <Bitcoin className="h-4 w-4 text-[#ff950e]" />
     ) : (
       <CreditCard className="h-4 w-4 text-[#ff950e]" />
     );
+  };
+
+  const getExplorerUrl = (txHash: string, currency?: string) => {
+    if (!txHash || !currency) return null;
+    
+    if (currency.includes('POLYGON')) {
+      return `https://polygonscan.com/tx/${txHash}`;
+    } else if (currency.includes('TRC20')) {
+      return `https://tronscan.org/#/transaction/${txHash}`;
+    } else if (currency === 'BTC') {
+      return `https://blockchair.com/bitcoin/transaction/${txHash}`;
+    } else if (currency.includes('ERC20') || currency === 'ETH') {
+      return `https://etherscan.io/tx/${txHash}`;
+    }
+    return null;
   };
 
   return (
@@ -231,31 +270,31 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
               <p className="text-sm text-gray-500">Your deposit history will appear here</p>
             </div>
           ) : (
-            filteredDeposits.map((deposit, index) => (
+            filteredDeposits.map((deposit) => (
               <div
-                key={deposit.id || index}
+                key={deposit.id}
                 className="group/item rounded-xl border border-gray-800 bg-[#0c0c0c] p-4 transition-colors duration-200 hover:border-[#ff950e]/40"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+                  <div className="flex items-start gap-3 flex-1">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10 flex-shrink-0">
                       {getTypeIcon(deposit.type)}
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-white">
                           ${deposit.amount.toFixed(2)}
                         </p>
                         {deposit.currency && (
                           <span className="text-xs text-gray-500">
-                            via {deposit.currency}
+                            via {deposit.currency.replace('_', ' ')}
                           </span>
                         )}
                         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${getStatusColor(deposit.status)}`}>
                           {deposit.status === 'completed' && <CheckCircle2 className="h-3 w-3" />}
-                          {deposit.status === 'pending' && <Clock className="h-3 w-3" />}
+                          {(deposit.status === 'pending' || deposit.status === 'confirming') && <Clock className="h-3 w-3" />}
                           {deposit.status === 'failed' && <AlertCircle className="h-3 w-3" />}
-                          {deposit.status}
+                          {getStatusText(deposit.status)}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
@@ -266,30 +305,30 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
                         {deposit.network && (
                           <span>Network: {deposit.network}</span>
                         )}
+                        {deposit.paymentMethod && deposit.type === 'card' && (
+                          <span>Method: {deposit.paymentMethod}</span>
+                        )}
                         {deposit.processingFee !== undefined && (
-                          <span>Fee: ${deposit.processingFee.toFixed(2)}</span>
+                          <span className="text-green-400">Fee: ${deposit.processingFee.toFixed(2)}</span>
                         )}
                       </div>
                       {deposit.txHash && (
-                        <p className="text-xs text-gray-600 font-mono truncate max-w-xs">
+                        <p className="text-xs text-gray-600 font-mono truncate">
                           TX: {deposit.txHash}
                         </p>
                       )}
                     </div>
                   </div>
-                  {deposit.txHash && deposit.type === 'crypto' && (
+                  {deposit.txHash && deposit.type === 'crypto' && getExplorerUrl(deposit.txHash, deposit.currency) && (
                     <button
                       onClick={() => {
-                        // Open blockchain explorer
-                        const explorerUrl = deposit.network?.includes('Polygon') 
-                          ? `https://polygonscan.com/tx/${deposit.txHash}`
-                          : `https://etherscan.io/tx/${deposit.txHash}`;
-                        window.open(explorerUrl, '_blank');
+                        const url = getExplorerUrl(deposit.txHash!, deposit.currency);
+                        if (url) window.open(url, '_blank');
                       }}
-                      className="inline-flex items-center gap-1 text-xs text-[#ff950e] hover:text-white transition-colors"
+                      className="inline-flex items-center gap-1 text-xs text-[#ff950e] hover:text-white transition-colors flex-shrink-0"
                     >
                       View TX
-                      <ArrowUpRight className="h-3 w-3" />
+                      <ExternalLink className="h-3 w-3" />
                     </button>
                   )}
                 </div>
