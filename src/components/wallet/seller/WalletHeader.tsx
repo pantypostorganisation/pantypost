@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { Wallet, ArrowUpRight, BarChart3 } from 'lucide-react';
+import { ArrowUpRight, BarChart3 } from 'lucide-react';
 
 interface WalletHeaderProps {
   balance: number;
@@ -31,7 +31,12 @@ export default function WalletHeader({
             <p className="mt-1 text-xs text-gray-500">${Math.max(0, remainingDailyLimit).toFixed(2)} remaining daily limit.</p>
           </div>
           <div className="ml-3 flex h-10 w-10 items-center justify-center rounded-xl border border-[#ff950e]/30 bg-[#ff950e]/10">
-            <Wallet className="h-4 w-4 text-[#ff950e]" />
+            <img
+              src="/icons/HeaderWallet.png"
+              alt="Wallet"
+              className="h-6 w-6 object-contain"
+              draggable={false}
+            />
           </div>
         </div>
 
