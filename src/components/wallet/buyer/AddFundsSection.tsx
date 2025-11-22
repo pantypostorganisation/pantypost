@@ -164,16 +164,11 @@ export default function AddFundsSection({
                     />
                   </div>
 
-                  {/* Card Number Dots - As an image */}
-                  <div className="flex items-center justify-center">
-                    <Image
-                      src="/CreditCardDots.png"
-                      alt="Card Number"
-                      width={280}
-                      height={30}
-                      quality={90}
-                      className="w-[180px] sm:w-[220px] md:w-[260px] lg:w-[280px] h-auto object-contain"
-                    />
+                  {/* Card Number (masked) - Back to text with responsive sizing */}
+                  <div className="font-mono font-semibold text-gray-300 whitespace-nowrap">
+                    <span className="inline-block text-sm sm:text-base md:text-lg lg:text-xl">
+                      •••• •••• •••• ••••
+                    </span>
                   </div>
 
                   {/* Bottom Info */}
