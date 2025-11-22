@@ -31,13 +31,17 @@ export default function AnimatedUserCounter({
   
   const { user } = useAuth();
   const authenticatedWebSocket = useWebSocket();
-  const publicWebSocket = usePublicWebSocket({ autoConnect: !user });
+  const publicWebSocket = usePublicWebSocket({ 
+    autoConnect: !user,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000
+  });
+  
   const mountedRef = useRef(true);
   const previousCountRef = useRef(0);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastUpdateTimeRef = useRef(0);
-  const pendingUpdateRef = useRef<number | null>(null);
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const subscriptionsRef = useRef<{ stats?: () => void; registered?: () => void }>({});
 
   // Spring animation for smooth counting
   const springValue = useSpring(0, { 
@@ -72,213 +76,192 @@ export default function AnimatedUserCounter({
     }, 3500);
   }, []);
 
-  // Debounced update function to handle rapid WebSocket updates
-  const applyUpdate = useCallback((newTotal: number, isFromFetch: boolean = false) => {
+  const updateCount = useCallback((newCount: number, animate: boolean = true) => {
     if (!mountedRef.current) return;
     
-    // Clear any pending update
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-      updateTimeoutRef.current = null;
-    }
-
-    // If this is from a fetch, apply immediately
-    if (isFromFetch) {
-      console.log('[AnimatedUserCounter] Applying fetched total:', newTotal);
-      setTargetCount(newTotal);
-      
-      if (!hasInitialLoad) {
-        springValue.set(newTotal);
-        previousCountRef.current = newTotal;
-        setHasInitialLoad(true);
-      } else {
-        const increment = newTotal - previousCountRef.current;
-        if (increment !== 0) {
-          springValue.set(newTotal);
-          if (increment > 0) {
-            triggerAnimation(increment);
-          }
-          previousCountRef.current = newTotal;
-        }
-      }
-      pendingUpdateRef.current = null;
-      return;
-    }
-
-    // For WebSocket updates, debounce
-    pendingUpdateRef.current = newTotal;
+    console.log('[AnimatedUserCounter] Updating count:', { 
+      from: previousCountRef.current, 
+      to: newCount,
+      animate 
+    });
     
-    updateTimeoutRef.current = setTimeout(() => {
-      if (!mountedRef.current || pendingUpdateRef.current === null) return;
-      
-      const finalTotal = pendingUpdateRef.current;
-      const currentCount = previousCountRef.current;
-      
-      if (finalTotal !== currentCount) {
-        console.log('[AnimatedUserCounter] Applying WebSocket update:', { from: currentCount, to: finalTotal });
-        
-        const increment = finalTotal - currentCount;
-        setTargetCount(finalTotal);
-        springValue.set(finalTotal);
-        
-        if (increment > 0 && hasInitialLoad) {
-          triggerAnimation(increment);
-        }
-        
-        previousCountRef.current = finalTotal;
-        lastUpdateTimeRef.current = Date.now();
-      }
-      
-      pendingUpdateRef.current = null;
-    }, 300); // 300ms debounce
-  }, [springValue, hasInitialLoad, triggerAnimation]);
+    const increment = newCount - previousCountRef.current;
+    
+    setTargetCount(newCount);
+    springValue.set(newCount);
+    
+    if (increment > 0 && animate && hasInitialLoad) {
+      triggerAnimation(increment);
+    }
+    
+    previousCountRef.current = newCount;
+  }, [springValue, triggerAnimation, hasInitialLoad]);
 
   const fetchStats = useCallback(async () => {
     try {
-      console.log('[AnimatedUserCounter] Fetching initial stats...');
+      console.log('[AnimatedUserCounter] Fetching stats...');
       const response = await userStatsService.getUserStats();
       
       if (response.success && response.data && mountedRef.current) {
-        console.log('[AnimatedUserCounter] Got initial stats:', response.data);
-        setNewUsersToday(response.data.newUsersToday);
-        applyUpdate(response.data.totalUsers, true);
+        console.log('[AnimatedUserCounter] Stats fetched:', response.data);
+        
+        setNewUsersToday(response.data.newUsersToday || 0);
+        
+        if (!hasInitialLoad) {
+          // Initial load - set without animation
+          springValue.set(response.data.totalUsers);
+          previousCountRef.current = response.data.totalUsers;
+          setTargetCount(response.data.totalUsers);
+          setHasInitialLoad(true);
+        } else {
+          // Update with animation
+          updateCount(response.data.totalUsers, true);
+        }
+        
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('[AnimatedUserCounter] Failed to fetch user stats:', error);
+      console.error('[AnimatedUserCounter] Failed to fetch stats:', error);
       setIsLoading(false);
       
-      // Retry after 2 seconds if initial load hasn't happened
+      // Retry after 2 seconds
       if (!hasInitialLoad && mountedRef.current) {
         setTimeout(() => {
-          if (mountedRef.current && !hasInitialLoad) {
+          if (mountedRef.current) {
             fetchStats();
           }
         }, 2000);
       }
     }
-  }, [applyUpdate, hasInitialLoad]);
+  }, [springValue, hasInitialLoad, updateCount]);
 
+  // Initial fetch
   useEffect(() => {
     mountedRef.current = true;
+    
+    // Fetch immediately
     fetchStats();
+    
+    // Also set up periodic refresh every 60 seconds as backup
+    const refreshInterval = setInterval(() => {
+      if (mountedRef.current) {
+        fetchStats();
+      }
+    }, 60000);
 
     return () => {
       mountedRef.current = false;
+      clearInterval(refreshInterval);
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
-      }
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
       }
     };
   }, []);
 
-  // Handle WebSocket subscriptions
+  // WebSocket subscription management
   useEffect(() => {
+    // Clean up previous subscriptions
+    if (subscriptionsRef.current.stats) {
+      subscriptionsRef.current.stats();
+      subscriptionsRef.current.stats = undefined;
+    }
+    if (subscriptionsRef.current.registered) {
+      subscriptionsRef.current.registered();
+      subscriptionsRef.current.registered = undefined;
+    }
+
     const handleStatsUpdate = (data: any) => {
-      if (!mountedRef.current || !hasInitialLoad) {
-        return;
+      console.log('[AnimatedUserCounter] Received stats:users event:', data);
+      
+      if (!mountedRef.current) return;
+      
+      if (typeof data.totalUsers === 'number') {
+        updateCount(data.totalUsers, true);
+        
+        if (typeof data.newUsersToday === 'number') {
+          setNewUsersToday(data.newUsersToday);
+        }
+        
+        // Update cache
+        userStatsService.updateCachedStats(data);
       }
-      
-      console.log('[AnimatedUserCounter] Stats update received:', data);
-      
-      if (data.totalUsers !== undefined) {
-        applyUpdate(data.totalUsers, false);
-      }
-      
-      if (data.newUsersToday !== undefined) {
-        setNewUsersToday(data.newUsersToday);
-      }
-      
-      userStatsService.updateCachedStats(data);
     };
 
     const handleUserRegistered = (data: any) => {
-      if (!mountedRef.current || !hasInitialLoad) {
-        return;
-      }
+      console.log('[AnimatedUserCounter] Received user:registered event:', data);
       
-      console.log('[AnimatedUserCounter] User registered event:', data);
+      if (!mountedRef.current || !hasInitialLoad) return;
       
-      // Increment the current count by 1
+      // Increment current count
       const newTotal = previousCountRef.current + 1;
-      applyUpdate(newTotal, false);
+      updateCount(newTotal, true);
       
-      // Also increment today's count
+      // Increment today's count
       setNewUsersToday(prev => prev + 1);
       
       // Update cache
       userStatsService.incrementUserCount(1);
     };
 
-    let unsubscribeStats: (() => void) | undefined;
-    let unsubscribeRegistered: (() => void) | undefined;
+    // Set up subscriptions based on auth state
+    const setupSubscriptions = () => {
+      console.log('[AnimatedUserCounter] Setting up subscriptions...', {
+        isAuthenticated: !!user,
+        authWsConnected: authenticatedWebSocket?.isConnected,
+        publicWsConnected: publicWebSocket.isConnected
+      });
 
-    // Wait a bit for WebSocket to be ready
-    const subscribeTimeout = setTimeout(() => {
       if (user && authenticatedWebSocket) {
-        console.log('[AnimatedUserCounter] Using authenticated WebSocket');
-        unsubscribeStats = authenticatedWebSocket.subscribe('stats:users', handleStatsUpdate);
-        unsubscribeRegistered = authenticatedWebSocket.subscribe('user:registered', handleUserRegistered);
-      } else if (!user && publicWebSocket.isConnected) {
-        console.log('[AnimatedUserCounter] Using public WebSocket for guest');
-        unsubscribeStats = publicWebSocket.subscribe('stats:users', handleStatsUpdate);
-        unsubscribeRegistered = publicWebSocket.subscribe('user:registered', handleUserRegistered);
-      } else if (!user) {
-        // Try to connect public WebSocket if not connected
-        console.log('[AnimatedUserCounter] Connecting public WebSocket...');
-        publicWebSocket.connect();
+        // Authenticated user - use authenticated WebSocket
+        console.log('[AnimatedUserCounter] Subscribing via authenticated WebSocket');
         
-        // Subscribe after a delay
-        setTimeout(() => {
-          if (publicWebSocket.isConnected && mountedRef.current) {
-            unsubscribeStats = publicWebSocket.subscribe('stats:users', handleStatsUpdate);
-            unsubscribeRegistered = publicWebSocket.subscribe('user:registered', handleUserRegistered);
-          }
-        }, 1000);
-      }
-    }, 500);
-
-    return () => {
-      clearTimeout(subscribeTimeout);
-      unsubscribeStats?.();
-      unsubscribeRegistered?.();
-    };
-  }, [user, authenticatedWebSocket, publicWebSocket, applyUpdate, hasInitialLoad]);
-
-  // Fallback polling
-  useEffect(() => {
-    const shouldPoll = !authenticatedWebSocket?.isConnected && !publicWebSocket.isConnected && hasInitialLoad;
-    
-    if (!shouldPoll) {
-      return;
-    }
-
-    console.log('[AnimatedUserCounter] Starting fallback polling (every 30s)');
-    
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await userStatsService.getUserStats();
-        if (response.success && response.data && mountedRef.current) {
-          const newTotal = response.data.totalUsers;
-          
-          if (newTotal !== previousCountRef.current) {
-            console.log('[AnimatedUserCounter] Polling detected change:', newTotal);
-            applyUpdate(newTotal, false);
-            setNewUsersToday(response.data.newUsersToday);
-          }
+        subscriptionsRef.current.stats = authenticatedWebSocket.subscribe('stats:users', handleStatsUpdate);
+        subscriptionsRef.current.registered = authenticatedWebSocket.subscribe('user:registered', handleUserRegistered);
+      } else {
+        // Guest user - use public WebSocket
+        console.log('[AnimatedUserCounter] Subscribing via public WebSocket');
+        
+        // Make sure public WebSocket is connected
+        if (!publicWebSocket.isConnected) {
+          console.log('[AnimatedUserCounter] Public WebSocket not connected, connecting...');
+          publicWebSocket.connect();
         }
-      } catch (error) {
-        console.error('[AnimatedUserCounter] Polling error:', error);
+        
+        subscriptionsRef.current.stats = publicWebSocket.subscribe('stats:users', handleStatsUpdate);
+        subscriptionsRef.current.registered = publicWebSocket.subscribe('user:registered', handleUserRegistered);
       }
-    }, 30000);
-    
-    return () => {
-      console.log('[AnimatedUserCounter] Stopping fallback polling');
-      clearInterval(pollInterval);
     };
-  }, [authenticatedWebSocket?.isConnected, publicWebSocket.isConnected, hasInitialLoad, applyUpdate]);
+
+    // Set up subscriptions with a small delay to ensure WebSocket is ready
+    const setupTimeout = setTimeout(() => {
+      setupSubscriptions();
+    }, 1000);
+
+    // Also listen for connection changes
+    const connectionCheckInterval = setInterval(() => {
+      const shouldUseAuth = !!user && authenticatedWebSocket?.isConnected;
+      const shouldUsePublic = !user && publicWebSocket.isConnected;
+      
+      // Re-setup if we have a connection but no subscriptions
+      if ((shouldUseAuth || shouldUsePublic) && !subscriptionsRef.current.stats) {
+        console.log('[AnimatedUserCounter] Connection detected, re-subscribing...');
+        setupSubscriptions();
+      }
+    }, 2000);
+
+    return () => {
+      clearTimeout(setupTimeout);
+      clearInterval(connectionCheckInterval);
+      
+      // Clean up subscriptions
+      if (subscriptionsRef.current.stats) {
+        subscriptionsRef.current.stats();
+      }
+      if (subscriptionsRef.current.registered) {
+        subscriptionsRef.current.registered();
+      }
+    };
+  }, [user, authenticatedWebSocket, publicWebSocket, updateCount, hasInitialLoad]);
 
   const displayValue = isLoading && !hasInitialLoad ? 'Loading' : formattedCount || '0';
 
@@ -334,6 +317,11 @@ export default function AnimatedUserCounter({
           </span>{' '}
           users
         </span>
+        {process.env.NODE_ENV === 'development' && (
+          <span className={`ml-1 text-[8px] ${publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
+            {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? '●' : '○'}
+          </span>
+        )}
       </motion.div>
     );
   }

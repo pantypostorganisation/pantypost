@@ -21,7 +21,12 @@ export default function PaymentsProcessedCounter({
 }: PaymentsProcessedCounterProps) {
   const { user } = useAuth();
   const authenticatedWebSocket = useWebSocket();
-  const publicWebSocket = usePublicWebSocket({ autoConnect: !user });
+  const publicWebSocket = usePublicWebSocket({ 
+    autoConnect: !user,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000
+  });
 
   const [displayValue, setDisplayValue] = useState(0);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
@@ -34,8 +39,7 @@ export default function PaymentsProcessedCounter({
   const animationFrameRef = useRef<number | null>(null);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTargetRef = useRef(0);
-  const pendingUpdateRef = useRef<number | null>(null);
-  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const subscriptionRef = useRef<(() => void) | undefined>(undefined);
 
   const formatCurrency = useCallback((value: number) => {
     const normalized = Math.max(0, Math.round(Number(value || 0) * 100) / 100);
@@ -47,11 +51,10 @@ export default function PaymentsProcessedCounter({
     }).format(normalized);
   }, []);
 
-  // Smooth count-up animation with easing
   const animateValue = useCallback((from: number, to: number, duration: number = 1500) => {
     if (!mountedRef.current) return;
     
-    console.log('[PaymentsProcessedCounter] Animating from', from, 'to', to);
+    console.log('[PaymentsProcessedCounter] Animating:', { from, to });
     
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -106,179 +109,164 @@ export default function PaymentsProcessedCounter({
     }, 3000);
   }, []);
 
-  // Debounced update function
-  const applyUpdate = useCallback((total: number, isFromFetch: boolean = false) => {
-    if (!mountedRef.current || !Number.isFinite(total)) return;
-
-    const normalizedTotal = Math.round(total * 100) / 100;
+  const updateValue = useCallback((newValue: number, animate: boolean = true) => {
+    if (!mountedRef.current || !Number.isFinite(newValue)) return;
     
-    // Clear pending update
-    if (updateTimeoutRef.current) {
-      clearTimeout(updateTimeoutRef.current);
-      updateTimeoutRef.current = null;
-    }
-
-    // Apply immediately if from fetch
-    if (isFromFetch) {
-      console.log('[PaymentsProcessedCounter] Applying fetched total:', normalizedTotal);
+    const normalized = Math.round(newValue * 100) / 100;
+    
+    console.log('[PaymentsProcessedCounter] Updating value:', { 
+      from: lastTargetRef.current, 
+      to: normalized,
+      animate 
+    });
+    
+    const increment = normalized - lastTargetRef.current;
+    
+    if (Math.abs(increment) > 0.01) {
+      animateValue(lastTargetRef.current, normalized, animate ? 1000 : 0);
       
-      if (!hasInitialLoad) {
-        setDisplayValue(0);
-        setTimeout(() => {
-          if (mountedRef.current) {
-            animateValue(0, normalizedTotal, 2000);
-          }
-        }, 100);
-        setHasInitialLoad(true);
-      } else {
-        const currentDisplay = lastTargetRef.current;
-        const increment = normalizedTotal - currentDisplay;
-        if (Math.abs(increment) > 0.01) {
-          animateValue(currentDisplay, normalizedTotal, 1000);
-          if (increment > 0) {
-            triggerAnimation(increment);
-          }
-        }
+      if (increment > 0 && animate && hasInitialLoad) {
+        triggerAnimation(increment);
       }
       
-      lastTargetRef.current = normalizedTotal;
-      pendingUpdateRef.current = null;
-      paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalizedTotal });
-      return;
+      lastTargetRef.current = normalized;
+      paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalized });
     }
-
-    // For WebSocket updates, debounce
-    pendingUpdateRef.current = normalizedTotal;
-    
-    updateTimeoutRef.current = setTimeout(() => {
-      if (!mountedRef.current || pendingUpdateRef.current === null) return;
-      
-      const finalTotal = pendingUpdateRef.current;
-      const currentTarget = lastTargetRef.current;
-      
-      if (finalTotal !== currentTarget) {
-        console.log('[PaymentsProcessedCounter] Applying WebSocket update:', { from: currentTarget, to: finalTotal });
-        
-        const increment = finalTotal - currentTarget;
-        animateValue(currentTarget, finalTotal, 1000);
-        
-        if (increment > 0 && hasInitialLoad) {
-          triggerAnimation(increment);
-        }
-        
-        lastTargetRef.current = finalTotal;
-        paymentStatsService.updateCachedStats({ totalPaymentsProcessed: finalTotal });
-      }
-      
-      pendingUpdateRef.current = null;
-    }, 300); // 300ms debounce
   }, [animateValue, triggerAnimation, hasInitialLoad]);
 
   const fetchStats = useCallback(async () => {
     try {
-      console.log('[PaymentsProcessedCounter] Fetching initial stats...');
+      console.log('[PaymentsProcessedCounter] Fetching stats...');
       const response = await paymentStatsService.getPaymentsProcessed();
       
       if (response.success && response.data && mountedRef.current) {
         const total = response.data.totalPaymentsProcessed ?? 0;
-        console.log('[PaymentsProcessedCounter] Got initial stats:', total);
-        applyUpdate(total, true);
+        console.log('[PaymentsProcessedCounter] Stats fetched:', total);
+        
+        if (!hasInitialLoad) {
+          // Initial load - animate from 0
+          setDisplayValue(0);
+          lastTargetRef.current = total;
+          setTimeout(() => {
+            if (mountedRef.current) {
+              animateValue(0, total, 2000);
+            }
+          }, 100);
+          setHasInitialLoad(true);
+        } else {
+          // Update
+          updateValue(total, true);
+        }
+        
         setIsLoading(false);
       }
     } catch (error) {
       console.error('[PaymentsProcessedCounter] Failed to fetch stats:', error);
       setIsLoading(false);
       
-      // Retry after 2 seconds if initial load hasn't happened
+      // Retry after 2 seconds
       if (!hasInitialLoad && mountedRef.current) {
         setTimeout(() => {
-          if (mountedRef.current && !hasInitialLoad) {
+          if (mountedRef.current) {
             fetchStats();
           }
         }, 2000);
       }
     }
-  }, [applyUpdate, hasInitialLoad]);
+  }, [animateValue, hasInitialLoad, updateValue]);
 
+  // Initial fetch and periodic refresh
   useEffect(() => {
     mountedRef.current = true;
+    
+    // Fetch immediately
     fetchStats();
+    
+    // Set up periodic refresh every 60 seconds
+    const refreshInterval = setInterval(() => {
+      if (mountedRef.current) {
+        fetchStats();
+      }
+    }, 60000);
 
     return () => {
       mountedRef.current = false;
+      clearInterval(refreshInterval);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
       }
-      if (updateTimeoutRef.current) {
-        clearTimeout(updateTimeoutRef.current);
-      }
     };
   }, []);
 
-  // Handle WebSocket subscriptions
+  // WebSocket subscription
   useEffect(() => {
-    const handleUpdate = (data: any) => {
-      if (!mountedRef.current || !hasInitialLoad) {
-        return;
-      }
-
-      console.log('[PaymentsProcessedCounter] WebSocket update received:', data);
-
-      const total = Number(data?.totalPaymentsProcessed);
-      if (Number.isFinite(total) && total >= 0) {
-        applyUpdate(total, false);
-      }
-    };
-
-    let unsubscribe: (() => void) | undefined;
-
-    // Wait for WebSocket to be ready
-    const subscribeTimeout = setTimeout(() => {
-      if (user && authenticatedWebSocket) {
-        console.log('[PaymentsProcessedCounter] Using authenticated WebSocket');
-        unsubscribe = authenticatedWebSocket.subscribe('stats:payments_processed', handleUpdate);
-      } else if (!user && publicWebSocket.isConnected) {
-        console.log('[PaymentsProcessedCounter] Using public WebSocket');
-        unsubscribe = publicWebSocket.subscribe('stats:payments_processed', handleUpdate);
-      } else if (!user) {
-        // Try to connect public WebSocket
-        console.log('[PaymentsProcessedCounter] Connecting public WebSocket...');
-        publicWebSocket.connect();
-        
-        // Subscribe after a delay
-        setTimeout(() => {
-          if (publicWebSocket.isConnected && mountedRef.current) {
-            unsubscribe = publicWebSocket.subscribe('stats:payments_processed', handleUpdate);
-          }
-        }, 1000);
-      }
-    }, 500);
-
-    return () => {
-      clearTimeout(subscribeTimeout);
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [authenticatedWebSocket, publicWebSocket, user, applyUpdate, hasInitialLoad]);
-
-  // Fallback polling
-  useEffect(() => {
-    if (authenticatedWebSocket?.isConnected || publicWebSocket.isConnected || !hasInitialLoad) {
-      return;
+    // Clean up previous subscription
+    if (subscriptionRef.current) {
+      subscriptionRef.current();
+      subscriptionRef.current = undefined;
     }
 
-    console.log('[PaymentsProcessedCounter] Starting fallback polling');
-    
-    const interval = setInterval(() => {
-      fetchStats();
-    }, 30000);
+    const handleUpdate = (data: any) => {
+      console.log('[PaymentsProcessedCounter] Received stats:payments_processed event:', data);
+      
+      if (!mountedRef.current) return;
+      
+      const total = Number(data?.totalPaymentsProcessed);
+      if (Number.isFinite(total) && total >= 0) {
+        updateValue(total, true);
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, [authenticatedWebSocket?.isConnected, publicWebSocket.isConnected, fetchStats, hasInitialLoad]);
+    const setupSubscription = () => {
+      console.log('[PaymentsProcessedCounter] Setting up subscription...', {
+        isAuthenticated: !!user,
+        authWsConnected: authenticatedWebSocket?.isConnected,
+        publicWsConnected: publicWebSocket.isConnected
+      });
+
+      if (user && authenticatedWebSocket) {
+        console.log('[PaymentsProcessedCounter] Subscribing via authenticated WebSocket');
+        subscriptionRef.current = authenticatedWebSocket.subscribe('stats:payments_processed', handleUpdate);
+      } else {
+        console.log('[PaymentsProcessedCounter] Subscribing via public WebSocket');
+        
+        if (!publicWebSocket.isConnected) {
+          console.log('[PaymentsProcessedCounter] Public WebSocket not connected, connecting...');
+          publicWebSocket.connect();
+        }
+        
+        subscriptionRef.current = publicWebSocket.subscribe('stats:payments_processed', handleUpdate);
+      }
+    };
+
+    // Set up subscription with delay
+    const setupTimeout = setTimeout(() => {
+      setupSubscription();
+    }, 1000);
+
+    // Check connection periodically
+    const connectionCheckInterval = setInterval(() => {
+      const shouldUseAuth = !!user && authenticatedWebSocket?.isConnected;
+      const shouldUsePublic = !user && publicWebSocket.isConnected;
+      
+      if ((shouldUseAuth || shouldUsePublic) && !subscriptionRef.current) {
+        console.log('[PaymentsProcessedCounter] Connection detected, re-subscribing...');
+        setupSubscription();
+      }
+    }, 2000);
+
+    return () => {
+      clearTimeout(setupTimeout);
+      clearInterval(connectionCheckInterval);
+      
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
+      }
+    };
+  }, [user, authenticatedWebSocket, publicWebSocket, updateValue]);
 
   const formattedValue = isLoading && !hasInitialLoad ? 'Loading...' : formatCurrency(displayValue);
   const formattedIncrement = useMemo(() => {
@@ -344,6 +332,11 @@ export default function PaymentsProcessedCounter({
           </AnimatePresence>
         </span>
       </span>
+      {process.env.NODE_ENV === 'development' && compact && (
+        <span className={`ml-1 text-[8px] ${publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
+          {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? '●' : '○'}
+        </span>
+      )}
     </motion.div>
   );
 }
