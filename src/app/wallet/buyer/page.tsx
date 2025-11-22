@@ -12,7 +12,6 @@ import AllDepositsSection from '@/components/wallet/buyer/AllDepositsSection';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
-import { DollarSign } from 'lucide-react';
 
 function BuyerWalletContent() {
   // old hook that powers the manual add-funds UI
@@ -92,23 +91,6 @@ function BuyerWalletContent() {
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
       <div className="relative z-10 px-4 py-8 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-7xl flex-col gap-8">
-          {/* Balance Header */}
-          <div className="flex items-center justify-between rounded-2xl border border-gray-800 bg-gradient-to-r from-[#111] to-[#0c0c0c] p-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-                <DollarSign className="h-7 w-7 text-[#ff950e]" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-400">Available Balance</p>
-                <p className="text-3xl font-bold text-white">${displayBalance.toFixed(2)} <span className="text-sm font-normal text-gray-500">USD</span></p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-500 mb-1">Instant deposits</p>
-              <p className="text-xs text-gray-500">Secure transactions</p>
-            </div>
-          </div>
-
           {/* success banner after crypto redirect */}
           {showBanner && (
             <div className="rounded-lg border border-green-500 bg-green-900/30 p-4 text-center text-green-300">
