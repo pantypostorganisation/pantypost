@@ -113,45 +113,40 @@ export default function AddFundsSection({
                 </div>
 
                 <div className="relative flex flex-col gap-0 p-6 h-full justify-between">
-                  {/* Header with Logos */}
-                  <div className="flex justify-between items-start">
-                    {/* PantyPost Logo */}
+                  {/* Header with Logos - Better aligned */}
+                  <div className="flex justify-between items-center">
+                    {/* PantyPost Logo - Made larger */}
                     <Image
                       src="/logo.png"
                       alt="PantyPost"
-                      width={60}
-                      height={60}
+                      width={70}
+                      height={70}
                       quality={90}
-                      className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
+                      className="w-16 h-16 sm:w-[70px] sm:h-[70px] object-contain"
                     />
 
-                    {/* SegPay Logo */}
+                    {/* SegPay Logo - Aligned with PantyPost */}
                     <Image
                       src="/SegPayLogo.png"
                       alt="SegPay"
-                      width={100}
-                      height={22}
+                      width={110}
+                      height={25}
                       quality={90}
-                      className="h-5 sm:h-6 w-auto object-contain"
-                      style={{ maxWidth: '100px' }}
+                      className="h-6 sm:h-7 w-auto object-contain"
+                      style={{ maxWidth: '110px' }}
                     />
                   </div>
 
-                  {/* Realistic EMV Chip */}
+                  {/* Real Credit Card Chip */}
                   <div className="flex items-center">
-                    <div className="relative w-11 h-9 sm:w-12 sm:h-10 rounded-lg overflow-hidden bg-gradient-to-br from-[#d4af37] via-[#f9e79f] to-[#b8860b] shadow-lg">
-                      {/* Chip contact pattern */}
-                      <div className="absolute inset-0.5 rounded bg-gradient-to-br from-[#ffd700] via-[#ffed4e] to-[#d4af37]">
-                        {/* Contact pads */}
-                        <div className="grid grid-cols-3 gap-[1px] p-1 h-full">
-                          {[...Array(6)].map((_, i) => (
-                            <div key={i} className="bg-gradient-to-br from-[#b8860b] to-[#8b6914] rounded-[1px]" />
-                          ))}
-                        </div>
-                      </div>
-                      {/* Shine effect */}
-                      <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/20 to-transparent" />
-                    </div>
+                    <Image
+                      src="/CreditCardChip.png"
+                      alt="Chip"
+                      width={73}
+                      height={53}
+                      quality={90}
+                      className="w-[55px] h-[40px] sm:w-[65px] sm:h-[47px] object-contain"
+                    />
                   </div>
 
                   {/* Card Number (masked) - Slightly larger */}
