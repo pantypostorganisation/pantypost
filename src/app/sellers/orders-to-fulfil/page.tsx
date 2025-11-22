@@ -417,8 +417,7 @@ export default function OrdersToFulfilPage() {
       <BanCheck>
         <main className="min-h-screen bg-gradient-to-b from-black via-[#08080c] to-black text-white py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-7xl mx-auto space-y-10">
-            <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-r from-[#15151b] via-[#1a0f0f] to-[#111827] p-8">
-              <div className="absolute inset-y-0 right-0 w-1/3 bg-gradient-to-l from-[#ff950e]/30 to-transparent opacity-60 blur-3xl" />
+            <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#1a1a1a] p-8">
               <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
                 <div className="max-w-2xl space-y-4">
                   <div className="flex items-center gap-4">
