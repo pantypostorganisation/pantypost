@@ -36,6 +36,7 @@ import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
 import { resolveApiUrl } from '@/utils/url';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
+import { WalletCardIcon } from '@/components/icons/WalletCardIcon';
 import dynamic from 'next/dynamic';
 
 // OPTIMIZED: Lazy load HeaderSearch to reduce initial bundle
@@ -842,7 +843,7 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/admin/verification-requests', <ClipboardCheck className="w-5 h-5" />, 'Verify')}
                   {renderMobileLink('/admin/wallet-management', <DollarSign className="w-5 h-5" />, 'Wallets')}
                   {renderMobileLink('/admin/withdrawals', <DollarSign className="w-5 h-5" />, 'Withdrawals')}
-                  {renderMobileLink('/wallet/admin', <WalletIcon className="w-5 h-5" />, `Platform: $${platformBalance.toFixed(2)}`)}
+                  {renderMobileLink('/wallet/admin', <WalletCardIcon className="w-5 h-3.5" />, `Platform: $${platformBalance.toFixed(2)}`)}
                 </>
               )}
 
@@ -864,7 +865,7 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/sellers/subscribers', <Users className="w-5 h-5" />, 'Analytics')}
                   {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
-                  {renderMobileLink('/wallet/seller', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
+                  {renderMobileLink('/wallet/seller', <WalletCardIcon className="w-5 h-3.5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
                   
                   <button
                     onClick={() => setShowMobileNotifications(true)}
@@ -897,7 +898,7 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
                   {renderMobileLink('/buyers/my-orders', <Package className="w-5 h-5" />, 'My Orders')}
                   {renderMobileLink('/buyers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
-                  {renderMobileLink('/wallet/buyer', <WalletIcon className="w-5 h-5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
+                  {renderMobileLink('/wallet/buyer', <WalletCardIcon className="w-5 h-3.5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
                 </>
               )}
 
@@ -1081,7 +1082,7 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletIcon className="w-3.5 h-3.5 text-purple-400" />
+                <WalletCardIcon className="w-5 h-3.5" />
                 <span className="font-bold text-purple-300">${platformBalance.toFixed(2)}</span>
               </Link>
             </>
@@ -1133,7 +1134,7 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletIcon className="w-3.5 h-3.5 text-purple-200 transition-colors duration-300 group-hover:text-purple-100" />
+                <WalletCardIcon className="w-5 h-3.5" />
                 <span className="font-bold text-purple-100">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
 
@@ -1298,7 +1299,7 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletIcon className="w-3.5 h-3.5 text-purple-200 transition-colors duration-300 group-hover:text-purple-100" />
+                <WalletCardIcon className="w-5 h-3.5" />
                 <span className="font-bold text-purple-100">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>
 
