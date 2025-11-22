@@ -41,7 +41,7 @@ export default function AnimatedUserCounter({
   const mountedRef = useRef(true);
   const previousCountRef = useRef(0);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const subscriptionsRef = useRef<{ stats?: () => void; registered?: () => void }>({});
+  const subscriptionRef = useRef<(() => void) | undefined>(undefined);
 
   // Spring animation for smooth counting
   const springValue = useSpring(0, { 
@@ -158,16 +158,12 @@ export default function AnimatedUserCounter({
     };
   }, []);
 
-  // WebSocket subscription management
+  // WebSocket subscription management - FIXED: Only listen to stats:users
   useEffect(() => {
-    // Clean up previous subscriptions
-    if (subscriptionsRef.current.stats) {
-      subscriptionsRef.current.stats();
-      subscriptionsRef.current.stats = undefined;
-    }
-    if (subscriptionsRef.current.registered) {
-      subscriptionsRef.current.registered();
-      subscriptionsRef.current.registered = undefined;
+    // Clean up previous subscription
+    if (subscriptionRef.current) {
+      subscriptionRef.current();
+      subscriptionRef.current = undefined;
     }
 
     const handleStatsUpdate = (data: any) => {
@@ -187,25 +183,9 @@ export default function AnimatedUserCounter({
       }
     };
 
-    const handleUserRegistered = (data: any) => {
-      console.log('[AnimatedUserCounter] Received user:registered event:', data);
-      
-      if (!mountedRef.current || !hasInitialLoad) return;
-      
-      // Increment current count
-      const newTotal = previousCountRef.current + 1;
-      updateCount(newTotal, true);
-      
-      // Increment today's count
-      setNewUsersToday(prev => prev + 1);
-      
-      // Update cache
-      userStatsService.incrementUserCount(1);
-    };
-
     // Set up subscriptions based on auth state
-    const setupSubscriptions = () => {
-      console.log('[AnimatedUserCounter] Setting up subscriptions...', {
+    const setupSubscription = () => {
+      console.log('[AnimatedUserCounter] Setting up subscription...', {
         isAuthenticated: !!user,
         authWsConnected: authenticatedWebSocket?.isConnected,
         publicWsConnected: publicWebSocket.isConnected
@@ -215,8 +195,8 @@ export default function AnimatedUserCounter({
         // Authenticated user - use authenticated WebSocket
         console.log('[AnimatedUserCounter] Subscribing via authenticated WebSocket');
         
-        subscriptionsRef.current.stats = authenticatedWebSocket.subscribe('stats:users', handleStatsUpdate);
-        subscriptionsRef.current.registered = authenticatedWebSocket.subscribe('user:registered', handleUserRegistered);
+        // FIXED: Only subscribe to stats:users (removed user:registered)
+        subscriptionRef.current = authenticatedWebSocket.subscribe('stats:users', handleStatsUpdate);
       } else {
         // Guest user - use public WebSocket
         console.log('[AnimatedUserCounter] Subscribing via public WebSocket');
@@ -227,14 +207,14 @@ export default function AnimatedUserCounter({
           publicWebSocket.connect();
         }
         
-        subscriptionsRef.current.stats = publicWebSocket.subscribe('stats:users', handleStatsUpdate);
-        subscriptionsRef.current.registered = publicWebSocket.subscribe('user:registered', handleUserRegistered);
+        // FIXED: Only subscribe to stats:users (removed user:registered)
+        subscriptionRef.current = publicWebSocket.subscribe('stats:users', handleStatsUpdate);
       }
     };
 
-    // Set up subscriptions with a small delay to ensure WebSocket is ready
+    // Set up subscription with a small delay to ensure WebSocket is ready
     const setupTimeout = setTimeout(() => {
-      setupSubscriptions();
+      setupSubscription();
     }, 1000);
 
     // Also listen for connection changes
@@ -242,10 +222,10 @@ export default function AnimatedUserCounter({
       const shouldUseAuth = !!user && authenticatedWebSocket?.isConnected;
       const shouldUsePublic = !user && publicWebSocket.isConnected;
       
-      // Re-setup if we have a connection but no subscriptions
-      if ((shouldUseAuth || shouldUsePublic) && !subscriptionsRef.current.stats) {
+      // Re-setup if we have a connection but no subscription
+      if ((shouldUseAuth || shouldUsePublic) && !subscriptionRef.current) {
         console.log('[AnimatedUserCounter] Connection detected, re-subscribing...');
-        setupSubscriptions();
+        setupSubscription();
       }
     }, 2000);
 
@@ -253,12 +233,9 @@ export default function AnimatedUserCounter({
       clearTimeout(setupTimeout);
       clearInterval(connectionCheckInterval);
       
-      // Clean up subscriptions
-      if (subscriptionsRef.current.stats) {
-        subscriptionsRef.current.stats();
-      }
-      if (subscriptionsRef.current.registered) {
-        subscriptionsRef.current.registered();
+      // Clean up subscription
+      if (subscriptionRef.current) {
+        subscriptionRef.current();
       }
     };
   }, [user, authenticatedWebSocket, publicWebSocket, updateCount, hasInitialLoad]);

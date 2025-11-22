@@ -48,7 +48,7 @@ function signToken(user) {
 
 // ============= AUTH ROUTES =============
 
-// POST /api/auth/signup - FIXED REFERRAL CODE HANDLING
+// POST /api/auth/signup - FIXED: Only emit stats:users to prevent double-counting
 router.post('/signup', async (req, res) => {
   try {
     const raw = req.body || {};
@@ -298,15 +298,10 @@ router.post('/signup', async (req, res) => {
       console.error('Failed to send verification email:', emailError);
     }
 
-    // ========== WEBSOCKET INTEGRATION FOR USER STATS ==========
+    // ========== WEBSOCKET INTEGRATION FOR USER STATS - FIXED ==========
+    // CRITICAL FIX: Only emit stats:users event, NOT user:registered
+    // This prevents double-counting on the frontend
     if (webSocketService && webSocketService.io) {
-      webSocketService.io.emit('user:registered', {
-        userId: newUser._id.toString(),
-        username: newUser.username,
-        role: newUser.role,
-        timestamp: new Date().toISOString()
-      });
-
       try {
         const [totalUsers, newUsersToday] = await Promise.all([
           User.countDocuments(),
@@ -333,20 +328,13 @@ router.post('/signup', async (req, res) => {
         };
 
         webSocketService.io.emit('stats:users', statsData);
-        console.log(`📊 Broadcasted user stats - Total: ${totalUsers}`);
+        console.log(`📊 Broadcasted user stats - Total: ${totalUsers} (was double-emitting before)`);
       } catch (statsError) {
         console.error('Failed to broadcast user stats:', statsError);
       }
     }
 
     if (publicWebSocketService) {
-      publicWebSocketService.broadcastUserRegistered({
-        userId: newUser._id.toString(),
-        username: newUser.username,
-        role: newUser.role,
-        timestamp: new Date().toISOString()
-      });
-      
       try {
         const [totalUsers, newUsersToday] = await Promise.all([
           User.countDocuments(),

@@ -552,8 +552,9 @@ router.post('/', authMiddleware, async (req, res) => {
         }
       }
 
+      // FIXED: Track the marked-up price that the buyer actually pays
       try {
-        await incrementPaymentStats(actualPrice);
+        await incrementPaymentStats(actualMarkedUpPrice);
       } catch (statsError) {
         console.error('[Order] Failed to increment payment stats:', statsError);
       }
@@ -1039,8 +1040,9 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         }
       }
 
+      // FIXED: Track the marked-up price that the buyer actually pays
       try {
-        await incrementPaymentStats(actualPrice);
+        await incrementPaymentStats(actualMarkedUpPrice);
       } catch (statsError) {
         console.error('[Order] Failed to increment payment stats:', statsError);
       }
