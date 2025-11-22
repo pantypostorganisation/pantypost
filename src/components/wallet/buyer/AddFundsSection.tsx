@@ -113,7 +113,7 @@ export default function AddFundsSection({
                 </div>
 
                 {/* Logos positioned at top of card */}
-                <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
+                <div className="absolute top-4 sm:top-6 left-4 sm:left-6 right-4 sm:right-6 flex justify-between items-center">
                   {/* PantyPost Logo */}
                   <Image
                     src="/logo.png"
@@ -121,7 +121,7 @@ export default function AddFundsSection({
                     width={70}
                     height={70}
                     quality={90}
-                    className="w-16 h-16 sm:w-[70px] sm:h-[70px] object-contain"
+                    className="w-12 h-12 sm:w-16 sm:h-16 md:w-[70px] md:h-[70px] object-contain"
                   />
 
                   {/* SegPay Logo */}
@@ -131,13 +131,13 @@ export default function AddFundsSection({
                     width={110}
                     height={25}
                     quality={90}
-                    className="h-6 sm:h-7 w-auto object-contain"
-                    style={{ maxWidth: '110px' }}
+                    className="h-5 sm:h-6 md:h-7 w-auto object-contain"
+                    style={{ maxWidth: '90px' }}
                   />
                 </div>
 
                 {/* Contactless Payment Waves - Positioned in upper-right middle */}
-                <div className="absolute" style={{ right: '40px', top: '45%' }}>
+                <div className="absolute" style={{ right: '30px', top: '45%' }}>
                   <Image
                     src="/CreditCardWaves.png"
                     alt="Contactless"
@@ -148,9 +148,9 @@ export default function AddFundsSection({
                   />
                 </div>
 
-                <div className="relative flex flex-col gap-0 p-6 h-full justify-between">
+                <div className="relative flex flex-col gap-0 p-4 sm:p-5 md:p-6 h-full justify-between">
                   {/* Spacer for logos */}
-                  <div className="h-16"></div>
+                  <div className="h-12 sm:h-14 md:h-16"></div>
 
                   {/* Credit Card Chip - 30% smaller */}
                   <div className="flex items-center">
@@ -160,34 +160,37 @@ export default function AddFundsSection({
                       width={73}
                       height={53}
                       quality={90}
-                      className="w-[38px] h-[28px] sm:w-[45px] sm:h-[33px] object-contain"
+                      className="w-[35px] h-[25px] sm:w-[40px] sm:h-[29px] md:w-[45px] md:h-[33px] object-contain"
                     />
                   </div>
 
-                  {/* Card Number (masked) - Slightly larger */}
-                  <div className="text-xl sm:text-2xl font-mono font-semibold tracking-[0.25em] text-gray-300">
-                    •••• •••• •••• ••••
+                  {/* Card Number (masked) - Responsive sizing */}
+                  <div className="flex gap-2 sm:gap-3 md:gap-4">
+                    <span className="text-base sm:text-lg md:text-xl lg:text-2xl font-mono font-semibold text-gray-300">••••</span>
+                    <span className="text-base sm:text-lg md:text-xl lg:text-2xl font-mono font-semibold text-gray-300">••••</span>
+                    <span className="text-base sm:text-lg md:text-xl lg:text-2xl font-mono font-semibold text-gray-300">••••</span>
+                    <span className="text-base sm:text-lg md:text-xl lg:text-2xl font-mono font-semibold text-gray-300">••••</span>
                   </div>
 
                   {/* Bottom Info */}
                   <div className="flex justify-between items-end">
                     <div className="flex-1">
-                      <p className="text-[10px] sm:text-xs uppercase text-gray-500 tracking-wider mb-1">
+                      <p className="text-[9px] sm:text-[10px] md:text-xs uppercase text-gray-500 tracking-wider mb-0.5 sm:mb-1">
                         Cardholder
                       </p>
-                      <p className="text-sm sm:text-base font-semibold text-gray-200 truncate">
+                      <p className="text-xs sm:text-sm md:text-base font-semibold text-gray-200 truncate">
                         {cardholderName || 'YOUR NAME'}
                       </p>
                     </div>
                     
                     <div className="text-right">
-                      <p className="text-[10px] sm:text-xs uppercase text-gray-500 tracking-wider mb-1">
+                      <p className="text-[9px] sm:text-[10px] md:text-xs uppercase text-gray-500 tracking-wider mb-0.5 sm:mb-1">
                         Balance
                       </p>
-                      <p className="text-lg sm:text-xl font-bold text-[#ff950e]">
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-[#ff950e]">
                         ${balance.toFixed(2)}
                       </p>
-                      <p className="text-[9px] sm:text-[10px] text-gray-500">Available</p>
+                      <p className="text-[8px] sm:text-[9px] md:text-[10px] text-gray-500">Available</p>
                     </div>
                   </div>
                 </div>
