@@ -238,37 +238,31 @@ export default function AddFundsSection({
                 </div>
 
                 <div className="relative flex flex-col gap-6">
-                  {/* Header with Logos */}
-                  <div className="flex justify-between items-start">
-                    {/* PantyPost Logo - 70% of header size */}
-                    <div className="flex flex-col">
+                  {/* Header with Logos - Aligned heights */}
+                  <div className="flex justify-between items-center h-[50px]">
+                    {/* PantyPost Logo */}
+                    <div className="flex items-center h-full">
                       <Image
                         src="/logo.png"
                         alt="PantyPost"
-                        width={67}
-                        height={67}
+                        width={50}
+                        height={50}
                         quality={90}
-                        className="w-[67px] h-auto"
+                        className="w-[50px] h-[50px] object-contain"
                       />
-                      <p className="text-[8px] text-gray-500 mt-1">
-                        Secured Payment
-                      </p>
                     </div>
 
-                    {/* SegPay Logo */}
-                    <div className="flex flex-col items-end">
+                    {/* SegPay Logo - Properly scaled for wide aspect ratio */}
+                    <div className="flex items-center h-full">
                       <Image
                         src="/SegPayLogo.png"
                         alt="SegPay"
-                        width={80}
-                        height={32}
+                        width={110}
+                        height={25}
                         quality={90}
-                        className="h-8 w-auto"
+                        className="h-[25px] w-auto object-contain"
+                        style={{ maxWidth: '110px' }}
                       />
-                      <div className="flex items-center gap-1.5 bg-white/5 backdrop-blur-sm rounded-full px-2.5 py-1 mt-1.5 border border-gray-700">
-                        <Sparkles className="h-2.5 w-2.5 text-gray-400" />
-                        <span className="text-[9px] font-semibold text-gray-400">Secure</span>
-                      </div>
                     </div>
                   </div>
 
@@ -300,6 +294,12 @@ export default function AddFundsSection({
                       </p>
                       <p className="text-[10px] text-gray-500">USD</p>
                     </div>
+                  </div>
+
+                  {/* Subtle security text at bottom */}
+                  <div className="flex justify-between items-center text-[8px] text-gray-600 mt-2">
+                    <span>SECURED PAYMENT</span>
+                    <span>256-BIT ENCRYPTION</span>
                   </div>
                 </div>
               </div>
