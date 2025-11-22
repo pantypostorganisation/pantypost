@@ -5,15 +5,14 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
-import BalanceCard from '@/components/wallet/buyer/BalanceCard';
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
-import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
-import EmptyState from '@/components/wallet/buyer/EmptyState';
 import CryptoDepositSection from '@/components/wallet/buyer/CryptoDepositSection';
-import DirectCryptoDepositSection from '@/components/wallet/buyer/DirectCryptoDepositSection'; // NEW!
+import DirectCryptoDepositSection from '@/components/wallet/buyer/DirectCryptoDepositSection';
+import AllDepositsSection from '@/components/wallet/buyer/AllDepositsSection';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
+import { DollarSign } from 'lucide-react';
 
 function BuyerWalletContent() {
   // old hook that powers the manual add-funds UI
@@ -38,6 +37,7 @@ function BuyerWalletContent() {
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'nowpayments' | 'direct'>('direct'); // Default to direct!
+  const [depositHistory, setDepositHistory] = useState<any[]>([]);
 
   // decide which balance to show: prefer context (backend) if available
   const contextBalance =
@@ -49,8 +49,25 @@ function BuyerWalletContent() {
   useEffect(() => {
     if (user?.username && isInitialized) {
       void reloadData();
+      void loadDepositHistory();
     }
   }, [user?.username, isInitialized, reloadData]);
+
+  // Load deposit history
+  const loadDepositHistory = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/deposits/history', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDepositHistory(data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load deposit history:', err);
+    }
+  };
 
   // show banner if we came back from NOWPayments or direct deposit success
   useEffect(() => {
@@ -59,6 +76,7 @@ function BuyerWalletContent() {
     
     if (depositStatus === 'success' || directStatus === 'success') {
       setShowBanner(true);
+      void loadDepositHistory(); // Reload history on success
 
       // clean query so it doesn't stay forever
       if (typeof window !== 'undefined') {
@@ -70,13 +88,27 @@ function BuyerWalletContent() {
     }
   }, [searchParams, router]);
 
-  const hasPurchases = Array.isArray(buyerPurchases) && buyerPurchases.length > 0;
-  const recentArray = Array.isArray(recentPurchases) ? recentPurchases : [];
-
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
-      <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
-        <div className="mx-auto flex max-w-6xl flex-col gap-10">
+      <div className="relative z-10 px-4 py-8 sm:px-6 lg:px-10">
+        <div className="mx-auto flex max-w-7xl flex-col gap-8">
+          {/* Balance Header */}
+          <div className="flex items-center justify-between rounded-2xl border border-gray-800 bg-gradient-to-r from-[#111] to-[#0c0c0c] p-6">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+                <DollarSign className="h-7 w-7 text-[#ff950e]" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-400">Available Balance</p>
+                <p className="text-3xl font-bold text-white">${displayBalance.toFixed(2)} <span className="text-sm font-normal text-gray-500">USD</span></p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-500 mb-1">Instant deposits</p>
+              <p className="text-xs text-gray-500">Secure transactions</p>
+            </div>
+          </div>
+
           {/* success banner after crypto redirect */}
           {showBanner && (
             <div className="rounded-lg border border-green-500 bg-green-900/30 p-4 text-center text-green-300">
@@ -84,33 +116,32 @@ function BuyerWalletContent() {
             </div>
           )}
 
-          {/* main 2-column area */}
-          <section className="grid gap-6 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)]">
-            {/* left column = live balance */}
-            <BalanceCard balance={displayBalance} />
+          {/* Main Content Area - Now full width */}
+          <div className="grid gap-8 lg:grid-cols-2">
+            {/* Card Deposit Section */}
+            <AddFundsSection
+              balance={displayBalance}
+              amountToAdd={amountToAdd}
+              message={message}
+              messageType={messageType}
+              isLoading={isLoading}
+              onAmountChange={handleAmountChange}
+              onKeyPress={handleKeyPress}
+              onAddFunds={async () => {
+                await handleAddFunds();
+                if (user?.username) {
+                  void reloadData();
+                  void loadDepositHistory();
+                }
+              }}
+              onQuickAmountSelect={handleQuickAmountSelect}
+            />
 
-            {/* right column = manual add + crypto deposit */}
+            {/* Crypto Deposit Section */}
             <div className="flex flex-col gap-6">
-              <AddFundsSection
-                amountToAdd={amountToAdd}
-                message={message}
-                messageType={messageType}
-                isLoading={isLoading}
-                onAmountChange={handleAmountChange}
-                onKeyPress={handleKeyPress}
-                onAddFunds={async () => {
-                  // run old handler
-                  await handleAddFunds();
-                  // then refresh from backend to stay in sync
-                  if (user?.username) {
-                    void reloadData();
-                  }
-                }}
-                onQuickAmountSelect={handleQuickAmountSelect}
-              />
-
               {/* Payment Method Toggle */}
               <div className="rounded-xl border border-gray-800 bg-[#111] p-4">
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Crypto Payment Method</h3>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPaymentMethod('direct')}
@@ -142,14 +173,13 @@ function BuyerWalletContent() {
                 <CryptoDepositSection />
               )}
             </div>
-          </section>
+          </div>
 
-          {/* purchases */}
-          {hasPurchases ? (
-            <RecentPurchases purchases={recentArray} />
-          ) : (
-            <EmptyState />
-          )}
+          {/* All Deposits Section */}
+          <AllDepositsSection 
+            deposits={depositHistory}
+            onRefresh={loadDepositHistory}
+          />
         </div>
       </div>
     </main>
