@@ -112,32 +112,47 @@ export default function AddFundsSection({
                   <div className="absolute top-0 right-0 w-48 h-48 bg-[#ff950e] rounded-full blur-3xl -translate-y-24 translate-x-24" />
                 </div>
 
+                {/* Logos positioned at top of card */}
+                <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
+                  {/* PantyPost Logo */}
+                  <Image
+                    src="/logo.png"
+                    alt="PantyPost"
+                    width={70}
+                    height={70}
+                    quality={90}
+                    className="w-16 h-16 sm:w-[70px] sm:h-[70px] object-contain"
+                  />
+
+                  {/* SegPay Logo */}
+                  <Image
+                    src="/SegPayLogo.png"
+                    alt="SegPay"
+                    width={110}
+                    height={25}
+                    quality={90}
+                    className="h-6 sm:h-7 w-auto object-contain"
+                    style={{ maxWidth: '110px' }}
+                  />
+                </div>
+
+                {/* Contactless Payment Waves - Positioned in upper-right middle */}
+                <div className="absolute" style={{ right: '40px', top: '45%' }}>
+                  <Image
+                    src="/CreditCardWaves.png"
+                    alt="Contactless"
+                    width={37}
+                    height={47}
+                    quality={90}
+                    className="w-[15px] h-[19px] sm:w-[18px] sm:h-[23px] object-contain opacity-80"
+                  />
+                </div>
+
                 <div className="relative flex flex-col gap-0 p-6 h-full justify-between">
-                  {/* Header with Logos - Positioned 35px from top */}
-                  <div className="flex justify-between items-center" style={{ paddingTop: '11px' }}>
-                    {/* PantyPost Logo */}
-                    <Image
-                      src="/logo.png"
-                      alt="PantyPost"
-                      width={70}
-                      height={70}
-                      quality={90}
-                      className="w-16 h-16 sm:w-[70px] sm:h-[70px] object-contain"
-                    />
+                  {/* Spacer for logos */}
+                  <div className="h-16"></div>
 
-                    {/* SegPay Logo */}
-                    <Image
-                      src="/SegPayLogo.png"
-                      alt="SegPay"
-                      width={110}
-                      height={25}
-                      quality={90}
-                      className="h-6 sm:h-7 w-auto object-contain"
-                      style={{ maxWidth: '110px' }}
-                    />
-                  </div>
-
-                  {/* Real Credit Card Chip */}
+                  {/* Credit Card Chip - 30% smaller */}
                   <div className="flex items-center">
                     <Image
                       src="/CreditCardChip.png"
@@ -145,19 +160,7 @@ export default function AddFundsSection({
                       width={73}
                       height={53}
                       quality={90}
-                      className="w-[55px] h-[40px] sm:w-[65px] sm:h-[47px] object-contain"
-                    />
-                  </div>
-
-                  {/* Contactless Payment Waves - Positioned in upper-right middle */}
-                  <div className="absolute" style={{ right: '40px', top: '45%' }}>
-                    <Image
-                      src="/CreditCardWaves.png"
-                      alt="Contactless"
-                      width={37}
-                      height={47}
-                      quality={90}
-                      className="w-[30px] h-[38px] sm:w-[37px] sm:h-[47px] object-contain opacity-80"
+                      className="w-[38px] h-[28px] sm:w-[45px] sm:h-[33px] object-contain"
                     />
                   </div>
 
