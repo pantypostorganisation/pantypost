@@ -1,7 +1,7 @@
 // src/components/wallet/buyer/WalletHeader.tsx
 'use client';
 
-import { Wallet, CreditCard, ArrowUpRight } from 'lucide-react';
+import { CreditCard, ArrowUpRight } from 'lucide-react';
 
 export default function WalletHeader() {
   return (
@@ -9,7 +9,12 @@ export default function WalletHeader() {
       <div className="flex flex-1 flex-col gap-8">
         <div className="flex items-center gap-5">
           <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-            <Wallet className="h-7 w-7 text-[#ff950e]" />
+            <img
+              src="/icons/HeaderWallet.png"
+              alt="Wallet"
+              className="h-6 w-6 object-contain"
+              draggable={false}
+            />
           </div>
           <div>
             <span className="inline-flex items-center gap-2 rounded-full border border-gray-800 bg-[#0c0c0c] px-3 py-1 text-xs font-semibold uppercase tracking-[0.4em] text-gray-400">
