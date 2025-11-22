@@ -9,26 +9,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
-import {
-  Bell,
-  ShoppingBag,
-  Wallet as WalletIcon,
-  MessageSquare,
-  Users,
-  User,
-  LogOut,
-  Package,
-  ShieldCheck,
-  ClipboardCheck,
-  DollarSign,
-  Crown,
-  Shield,
-  RotateCcw,
-  Trash2,
-  Ban,
-  Menu,
-  X,
-} from 'lucide-react';
+import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ShieldCheck, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
@@ -36,7 +17,6 @@ import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
 import { resolveApiUrl } from '@/utils/url';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
-import { WalletCardIcon } from '@/components/icons/WalletCardIcon';
 import dynamic from 'next/dynamic';
 
 // OPTIMIZED: Lazy load HeaderSearch to reduce initial bundle
@@ -843,7 +823,11 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/admin/verification-requests', <ClipboardCheck className="w-5 h-5" />, 'Verify')}
                   {renderMobileLink('/admin/wallet-management', <DollarSign className="w-5 h-5" />, 'Wallets')}
                   {renderMobileLink('/admin/withdrawals', <DollarSign className="w-5 h-5" />, 'Withdrawals')}
-                  {renderMobileLink('/wallet/admin', <WalletCardIcon className="w-5 h-3.5" />, `Platform: $${platformBalance.toFixed(2)}`)}
+                  {renderMobileLink(
+                    '/wallet/admin',
+                    <img src="/icons/HeaderWallet.png" alt="Wallet" className="h-5 w-5 object-contain" draggable={false} />,
+                    `Platform: $${platformBalance.toFixed(2)}`
+                  )}
                 </>
               )}
 
@@ -865,7 +849,11 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/sellers/subscribers', <Users className="w-5 h-5" />, 'Analytics')}
                   {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
-                  {renderMobileLink('/wallet/seller', <WalletCardIcon className="w-5 h-3.5" />, `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`)}
+                  {renderMobileLink(
+                    '/wallet/seller',
+                    <img src="/icons/HeaderWallet.png" alt="Wallet" className="h-5 w-5 object-contain" draggable={false} />,
+                    `Wallet: $${Math.max(sellerBalance, 0).toFixed(2)}`
+                  )}
                   
                   <button
                     onClick={() => setShowMobileNotifications(true)}
@@ -898,7 +886,11 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/buyers/dashboard', <User className="w-5 h-5" />, 'Dashboard')}
                   {renderMobileLink('/buyers/my-orders', <Package className="w-5 h-5" />, 'My Orders')}
                   {renderMobileLink('/buyers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
-                  {renderMobileLink('/wallet/buyer', <WalletCardIcon className="w-5 h-3.5" />, `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`)}
+                  {renderMobileLink(
+                    '/wallet/buyer',
+                    <img src="/icons/HeaderWallet.png" alt="Wallet" className="h-5 w-5 object-contain" draggable={false} />,
+                    `Wallet: $${Math.max(buyerBalance, 0).toFixed(2)}`
+                  )}
                 </>
               )}
 
@@ -1082,7 +1074,7 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletCardIcon className="w-5 h-3.5" />
+                <img src="/icons/HeaderWallet.png" alt="Wallet" className="h-5 w-5 object-contain" draggable={false} />
                 <span className="font-bold text-purple-300">${platformBalance.toFixed(2)}</span>
               </Link>
             </>
@@ -1134,7 +1126,7 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletCardIcon className="w-5 h-3.5" />
+                <img src="/icons/HeaderWallet.png" alt="Wallet" className="h-5 w-5 object-contain" draggable={false} />
                 <span className="font-bold text-purple-100">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
 
@@ -1299,7 +1291,7 @@ export default function Header(): React.ReactElement | null {
                 }}
                 style={{ touchAction: 'manipulation' }}
               >
-                <WalletCardIcon className="w-5 h-3.5" />
+                <img src="/icons/HeaderWallet.png" alt="Wallet" className="h-5 w-5 object-contain" draggable={false} />
                 <span className="font-bold text-purple-100">${Math.max(buyerBalance, 0).toFixed(2)}</span>
               </Link>
 
