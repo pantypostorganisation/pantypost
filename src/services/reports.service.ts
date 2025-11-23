@@ -126,6 +126,37 @@ class ReportsService {
     }
   }
 
+  async getResolvedReports(params?: {
+    page?: number;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<ReportResponse> {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, String(value));
+        }
+      });
+    }
+
+    try {
+      return await apiCall(`/reports/resolved?${queryParams.toString()}`, {
+        method: 'GET'
+      });
+    } catch (error) {
+      console.error('[ReportsService] Error fetching resolved reports:', error);
+      return {
+        success: false,
+        error: {
+          code: 'NETWORK_ERROR',
+          message: 'Failed to fetch resolved reports'
+        }
+      };
+    }
+  }
+
   async getReportById(id: string): Promise<ReportResponse> {
     try {
       return await apiCall(buildApiUrl('/reports/:id', { id }), {
