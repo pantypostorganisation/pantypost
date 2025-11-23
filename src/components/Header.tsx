@@ -990,11 +990,6 @@ export default function Header(): React.ReactElement | null {
 
           {isAdminUser && (
             <>
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-purple-900/20 to-pink-900/20 rounded-lg border border-purple-500/30">
-                <Crown className="w-3.5 h-3.5 text-purple-400" />
-                <span className="text-[10px] font-bold text-purple-300">ADMIN</span>
-              </div>
-
               <div className="relative flex items-center">
                 <Link
                   href="/admin/reports"
