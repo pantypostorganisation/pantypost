@@ -188,21 +188,25 @@ router.get('/', authMiddleware, async (req, res) => {
       });
     }
 
-    const {
-      page = 0,
-      limit = 20,
-      status,
-      severity,
-      reportType,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = req.query;
+  const {
+    page = 0,
+    limit = 20,
+    status,
+    severity,
+    reportType,
+    sortBy = 'createdAt',
+    sortOrder = 'desc'
+  } = req.query;
 
     // Build query
-    const query = {};
-    if (status) query.status = status;
-    if (severity) query.severity = severity;
-    if (reportType) query.reportType = reportType;
+  const query = {};
+  if (status && status !== 'all') {
+    query.status = status;
+  } else {
+    query.status = 'pending';
+  }
+  if (severity) query.severity = severity;
+  if (reportType) query.reportType = reportType;
 
     // Build sort
     const sort = {};
@@ -236,6 +240,60 @@ router.get('/', authMiddleware, async (req, res) => {
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: 'Failed to fetch reports'
+      }
+    });
+  }
+});
+
+// GET /api/reports/resolved - Get resolved reports (admin only)
+router.get('/resolved', authMiddleware, async (req, res) => {
+  try {
+    // Check admin role
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+          message: 'Admin access required'
+        }
+      });
+    }
+
+    const {
+      page = 0,
+      limit = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    const sort = {};
+    sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+    const reports = await Report.find({ status: 'resolved' })
+      .sort(sort)
+      .limit(parseInt(limit))
+      .skip(parseInt(page) * parseInt(limit))
+      .lean();
+
+    const total = await Report.countDocuments({ status: 'resolved' });
+
+    res.json({
+      success: true,
+      data: {
+        reports,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('[Reports] Error fetching resolved reports:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to fetch resolved reports'
       }
     });
   }

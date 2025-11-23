@@ -9,7 +9,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
-import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ShieldCheck, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X } from 'lucide-react';
+import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
@@ -818,7 +818,6 @@ export default function Header(): React.ReactElement | null {
                   </div>
                   {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
                   {renderMobileLink('/admin/bans', <Ban className="w-5 h-5" />, 'Bans')}
-                  {renderMobileLink('/admin/resolved', <ShieldCheck className="w-5 h-5" />, 'Resolved')}
                   {renderMobileLink('/admin/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/admin/verification-requests', <ClipboardCheck className="w-5 h-5" />, 'Verify')}
                   {renderMobileLink('/admin/wallet-management', <DollarSign className="w-5 h-5" />, 'Wallets')}
@@ -1017,14 +1016,6 @@ export default function Header(): React.ReactElement | null {
               >
                 <Ban className="w-3.5 h-3.5 text-purple-400" />
                 <span>Bans</span>
-              </Link>
-
-              <Link
-                href="/admin/resolved"
-                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-green-400" />
-                <span>Resolved</span>
               </Link>
 
               <Link

@@ -83,7 +83,7 @@ export default function AdminReportsPage() {
   // State variables
   const [reports, setReports] = useState<ReportLog[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterBy, setFilterBy] = useState<'all' | 'unprocessed' | 'processed'>('unprocessed');
+  const [filterBy, setFilterBy] = useState<'all' | 'unprocessed' | 'processed'>('all');
   const [severityFilter, setSeverityFilter] = useState<'all' | 'low' | 'medium' | 'high' | 'critical'>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'harassment' | 'spam' | 'inappropriate_content' | 'scam' | 'other'>('all');
   const [selectedReport, setSelectedReport] = useState<ReportLog | null>(null);
@@ -105,6 +105,59 @@ export default function AdminReportsPage() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [isLoadingReports, setIsLoadingReports] = useState(true);
 
+  const normalizeReport = (
+    report: any,
+    options: { processedOverride?: boolean; statusOverride?: ReportLog['status'] } = {}
+  ): ReportLog => {
+    const processedStatuses = new Set(['resolved', 'dismissed']);
+    const derivedProcessed = processedStatuses.has(report?.status) || report?.processed || false;
+    const processed = typeof options.processedOverride === 'boolean'
+      ? options.processedOverride
+      : derivedProcessed;
+
+    const status = options.statusOverride || report?.status || (processed ? 'resolved' : 'pending');
+
+    return {
+      id: report?._id || report?.id || `report_${Date.now()}_${Math.random()}`,
+      reporter: sanitizeStrict(report?.reportedBy || report?.reporter || 'unknown'),
+      reportee: sanitizeStrict(report?.reportedUser || report?.reportee || 'unknown'),
+      messages: report?.messages || [],
+      date: report?.createdAt || report?.date || new Date().toISOString(),
+      processed,
+      status,
+      banApplied: report?.banApplied || false,
+      banId: report?.banId,
+      severity: report?.severity || 'medium',
+      category: report?.reportType || report?.category || 'other',
+      adminNotes: sanitizeStrict(report?.description || report?.adminNotes || ''),
+      processedBy: report?.processedBy ? sanitizeStrict(report.processedBy) : undefined,
+      processedAt: report?.processedAt || report?.resolvedAt,
+      evidence: report?.evidence || [],
+      relatedMessageId: report?.relatedMessageId
+    };
+  };
+
+  const extractReportsFromResponse = (
+    response: any,
+    options: { processedOverride?: boolean; statusOverride?: ReportLog['status'] } = {}
+  ): ReportLog[] => {
+    if (!response?.success || !response.data) return [];
+
+    let reportsData: any[] = [];
+
+    if (Array.isArray(response.data)) {
+      reportsData = response.data;
+    } else if (response.data.reports && Array.isArray(response.data.reports)) {
+      reportsData = response.data.reports;
+    } else if (response.data.data && Array.isArray(response.data.data)) {
+      reportsData = response.data.data;
+    } else if (Array.isArray(response.reports)) {
+      reportsData = response.reports;
+    }
+
+    return reportsData.map((report: any) => normalizeReport(report, options));
+  };
+
   // Load reports from backend API
   useEffect(() => {
     loadReports();
@@ -114,47 +167,33 @@ export default function AdminReportsPage() {
   const loadReports = async () => {
     setIsLoadingReports(true);
     try {
-      const response = await reportsService.getReports();
-      
-      if (response.success && response.data) {
-        // Handle different response formats from backend
-        let reportsData: any[] = [];
-        
-        if (Array.isArray(response.data)) {
-          reportsData = response.data;
-        } else if (response.data.reports && Array.isArray(response.data.reports)) {
-          reportsData = response.data.reports;
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          reportsData = response.data.data;
-        }
+      const [pendingResult, resolvedResult] = await Promise.allSettled([
+        reportsService.getReports({ status: 'pending' }),
+        reportsService.getResolvedReports()
+      ]);
 
-        // Map backend report format to frontend ReportLog format
-        const mappedReports: ReportLog[] = reportsData.map((report: any) => ({
-          id: report._id || report.id || `report_${Date.now()}_${Math.random()}`,
-          reporter: sanitizeStrict(report.reportedBy || report.reporter || 'unknown'),
-          reportee: sanitizeStrict(report.reportedUser || report.reportee || 'unknown'),
-          date: report.createdAt || report.date || new Date().toISOString(),
-          category: report.reportType || report.category || 'other',
-          severity: report.severity || 'medium',
-          adminNotes: sanitizeStrict(report.description || report.adminNotes || ''),
-          processed: report.status === 'resolved' || report.processed || false,
-          banApplied: report.banApplied || false,
-          processedBy: report.processedBy ? sanitizeStrict(report.processedBy) : undefined,
-          processedAt: report.processedAt || report.resolvedAt,
-          evidence: report.evidence || [],
-          relatedMessageId: report.relatedMessageId,
-          messages: report.messages || []  // Add messages field
-        }));
-
-        // Sort newest → oldest
-        mappedReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-        setReports(mappedReports);
-        setLastRefresh(new Date());
-      } else {
-        console.error('Failed to load reports:', response.error);
-        setReports([]);
+      if (pendingResult.status === 'rejected') {
+        console.error('Failed to load pending reports:', pendingResult.reason);
       }
+
+      if (resolvedResult.status === 'rejected') {
+        console.error('Failed to load resolved reports:', resolvedResult.reason);
+      }
+
+      const pendingReports = pendingResult.status === 'fulfilled'
+        ? extractReportsFromResponse(pendingResult.value, { processedOverride: false, statusOverride: 'pending' })
+        : [];
+
+      const resolvedReports = resolvedResult.status === 'fulfilled'
+        ? extractReportsFromResponse(resolvedResult.value, { processedOverride: true, statusOverride: 'resolved' })
+        : [];
+
+      const combinedReports = [...pendingReports, ...resolvedReports]
+        .filter(Boolean)
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      setReports(combinedReports);
+      setLastRefresh(new Date());
     } catch (error) {
       console.error('Error loading reports:', error);
       setReports([]);
@@ -196,7 +235,7 @@ export default function AdminReportsPage() {
 
   // Calculate filtered and sorted reports
   const filteredAndSortedReports = (() => {
-    let filtered = reports.filter((report) => {
+    const filtered = reports.filter((report) => {
       if (!report) return false;
 
       const searchLower = searchTerm.toLowerCase();
@@ -206,14 +245,11 @@ export default function AdminReportsPage() {
           (report.adminNotes && report.adminNotes.toLowerCase().includes(searchLower))
         : true;
 
-      const matchesFilter =
-        filterBy === 'all' ? true : filterBy === 'processed' ? report.processed : !report.processed;
-
       const matchesSeverity = severityFilter === 'all' ? true : report.severity === severityFilter;
 
       const matchesCategory = categoryFilter === 'all' ? true : report.category === categoryFilter;
 
-      return matchesSearch && matchesFilter && matchesSeverity && matchesCategory;
+      return matchesSearch && matchesSeverity && matchesCategory;
     });
 
     // Sort
@@ -242,6 +278,12 @@ export default function AdminReportsPage() {
 
     return filtered;
   })();
+
+  const activeReports = filteredAndSortedReports.filter((report) => !report.processed);
+  const resolvedReports = filteredAndSortedReports.filter((report) => report.processed);
+
+  const visibleActiveReports = filterBy === 'processed' ? [] : activeReports;
+  const visibleResolvedReports = filterBy === 'unprocessed' ? [] : resolvedReports;
 
   // Update ban info
   useEffect(() => {
@@ -518,7 +560,7 @@ export default function AdminReportsPage() {
           ) : (
             <Suspense fallback={<ReportListSkeleton count={5} />}>
               <ReportsList
-                reports={filteredAndSortedReports}
+                reports={visibleActiveReports}
                 searchTerm={searchTerm}
                 expandedReports={expandedReports}
                 toggleExpanded={toggleExpanded}
@@ -534,6 +576,31 @@ export default function AdminReportsPage() {
               />
             </Suspense>
           )}
+
+          <div className="mt-10 space-y-4">
+            <h2 className="text-2xl font-semibold text-white">Resolved Reports</h2>
+            {isLoadingReports ? (
+              <ReportListSkeleton count={3} />
+            ) : (
+              <Suspense fallback={<ReportListSkeleton count={3} />}>
+                <ReportsList
+                  reports={visibleResolvedReports}
+                  searchTerm={searchTerm}
+                  expandedReports={expandedReports}
+                  toggleExpanded={toggleExpanded}
+                  onBan={handleBanFromReport}
+                  onResolve={handleMarkResolved}
+                  onDelete={handleDeleteReport}
+                  onUpdateSeverity={updateReportSeverity}
+                  onUpdateCategory={updateReportCategory}
+                  onUpdateAdminNotes={updateAdminNotes}
+                  getUserReportStats={getUserReportStats}
+                  banContext={banContext}
+                  reportBanInfo={reportBanInfo}
+                />
+              </Suspense>
+            )}
+          </div>
 
           {showBanModal && (
             <Suspense fallback={<ModalSkeleton />}>

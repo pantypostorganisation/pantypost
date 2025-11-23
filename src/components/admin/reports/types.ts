@@ -15,6 +15,7 @@ export type ReportLog = {
   messages: Message[];
   date: string;
   processed?: boolean;
+  status?: 'pending' | 'reviewed' | 'resolved' | 'dismissed';
   banApplied?: boolean;
   banId?: string;
   severity?: 'low' | 'medium' | 'high' | 'critical';
@@ -22,6 +23,8 @@ export type ReportLog = {
   adminNotes?: string;
   processedBy?: string;
   processedAt?: string;
+  evidence?: string[];
+  relatedMessageId?: string;
 };
 
 export type ReportStats = {
