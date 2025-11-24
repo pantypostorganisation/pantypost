@@ -101,23 +101,30 @@ export default function AdminApprovalPage() {
     );
   }
 
-  const renderImages = (listing: Listing) => (
-    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
-      {(listing.imageUrls || []).map((url, index) => (
+  const renderImages = (listing: Listing) => {
+    const firstImage =
+      typeof listing.images?.[0] === 'string'
+        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/uploads/${listing.images[0]}`
+        : listing.images?.[0]?.url;
+
+    if (!firstImage) return null;
+
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
         <div
-          key={`${listing.id || (listing as any)._id}-${index}`}
           className="relative overflow-hidden rounded-lg border border-white/10 bg-[#0f0f0f]"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={url}
-            alt={`${listing.title} image ${index + 1}`}
-            className="h-24 w-full object-cover"
+            src={firstImage}
+            alt={listing.title}
+            className="w-full h-full object-cover rounded-xl"
+            onError={e => (e.currentTarget.src = '/placeholder-image.png')}
           />
         </div>
-      ))}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderPendingCard = (listing: Listing) => {
     const category = listing.tags?.[0] || 'General';
