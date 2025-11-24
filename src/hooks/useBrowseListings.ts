@@ -211,9 +211,14 @@ export const useBrowseListings = () => {
     console.log('=== Filtering listings ===');
     console.log('Fresh listings count:', freshListings.length);
     console.log('Current filters:', { filter, searchTerm: debouncedSearchTerm, minPrice, maxPrice, sortBy, selectedHourRange });
-    
+
     let filtered = [...freshListings];
-    
+
+    filtered = filtered.filter(listing => {
+      if (!listing.approvalStatus) return true;
+      return listing.approvalStatus === 'approved';
+    });
+
     // Filter out ended auctions
     filtered = filtered.filter(listing => {
       if (!listing.auction) return true;

@@ -20,6 +20,9 @@ export { banService } from './ban.service';
 // Reports service - report management
 export { reportsService } from './reports.service';
 
+// Approval service - manual listing approvals
+export { approvalService } from './approval.service';
+
 // Wallet service - financial operations
 export { walletService } from './wallet.service';
 

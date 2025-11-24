@@ -72,6 +72,13 @@ export type Listing = {
   tags?: string[];
   hoursWorn?: number;
   views?: number;
+  verifiedSeller?: boolean;
+  requiresApproval?: boolean;
+  approvalStatus?: 'pending' | 'approved' | 'denied';
+  approvedAt?: string;
+  approvedBy?: string;
+  deniedAt?: string;
+  deniedBy?: string;
 
   auction?: AuctionSettings;
 };
@@ -142,7 +149,7 @@ class SoldListingDeduplicationManager {
 type ListingContextType = {
   isAuthReady: boolean;
   listings: Listing[];
-  addListing: (listing: AddListingInput) => Promise<void>;
+  addListing: (listing: AddListingInput) => Promise<Listing | null>;
   addAuctionListing: (listing: AddListingInput, auctionSettings: AuctionInput) => Promise<void>;
   removeListing: (id: string) => Promise<void>;
   updateListing: (
@@ -539,10 +546,10 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [listings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Create listing ----------
-  const addListing = async (listing: NewListingInput): Promise<void> => {
+  const addListing = async (listing: NewListingInput): Promise<Listing | null> => {
     if (!user || user.role !== 'seller') {
       alert('You must be logged in as a seller to create listings.');
-      return;
+      return null;
     }
 
     const validationResult = securityService.validateAndSanitize(
@@ -572,7 +579,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         'Please check your listing details:\n' +
           Object.values(validationResult.errors || {}).join('\n')
       );
-      return;
+      return null;
     }
 
     const myListings = listings.filter((l) => l.seller === user.username);
@@ -585,7 +592,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           ? 'You have reached the maximum of 25 listings for verified sellers.'
           : 'Unverified sellers can only have 2 active listings. Please verify your account to add more.'
       );
-      return;
+      return null;
     }
 
     try {
@@ -608,12 +615,15 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
             new CustomEvent('listingCreated', { detail: { listing: result.data } })
           );
         }
+        return result.data;
       } else {
         alert(result.error?.message || 'Failed to create listing. Please try again.');
+        return null;
       }
     } catch (error) {
       console.error('Error creating listing:', error);
       alert('An error occurred while creating the listing.');
+      return null;
     }
   };
 

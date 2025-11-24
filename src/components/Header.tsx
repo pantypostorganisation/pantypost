@@ -817,6 +817,7 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-purple-300 font-bold text-sm">ADMIN PANEL</span>
                   </div>
                   {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
+                  {renderMobileLink('/admin/approval', <ClipboardCheck className="w-5 h-5" />, 'Approval')}
                   {renderMobileLink('/admin/bans', <Ban className="w-5 h-5" />, 'Bans')}
                   {renderMobileLink('/admin/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/admin/verification-requests', <ClipboardCheck className="w-5 h-5" />, 'Verify')}
@@ -1004,6 +1005,14 @@ export default function Header(): React.ReactElement | null {
                   )}
                 </Link>
               </div>
+
+              <Link
+                href="/admin/approval"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-orange-900/20 hover:from-purple-900/30 hover:to-orange-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5 text-purple-300" />
+                <span>Approval</span>
+              </Link>
 
               <Link
                 href="/admin/bans"

@@ -10,6 +10,9 @@ const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const AuctionSettlementService = require('../services/auctionSettlement');
+const jwt = require('jsonwebtoken');
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // ============= HELPER FUNCTIONS FOR PREMIUM CONTENT =============
 
@@ -138,12 +141,12 @@ router.get('/debug', async (req, res) => {
 // GET /api/listings - Get all listings with advanced filters
 router.get('/', async (req, res) => {
   try {
-    const { 
+    const {
       search,
-      seller, 
+      seller,
       tags,
-      minPrice, 
-      maxPrice, 
+      minPrice,
+      maxPrice,
       isPremium,
       isAuction,
       status = 'active',
@@ -153,7 +156,20 @@ router.get('/', async (req, res) => {
       page = 1,
       limit = 20
     } = req.query;
-    
+
+    let requester = null;
+    const authHeader = req.headers.authorization || '';
+    if (authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
+      try {
+        requester = jwt.verify(token, JWT_SECRET);
+      } catch (error) {
+        requester = null;
+      }
+    }
+
+    const includeAllApprovals = requester?.role === 'admin' && req.query.includeAllApprovals === 'true';
+
     // Build filter
     let filter = {};
     
@@ -199,7 +215,22 @@ router.get('/', async (req, res) => {
     
     // Auction filter
     if (isAuction !== undefined) filter['auction.isAuction'] = isAuction === 'true';
-    
+
+    if (!includeAllApprovals) {
+      const approvalConditions = [
+        { approvalStatus: 'approved' },
+        { approvalStatus: { $exists: false } },
+        { requiresApproval: { $ne: true } },
+      ];
+
+      if (requester?.role === 'seller' && requester?.username) {
+        approvalConditions.push({ seller: requester.username });
+      }
+
+      filter.$and = filter.$and || [];
+      filter.$and.push({ $or: approvalConditions });
+    }
+
     // Price filter
     if (!isAuction || isAuction === 'false') {
       if (minPrice || maxPrice) {
@@ -438,10 +469,32 @@ router.post('/', authMiddleware, async (req, res) => {
         error: 'Only sellers can create listings'
       });
     }
-    
+
     const listingData = req.body;
     listingData.seller = req.user.username;
-    
+
+    const sellerRecord = await User.findOne({ username: req.user.username });
+    const isSellerVerified = Boolean(sellerRecord?.isVerified || sellerRecord?.verificationStatus === 'verified');
+
+    listingData.isVerified = isSellerVerified;
+    listingData.verifiedSeller = isSellerVerified;
+
+    if (isSellerVerified) {
+      listingData.requiresApproval = false;
+      listingData.approvalStatus = 'approved';
+      listingData.approvedAt = new Date();
+      listingData.approvedBy = 'system';
+      listingData.deniedAt = undefined;
+      listingData.deniedBy = undefined;
+    } else {
+      listingData.requiresApproval = true;
+      listingData.approvalStatus = 'pending';
+      listingData.approvedAt = undefined;
+      listingData.approvedBy = undefined;
+      listingData.deniedAt = undefined;
+      listingData.deniedBy = undefined;
+    }
+
     // Handle images
     if (listingData.imageUrl && !listingData.imageUrls) {
       listingData.imageUrls = [listingData.imageUrl];

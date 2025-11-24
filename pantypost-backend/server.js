@@ -44,6 +44,7 @@ const verificationRoutes = require('./routes/verification.routes');
 const adminRoutes = require('./routes/admin.routes');
 const reportRoutes = require('./routes/report.routes');
 const banRoutes = require('./routes/ban.routes');
+const approvalRoutes = require('./routes/approval.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const statsRoutes = require('./routes/stats.routes');
 // NEW
@@ -168,6 +169,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin', banRoutes);
+app.use('/api/admin/approval', approvalRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/stats', statsRoutes);

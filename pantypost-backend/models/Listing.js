@@ -51,6 +51,26 @@ const listingSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  verifiedSeller: {
+    type: Boolean,
+    default: false
+  },
+
+  requiresApproval: {
+    type: Boolean,
+    default: false
+  },
+
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'denied'],
+    default: 'approved'
+  },
+
+  approvedAt: Date,
+  approvedBy: String,
+  deniedAt: Date,
+  deniedBy: String,
   
   // Listing details
   tags: [{

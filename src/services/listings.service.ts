@@ -87,11 +87,18 @@ interface BackendListing {
   imageUrls: string[];
   seller: string;
   isVerified?: boolean;
+  verifiedSeller?: boolean;
   isPremium?: boolean;
   tags?: string[];
   hoursWorn?: number;
   status?: 'active' | 'sold' | 'expired' | 'cancelled';
   views?: number;
+  requiresApproval?: boolean;
+  approvalStatus?: 'pending' | 'approved' | 'denied';
+  approvedAt?: string;
+  approvedBy?: string;
+  deniedAt?: string;
+  deniedBy?: string;
   createdAt: string;
   soldAt?: string;
   isLocked?: boolean; // Server indicates premium content is locked
@@ -220,11 +227,18 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
     date: backendListing.createdAt,
     seller: backendListing.seller,
     isVerified: backendListing.isVerified || false,
+    verifiedSeller: backendListing.verifiedSeller ?? backendListing.isVerified ?? false,
     isPremium: backendListing.isPremium || false,
     isLocked: backendListing.isLocked || false, // Pass through isLocked flag from backend
     tags: backendListing.tags || [],
     hoursWorn: backendListing.hoursWorn,
     views: backendListing.views || 0,
+    requiresApproval: backendListing.requiresApproval ?? false,
+    approvalStatus: backendListing.approvalStatus,
+    approvedAt: backendListing.approvedAt,
+    approvedBy: backendListing.approvedBy,
+    deniedAt: backendListing.deniedAt,
+    deniedBy: backendListing.deniedBy,
     // Include seller profile data from backend
     sellerProfile: backendListing.sellerProfile || undefined,
     isSellerVerified: backendListing.isSellerVerified || false,
