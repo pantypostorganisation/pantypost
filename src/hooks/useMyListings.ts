@@ -7,9 +7,9 @@ import { WalletContext } from '@/context/WalletContext';
 import { listingsService } from '@/services';
 import { Listing } from '@/context/ListingContext';
 import { ListingFormState, EditingState, ListingAnalytics, ListingDraft } from '@/types/myListings';
-import { 
-  INITIAL_FORM_STATE, 
-  calculateAuctionEndTime 
+import {
+  INITIAL_FORM_STATE,
+  calculateAuctionEndTime
 } from '@/utils/myListingsUtils';
 import { uploadMultipleToCloudinary, checkCloudinaryConfig } from '@/utils/cloudinary';
 import { v4 as uuidv4 } from 'uuid';
@@ -18,6 +18,7 @@ import { sanitizeStrict, sanitizeNumber } from '@/utils/security/sanitization';
 import { securityService } from '@/services';
 import { z } from 'zod';
 import { ApiResponse } from '@/services/api.config';
+import { useToast } from '@/context/ToastContext';
 
 // Validation schema for listing form
 const listingFormSchema = z.object({
@@ -49,9 +50,9 @@ function sanitizeFormState(formState: ListingFormState): ListingFormState {
 
 export const useMyListings = () => {
   const { user } = useAuth();
-  const { 
-    listings = [], 
-    addListing, 
+  const {
+    listings = [],
+    addListing,
     addAuctionListing, 
     removeListing, 
     updateListing, 
@@ -63,6 +64,8 @@ export const useMyListings = () => {
     isLoading: listingsLoading,
     error: listingsError
   } = useListings();
+
+  const toast = useToast();
   
   // Use useContext to get wallet context - it might be undefined
   const walletContext = useContext(WalletContext);
@@ -529,7 +532,10 @@ export const useMyListings = () => {
             console.error("updateListing function not available in context");
           }
         } else {
-          await addListing(listingData);
+          const createdListing = await addListing(listingData);
+          if (createdListing?.approvalStatus === 'pending') {
+            toast?.info('Pending approval', 'Your listing is pending approval by Admins.');
+          }
         }
         
         // Delete draft if it was loaded

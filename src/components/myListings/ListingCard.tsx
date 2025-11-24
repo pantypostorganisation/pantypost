@@ -15,6 +15,8 @@ export default function ListingCard({
 }: ListingCardProps) {
   const { confirm, ConfirmationModal } = useConfirmation();
   const isAuctionListing = !!listing.auction;
+  const isPendingApproval = listing.approvalStatus === 'pending';
+  const isDenied = listing.approvalStatus === 'denied';
 
   const cover = listing.imageUrls?.[0] ?? '';
 
@@ -71,6 +73,22 @@ export default function ListingCard({
           </div>
         )}
 
+        {!isAuctionListing && isPendingApproval && (
+          <div className="absolute top-4 right-4 z-10">
+            <span className="bg-amber-500/20 border border-amber-400/60 text-amber-200 text-xs px-3 py-1.5 rounded-full font-semibold">
+              Pending approval
+            </span>
+          </div>
+        )}
+
+        {!isAuctionListing && isDenied && (
+          <div className="absolute top-4 right-4 z-10">
+            <span className="bg-red-600/20 border border-red-500/60 text-red-200 text-xs px-3 py-1.5 rounded-full font-semibold">
+              Denied
+            </span>
+          </div>
+        )}
+
         {!isAuctionListing && listing.isPremium && (
           <div className="absolute top-4 right-4 z-10">
             <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
@@ -100,6 +118,18 @@ export default function ListingCard({
         <div className="p-5 flex flex-col flex-grow">
           <h3 className="text-xl font-bold text-white mb-2">{listing.title}</h3>
           <p className="text-gray-400 text-sm mb-3 line-clamp-2 flex-grow">{listing.description}</p>
+
+          {isPendingApproval && (
+            <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
+              Pending approval — Our admins will review this listing soon.
+            </div>
+          )}
+
+          {isDenied && (
+            <div className="mb-3 rounded-lg border border-red-500/50 bg-red-600/10 px-3 py-2 text-xs font-semibold text-red-200">
+              Denied — Your listing did not meet our guidelines.
+            </div>
+          )}
 
           {listing.tags && listing.tags.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-auto mb-3">
