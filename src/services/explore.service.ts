@@ -1,6 +1,6 @@
 // src/services/explore.service.ts
-import { apiCall } from './api';
-import sanitize from './sanitize';
+import { apiCall } from './api.config';
+import { sanitizeString, sanitizeUsername } from '@/utils/sanitizeInput';
 
 // ==================== TYPES ====================
 
@@ -82,14 +82,18 @@ class ExploreService {
     params.append('page', page.toString());
     params.append('limit', limit.toString());
     params.append('type', type);
-    if (tag) params.append('tag', sanitize.strict(tag));
+    if (tag) params.append('tag', sanitizeString(tag));
     
     const response = await apiCall<{ posts: Post[]; meta: FeedMeta }>(
       `/posts/feed?${params.toString()}`,
       { method: 'GET' }
     );
     
-    return response;
+    if (response.success && response.data) {
+      return response.data;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to fetch feed');
   }
 
   /**
@@ -110,7 +114,11 @@ class ExploreService {
       { method: 'GET' }
     );
     
-    return response;
+    if (response.success && response.data) {
+      return response.data;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to fetch following feed');
   }
 
   /**
@@ -122,7 +130,11 @@ class ExploreService {
       { method: 'GET' }
     );
     
-    return response.tags;
+    if (response.success && response.data) {
+      return response.data.tags;
+    }
+    
+    return [];
   }
 
   /**
@@ -130,11 +142,15 @@ class ExploreService {
    */
   async getPost(postId: string): Promise<Post> {
     const response = await apiCall<{ post: Post }>(
-      `/posts/${sanitize.strict(postId)}`,
+      `/posts/${sanitizeString(postId)}`,
       { method: 'GET' }
     );
     
-    return response.post;
+    if (response.success && response.data) {
+      return response.data.post;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to fetch post');
   }
 
   /**
@@ -151,11 +167,15 @@ class ExploreService {
     params.append('limit', limit.toString());
     
     const response = await apiCall<{ posts: Post[]; meta: FeedMeta }>(
-      `/posts/user/${sanitize.username(username)}?${params.toString()}`,
+      `/posts/user/${sanitizeUsername(username)}?${params.toString()}`,
       { method: 'GET' }
     );
     
-    return response;
+    if (response.success && response.data) {
+      return response.data;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to fetch user posts');
   }
 
   /**
@@ -163,9 +183,9 @@ class ExploreService {
    */
   async createPost(data: CreatePostRequest): Promise<Post> {
     const sanitizedData = {
-      content: sanitize.strict(data.content),
-      imageUrls: data.imageUrls?.map(url => sanitize.strict(url)) || [],
-      linkedListing: data.linkedListing ? sanitize.strict(data.linkedListing) : undefined
+      content: sanitizeString(data.content),
+      imageUrls: data.imageUrls?.map(url => sanitizeString(url)) || [],
+      linkedListing: data.linkedListing ? sanitizeString(data.linkedListing) : undefined
     };
     
     const response = await apiCall<{ post: Post }>(
@@ -176,7 +196,11 @@ class ExploreService {
       }
     );
     
-    return response.post;
+    if (response.success && response.data) {
+      return response.data.post;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to create post');
   }
 
   /**
@@ -186,37 +210,45 @@ class ExploreService {
     const sanitizedData: UpdatePostRequest = {};
     
     if (data.content !== undefined) {
-      sanitizedData.content = sanitize.strict(data.content);
+      sanitizedData.content = sanitizeString(data.content);
     }
     if (data.imageUrls !== undefined) {
-      sanitizedData.imageUrls = data.imageUrls.map(url => sanitize.strict(url));
+      sanitizedData.imageUrls = data.imageUrls.map(url => sanitizeString(url));
     }
     if (data.isPinned !== undefined) {
       sanitizedData.isPinned = data.isPinned;
     }
     if (data.linkedListing !== undefined) {
-      sanitizedData.linkedListing = sanitize.strict(data.linkedListing);
+      sanitizedData.linkedListing = sanitizeString(data.linkedListing);
     }
     
     const response = await apiCall<{ post: Post }>(
-      `/posts/${sanitize.strict(postId)}`,
+      `/posts/${sanitizeString(postId)}`,
       {
         method: 'PUT',
         body: JSON.stringify(sanitizedData)
       }
     );
     
-    return response.post;
+    if (response.success && response.data) {
+      return response.data.post;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to update post');
   }
 
   /**
    * Delete a post (soft delete)
    */
   async deletePost(postId: string): Promise<void> {
-    await apiCall(
-      `/posts/${sanitize.strict(postId)}`,
+    const response = await apiCall(
+      `/posts/${sanitizeString(postId)}`,
       { method: 'DELETE' }
     );
+    
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to delete post');
+    }
   }
 
   /**
@@ -224,11 +256,15 @@ class ExploreService {
    */
   async toggleLike(postId: string): Promise<{ liked: boolean; likeCount: number }> {
     const response = await apiCall<{ liked: boolean; likeCount: number }>(
-      `/posts/${sanitize.strict(postId)}/like`,
+      `/posts/${sanitizeString(postId)}/like`,
       { method: 'POST' }
     );
     
-    return response;
+    if (response.success && response.data) {
+      return response.data;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to toggle like');
   }
 
   /**
@@ -240,24 +276,32 @@ class ExploreService {
     }
     
     const response = await apiCall<{ comment: PostComment }>(
-      `/posts/${sanitize.strict(postId)}/comment`,
+      `/posts/${sanitizeString(postId)}/comment`,
       {
         method: 'POST',
-        body: JSON.stringify({ content: sanitize.strict(content) })
+        body: JSON.stringify({ content: sanitizeString(content) })
       }
     );
     
-    return response.comment;
+    if (response.success && response.data) {
+      return response.data.comment;
+    }
+    
+    throw new Error(response.error?.message || 'Failed to add comment');
   }
 
   /**
    * Delete a comment from a post
    */
   async deleteComment(postId: string, commentId: string): Promise<void> {
-    await apiCall(
-      `/posts/${sanitize.strict(postId)}/comment/${sanitize.strict(commentId)}`,
+    const response = await apiCall(
+      `/posts/${sanitizeString(postId)}/comment/${sanitizeString(commentId)}`,
       { method: 'DELETE' }
     );
+    
+    if (!response.success) {
+      throw new Error(response.error?.message || 'Failed to delete comment');
+    }
   }
 }
 

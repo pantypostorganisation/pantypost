@@ -102,10 +102,13 @@ export default function AdminApprovalPage() {
   }
 
   const renderImages = (listing: Listing) => {
+    // Fixed: Changed from listing.images to listing.imageUrls
     const firstImage =
-      typeof listing.images?.[0] === 'string'
-        ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/uploads/${listing.images[0]}`
-        : listing.images?.[0]?.url;
+      typeof listing.imageUrls?.[0] === 'string'
+        ? listing.imageUrls[0].startsWith('http')
+          ? listing.imageUrls[0]
+          : `${process.env.NEXT_PUBLIC_BACKEND_URL}/uploads/${listing.imageUrls[0]}`
+        : undefined;
 
     if (!firstImage) return null;
 

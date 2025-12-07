@@ -551,7 +551,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
 
 export default function ExplorePage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isLoggedIn } = useAuth();
   
   const [posts, setPosts] = useState<Post[]>([]);
   const [trendingTags, setTrendingTags] = useState<TrendingTag[]>([]);
@@ -578,7 +578,7 @@ export default function ExplorePage() {
       const currentPage = reset ? 1 : page;
       
       let response;
-      if (feedType === 'following' && isAuthenticated) {
+      if (feedType === 'following' && isLoggedIn) {
         response = await exploreService.getFollowingFeed({ page: currentPage, limit: 20 });
       } else {
         response = await exploreService.getFeed({ 
@@ -603,7 +603,7 @@ export default function ExplorePage() {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
-  }, [feedType, selectedTag, page, isAuthenticated]);
+  }, [feedType, selectedTag, page, isLoggedIn]);
 
   // Load trending tags
   const loadTrendingTags = useCallback(async () => {
@@ -641,7 +641,7 @@ export default function ExplorePage() {
 
   // Handlers
   const handleLike = async (postId: string) => {
-    if (!isAuthenticated) {
+    if (!isLoggedIn) {
       router.push('/login');
       return;
     }
@@ -649,7 +649,7 @@ export default function ExplorePage() {
   };
 
   const handleComment = async (postId: string, content: string) => {
-    if (!isAuthenticated) {
+    if (!isLoggedIn) {
       router.push('/login');
       return;
     }
@@ -731,7 +731,7 @@ export default function ExplorePage() {
               </button>
               <button
                 onClick={() => {
-                  if (!isAuthenticated) {
+                  if (!isLoggedIn) {
                     router.push('/login');
                     return;
                   }
@@ -763,14 +763,14 @@ export default function ExplorePage() {
             )}
             
             {/* Guest Banner */}
-            {!isAuthenticated && (
+            {!isLoggedIn && (
               <div className="mb-6 p-4 bg-gradient-to-r from-pink-600/20 to-purple-600/20 border border-pink-500/30 rounded-xl">
                 <p className="text-gray-200 mb-3">
                   Join PantyPost to like, comment, and follow your favorite sellers!
                 </p>
                 <div className="flex gap-3">
                   <Link
-                    href="/register"
+                    href="/signup"
                     className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg text-white font-medium transition-colors"
                   >
                     Sign Up
