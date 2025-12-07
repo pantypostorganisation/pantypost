@@ -2,14 +2,22 @@
 import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
 
-// Content Security Policy - Enhanced for production and network access
+// ✅ FIXED Content Security Policy (Images + Videos from API now allowed)
 const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self' 'unsafe-eval' 'unsafe-inline' *.google-analytics.com *.googletagmanager.com *.sentry.io *.sentry-cdn.com https://www.googletagmanager.com https://www.google-analytics.com;
   style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-  img-src 'self' blob: data: https: *.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* http://127.0.0.1:* http://192.168.*:* http://10.*:*' : ''};
-  media-src 'self' https://res.cloudinary.com;
-  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com wss://api.pantypost.com/* *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${process.env.NODE_ENV === 'development' ? 'http://localhost:* ws://localhost:* http://192.168.*:* ws://192.168.*:* http://10.*:* ws://10.*:*' : ''};
+  img-src 'self' blob: data: https: *.cloudinary.com https://api.pantypost.com ${
+    process.env.NODE_ENV === 'development'
+      ? 'http://localhost:* http://127.0.0.1:* http://192.168.*:* http://10.*:*'
+      : ''
+  };
+  media-src 'self' https://api.pantypost.com https://res.cloudinary.com blob: data:;
+  connect-src 'self' *.google-analytics.com *.googletagmanager.com https://api.pantypost.com wss://api.pantypost.com wss://api.pantypost.com/* *.sentry.io https://vitals.vercel-insights.com https://api.cloudinary.com https://res.cloudinary.com ${
+    process.env.NODE_ENV === 'development'
+      ? 'http://localhost:* ws://localhost:* http://192.168.*:* ws://192.168.*:* http://10.*:* ws://10.*:*'
+      : ''
+  };
   font-src 'self' https://fonts.gstatic.com;
   object-src 'none';
   base-uri 'self';
@@ -33,10 +41,7 @@ const securityHeaders =
       ]
     : [
         { key: 'X-DNS-Prefetch-Control', value: 'on' },
-        {
-          key: 'Strict-Transport-Security',
-          value: 'max-age=63072000; includeSubDomains; preload',
-        },
+        { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
         { key: 'X-XSS-Protection', value: '1; mode=block' },
         { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
         { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -54,9 +59,7 @@ const performanceHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // ✅ Build to the default folder so next start & PM2 pick it up
   distDir: '.next',
-
   output: 'standalone',
   poweredByHeader: false,
   compress: true,
@@ -69,15 +72,12 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'res.cloudinary.com', port: '', pathname: '/**' },
       { protocol: 'https', hostname: '*.cloudinary.com', port: '', pathname: '/**' },
 
-      // ✅ production API uploads (Next/Image)
+      // ✅ production API uploads
       { protocol: 'https', hostname: 'api.pantypost.com', port: '', pathname: '/uploads/**' },
 
       // ✅ local dev backend
       { protocol: 'http', hostname: 'localhost', port: '5000', pathname: '/uploads/**' },
       { protocol: 'http', hostname: '127.0.0.1', port: '5000', pathname: '/uploads/**' },
-
-      // NOTE: Next.js does not support wildcard hostnames like '192.168.*' or '10.*'
-      // If you need LAN dev hosts, add them explicitly here per IP/hostname.
     ],
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -132,7 +132,6 @@ const nextConfig: NextConfig = {
       { source: '/api/:path*', destination: `${backendUrl}/api/:path*` },
       { source: '/uploads/:path*', destination: `${backendUrl}/uploads/:path*` },
     ];
-    // FIXED: Removed sitemap rewrite to use custom sitemap.ts
     return process.env.NODE_ENV === 'development' ? devRewrites : [];
   },
 
