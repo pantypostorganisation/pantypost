@@ -1,6 +1,6 @@
 // next.config.ts
 import { withSentryConfig } from '@sentry/nextjs';
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next';
 
 // Content Security Policy - Enhanced for production and network access
 const ContentSecurityPolicy = `
@@ -19,27 +19,35 @@ const ContentSecurityPolicy = `
   worker-src 'self' blob:;
   manifest-src 'self';
   ${process.env.NODE_ENV === 'production' ? 'upgrade-insecure-requests;' : ''}
-`.replace(/\s{2,}/g, ' ').trim();
+`
+  .replace(/\s{2,}/g, ' ')
+  .trim();
 
-const securityHeaders = process.env.NODE_ENV === 'development' ? [
-  { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-] : [
-  { key: 'X-DNS-Prefetch-Control', value: 'on' },
-  { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-  { key: 'X-XSS-Protection', value: '1; mode=block' },
-  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-  { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
-  { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
-  { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-  { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
-  { key: 'Cross-Origin-Embedder-Policy', value: 'unsafe-none' },
-  { key: 'Content-Security-Policy', value: ContentSecurityPolicy },
-];
+const securityHeaders =
+  process.env.NODE_ENV === 'development'
+    ? [
+        { key: 'X-DNS-Prefetch-Control', value: 'on' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      ]
+    : [
+        { key: 'X-DNS-Prefetch-Control', value: 'on' },
+        {
+          key: 'Strict-Transport-Security',
+          value: 'max-age=63072000; includeSubDomains; preload',
+        },
+        { key: 'X-XSS-Protection', value: '1; mode=block' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=()' },
+        { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+        { key: 'Cross-Origin-Embedder-Policy', value: 'unsafe-none' },
+        { key: 'Content-Security-Policy', value: ContentSecurityPolicy },
+      ];
 
 const performanceHeaders = [
   { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
@@ -60,10 +68,16 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'res.cloudinary.com', port: '', pathname: '/**' },
       { protocol: 'https', hostname: '*.cloudinary.com', port: '', pathname: '/**' },
+
+      // ✅ production API uploads (Next/Image)
+      { protocol: 'https', hostname: 'api.pantypost.com', port: '', pathname: '/uploads/**' },
+
+      // ✅ local dev backend
       { protocol: 'http', hostname: 'localhost', port: '5000', pathname: '/uploads/**' },
       { protocol: 'http', hostname: '127.0.0.1', port: '5000', pathname: '/uploads/**' },
-      { protocol: 'http', hostname: '192.168.*', port: '5000', pathname: '/uploads/**' },
-      { protocol: 'http', hostname: '10.*', port: '5000', pathname: '/uploads/**' },
+
+      // NOTE: Next.js does not support wildcard hostnames like '192.168.*' or '10.*'
+      // If you need LAN dev hosts, add them explicitly here per IP/hostname.
     ],
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
@@ -130,7 +144,7 @@ const nextConfig: NextConfig = {
           analyzerMode: 'static',
           reportFilename: dev ? './analyze/client-dev.html' : './analyze/client.html',
           openAnalyzer: false,
-        })
+        }),
       );
     }
 
@@ -162,7 +176,7 @@ const sentryOptions = {
   hideSourceMaps: true,
   widenClientFileUpload: true,
   transpileClientSDK: true,
-  tunnelRoute: "/monitoring",
+  tunnelRoute: '/monitoring',
   disableLogger: true,
   automaticVercelMonitors: true,
 };
@@ -171,4 +185,3 @@ export default process.env.NODE_ENV === 'production' &&
   process.env.NEXT_PUBLIC_ENABLE_ERROR_TRACKING === 'true'
   ? withSentryConfig(nextConfig, sentryOptions)
   : nextConfig;
-  

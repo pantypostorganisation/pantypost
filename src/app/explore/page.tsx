@@ -3,15 +3,14 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
-import { 
-  Heart, 
-  MessageCircle, 
-  Eye, 
-  Clock, 
-  TrendingUp, 
-  Users, 
+import {
+  Heart,
+  MessageCircle,
+  Eye,
+  Clock,
+  TrendingUp,
+  Users,
   ChevronLeft,
   ChevronRight,
   X,
@@ -26,11 +25,12 @@ import {
   VolumeX,
   UserPlus,
   UserCheck,
-  Film
+  Film,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import exploreService, { Post, PostComment } from '@/services/explore.service';
 import { apiCall } from '@/services/api.config';
+import OptimizedImage from '@/components/OptimizedImage';
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -38,21 +38,23 @@ function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  
+
   if (diffInSeconds < 60) return 'Just now';
   if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m`;
   if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h`;
   if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d`;
-  
+
   return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 }
 
 function isVideoUrl(url: string): boolean {
   const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.m4v'];
   const lowercaseUrl = url.toLowerCase();
-  return videoExtensions.some(ext => lowercaseUrl.includes(ext)) || 
-         lowercaseUrl.includes('video') ||
-         lowercaseUrl.includes('/v/');
+  return (
+    videoExtensions.some((ext) => lowercaseUrl.includes(ext)) ||
+    lowercaseUrl.includes('video') ||
+    lowercaseUrl.includes('/v/')
+  );
 }
 
 // ==================== VIDEO PLAYER COMPONENT ====================
@@ -69,7 +71,7 @@ function VideoPlayer({ src, isVisible }: VideoPlayerProps) {
 
   useEffect(() => {
     if (!videoRef.current) return;
-    
+
     if (isVisible) {
       videoRef.current.play().catch(() => {});
       setIsPlaying(true);
@@ -113,9 +115,9 @@ function VideoPlayer({ src, isVisible }: VideoPlayerProps) {
         playsInline
         preload="metadata"
       />
-      
+
       {/* Play/Pause overlay */}
-      <div 
+      <div
         className="absolute inset-0 flex items-center justify-center cursor-pointer"
         onClick={togglePlay}
       >
@@ -125,7 +127,7 @@ function VideoPlayer({ src, isVisible }: VideoPlayerProps) {
           </div>
         )}
       </div>
-      
+
       {/* Mute button */}
       <button
         onClick={toggleMute}
@@ -157,7 +159,7 @@ function FollowButton({ username, initialIsFollowing = false, onFollowChange }: 
   const handleFollow = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (!isLoggedIn) {
       router.push('/login');
       return;
@@ -221,22 +223,22 @@ interface PostCardProps {
   isVisible: boolean;
 }
 
-function PostCard({ 
-  post, 
-  currentUser, 
-  onLike, 
-  onComment, 
+function PostCard({
+  post,
+  currentUser,
+  onLike,
+  onComment,
   onDeleteComment,
   onDelete,
   onTagClick,
-  isVisible
+  isVisible,
 }: PostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const [isLiked, setIsLiked] = useState(
-    currentUser ? post.likes.includes(currentUser.username) : false
+    currentUser ? post.likes.includes(currentUser.username) : false,
   );
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [comments, setComments] = useState<PostComment[]>(post.comments || []);
@@ -255,11 +257,11 @@ function PostCard({
 
   const handleLike = async () => {
     if (!currentUser) return;
-    
+
     // Optimistic update
     setIsLiked(!isLiked);
-    setLikeCount(prev => isLiked ? prev - 1 : prev + 1);
-    
+    setLikeCount((prev) => (isLiked ? prev - 1 : prev + 1));
+
     try {
       await onLike(post._id);
     } catch {
@@ -271,7 +273,7 @@ function PostCard({
 
   const handleComment = async () => {
     if (!commentText.trim() || !currentUser) return;
-    
+
     try {
       await onComment(post._id, commentText);
       // Add comment optimistically
@@ -279,7 +281,7 @@ function PostCard({
         _id: Date.now().toString(),
         author: currentUser.username,
         content: commentText,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       };
       setComments([...comments, newComment]);
       setCommentText('');
@@ -291,7 +293,7 @@ function PostCard({
   const handleDeleteComment = async (commentId: string) => {
     try {
       await onDeleteComment(post._id, commentId);
-      setComments(comments.filter(c => c._id !== commentId));
+      setComments(comments.filter((c) => c._id !== commentId));
     } catch (error) {
       console.error('Failed to delete comment:', error);
     }
@@ -329,12 +331,13 @@ function PostCard({
           <Link href={`/sellers/${post.author}`} className="flex-shrink-0">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#ff950e]/20 to-[#ff6b00]/10 border-2 border-[#ff950e]/30 overflow-hidden hover:border-[#ff950e] transition-colors">
               {post.authorInfo?.profilePic ? (
-                <Image
+                <OptimizedImage
                   src={post.authorInfo.profilePic}
                   alt={post.author}
                   width={48}
                   height={48}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full"
+                  objectFit="cover"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[#ff950e] text-xl font-bold">
@@ -343,17 +346,17 @@ function PostCard({
               )}
             </div>
           </Link>
-          
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <Link 
+              <Link
                 href={`/sellers/${post.author}`}
                 className="font-bold text-white hover:text-[#ff950e] transition-colors truncate"
               >
                 {post.author}
               </Link>
               {post.authorInfo?.isVerified && (
-                <Image
+                <OptimizedImage
                   src="/verification_badge.png"
                   alt="Verified"
                   width={16}
@@ -371,10 +374,10 @@ function PostCard({
               {formatRelativeTime(post.createdAt)}
             </span>
           </div>
-          
+
           <FollowButton username={post.author} />
         </div>
-        
+
         {isOwner && (
           <div className="relative ml-2" ref={menuRef}>
             <button
@@ -383,7 +386,7 @@ function PostCard({
             >
               <MoreHorizontal className="w-5 h-5" />
             </button>
-            
+
             {showMenu && (
               <div className="absolute right-0 top-full mt-1 bg-[#222] border border-[#444] rounded-xl shadow-2xl z-20 min-w-[150px] overflow-hidden">
                 <button
@@ -418,15 +421,15 @@ function PostCard({
             {isCurrentMediaVideo ? (
               <VideoPlayer src={currentMedia} isVisible={isVisible} />
             ) : (
-              <Image
+              <OptimizedImage
                 src={currentMedia}
                 alt="Post media"
                 fill
-                className="object-cover"
+                objectFit="cover"
               />
             )}
           </div>
-          
+
           {/* Media type indicator */}
           {isCurrentMediaVideo && (
             <div className="absolute top-3 left-3 bg-black/60 px-2 py-1 rounded-full flex items-center gap-1">
@@ -434,29 +437,37 @@ function PostCard({
               <span className="text-white text-xs">Video</span>
             </div>
           )}
-          
+
           {mediaUrls.length > 1 && (
             <>
               <button
-                onClick={() => setCurrentMediaIndex(i => i === 0 ? mediaUrls.length - 1 : i - 1)}
+                onClick={() =>
+                  setCurrentMediaIndex((i) => (i === 0 ? mediaUrls.length - 1 : i - 1))
+                }
                 className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
-                onClick={() => setCurrentMediaIndex(i => i === mediaUrls.length - 1 ? 0 : i + 1)}
+                onClick={() =>
+                  setCurrentMediaIndex((i) =>
+                    i === mediaUrls.length - 1 ? 0 : i + 1,
+                  )
+                }
                 className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
-              
+
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
                 {mediaUrls.map((_, index) => (
                   <button
                     key={index}
                     onClick={() => setCurrentMediaIndex(index)}
                     className={`w-2 h-2 rounded-full transition-all ${
-                      index === currentMediaIndex ? 'bg-[#ff950e] w-4' : 'bg-white/50 hover:bg-white/70'
+                      index === currentMediaIndex
+                        ? 'bg-[#ff950e] w-4'
+                        : 'bg-white/50 hover:bg-white/70'
                     }`}
                   />
                 ))}
@@ -472,9 +483,9 @@ function PostCard({
           onClick={handleLike}
           disabled={!currentUser}
           className={`flex items-center gap-2 transition-all duration-200 ${
-            currentUser 
-              ? isLiked 
-                ? 'text-red-500' 
+            currentUser
+              ? isLiked
+                ? 'text-red-500'
                 : 'text-gray-400 hover:text-red-500'
               : 'text-gray-600 cursor-not-allowed'
           }`}
@@ -482,7 +493,7 @@ function PostCard({
           <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
           <span className="text-sm font-medium">{likeCount}</span>
         </button>
-        
+
         <button
           onClick={() => setShowComments(!showComments)}
           className="flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition-colors"
@@ -490,7 +501,7 @@ function PostCard({
           <MessageCircle className="w-6 h-6" />
           <span className="text-sm font-medium">{comments.length}</span>
         </button>
-        
+
         <div className="flex items-center gap-2 text-gray-500 ml-auto">
           <Eye className="w-5 h-5" />
           <span className="text-sm">{post.views}</span>
@@ -527,10 +538,13 @@ function PostCard({
             </div>
           ) : (
             <p className="text-sm text-gray-500 mt-4 text-center">
-              <Link href="/login" className="text-[#ff950e] hover:underline font-semibold">Log in</Link> to comment
+              <Link href="/login" className="text-[#ff950e] hover:underline font-semibold">
+                Log in
+              </Link>{' '}
+              to comment
             </p>
           )}
-          
+
           {/* Comments List */}
           {comments.length > 0 && (
             <div className="mt-4 space-y-3">
@@ -541,7 +555,7 @@ function PostCard({
                   </div>
                   <div className="flex-1 bg-[#222] rounded-2xl px-4 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <Link 
+                      <Link
                         href={`/sellers/${comment.author}`}
                         className="text-sm font-semibold text-[#ff950e] hover:underline"
                       >
@@ -553,7 +567,7 @@ function PostCard({
                     </div>
                     <p className="text-sm text-gray-300 mt-1">{comment.content}</p>
                   </div>
-                  
+
                   {(currentUser?.username === comment.author || isOwner) && (
                     <button
                       onClick={() => handleDeleteComment(comment._id)}
@@ -593,65 +607,76 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
   const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
+
     if (mediaUrls.length + files.length > 4) {
       setError('Maximum 4 media files allowed');
       return;
     }
-    
+
     setIsUploading(true);
     setError('');
     setUploadProgress(0);
-    
+
     try {
       const totalFiles = files.length;
       let completedFiles = 0;
-      
+
       for (const file of Array.from(files)) {
         // Validate file size (50MB max for videos, 10MB for images)
         const isVideo = file.type.startsWith('video/');
         const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-        
+
         if (file.size > maxSize) {
-          setError(`File too large. Max ${isVideo ? '50MB' : '10MB'} for ${isVideo ? 'videos' : 'images'}`);
+          setError(
+            `File too large. Max ${isVideo ? '50MB' : '10MB'} for ${
+              isVideo ? 'videos' : 'images'
+            }`,
+          );
           continue;
         }
-        
+
         // Create FormData for your existing backend upload endpoint
         const formData = new FormData();
         formData.append('file', file);
-        
+
         // Get the auth token
         const token = getAuthToken();
-        
+
         // Use your existing /api/upload endpoint
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com'}/api/upload`, {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
+        const response = await fetch(
+          `${
+            process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com'
+          }/api/upload`,
+          {
+            method: 'POST',
+            body: formData,
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
         if (!response.ok) {
           throw new Error('Upload failed');
         }
-        
+
         const data = await response.json();
-        
+
         if (data.success && (data.url || data.data?.url)) {
           const uploadedUrl = data.url || data.data?.url;
-          setMediaUrls(prev => [...prev, uploadedUrl]);
+          setMediaUrls((prev) => [...prev, uploadedUrl]);
         } else {
           throw new Error(data.error || 'Upload failed');
         }
-        
+
         completedFiles++;
         setUploadProgress(Math.round((completedFiles / totalFiles) * 100));
       }
     } catch (err) {
       console.error('Upload error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to upload media. Please try again.');
+      setError(
+        err instanceof Error ? err.message : 'Failed to upload media. Please try again.',
+      );
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
@@ -663,19 +688,19 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
   };
 
   const removeMedia = (index: number) => {
-    setMediaUrls(prev => prev.filter((_, i) => i !== index));
+    setMediaUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async () => {
     if (!content.trim() && mediaUrls.length === 0) return;
-    
+
     setIsSubmitting(true);
     setError('');
-    
+
     try {
       const post = await exploreService.createPost({
         content: content.trim(),
-        imageUrls: mediaUrls
+        imageUrls: mediaUrls,
       });
       onPostCreated(post);
       onClose();
@@ -699,7 +724,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
             <X className="w-5 h-5" />
           </button>
         </div>
-        
+
         {/* Content */}
         <div className="p-4">
           <textarea
@@ -714,28 +739,31 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
             <span className="text-xs text-gray-500">
               Pro tip: Use hashtags like #lingerie #worn #custom
             </span>
-            <span className={`text-xs ${content.length > 1900 ? 'text-[#ff950e]' : 'text-gray-500'}`}>
+            <span
+              className={`text-xs ${
+                content.length > 1900 ? 'text-[#ff950e]' : 'text-gray-500'
+              }`}
+            >
               {content.length}/2000
             </span>
           </div>
-          
+
           {/* Media Preview */}
           {mediaUrls.length > 0 && (
             <div className="mt-4 grid grid-cols-2 gap-2">
               {mediaUrls.map((url, index) => (
-                <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-[#444]">
+                <div
+                  key={index}
+                  className="relative aspect-square rounded-xl overflow-hidden border border-[#444]"
+                >
                   {isVideoUrl(url) ? (
-                    <video
-                      src={url}
-                      className="w-full h-full object-cover"
-                      muted
-                    />
+                    <video src={url} className="w-full h-full object-cover" muted />
                   ) : (
-                    <Image
+                    <OptimizedImage
                       src={url}
                       alt={`Upload ${index + 1}`}
                       fill
-                      className="object-cover"
+                      objectFit="cover"
                     />
                   )}
                   <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
@@ -755,7 +783,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
               ))}
             </div>
           )}
-          
+
           {/* Upload Button */}
           <div className="mt-4">
             <input
@@ -787,14 +815,14 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
               Images up to 10MB, Videos up to 50MB
             </p>
           </div>
-          
+
           {error && (
             <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
         </div>
-        
+
         {/* Footer */}
         <div className="p-4 border-t border-[#333] flex justify-end gap-3 sticky bottom-0 bg-[#1a1a1a]">
           <button
@@ -822,7 +850,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
 export default function ExplorePage() {
   const router = useRouter();
   const { user, isLoggedIn } = useAuth();
-  
+
   const [posts, setPosts] = useState<Post[]>([]);
   const [feedType, setFeedType] = useState<'latest' | 'trending' | 'following'>('latest');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -832,7 +860,7 @@ export default function ExplorePage() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
-  
+
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const postRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -843,7 +871,7 @@ export default function ExplorePage() {
         entries.forEach((entry) => {
           const postId = entry.target.getAttribute('data-post-id');
           if (postId) {
-            setVisiblePostIds(prev => {
+            setVisiblePostIds((prev) => {
               const next = new Set(prev);
               if (entry.isIntersecting) {
                 next.add(postId);
@@ -855,7 +883,7 @@ export default function ExplorePage() {
           }
         });
       },
-      { threshold: 0.5 }
+      { threshold: 0.5 },
     );
 
     postRefs.current.forEach((element) => {
@@ -866,49 +894,52 @@ export default function ExplorePage() {
   }, [posts]);
 
   // Load posts
-  const loadPosts = useCallback(async (reset: boolean = false) => {
-    try {
-      if (reset) {
-        setIsLoading(true);
-        setPage(1);
-      } else {
-        setIsLoadingMore(true);
+  const loadPosts = useCallback(
+    async (reset: boolean = false) => {
+      try {
+        if (reset) {
+          setIsLoading(true);
+          setPage(1);
+        } else {
+          setIsLoadingMore(true);
+        }
+
+        const currentPage = reset ? 1 : page;
+
+        let response;
+        if (feedType === 'following' && isLoggedIn) {
+          response = await exploreService.getFollowingFeed({ page: currentPage, limit: 10 });
+        } else {
+          response = await exploreService.getFeed({
+            page: currentPage,
+            limit: 10,
+            type: feedType === 'following' ? 'latest' : feedType,
+            tag: selectedTag || undefined,
+          });
+        }
+
+        if (reset) {
+          setPosts(response.posts);
+        } else {
+          setPosts((prev) => [...prev, ...response.posts]);
+        }
+
+        setHasMore(response.meta.hasMore);
+        if (!reset) setPage((prev) => prev + 1);
+      } catch (error) {
+        console.error('Failed to load posts:', error);
+      } finally {
+        setIsLoading(false);
+        setIsLoadingMore(false);
       }
-      
-      const currentPage = reset ? 1 : page;
-      
-      let response;
-      if (feedType === 'following' && isLoggedIn) {
-        response = await exploreService.getFollowingFeed({ page: currentPage, limit: 10 });
-      } else {
-        response = await exploreService.getFeed({ 
-          page: currentPage, 
-          limit: 10, 
-          type: feedType === 'following' ? 'latest' : feedType,
-          tag: selectedTag || undefined
-        });
-      }
-      
-      if (reset) {
-        setPosts(response.posts);
-      } else {
-        setPosts(prev => [...prev, ...response.posts]);
-      }
-      
-      setHasMore(response.meta.hasMore);
-      if (!reset) setPage(prev => prev + 1);
-    } catch (error) {
-      console.error('Failed to load posts:', error);
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  }, [feedType, selectedTag, page, isLoggedIn]);
+    },
+    [feedType, selectedTag, page, isLoggedIn],
+  );
 
   // Initial load
   useEffect(() => {
     loadPosts(true);
-  }, [feedType, selectedTag]);
+  }, [feedType, selectedTag, loadPosts]);
 
   // Infinite scroll
   useEffect(() => {
@@ -918,13 +949,13 @@ export default function ExplorePage() {
           loadPosts(false);
         }
       },
-      { threshold: 0.1 }
+      { threshold: 0.1 },
     );
-    
+
     if (loadMoreRef.current) {
       observer.observe(loadMoreRef.current);
     }
-    
+
     return () => observer.disconnect();
   }, [hasMore, isLoadingMore, isLoading, loadPosts]);
 
@@ -951,10 +982,10 @@ export default function ExplorePage() {
 
   const handleDeletePost = async (postId: string) => {
     if (!confirm('Are you sure you want to delete this post?')) return;
-    
+
     try {
       await exploreService.deletePost(postId);
-      setPosts(prev => prev.filter(p => p._id !== postId));
+      setPosts((prev) => prev.filter((p) => p._id !== postId));
     } catch (error) {
       console.error('Failed to delete post:', error);
     }
@@ -966,7 +997,7 @@ export default function ExplorePage() {
   };
 
   const handlePostCreated = (post: Post) => {
-    setPosts(prev => [post, ...prev]);
+    setPosts((prev) => [post, ...prev]);
   };
 
   const isSeller = user?.role === 'seller';
@@ -980,7 +1011,7 @@ export default function ExplorePage() {
             <h1 className="text-3xl font-bold text-white">Explore</h1>
             <p className="text-gray-500 text-sm mt-1">See what sellers are sharing</p>
           </div>
-          
+
           {isSeller && (
             <button
               onClick={() => setShowCreateModal(true)}
@@ -991,7 +1022,7 @@ export default function ExplorePage() {
             </button>
           )}
         </div>
-        
+
         {/* Feed Type Tabs */}
         <div className="flex gap-1 mb-6 p-1 bg-[#1a1a1a] rounded-full border border-[#333]">
           <button
@@ -1034,7 +1065,7 @@ export default function ExplorePage() {
             <span className="text-sm">Following</span>
           </button>
         </div>
-        
+
         {/* Selected Tag Indicator */}
         {selectedTag && (
           <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-xl">
@@ -1047,7 +1078,7 @@ export default function ExplorePage() {
             </button>
           </div>
         )}
-        
+
         {/* Guest Banner */}
         {!isLoggedIn && (
           <div className="mb-6 p-5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 border border-[#ff950e]/30 rounded-2xl">
@@ -1070,7 +1101,7 @@ export default function ExplorePage() {
             </div>
           </div>
         )}
-        
+
         {/* Posts Feed */}
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20">
@@ -1084,12 +1115,11 @@ export default function ExplorePage() {
             </div>
             <h3 className="text-xl font-semibold text-white mb-2">No posts yet</h3>
             <p className="text-gray-500 max-w-sm mx-auto">
-              {feedType === 'following' 
-                ? "Posts from sellers you follow will appear here"
-                : selectedTag 
-                  ? `No posts with #${selectedTag} yet`
-                  : "Be the first to post something!"
-              }
+              {feedType === 'following'
+                ? 'Posts from sellers you follow will appear here'
+                : selectedTag
+                ? `No posts with #${selectedTag} yet`
+                : 'Be the first to post something!'}
             </p>
           </div>
         ) : (
@@ -1114,7 +1144,7 @@ export default function ExplorePage() {
                 />
               </div>
             ))}
-            
+
             {/* Load More Trigger */}
             <div ref={loadMoreRef} className="py-8">
               {isLoadingMore && (
@@ -1127,13 +1157,10 @@ export default function ExplorePage() {
           </div>
         )}
       </main>
-      
+
       {/* Create Post Modal */}
       {showCreateModal && (
-        <CreatePostModal
-          onClose={() => setShowCreateModal(false)}
-          onPostCreated={handlePostCreated}
-        />
+        <CreatePostModal onClose={() => setShowCreateModal(false)} onPostCreated={handlePostCreated} />
       )}
     </div>
   );
