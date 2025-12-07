@@ -609,9 +609,10 @@ export default function ExplorePage() {
   const loadTrendingTags = useCallback(async () => {
     try {
       const tags = await exploreService.getTrendingTags(10);
-      setTrendingTags(tags);
+      setTrendingTags(Array.isArray(tags) ? tags : []);
     } catch (error) {
       console.error('Failed to load trending tags:', error);
+      setTrendingTags([]);
     }
   }, []);
 
@@ -790,7 +791,7 @@ export default function ExplorePage() {
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 text-pink-500 animate-spin" />
               </div>
-            ) : posts.length === 0 ? (
+            ) : !posts || posts.length === 0 ? (
               <div className="text-center py-20">
                 <div className="w-16 h-16 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center">
                   <MessageCircle className="w-8 h-8 text-gray-600" />
@@ -807,7 +808,7 @@ export default function ExplorePage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {posts.map((post) => (
+                {posts && posts.map((post) => (
                   <PostCard
                     key={post._id}
                     post={post}
@@ -841,7 +842,7 @@ export default function ExplorePage() {
                   Trending Tags
                 </h2>
                 
-                {trendingTags.length > 0 ? (
+                {trendingTags && trendingTags.length > 0 ? (
                   <div className="space-y-2">
                     {trendingTags.map((tag, index) => (
                       <button
