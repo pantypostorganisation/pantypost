@@ -6,7 +6,7 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const Notification = require('../models/Notification');
-const authMiddleware = require('../middleware/auth');
+const authMiddleware = require('../middleware/auth.middleware');
 
 // Helper: Get author info
 async function getAuthorInfo(username) {
