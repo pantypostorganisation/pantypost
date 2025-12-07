@@ -30,7 +30,7 @@ export default function OptimizedImage({
   priority = false,
   className = '',
   sizes = '100vw',
-  quality = 75,
+  quality = 75, // kept for API compat, not used by <img>
   placeholder = 'blur',
   blurDataURL,
   fill = false,
@@ -42,30 +42,47 @@ export default function OptimizedImage({
   const [imageError, setImageError] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(src);
 
-  // Process the image source to ensure it's a valid URL
   const processedSrc = useMemo(() => {
-    // If it's already a full URL, return as is
-    if (currentSrc.startsWith('http://') || currentSrc.startsWith('https://')) {
-      return currentSrc;
+    let srcVal = (currentSrc || '').trim();
+
+    // If nothing at all, fall back immediately
+    if (!srcVal) {
+      return PLACEHOLDER_IMAGE;
     }
 
-    // If it's a data URL, return as is
-    if (currentSrc.startsWith('data:')) {
-      return currentSrc;
+    // Full URLs or data URLs – just use them
+    if (
+      srcVal.startsWith('http://') ||
+      srcVal.startsWith('https://') ||
+      srcVal.startsWith('data:')
+    ) {
+      return srcVal;
     }
 
-    // If it starts with /uploads/, prepend the API URL
-    if (currentSrc.startsWith('/uploads/')) {
-      return `${process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com'}${currentSrc}`;
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
+
+    // Normalise bare "uploads/..." -> "/uploads/..."
+    if (srcVal.startsWith('uploads/')) {
+      srcVal = `/${srcVal}`;
     }
 
-    // If it's just a filename (no path), assume it's in /uploads/listings/
-    if (!currentSrc.includes('/')) {
-      return `${process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com'}/uploads/listings/${currentSrc}`;
+    // Anything under /uploads/ should come from the API domain
+    if (srcVal.startsWith('/uploads/')) {
+      return `${apiBase}${srcVal}`;
     }
 
-    // Otherwise, assume it's a local public folder path
-    return currentSrc;
+    // Bare filename (no slash) – assume listing/post upload filename
+    if (!srcVal.includes('/')) {
+      return `${apiBase}/uploads/listings/${srcVal}`;
+    }
+
+    // Local public asset like "images/foo.png" or "/images/foo.png"
+    if (!srcVal.startsWith('/')) {
+      return `/${srcVal}`;
+    }
+
+    // Already a root-relative path such as "/images/foo.png"
+    return srcVal;
   }, [currentSrc]);
 
   const handleLoad = useCallback(() => {
@@ -74,16 +91,18 @@ export default function OptimizedImage({
   }, []);
 
   const handleError = useCallback(() => {
-    console.warn(`[OptimizedImage] Failed to load: ${processedSrc}`);
+    console.warn('[OptimizedImage] Failed to load:', processedSrc);
     setIsLoading(false);
-    setImageError(true);
 
-    // If we haven't already tried the placeholder, use it
+    // If we haven’t already tried our local placeholder, switch to it
     if (currentSrc !== PLACEHOLDER_IMAGE) {
-      console.log('[OptimizedImage] Falling back to placeholder');
+      console.log('[OptimizedImage] Falling back to local placeholder');
       setCurrentSrc(PLACEHOLDER_IMAGE);
-      setImageError(false); // Reset error for placeholder attempt
+      setImageError(false);
       setIsLoading(true);
+    } else {
+      // Placeholder also failed
+      setImageError(true);
     }
 
     if (onError) {
@@ -91,7 +110,6 @@ export default function OptimizedImage({
     }
   }, [currentSrc, processedSrc, onError]);
 
-  // Common image styles
   const imageStyles: React.CSSProperties = {
     objectFit,
     transition: 'opacity 0.3s ease-in-out',
@@ -99,7 +117,6 @@ export default function OptimizedImage({
     ...style,
   };
 
-  // For fill mode
   if (fill) {
     return (
       <div className={`relative ${className}`} style={style}>
@@ -125,11 +142,13 @@ export default function OptimizedImage({
     );
   }
 
-  // For fixed dimensions
   return (
-    <div className={`relative ${className}`} style={{ width, height, ...style }}>
+    <div
+      className={`relative ${className}`}
+      style={{ width, height, ...style }}
+    >
       {isLoading && (
-        <div 
+        <div
           className="absolute inset-0 bg-gray-200 animate-pulse rounded"
           style={{ width, height }}
         />
