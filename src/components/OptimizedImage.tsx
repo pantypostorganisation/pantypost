@@ -30,7 +30,7 @@ export default function OptimizedImage({
   priority = false,
   className = '',
   sizes = '100vw',
-  quality = 75, // kept for API compat, not used by <img>
+  quality = 75,
   placeholder = 'blur',
   blurDataURL,
   fill = false,
@@ -42,47 +42,31 @@ export default function OptimizedImage({
   const [imageError, setImageError] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(src);
 
+  // ✅ Fix: Properly process all image sources
   const processedSrc = useMemo(() => {
-    let srcVal = (currentSrc || '').trim();
+    if (!currentSrc) return PLACEHOLDER_IMAGE;
 
-    // If nothing at all, fall back immediately
-    if (!srcVal) {
-      return PLACEHOLDER_IMAGE;
+    if (currentSrc.startsWith('http://') || currentSrc.startsWith('https://')) {
+      return currentSrc;
     }
 
-    // Full URLs or data URLs – just use them
-    if (
-      srcVal.startsWith('http://') ||
-      srcVal.startsWith('https://') ||
-      srcVal.startsWith('data:')
-    ) {
-      return srcVal;
+    if (currentSrc.startsWith('data:')) {
+      return currentSrc;
     }
 
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com';
-
-    // Normalise bare "uploads/..." -> "/uploads/..."
-    if (srcVal.startsWith('uploads/')) {
-      srcVal = `/${srcVal}`;
+    if (currentSrc.startsWith('/uploads/')) {
+      return `${
+        process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com'
+      }${currentSrc}`;
     }
 
-    // Anything under /uploads/ should come from the API domain
-    if (srcVal.startsWith('/uploads/')) {
-      return `${apiBase}${srcVal}`;
+    if (!currentSrc.includes('/')) {
+      return `${
+        process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com'
+      }/uploads/listings/${currentSrc}`;
     }
 
-    // Bare filename (no slash) – assume listing/post upload filename
-    if (!srcVal.includes('/')) {
-      return `${apiBase}/uploads/listings/${srcVal}`;
-    }
-
-    // Local public asset like "images/foo.png" or "/images/foo.png"
-    if (!srcVal.startsWith('/')) {
-      return `/${srcVal}`;
-    }
-
-    // Already a root-relative path such as "/images/foo.png"
-    return srcVal;
+    return currentSrc;
   }, [currentSrc]);
 
   const handleLoad = useCallback(() => {
@@ -91,23 +75,18 @@ export default function OptimizedImage({
   }, []);
 
   const handleError = useCallback(() => {
-    console.warn('[OptimizedImage] Failed to load:', processedSrc);
+    console.warn(`[OptimizedImage] Failed to load: ${processedSrc}`);
     setIsLoading(false);
+    setImageError(true);
 
-    // If we haven’t already tried our local placeholder, switch to it
     if (currentSrc !== PLACEHOLDER_IMAGE) {
-      console.log('[OptimizedImage] Falling back to local placeholder');
+      console.log('[OptimizedImage] Falling back to placeholder');
       setCurrentSrc(PLACEHOLDER_IMAGE);
       setImageError(false);
       setIsLoading(true);
-    } else {
-      // Placeholder also failed
-      setImageError(true);
     }
 
-    if (onError) {
-      onError();
-    }
+    if (onError) onError();
   }, [currentSrc, processedSrc, onError]);
 
   const imageStyles: React.CSSProperties = {
@@ -117,23 +96,27 @@ export default function OptimizedImage({
     ...style,
   };
 
+  // ✅✅✅ FIXED FILL MODE (This is what was breaking Explore)
   if (fill) {
     return (
-      <div className={`relative ${className}`} style={style}>
+      <div
+        className={`relative w-full h-full overflow-hidden ${className}`}
+        style={style}
+      >
         {isLoading && (
           <div className="absolute inset-0 bg-gray-200 animate-pulse rounded" />
         )}
+
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={processedSrc}
           alt={alt}
           loading={priority ? 'eager' : 'lazy'}
+          className="w-full h-full"
           style={{
             ...imageStyles,
             position: 'absolute',
             inset: 0,
-            width: '100%',
-            height: '100%',
           }}
           onLoad={handleLoad}
           onError={handleError}
@@ -142,6 +125,7 @@ export default function OptimizedImage({
     );
   }
 
+  // ✅ Fixed-dimension mode (used by Browse avatars, previews, etc.)
   return (
     <div
       className={`relative ${className}`}
@@ -153,6 +137,7 @@ export default function OptimizedImage({
           style={{ width, height }}
         />
       )}
+
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={processedSrc}
