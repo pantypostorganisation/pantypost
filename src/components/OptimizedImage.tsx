@@ -1,11 +1,10 @@
 // src/components/OptimizedImage.tsx
 'use client';
 
-import Image, { StaticImageData } from 'next/image';
 import React, { useState, useCallback, useMemo } from 'react';
 
 interface OptimizedImageProps {
-  src: string | StaticImageData;
+  src: string;
   alt: string;
   width?: number;
   height?: number;
@@ -21,9 +20,6 @@ interface OptimizedImageProps {
   onError?: () => void;
 }
 
-const DEFAULT_BLUR_DATA_URL =
-  'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXz/2wBDARUXFx4aHjshITt8U0ZTfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHz/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAb/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWEREiMxUf/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q==';
-
 const PLACEHOLDER_IMAGE = '/placeholder-panty.png';
 
 export default function OptimizedImage({
@@ -36,7 +32,7 @@ export default function OptimizedImage({
   sizes = '100vw',
   quality = 75,
   placeholder = 'blur',
-  blurDataURL = DEFAULT_BLUR_DATA_URL,
+  blurDataURL,
   fill = false,
   style,
   objectFit = 'cover',
@@ -48,11 +44,6 @@ export default function OptimizedImage({
 
   // Process the image source to ensure it's a valid URL
   const processedSrc = useMemo(() => {
-    // If it's a StaticImageData object, return as is
-    if (typeof currentSrc !== 'string') {
-      return currentSrc;
-    }
-
     // If it's already a full URL, return as is
     if (currentSrc.startsWith('http://') || currentSrc.startsWith('https://')) {
       return currentSrc;
@@ -88,7 +79,7 @@ export default function OptimizedImage({
     setImageError(true);
 
     // If we haven't already tried the placeholder, use it
-    if (currentSrc !== PLACEHOLDER_IMAGE && typeof currentSrc === 'string') {
+    if (currentSrc !== PLACEHOLDER_IMAGE) {
       console.log('[OptimizedImage] Falling back to placeholder');
       setCurrentSrc(PLACEHOLDER_IMAGE);
       setImageError(false); // Reset error for placeholder attempt
@@ -100,6 +91,14 @@ export default function OptimizedImage({
     }
   }, [currentSrc, processedSrc, onError]);
 
+  // Common image styles
+  const imageStyles: React.CSSProperties = {
+    objectFit,
+    transition: 'opacity 0.3s ease-in-out',
+    opacity: isLoading ? 0 : 1,
+    ...style,
+  };
+
   // For fill mode
   if (fill) {
     return (
@@ -107,20 +106,20 @@ export default function OptimizedImage({
         {isLoading && (
           <div className="absolute inset-0 bg-gray-200 animate-pulse rounded" />
         )}
-        <Image
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={processedSrc}
           alt={alt}
-          fill
-          sizes={sizes}
-          quality={quality}
-          priority={priority}
-          placeholder={placeholder}
-          blurDataURL={blurDataURL}
-          style={{ objectFit }}
-          className={`${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+          loading={priority ? 'eager' : 'lazy'}
+          style={{
+            ...imageStyles,
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+          }}
           onLoad={handleLoad}
           onError={handleError}
-          unoptimized={true} // Important: disable Next.js optimization for external URLs
         />
       </div>
     );
@@ -135,21 +134,16 @@ export default function OptimizedImage({
           style={{ width, height }}
         />
       )}
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={processedSrc}
         alt={alt}
         width={width}
         height={height}
-        quality={quality}
-        priority={priority}
-        sizes={sizes}
-        placeholder={placeholder}
-        blurDataURL={blurDataURL}
-        style={{ objectFit, ...style }}
-        className={`${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
+        loading={priority ? 'eager' : 'lazy'}
+        style={imageStyles}
         onLoad={handleLoad}
         onError={handleError}
-        unoptimized={true} // Important: disable Next.js optimization for external URLs
       />
     </div>
   );
