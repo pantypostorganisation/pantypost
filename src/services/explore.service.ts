@@ -84,13 +84,23 @@ class ExploreService {
     params.append('type', type);
     if (tag) params.append('tag', sanitizeString(tag));
     
-    const response = await apiCall<{ posts: Post[]; meta: FeedMeta }>(
+    const response = await apiCall<any>(
       `/posts/feed?${params.toString()}`,
       { method: 'GET' }
     );
     
     if (response.success && response.data) {
-      return response.data;
+      // Handle case where posts might be directly in data or nested
+      const posts = Array.isArray(response.data) ? response.data : (response.data.posts || []);
+      const meta = response.data.meta || response.meta || {
+        total: posts.length,
+        page: page,
+        limit: limit,
+        pages: 1,
+        hasMore: false
+      };
+      
+      return { posts, meta };
     }
     
     throw new Error(response.error?.message || 'Failed to fetch feed');
@@ -109,13 +119,23 @@ class ExploreService {
     params.append('page', page.toString());
     params.append('limit', limit.toString());
     
-    const response = await apiCall<{ posts: Post[]; meta: FeedMeta }>(
+    const response = await apiCall<any>(
       `/posts/following/feed?${params.toString()}`,
       { method: 'GET' }
     );
     
     if (response.success && response.data) {
-      return response.data;
+      // Handle case where posts might be directly in data or nested
+      const posts = Array.isArray(response.data) ? response.data : (response.data.posts || []);
+      const meta = response.data.meta || response.meta || {
+        total: posts.length,
+        page: page,
+        limit: limit,
+        pages: 1,
+        hasMore: false
+      };
+      
+      return { posts, meta };
     }
     
     throw new Error(response.error?.message || 'Failed to fetch following feed');
@@ -166,13 +186,23 @@ class ExploreService {
     params.append('page', page.toString());
     params.append('limit', limit.toString());
     
-    const response = await apiCall<{ posts: Post[]; meta: FeedMeta }>(
+    const response = await apiCall<any>(
       `/posts/user/${sanitizeUsername(username)}?${params.toString()}`,
       { method: 'GET' }
     );
     
     if (response.success && response.data) {
-      return response.data;
+      // Handle case where posts might be directly in data or nested
+      const posts = Array.isArray(response.data) ? response.data : (response.data.posts || []);
+      const meta = response.data.meta || response.meta || {
+        total: posts.length,
+        page: page,
+        limit: limit,
+        pages: 1,
+        hasMore: false
+      };
+      
+      return { posts, meta };
     }
     
     throw new Error(response.error?.message || 'Failed to fetch user posts');
