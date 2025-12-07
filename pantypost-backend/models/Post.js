@@ -1,15 +1,18 @@
 // pantypost-backend/models/Post.js
+
 const mongoose = require('mongoose');
 
+// Comment subdocument schema
 const commentSchema = new mongoose.Schema({
   author: {
     type: String,
     required: true,
-    ref: 'User'
+    trim: true
   },
   content: {
     type: String,
     required: true,
+    trim: true,
     maxlength: 500
   },
   createdAt: {
@@ -18,198 +21,219 @@ const commentSchema = new mongoose.Schema({
   }
 });
 
+// Main Post schema
 const postSchema = new mongoose.Schema({
-  // The seller who created the post
+  // Author info
   author: {
     type: String,
     required: true,
-    ref: 'User',
+    trim: true,
     index: true
   },
   
-  // Post content
+  // Content
   content: {
     type: String,
-    required: true,
-    maxlength: 2000
+    trim: true,
+    maxlength: 2000,
+    default: ''
   },
   
-  // Optional images (up to 4)
+  // Media URLs (images and videos)
   imageUrls: [{
     type: String,
-    maxlength: 500
+    trim: true
   }],
   
-  // Likes (usernames of users who liked)
+  // Engagement
   likes: [{
     type: String,
-    ref: 'User'
+    trim: true
   }],
-  
-  // Like count for efficient querying
   likeCount: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   
   // Comments
   comments: [commentSchema],
-  
-  // Comment count for efficient querying
   commentCount: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   
-  // View count
+  // Views
   views: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
   
-  // Tags/hashtags extracted from content
+  // Tags (hashtags extracted from content)
   tags: [{
     type: String,
-    lowercase: true,
-    trim: true
+    trim: true,
+    lowercase: true
   }],
   
-  // Post status
+  // Status
   status: {
     type: String,
     enum: ['active', 'hidden', 'deleted'],
-    default: 'active'
+    default: 'active',
+    index: true
   },
   
-  // Is this a pinned post on the author's profile?
+  // Pinned post (one per seller)
   isPinned: {
     type: Boolean,
     default: false
   },
   
-  // Optional link to a listing
+  // Optional linked listing
   linkedListing: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Listing',
-    default: null
-  },
-  
-  // Timestamps
-  createdAt: {
-    type: Date,
-    default: Date.now,
-    index: true
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
+    ref: 'Listing'
   }
+}, {
+  timestamps: true
 });
 
-// Indexes for efficient queries
+// Indexes for performance
 postSchema.index({ author: 1, createdAt: -1 });
 postSchema.index({ status: 1, createdAt: -1 });
 postSchema.index({ tags: 1 });
 postSchema.index({ likeCount: -1, createdAt: -1 });
+postSchema.index({ isPinned: -1, createdAt: -1 });
 
-// Extract hashtags from content before saving
+// Pre-save hook to extract hashtags
 postSchema.pre('save', function(next) {
-  if (this.isModified('content')) {
+  if (this.isModified('content') && this.content) {
     // Extract hashtags from content
     const hashtagRegex = /#(\w+)/g;
     const matches = this.content.match(hashtagRegex);
+    
     if (matches) {
-      this.tags = matches.map(tag => tag.slice(1).toLowerCase()).slice(0, 10); // Max 10 tags
+      // Remove # and deduplicate, limit to 10 tags
+      this.tags = [...new Set(matches.map(tag => tag.slice(1).toLowerCase()))].slice(0, 10);
+    } else {
+      this.tags = [];
     }
   }
-  this.updatedAt = new Date();
   next();
 });
 
-// Instance methods
-postSchema.methods.addLike = async function(username) {
+// Instance method: Add like
+postSchema.methods.addLike = function(username) {
   if (!this.likes.includes(username)) {
     this.likes.push(username);
     this.likeCount = this.likes.length;
-    await this.save();
     return true;
   }
   return false;
 };
 
-postSchema.methods.removeLike = async function(username) {
+// Instance method: Remove like
+postSchema.methods.removeLike = function(username) {
   const index = this.likes.indexOf(username);
   if (index > -1) {
     this.likes.splice(index, 1);
     this.likeCount = this.likes.length;
-    await this.save();
     return true;
   }
   return false;
 };
 
-postSchema.methods.addComment = async function(author, content) {
+// Instance method: Add comment
+postSchema.methods.addComment = function(author, content) {
   this.comments.push({ author, content });
   this.commentCount = this.comments.length;
-  await this.save();
   return this.comments[this.comments.length - 1];
 };
 
-postSchema.methods.removeComment = async function(commentId, requestingUser) {
+// Instance method: Remove comment
+postSchema.methods.removeComment = function(commentId, requestingUser) {
   const comment = this.comments.id(commentId);
-  if (!comment) {
-    throw new Error('Comment not found');
-  }
-  // Only comment author or post author can delete
+  if (!comment) return false;
+  
+  // Only allow comment author or post author to delete
   if (comment.author !== requestingUser && this.author !== requestingUser) {
-    throw new Error('Not authorized to delete this comment');
+    return false;
   }
+  
   comment.deleteOne();
   this.commentCount = this.comments.length;
-  await this.save();
   return true;
 };
 
-postSchema.methods.incrementViews = async function() {
+// Instance method: Increment views
+postSchema.methods.incrementViews = function() {
   this.views += 1;
-  await this.save();
-  return this.views;
 };
 
-// Static methods
+// Static method: Get feed with pagination
 postSchema.statics.getFeed = async function(options = {}) {
   const {
-    limit = 20,
-    skip = 0,
-    followedUsers = null, // Array of usernames the user follows
-    excludeAuthor = null,
-    tag = null
+    page = 1,
+    limit = 10,
+    type = 'latest',
+    tag = null,
+    followedUsers = null,
+    excludeAuthor = null
   } = options;
-
+  
   const query = { status: 'active' };
-  
-  // If followedUsers provided, only show posts from those users
-  if (followedUsers && followedUsers.length > 0) {
-    query.author = { $in: followedUsers };
-  }
-  
-  // Exclude specific author (e.g., for "discover" feed)
-  if (excludeAuthor) {
-    query.author = { ...query.author, $ne: excludeAuthor };
-  }
   
   // Filter by tag
   if (tag) {
     query.tags = tag.toLowerCase();
   }
-
-  return this.find(query)
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(limit)
-    .lean();
+  
+  // Filter by followed users
+  if (followedUsers && followedUsers.length > 0) {
+    query.author = { $in: followedUsers };
+  }
+  
+  // Exclude specific author
+  if (excludeAuthor) {
+    query.author = { $ne: excludeAuthor };
+  }
+  
+  // Determine sort order
+  let sort;
+  if (type === 'trending') {
+    // Trending: Sort by engagement score (likes + comments*2 + views*0.1)
+    sort = { likeCount: -1, commentCount: -1, createdAt: -1 };
+  } else {
+    // Latest: Sort by creation date
+    sort = { createdAt: -1 };
+  }
+  
+  const skip = (page - 1) * limit;
+  
+  const [posts, total] = await Promise.all([
+    this.find(query)
+      .sort(sort)
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    this.countDocuments(query)
+  ]);
+  
+  return {
+    posts,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit)
+    }
+  };
 };
 
+// Static method: Get trending posts
 postSchema.statics.getTrendingPosts = async function(limit = 10) {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   
@@ -217,32 +241,69 @@ postSchema.statics.getTrendingPosts = async function(limit = 10) {
     status: 'active',
     createdAt: { $gte: oneDayAgo }
   })
-  .sort({ likeCount: -1, commentCount: -1, views: -1 })
-  .limit(limit)
-  .lean();
+    .sort({ likeCount: -1, commentCount: -1, views: -1 })
+    .limit(limit)
+    .lean();
 };
 
-postSchema.statics.getPostsByAuthor = async function(author, limit = 20, skip = 0) {
-  return this.find({
-    author,
+// Static method: Get posts by author
+postSchema.statics.getPostsByAuthor = async function(username, options = {}) {
+  const { page = 1, limit = 10 } = options;
+  const skip = (page - 1) * limit;
+  
+  const query = {
+    author: username,
     status: 'active'
-  })
-  .sort({ isPinned: -1, createdAt: -1 })
-  .skip(skip)
-  .limit(limit)
-  .lean();
+  };
+  
+  const [posts, total] = await Promise.all([
+    this.find(query)
+      .sort({ isPinned: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    this.countDocuments(query)
+  ]);
+  
+  return {
+    posts,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit)
+    }
+  };
 };
 
+// Static method: Get trending tags
 postSchema.statics.getTrendingTags = async function(limit = 10) {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
   
   return this.aggregate([
-    { $match: { status: 'active', createdAt: { $gte: oneDayAgo } } },
+    {
+      $match: {
+        status: 'active',
+        createdAt: { $gte: oneDayAgo },
+        tags: { $exists: true, $ne: [] }
+      }
+    },
     { $unwind: '$tags' },
-    { $group: { _id: '$tags', count: { $sum: 1 } } },
+    {
+      $group: {
+        _id: '$tags',
+        count: { $sum: 1 }
+      }
+    },
     { $sort: { count: -1 } },
     { $limit: limit },
-    { $project: { tag: '$_id', count: 1, _id: 0 } }
+    {
+      $project: {
+        _id: 0,
+        tag: '$_id',
+        count: 1
+      }
+    }
   ]);
 };
 

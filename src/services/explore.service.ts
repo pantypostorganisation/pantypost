@@ -1,6 +1,6 @@
 // src/services/explore.service.ts
+
 import { apiCall } from './api.config';
-import { sanitizeString, sanitizeUsername } from '@/utils/sanitizeInput';
 
 // ==================== TYPES ====================
 
@@ -44,11 +44,16 @@ export interface TrendingTag {
 }
 
 export interface FeedMeta {
-  total: number;
   page: number;
   limit: number;
-  pages: number;
+  total: number;
+  totalPages: number;
   hasMore: boolean;
+}
+
+export interface FeedResponse {
+  posts: Post[];
+  meta: FeedMeta;
 }
 
 export interface CreatePostRequest {
@@ -61,116 +66,154 @@ export interface UpdatePostRequest {
   content?: string;
   imageUrls?: string[];
   isPinned?: boolean;
-  linkedListing?: string;
 }
 
 // ==================== SERVICE ====================
 
 class ExploreService {
   /**
-   * Get the public feed (latest or trending posts)
+   * Get the public feed with optional filtering
    */
   async getFeed(options: {
     page?: number;
     limit?: number;
-    tag?: string;
     type?: 'latest' | 'trending';
-  } = {}): Promise<{ posts: Post[]; meta: FeedMeta }> {
-    const { page = 1, limit = 20, tag, type = 'latest' } = options;
+    tag?: string;
+  } = {}): Promise<FeedResponse> {
+    const { page = 1, limit = 10, type = 'latest', tag } = options;
     
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
-    params.append('type', type);
-    if (tag) params.append('tag', sanitizeString(tag));
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString(),
+      type
+    });
     
-    const response = await apiCall<any>(
-      `/posts/feed?${params.toString()}`,
-      { method: 'GET' }
-    );
-    
-    if (response.success && response.data) {
-      // Handle case where posts might be directly in data or nested
-      const posts = Array.isArray(response.data) ? response.data : (response.data.posts || []);
-      const meta = response.data.meta || response.meta || {
-        total: posts.length,
-        page: page,
-        limit: limit,
-        pages: 1,
-        hasMore: false
-      };
-      
-      return { posts, meta };
+    if (tag) {
+      params.append('tag', tag);
     }
     
-    throw new Error(response.error?.message || 'Failed to fetch feed');
+    try {
+      const response = await apiCall<{
+        posts: Post[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          pages: number;
+        };
+      }>(`/posts/feed?${params.toString()}`);
+      
+      if (response.success && response.data) {
+        return {
+          posts: response.data.posts || [],
+          meta: {
+            page: response.data.pagination?.page || page,
+            limit: response.data.pagination?.limit || limit,
+            total: response.data.pagination?.total || 0,
+            totalPages: response.data.pagination?.pages || 0,
+            hasMore: (response.data.pagination?.page || 0) < (response.data.pagination?.pages || 0)
+          }
+        };
+      }
+      
+      return {
+        posts: [],
+        meta: { page, limit, total: 0, totalPages: 0, hasMore: false }
+      };
+    } catch (error) {
+      console.error('[ExploreService] getFeed error:', error);
+      return {
+        posts: [],
+        meta: { page, limit, total: 0, totalPages: 0, hasMore: false }
+      };
+    }
   }
 
   /**
-   * Get feed from users the current user follows/subscribes to
+   * Get feed from users the current user follows
    */
   async getFollowingFeed(options: {
     page?: number;
     limit?: number;
-  } = {}): Promise<{ posts: Post[]; meta: FeedMeta }> {
-    const { page = 1, limit = 20 } = options;
+  } = {}): Promise<FeedResponse> {
+    const { page = 1, limit = 10 } = options;
     
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString()
+    });
     
-    const response = await apiCall<any>(
-      `/posts/following/feed?${params.toString()}`,
-      { method: 'GET' }
-    );
-    
-    if (response.success && response.data) {
-      // Handle case where posts might be directly in data or nested
-      const posts = Array.isArray(response.data) ? response.data : (response.data.posts || []);
-      const meta = response.data.meta || response.meta || {
-        total: posts.length,
-        page: page,
-        limit: limit,
-        pages: 1,
-        hasMore: false
-      };
+    try {
+      const response = await apiCall<{
+        posts: Post[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          pages: number;
+        };
+      }>(`/posts/following/feed?${params.toString()}`);
       
-      return { posts, meta };
+      if (response.success && response.data) {
+        return {
+          posts: response.data.posts || [],
+          meta: {
+            page: response.data.pagination?.page || page,
+            limit: response.data.pagination?.limit || limit,
+            total: response.data.pagination?.total || 0,
+            totalPages: response.data.pagination?.pages || 0,
+            hasMore: (response.data.pagination?.page || 0) < (response.data.pagination?.pages || 0)
+          }
+        };
+      }
+      
+      return {
+        posts: [],
+        meta: { page, limit, total: 0, totalPages: 0, hasMore: false }
+      };
+    } catch (error) {
+      console.error('[ExploreService] getFollowingFeed error:', error);
+      return {
+        posts: [],
+        meta: { page, limit, total: 0, totalPages: 0, hasMore: false }
+      };
     }
-    
-    throw new Error(response.error?.message || 'Failed to fetch following feed');
   }
 
   /**
    * Get trending hashtags
    */
   async getTrendingTags(limit: number = 10): Promise<TrendingTag[]> {
-    const response = await apiCall<{ tags: TrendingTag[] }>(
-      `/posts/trending-tags?limit=${limit}`,
-      { method: 'GET' }
-    );
-    
-    if (response.success && response.data) {
-      return response.data.tags;
+    try {
+      const response = await apiCall<TrendingTag[]>(`/posts/trending-tags?limit=${limit}`);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('[ExploreService] getTrendingTags error:', error);
+      return [];
     }
-    
-    return [];
   }
 
   /**
    * Get a single post by ID
    */
-  async getPost(postId: string): Promise<Post> {
-    const response = await apiCall<{ post: Post }>(
-      `/posts/${sanitizeString(postId)}`,
-      { method: 'GET' }
-    );
-    
-    if (response.success && response.data) {
-      return response.data.post;
+  async getPost(postId: string): Promise<Post | null> {
+    try {
+      const response = await apiCall<Post>(`/posts/${postId}`);
+      
+      if (response.success && response.data) {
+        return response.data;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[ExploreService] getPost error:', error);
+      return null;
     }
-    
-    throw new Error(response.error?.message || 'Failed to fetch post');
   }
 
   /**
@@ -179,102 +222,94 @@ class ExploreService {
   async getPostsByUser(username: string, options: {
     page?: number;
     limit?: number;
-  } = {}): Promise<{ posts: Post[]; meta: FeedMeta }> {
-    const { page = 1, limit = 20 } = options;
+  } = {}): Promise<FeedResponse> {
+    const { page = 1, limit = 10 } = options;
     
-    const params = new URLSearchParams();
-    params.append('page', page.toString());
-    params.append('limit', limit.toString());
+    const params = new URLSearchParams({
+      page: page.toString(),
+      limit: limit.toString()
+    });
     
-    const response = await apiCall<any>(
-      `/posts/user/${sanitizeUsername(username)}?${params.toString()}`,
-      { method: 'GET' }
-    );
-    
-    if (response.success && response.data) {
-      // Handle case where posts might be directly in data or nested
-      const posts = Array.isArray(response.data) ? response.data : (response.data.posts || []);
-      const meta = response.data.meta || response.meta || {
-        total: posts.length,
-        page: page,
-        limit: limit,
-        pages: 1,
-        hasMore: false
-      };
+    try {
+      const response = await apiCall<{
+        posts: Post[];
+        pagination: {
+          page: number;
+          limit: number;
+          total: number;
+          pages: number;
+        };
+      }>(`/posts/user/${encodeURIComponent(username)}?${params.toString()}`);
       
-      return { posts, meta };
+      if (response.success && response.data) {
+        return {
+          posts: response.data.posts || [],
+          meta: {
+            page: response.data.pagination?.page || page,
+            limit: response.data.pagination?.limit || limit,
+            total: response.data.pagination?.total || 0,
+            totalPages: response.data.pagination?.pages || 0,
+            hasMore: (response.data.pagination?.page || 0) < (response.data.pagination?.pages || 0)
+          }
+        };
+      }
+      
+      return {
+        posts: [],
+        meta: { page, limit, total: 0, totalPages: 0, hasMore: false }
+      };
+    } catch (error) {
+      console.error('[ExploreService] getPostsByUser error:', error);
+      return {
+        posts: [],
+        meta: { page, limit, total: 0, totalPages: 0, hasMore: false }
+      };
     }
-    
-    throw new Error(response.error?.message || 'Failed to fetch user posts');
   }
 
   /**
    * Create a new post (sellers only)
    */
   async createPost(data: CreatePostRequest): Promise<Post> {
-    const sanitizedData = {
-      content: sanitizeString(data.content),
-      imageUrls: data.imageUrls?.map(url => sanitizeString(url)) || [],
-      linkedListing: data.linkedListing ? sanitizeString(data.linkedListing) : undefined
-    };
+    const response = await apiCall<Post>('/posts', {
+      method: 'POST',
+      body: JSON.stringify({
+        content: data.content,
+        imageUrls: data.imageUrls || [],
+        linkedListing: data.linkedListing
+      })
+    });
     
-    const response = await apiCall<{ post: Post }>(
-      '/posts',
-      {
-        method: 'POST',
-        body: JSON.stringify(sanitizedData)
-      }
-    );
-    
-    if (response.success && response.data) {
-      return response.data.post;
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || 'Failed to create post');
     }
     
-    throw new Error(response.error?.message || 'Failed to create post');
+    return response.data;
   }
 
   /**
    * Update an existing post
    */
   async updatePost(postId: string, data: UpdatePostRequest): Promise<Post> {
-    const sanitizedData: UpdatePostRequest = {};
+    const response = await apiCall<Post>(`/posts/${postId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    });
     
-    if (data.content !== undefined) {
-      sanitizedData.content = sanitizeString(data.content);
-    }
-    if (data.imageUrls !== undefined) {
-      sanitizedData.imageUrls = data.imageUrls.map(url => sanitizeString(url));
-    }
-    if (data.isPinned !== undefined) {
-      sanitizedData.isPinned = data.isPinned;
-    }
-    if (data.linkedListing !== undefined) {
-      sanitizedData.linkedListing = sanitizeString(data.linkedListing);
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || 'Failed to update post');
     }
     
-    const response = await apiCall<{ post: Post }>(
-      `/posts/${sanitizeString(postId)}`,
-      {
-        method: 'PUT',
-        body: JSON.stringify(sanitizedData)
-      }
-    );
-    
-    if (response.success && response.data) {
-      return response.data.post;
-    }
-    
-    throw new Error(response.error?.message || 'Failed to update post');
+    return response.data;
   }
 
   /**
    * Delete a post (soft delete)
    */
   async deletePost(postId: string): Promise<void> {
-    const response = await apiCall(
-      `/posts/${sanitizeString(postId)}`,
-      { method: 'DELETE' }
-    );
+    const response = await apiCall(`/posts/${postId}`, {
+      method: 'DELETE'
+    });
     
     if (!response.success) {
       throw new Error(response.error?.message || 'Failed to delete post');
@@ -285,16 +320,18 @@ class ExploreService {
    * Toggle like on a post
    */
   async toggleLike(postId: string): Promise<{ liked: boolean; likeCount: number }> {
-    const response = await apiCall<{ liked: boolean; likeCount: number }>(
-      `/posts/${sanitizeString(postId)}/like`,
-      { method: 'POST' }
-    );
+    const response = await apiCall<{
+      liked: boolean;
+      likeCount: number;
+    }>(`/posts/${postId}/like`, {
+      method: 'POST'
+    });
     
     if (response.success && response.data) {
       return response.data;
     }
     
-    throw new Error(response.error?.message || 'Failed to toggle like');
+    return { liked: false, likeCount: 0 };
   }
 
   /**
@@ -305,29 +342,25 @@ class ExploreService {
       throw new Error('Comment must be 500 characters or less');
     }
     
-    const response = await apiCall<{ comment: PostComment }>(
-      `/posts/${sanitizeString(postId)}/comment`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ content: sanitizeString(content) })
-      }
-    );
+    const response = await apiCall<PostComment>(`/posts/${postId}/comment`, {
+      method: 'POST',
+      body: JSON.stringify({ content })
+    });
     
-    if (response.success && response.data) {
-      return response.data.comment;
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || 'Failed to add comment');
     }
     
-    throw new Error(response.error?.message || 'Failed to add comment');
+    return response.data;
   }
 
   /**
    * Delete a comment from a post
    */
   async deleteComment(postId: string, commentId: string): Promise<void> {
-    const response = await apiCall(
-      `/posts/${sanitizeString(postId)}/comment/${sanitizeString(commentId)}`,
-      { method: 'DELETE' }
-    );
+    const response = await apiCall(`/posts/${postId}/comment/${commentId}`, {
+      method: 'DELETE'
+    });
     
     if (!response.success) {
       throw new Error(response.error?.message || 'Failed to delete comment');

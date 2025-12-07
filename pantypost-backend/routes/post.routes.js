@@ -1,67 +1,102 @@
 // pantypost-backend/routes/post.routes.js
+
 const express = require('express');
 const router = express.Router();
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const Notification = require('../models/Notification');
-const authMiddleware = require('../middleware/auth.middleware');
+const authMiddleware = require('../middleware/auth');
+
+// Helper: Get author info
+async function getAuthorInfo(username) {
+  const user = await User.findOne({ username }).select('username profilePic isVerified tier bio').lean();
+  if (!user) return null;
+  
+  return {
+    username: user.username,
+    profilePic: user.profilePic,
+    isVerified: user.isVerified || false,
+    tier: user.tier,
+    bio: user.bio
+  };
+}
+
+// Helper: Enrich posts with author info
+async function enrichPostsWithAuthorInfo(posts) {
+  const authorUsernames = [...new Set(posts.map(p => p.author))];
+  const authors = await User.find({ username: { $in: authorUsernames } })
+    .select('username profilePic isVerified tier bio')
+    .lean();
+  
+  const authorMap = {};
+  authors.forEach(a => {
+    authorMap[a.username] = {
+      username: a.username,
+      profilePic: a.profilePic,
+      isVerified: a.isVerified || false,
+      tier: a.tier,
+      bio: a.bio
+    };
+  });
+  
+  return posts.map(post => ({
+    ...post,
+    authorInfo: authorMap[post.author] || null
+  }));
+}
+
+// Helper: Send notification (async, non-blocking)
+async function sendNotification(userId, type, data) {
+  try {
+    if (!userId) return;
+    
+    const user = await User.findOne({ username: userId });
+    if (!user) return;
+    
+    await Notification.create({
+      userId: user._id,
+      type,
+      title: data.title,
+      message: data.message,
+      data: data.metadata || {},
+      priority: 'low'
+    });
+  } catch (error) {
+    console.error('[Post] Notification error:', error.message);
+  }
+}
 
 // ==================== PUBLIC ROUTES ====================
 
-// GET /api/posts/feed - Get explore feed (public, but personalized if logged in)
+// GET /api/posts/feed - Get public feed
 router.get('/feed', async (req, res) => {
   try {
-    const { page = 1, limit = 20, tag, type = 'latest' } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    let posts;
+    const { page = 1, limit = 10, type = 'latest', tag } = req.query;
     
-    if (type === 'trending') {
-      posts = await Post.getTrendingPosts(parseInt(limit));
-    } else {
-      posts = await Post.getFeed({
-        limit: parseInt(limit),
-        skip,
-        tag: tag || null
-      });
-    }
-
-    // Enrich posts with author info
-    const enrichedPosts = await Promise.all(posts.map(async (post) => {
-      const author = await User.findOne({ username: post.author })
-        .select('username profilePic isVerified tier bio')
-        .lean();
-      
-      return {
-        ...post,
-        id: post._id,
-        authorInfo: author ? {
-          username: author.username,
-          profilePic: author.profilePic,
-          isVerified: author.isVerified,
-          tier: author.tier,
-          bio: author.bio
-        } : null
-      };
-    }));
-
-    // Get total count for pagination
-    const total = await Post.countDocuments({ status: 'active', ...(tag ? { tags: tag.toLowerCase() } : {}) });
-
+    const result = await Post.getFeed({
+      page: parseInt(page),
+      limit: Math.min(parseInt(limit), 50),
+      type,
+      tag: tag || null
+    });
+    
+    // Enrich with author info
+    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts);
+    
     res.json({
       success: true,
-      data: enrichedPosts,
-      meta: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit))
+      data: {
+        posts: enrichedPosts,
+        pagination: result.pagination
       }
     });
   } catch (error) {
-    console.error('[Posts] Feed error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] Feed error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch feed'
+    });
   }
 });
 
@@ -76,425 +111,474 @@ router.get('/trending-tags', async (req, res) => {
       data: tags
     });
   } catch (error) {
-    console.error('[Posts] Trending tags error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/posts/:id - Get single post
-router.get('/:id', async (req, res) => {
-  try {
-    const post = await Post.findById(req.params.id).lean();
-    
-    if (!post || post.status !== 'active') {
-      return res.status(404).json({ success: false, error: 'Post not found' });
-    }
-
-    // Get author info
-    const author = await User.findOne({ username: post.author })
-      .select('username profilePic isVerified tier bio subscriberCount')
-      .lean();
-
-    // Increment view count (async, don't wait)
-    Post.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } }).exec();
-
-    res.json({
-      success: true,
-      data: {
-        ...post,
-        id: post._id,
-        authorInfo: author ? {
-          username: author.username,
-          profilePic: author.profilePic,
-          isVerified: author.isVerified,
-          tier: author.tier,
-          bio: author.bio,
-          subscriberCount: author.subscriberCount
-        } : null
-      }
+    console.error('[Post] Trending tags error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch trending tags'
     });
-  } catch (error) {
-    console.error('[Posts] Get post error:', error);
-    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // GET /api/posts/user/:username - Get posts by user
 router.get('/user/:username', async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const posts = await Post.getPostsByAuthor(req.params.username, parseInt(limit), skip);
+    const { username } = req.params;
+    const { page = 1, limit = 10 } = req.query;
     
-    // Get author info once
-    const author = await User.findOne({ username: req.params.username })
-      .select('username profilePic isVerified tier bio')
-      .lean();
-
-    const enrichedPosts = posts.map(post => ({
-      ...post,
-      id: post._id,
-      authorInfo: author ? {
-        username: author.username,
-        profilePic: author.profilePic,
-        isVerified: author.isVerified,
-        tier: author.tier
-      } : null
-    }));
-
-    const total = await Post.countDocuments({ author: req.params.username, status: 'active' });
-
+    const result = await Post.getPostsByAuthor(username, {
+      page: parseInt(page),
+      limit: Math.min(parseInt(limit), 50)
+    });
+    
+    // Enrich with author info
+    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts);
+    
     res.json({
       success: true,
-      data: enrichedPosts,
-      meta: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit))
+      data: {
+        posts: enrichedPosts,
+        pagination: result.pagination
       }
     });
   } catch (error) {
-    console.error('[Posts] User posts error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] User posts error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch user posts'
+    });
+  }
+});
+
+// GET /api/posts/following/feed - Get feed from followed users (must be before /:id)
+router.get('/following/feed', authMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const userId = req.user._id;
+    
+    // Get list of users this user follows
+    const subscriptions = await Subscription.find({
+      subscriberId: userId,
+      status: 'active'
+    }).select('sellerUsername').lean();
+    
+    const followedUsers = subscriptions.map(s => s.sellerUsername);
+    
+    if (followedUsers.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          posts: [],
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            pages: 0
+          }
+        }
+      });
+    }
+    
+    const result = await Post.getFeed({
+      page: parseInt(page),
+      limit: Math.min(parseInt(limit), 50),
+      type: 'latest',
+      followedUsers
+    });
+    
+    // Enrich with author info
+    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts);
+    
+    res.json({
+      success: true,
+      data: {
+        posts: enrichedPosts,
+        pagination: result.pagination
+      }
+    });
+  } catch (error) {
+    console.error('[Post] Following feed error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch following feed'
+    });
+  }
+});
+
+// GET /api/posts/:id - Get single post
+router.get('/:id', async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    
+    if (!post || post.status === 'deleted') {
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found'
+      });
+    }
+    
+    // Increment views
+    post.incrementViews();
+    await post.save();
+    
+    // Get author info
+    const authorInfo = await getAuthorInfo(post.author);
+    
+    res.json({
+      success: true,
+      data: {
+        ...post.toObject(),
+        authorInfo
+      }
+    });
+  } catch (error) {
+    console.error('[Post] Get post error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch post'
+    });
   }
 });
 
 // ==================== AUTHENTICATED ROUTES ====================
 
-// POST /api/posts - Create a new post (sellers only)
+// POST /api/posts - Create new post (sellers only)
 router.post('/', authMiddleware, async (req, res) => {
   try {
+    // Check if user is a seller
+    if (req.user.role !== 'seller') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only sellers can create posts'
+      });
+    }
+    
     const { content, imageUrls, linkedListing } = req.body;
-    const author = req.user.username;
-
-    // Verify user is a seller
-    const user = await User.findOne({ username: author });
-    if (!user || user.role !== 'seller') {
-      return res.status(403).json({ success: false, error: 'Only sellers can create posts' });
-    }
-
+    
     // Validate content
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({ success: false, error: 'Post content is required' });
+    if (!content && (!imageUrls || imageUrls.length === 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Post must have content or media'
+      });
     }
-
-    if (content.length > 2000) {
-      return res.status(400).json({ success: false, error: 'Post content too long (max 2000 characters)' });
+    
+    if (content && content.length > 2000) {
+      return res.status(400).json({
+        success: false,
+        error: 'Content must be 2000 characters or less'
+      });
     }
-
-    // Validate images
+    
+    // Validate imageUrls
     if (imageUrls && imageUrls.length > 4) {
-      return res.status(400).json({ success: false, error: 'Maximum 4 images allowed per post' });
+      return res.status(400).json({
+        success: false,
+        error: 'Maximum 4 media files allowed'
+      });
     }
-
+    
+    // Create post
     const post = new Post({
-      author,
-      content: content.trim(),
+      author: req.user.username,
+      content: content || '',
       imageUrls: imageUrls || [],
-      linkedListing: linkedListing || null
+      linkedListing
     });
-
+    
     await post.save();
-
-    // Return with author info
+    
+    // Get author info
+    const authorInfo = await getAuthorInfo(req.user.username);
+    
+    // Notify subscribers (async)
+    setImmediate(async () => {
+      try {
+        const subscriptions = await Subscription.find({
+          sellerUsername: req.user.username,
+          status: 'active'
+        }).populate('subscriberId', 'username');
+        
+        for (const sub of subscriptions) {
+          if (sub.subscriberId) {
+            await sendNotification(sub.subscriberId.username, 'post', {
+              title: 'New Post',
+              message: `${req.user.username} shared a new post`,
+              metadata: { postId: post._id }
+            });
+          }
+        }
+      } catch (err) {
+        console.error('[Post] Notification error:', err);
+      }
+    });
+    
     res.status(201).json({
       success: true,
       data: {
         ...post.toObject(),
-        id: post._id,
-        authorInfo: {
-          username: user.username,
-          profilePic: user.profilePic,
-          isVerified: user.isVerified,
-          tier: user.tier
-        }
+        authorInfo
       }
     });
-
-    // Notify subscribers about new post (async)
-    const subscribers = await Subscription.find({ creator: author, status: 'active' }).select('subscriber');
-    for (const sub of subscribers) {
-      await Notification.createNotification({
-        recipient: sub.subscriber,
-        type: 'system',
-        title: 'New Post',
-        message: `${author} shared a new post`,
-        data: { postId: post._id, author },
-        priority: 'low'
-      });
-    }
   } catch (error) {
-    console.error('[Posts] Create post error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] Create error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to create post'
+    });
   }
 });
 
-// PUT /api/posts/:id - Update a post
+// PUT /api/posts/:id - Update post
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
     if (!post) {
-      return res.status(404).json({ success: false, error: 'Post not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found'
+      });
     }
-
-    if (post.author !== req.user.username && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Not authorized to edit this post' });
+    
+    // Check ownership
+    if (post.author !== req.user.username) {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only edit your own posts'
+      });
     }
-
+    
     const { content, imageUrls, isPinned } = req.body;
-
+    
+    // Update fields
     if (content !== undefined) {
-      if (content.trim().length === 0) {
-        return res.status(400).json({ success: false, error: 'Post content cannot be empty' });
-      }
       if (content.length > 2000) {
-        return res.status(400).json({ success: false, error: 'Post content too long' });
+        return res.status(400).json({
+          success: false,
+          error: 'Content must be 2000 characters or less'
+        });
       }
-      post.content = content.trim();
+      post.content = content;
     }
-
+    
     if (imageUrls !== undefined) {
       if (imageUrls.length > 4) {
-        return res.status(400).json({ success: false, error: 'Maximum 4 images allowed' });
+        return res.status(400).json({
+          success: false,
+          error: 'Maximum 4 media files allowed'
+        });
       }
       post.imageUrls = imageUrls;
     }
-
+    
     if (isPinned !== undefined) {
-      // Unpin any existing pinned posts by this author
+      // Unpin other posts if pinning this one
       if (isPinned) {
         await Post.updateMany(
-          { author: post.author, isPinned: true, _id: { $ne: post._id } },
+          { author: req.user.username, isPinned: true, _id: { $ne: post._id } },
           { isPinned: false }
         );
       }
       post.isPinned = isPinned;
     }
-
+    
     await post.save();
-
+    
+    // Get author info
+    const authorInfo = await getAuthorInfo(req.user.username);
+    
     res.json({
       success: true,
       data: {
         ...post.toObject(),
-        id: post._id
+        authorInfo
       }
     });
   } catch (error) {
-    console.error('[Posts] Update post error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] Update error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update post'
+    });
   }
 });
 
-// DELETE /api/posts/:id - Delete a post
+// DELETE /api/posts/:id - Delete post (soft delete)
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
     if (!post) {
-      return res.status(404).json({ success: false, error: 'Post not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found'
+      });
     }
-
+    
+    // Check ownership (or admin)
     if (post.author !== req.user.username && req.user.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Not authorized to delete this post' });
+      return res.status(403).json({
+        success: false,
+        error: 'You can only delete your own posts'
+      });
     }
-
-    // Soft delete
+    
     post.status = 'deleted';
     await post.save();
-
-    res.json({ success: true, message: 'Post deleted' });
+    
+    res.json({
+      success: true,
+      message: 'Post deleted successfully'
+    });
   } catch (error) {
-    console.error('[Posts] Delete post error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] Delete error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete post'
+    });
   }
 });
 
-// POST /api/posts/:id/like - Like a post
+// POST /api/posts/:id/like - Toggle like on post
 router.post('/:id/like', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
     if (!post || post.status !== 'active') {
-      return res.status(404).json({ success: false, error: 'Post not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found'
+      });
     }
-
+    
     const username = req.user.username;
-    const alreadyLiked = post.likes.includes(username);
-
-    if (alreadyLiked) {
-      // Unlike
-      await post.removeLike(username);
+    let liked;
+    
+    if (post.likes.includes(username)) {
+      post.removeLike(username);
+      liked = false;
     } else {
-      // Like
-      await post.addLike(username);
+      post.addLike(username);
+      liked = true;
       
-      // Notify post author (if not liking own post)
+      // Notify post author (async)
       if (post.author !== username) {
-        await Notification.createNotification({
-          recipient: post.author,
-          type: 'system',
-          title: 'New Like',
-          message: `${username} liked your post`,
-          data: { postId: post._id, liker: username },
-          priority: 'low'
+        setImmediate(() => {
+          sendNotification(post.author, 'like', {
+            title: 'New Like',
+            message: `${username} liked your post`,
+            metadata: { postId: post._id }
+          });
         });
       }
     }
-
+    
+    await post.save();
+    
     res.json({
       success: true,
       data: {
-        liked: !alreadyLiked,
+        liked,
         likeCount: post.likeCount
       }
     });
   } catch (error) {
-    console.error('[Posts] Like post error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] Like error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to toggle like'
+    });
   }
 });
 
-// POST /api/posts/:id/comment - Add comment to a post
+// POST /api/posts/:id/comment - Add comment to post
 router.post('/:id/comment', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
     if (!post || post.status !== 'active') {
-      return res.status(404).json({ success: false, error: 'Post not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found'
+      });
     }
-
+    
     const { content } = req.body;
     
     if (!content || content.trim().length === 0) {
-      return res.status(400).json({ success: false, error: 'Comment content is required' });
-    }
-
-    if (content.length > 500) {
-      return res.status(400).json({ success: false, error: 'Comment too long (max 500 characters)' });
-    }
-
-    const username = req.user.username;
-    const comment = await post.addComment(username, content.trim());
-
-    // Get commenter info
-    const commenter = await User.findOne({ username })
-      .select('username profilePic isVerified')
-      .lean();
-
-    // Notify post author (if not commenting on own post)
-    if (post.author !== username) {
-      await Notification.createNotification({
-        recipient: post.author,
-        type: 'system',
-        title: 'New Comment',
-        message: `${username} commented on your post`,
-        data: { postId: post._id, commenter: username, commentId: comment._id },
-        priority: 'low'
+      return res.status(400).json({
+        success: false,
+        error: 'Comment content is required'
       });
     }
-
+    
+    if (content.length > 500) {
+      return res.status(400).json({
+        success: false,
+        error: 'Comment must be 500 characters or less'
+      });
+    }
+    
+    const comment = post.addComment(req.user.username, content.trim());
+    await post.save();
+    
+    // Notify post author (async)
+    if (post.author !== req.user.username) {
+      setImmediate(() => {
+        sendNotification(post.author, 'comment', {
+          title: 'New Comment',
+          message: `${req.user.username} commented on your post`,
+          metadata: { postId: post._id, commentId: comment._id }
+        });
+      });
+    }
+    
     res.status(201).json({
       success: true,
-      data: {
-        ...comment.toObject(),
-        id: comment._id,
-        authorInfo: commenter
-      }
+      data: comment
     });
   } catch (error) {
-    console.error('[Posts] Add comment error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] Comment error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to add comment'
+    });
   }
 });
 
-// DELETE /api/posts/:id/comment/:commentId - Delete a comment
+// DELETE /api/posts/:id/comment/:commentId - Delete comment
 router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
     if (!post) {
-      return res.status(404).json({ success: false, error: 'Post not found' });
-    }
-
-    await post.removeComment(req.params.commentId, req.user.username);
-
-    res.json({ success: true, message: 'Comment deleted' });
-  } catch (error) {
-    console.error('[Posts] Delete comment error:', error);
-    res.status(400).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/posts/following/feed - Get feed from followed users only
-router.get('/following/feed', authMiddleware, async (req, res) => {
-  try {
-    const { page = 1, limit = 20 } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const username = req.user.username;
-
-    // Get list of users this user follows (subscribed to)
-    const subscriptions = await Subscription.find({ 
-      subscriber: username, 
-      status: 'active' 
-    }).select('creator');
-    
-    const followedUsers = subscriptions.map(s => s.creator);
-
-    if (followedUsers.length === 0) {
-      return res.json({
-        success: true,
-        data: [],
-        meta: { page: 1, limit: parseInt(limit), total: 0, totalPages: 0 }
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found'
       });
     }
-
-    const posts = await Post.getFeed({
-      limit: parseInt(limit),
-      skip,
-      followedUsers
-    });
-
-    // Enrich with author info
-    const enrichedPosts = await Promise.all(posts.map(async (post) => {
-      const author = await User.findOne({ username: post.author })
-        .select('username profilePic isVerified tier')
-        .lean();
-      
-      return {
-        ...post,
-        id: post._id,
-        isLiked: post.likes.includes(username),
-        authorInfo: author ? {
-          username: author.username,
-          profilePic: author.profilePic,
-          isVerified: author.isVerified,
-          tier: author.tier
-        } : null
-      };
-    }));
-
-    const total = await Post.countDocuments({ 
-      status: 'active', 
-      author: { $in: followedUsers } 
-    });
-
+    
+    const removed = post.removeComment(req.params.commentId, req.user.username);
+    
+    if (!removed) {
+      return res.status(403).json({
+        success: false,
+        error: 'Cannot delete this comment'
+      });
+    }
+    
+    await post.save();
+    
     res.json({
       success: true,
-      data: enrichedPosts,
-      meta: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        totalPages: Math.ceil(total / parseInt(limit))
-      }
+      message: 'Comment deleted successfully'
     });
   } catch (error) {
-    console.error('[Posts] Following feed error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('[Post] Delete comment error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to delete comment'
+    });
   }
 });
 

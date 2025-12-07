@@ -12,7 +12,6 @@ import {
   Clock, 
   TrendingUp, 
   Users, 
-  Hash,
   ChevronLeft,
   ChevronRight,
   X,
@@ -21,12 +20,17 @@ import {
   Trash2,
   ImageIcon,
   Loader2,
-  BadgeCheck,
-  Plus
+  Plus,
+  Play,
+  Volume2,
+  VolumeX,
+  UserPlus,
+  UserCheck,
+  Film
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import exploreService, { Post, TrendingTag, PostComment } from '@/services/explore.service';
-import Header from '@/components/Header';
+import exploreService, { Post, PostComment } from '@/services/explore.service';
+import { apiCall } from '@/services/api.config';
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -43,7 +47,168 @@ function formatRelativeTime(dateString: string): string {
   return date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 }
 
-// ==================== SUB-COMPONENTS ====================
+function isVideoUrl(url: string): boolean {
+  const videoExtensions = ['.mp4', '.webm', '.ogg', '.mov', '.m4v'];
+  const lowercaseUrl = url.toLowerCase();
+  return videoExtensions.some(ext => lowercaseUrl.includes(ext)) || 
+         lowercaseUrl.includes('video') ||
+         lowercaseUrl.includes('/v/');
+}
+
+// ==================== VIDEO PLAYER COMPONENT ====================
+
+interface VideoPlayerProps {
+  src: string;
+  isVisible: boolean;
+}
+
+function VideoPlayer({ src, isVisible }: VideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    if (isVisible) {
+      videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    } else {
+      videoRef.current.pause();
+      setIsPlaying(false);
+    }
+  }, [isVisible]);
+
+  const toggleMute = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    }
+  };
+
+  return (
+    <div className="relative w-full h-full group">
+      <video
+        ref={videoRef}
+        src={src}
+        className="w-full h-full object-cover"
+        loop
+        muted={isMuted}
+        playsInline
+        preload="metadata"
+      />
+      
+      {/* Play/Pause overlay */}
+      <div 
+        className="absolute inset-0 flex items-center justify-center cursor-pointer"
+        onClick={togglePlay}
+      >
+        {!isPlaying && (
+          <div className="w-16 h-16 bg-black/50 rounded-full flex items-center justify-center">
+            <Play className="w-8 h-8 text-white ml-1" fill="white" />
+          </div>
+        )}
+      </div>
+      
+      {/* Mute button */}
+      <button
+        onClick={toggleMute}
+        className="absolute bottom-3 right-3 p-2 bg-black/60 rounded-full text-white hover:bg-black/80 transition-colors opacity-0 group-hover:opacity-100"
+      >
+        {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+      </button>
+    </div>
+  );
+}
+
+// ==================== FOLLOW BUTTON COMPONENT ====================
+
+interface FollowButtonProps {
+  username: string;
+  initialIsFollowing?: boolean;
+  onFollowChange?: (isFollowing: boolean) => void;
+}
+
+function FollowButton({ username, initialIsFollowing = false, onFollowChange }: FollowButtonProps) {
+  const { user, isLoggedIn } = useAuth();
+  const router = useRouter();
+  const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Don't show follow button for own profile
+  if (user?.username === username) return null;
+
+  const handleFollow = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!isLoggedIn) {
+      router.push('/login');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (isFollowing) {
+        await apiCall(`/subscriptions/unsubscribe/${username}`, { method: 'POST' });
+        setIsFollowing(false);
+        onFollowChange?.(false);
+      } else {
+        await apiCall(`/subscriptions/subscribe/${username}`, { method: 'POST' });
+        setIsFollowing(true);
+        onFollowChange?.(true);
+      }
+    } catch (error) {
+      console.error('Follow action failed:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleFollow}
+      disabled={isLoading}
+      className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
+        isFollowing
+          ? 'bg-[#ff950e]/20 text-[#ff950e] border border-[#ff950e]/50 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50'
+          : 'bg-[#ff950e] text-black hover:bg-[#ff6b00]'
+      }`}
+    >
+      {isLoading ? (
+        <Loader2 className="w-3 h-3 animate-spin" />
+      ) : isFollowing ? (
+        <>
+          <UserCheck className="w-3 h-3" />
+          <span>Following</span>
+        </>
+      ) : (
+        <>
+          <UserPlus className="w-3 h-3" />
+          <span>Follow</span>
+        </>
+      )}
+    </button>
+  );
+}
+
+// ==================== POST CARD COMPONENT ====================
 
 interface PostCardProps {
   post: Post;
@@ -53,6 +218,7 @@ interface PostCardProps {
   onDeleteComment: (postId: string, commentId: string) => void;
   onDelete: (postId: string) => void;
   onTagClick: (tag: string) => void;
+  isVisible: boolean;
 }
 
 function PostCard({ 
@@ -62,11 +228,12 @@ function PostCard({
   onComment, 
   onDeleteComment,
   onDelete,
-  onTagClick 
+  onTagClick,
+  isVisible
 }: PostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [showMenu, setShowMenu] = useState(false);
   const [isLiked, setIsLiked] = useState(
     currentUser ? post.likes.includes(currentUser.username) : false
@@ -139,7 +306,7 @@ function PostCard({
           <button
             key={index}
             onClick={() => onTagClick(part.slice(1))}
-            className="text-pink-400 hover:text-pink-300 hover:underline"
+            className="text-[#ff950e] hover:text-[#ff6b00] hover:underline"
           >
             {part}
           </button>
@@ -150,37 +317,52 @@ function PostCard({
   };
 
   const isOwner = currentUser?.username === post.author;
+  const mediaUrls = post.imageUrls || [];
+  const currentMedia = mediaUrls[currentMediaIndex];
+  const isCurrentMediaVideo = currentMedia ? isVideoUrl(currentMedia) : false;
 
   return (
-    <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+    <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-[#333] hover:border-[#ff950e]/30 transition-all duration-300 overflow-hidden shadow-xl">
       {/* Header */}
       <div className="p-4 flex items-center justify-between">
-        <Link href={`/sellers/${post.author}`} className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-full bg-gray-700 overflow-hidden">
-            {post.authorInfo?.profilePic ? (
-              <Image
-                src={post.authorInfo.profilePic}
-                alt={post.author}
-                width={40}
-                height={40}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-400 text-lg font-bold">
-                {post.author.charAt(0).toUpperCase()}
-              </div>
-            )}
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-medium text-white group-hover:text-pink-400 transition-colors">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <Link href={`/sellers/${post.author}`} className="flex-shrink-0">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#ff950e]/20 to-[#ff6b00]/10 border-2 border-[#ff950e]/30 overflow-hidden hover:border-[#ff950e] transition-colors">
+              {post.authorInfo?.profilePic ? (
+                <Image
+                  src={post.authorInfo.profilePic}
+                  alt={post.author}
+                  width={48}
+                  height={48}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[#ff950e] text-xl font-bold">
+                  {post.author.charAt(0).toUpperCase()}
+                </div>
+              )}
+            </div>
+          </Link>
+          
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link 
+                href={`/sellers/${post.author}`}
+                className="font-bold text-white hover:text-[#ff950e] transition-colors truncate"
+              >
                 {post.author}
-              </span>
+              </Link>
               {post.authorInfo?.isVerified && (
-                <BadgeCheck className="w-4 h-4 text-pink-500" />
+                <Image
+                  src="/verification_badge.png"
+                  alt="Verified"
+                  width={16}
+                  height={16}
+                  className="flex-shrink-0"
+                />
               )}
               {post.authorInfo?.tier && (
-                <span className="text-xs px-1.5 py-0.5 bg-pink-500/20 text-pink-400 rounded">
+                <span className="text-[10px] px-2 py-0.5 bg-[#ff950e]/20 text-[#ff950e] rounded-full font-semibold">
                   {post.authorInfo.tier}
                 </span>
               )}
@@ -189,25 +371,27 @@ function PostCard({
               {formatRelativeTime(post.createdAt)}
             </span>
           </div>
-        </Link>
+          
+          <FollowButton username={post.author} />
+        </div>
         
         {isOwner && (
-          <div className="relative" ref={menuRef}>
+          <div className="relative ml-2" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
               <MoreHorizontal className="w-5 h-5" />
             </button>
             
             {showMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl z-10 min-w-[150px]">
+              <div className="absolute right-0 top-full mt-1 bg-[#222] border border-[#444] rounded-xl shadow-2xl z-20 min-w-[150px] overflow-hidden">
                 <button
                   onClick={() => {
                     onDelete(post._id);
                     setShowMenu(false);
                   }}
-                  className="w-full px-4 py-2 text-left text-red-400 hover:bg-gray-800 flex items-center gap-2 rounded-lg"
+                  className="w-full px-4 py-3 text-left text-red-400 hover:bg-red-500/10 flex items-center gap-2 transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
                   Delete Post
@@ -219,46 +403,60 @@ function PostCard({
       </div>
 
       {/* Content */}
-      <div className="px-4 pb-3">
-        <p className="text-gray-200 whitespace-pre-wrap break-words">
-          {renderContent(post.content)}
-        </p>
-      </div>
+      {post.content && (
+        <div className="px-4 pb-3">
+          <p className="text-gray-200 whitespace-pre-wrap break-words leading-relaxed">
+            {renderContent(post.content)}
+          </p>
+        </div>
+      )}
 
-      {/* Images */}
-      {post.imageUrls.length > 0 && (
-        <div className="relative">
-          <div className="aspect-square bg-gray-900 relative overflow-hidden">
-            <Image
-              src={post.imageUrls[currentImageIndex]}
-              alt="Post image"
-              fill
-              className="object-cover"
-            />
+      {/* Media (Images/Videos) */}
+      {mediaUrls.length > 0 && (
+        <div className="relative bg-black">
+          <div className="aspect-square relative overflow-hidden">
+            {isCurrentMediaVideo ? (
+              <VideoPlayer src={currentMedia} isVisible={isVisible} />
+            ) : (
+              <Image
+                src={currentMedia}
+                alt="Post media"
+                fill
+                className="object-cover"
+              />
+            )}
           </div>
           
-          {post.imageUrls.length > 1 && (
+          {/* Media type indicator */}
+          {isCurrentMediaVideo && (
+            <div className="absolute top-3 left-3 bg-black/60 px-2 py-1 rounded-full flex items-center gap-1">
+              <Film className="w-3 h-3 text-white" />
+              <span className="text-white text-xs">Video</span>
+            </div>
+          )}
+          
+          {mediaUrls.length > 1 && (
             <>
               <button
-                onClick={() => setCurrentImageIndex(i => i === 0 ? post.imageUrls.length - 1 : i - 1)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                onClick={() => setCurrentMediaIndex(i => i === 0 ? mediaUrls.length - 1 : i - 1)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
               <button
-                onClick={() => setCurrentImageIndex(i => i === post.imageUrls.length - 1 ? 0 : i + 1)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                onClick={() => setCurrentMediaIndex(i => i === mediaUrls.length - 1 ? 0 : i + 1)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
               
               <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                {post.imageUrls.map((_, index) => (
+                {mediaUrls.map((_, index) => (
                   <button
                     key={index}
-                    onClick={() => setCurrentImageIndex(index)}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === currentImageIndex ? 'bg-white' : 'bg-white/40'
+                    onClick={() => setCurrentMediaIndex(index)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      index === currentMediaIndex ? 'bg-[#ff950e] w-4' : 'bg-white/50 hover:bg-white/70'
                     }`}
                   />
                 ))}
@@ -269,31 +467,31 @@ function PostCard({
       )}
 
       {/* Actions */}
-      <div className="px-4 py-3 flex items-center gap-6 border-t border-gray-700/50">
+      <div className="px-4 py-3 flex items-center gap-6 border-t border-[#333]">
         <button
           onClick={handleLike}
           disabled={!currentUser}
-          className={`flex items-center gap-2 transition-colors ${
+          className={`flex items-center gap-2 transition-all duration-200 ${
             currentUser 
               ? isLiked 
-                ? 'text-pink-500' 
-                : 'text-gray-400 hover:text-pink-500'
-              : 'text-gray-500 cursor-not-allowed'
+                ? 'text-red-500' 
+                : 'text-gray-400 hover:text-red-500'
+              : 'text-gray-600 cursor-not-allowed'
           }`}
         >
-          <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
-          <span className="text-sm">{likeCount}</span>
+          <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
+          <span className="text-sm font-medium">{likeCount}</span>
         </button>
         
         <button
           onClick={() => setShowComments(!showComments)}
-          className="flex items-center gap-2 text-gray-400 hover:text-blue-400 transition-colors"
+          className="flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition-colors"
         >
-          <MessageCircle className="w-5 h-5" />
-          <span className="text-sm">{comments.length}</span>
+          <MessageCircle className="w-6 h-6" />
+          <span className="text-sm font-medium">{comments.length}</span>
         </button>
         
-        <div className="flex items-center gap-2 text-gray-500">
+        <div className="flex items-center gap-2 text-gray-500 ml-auto">
           <Eye className="w-5 h-5" />
           <span className="text-sm">{post.views}</span>
         </div>
@@ -301,43 +499,51 @@ function PostCard({
 
       {/* Comments Section */}
       {showComments && (
-        <div className="px-4 pb-4 border-t border-gray-700/50">
+        <div className="px-4 pb-4 border-t border-[#333]">
           {/* Comment Input */}
           {currentUser ? (
-            <div className="flex gap-2 mt-3">
-              <input
-                type="text"
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleComment()}
-                placeholder="Write a comment..."
-                maxLength={500}
-                className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-pink-500"
-              />
-              <button
-                onClick={handleComment}
-                disabled={!commentText.trim()}
-                className="p-2 bg-pink-600 hover:bg-pink-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg transition-colors"
-              >
-                <Send className="w-4 h-4 text-white" />
-              </button>
+            <div className="flex gap-3 mt-4">
+              <div className="w-8 h-8 rounded-full bg-[#ff950e]/20 flex items-center justify-center text-[#ff950e] text-sm font-bold flex-shrink-0">
+                {currentUser.username.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 flex gap-2">
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleComment()}
+                  placeholder="Write a comment..."
+                  maxLength={500}
+                  className="flex-1 bg-[#222] border border-[#444] rounded-full px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] transition-colors"
+                />
+                <button
+                  onClick={handleComment}
+                  disabled={!commentText.trim()}
+                  className="p-2 bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-[#333] disabled:cursor-not-allowed rounded-full transition-colors"
+                >
+                  <Send className="w-4 h-4 text-black" />
+                </button>
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-500 mt-3">
-              <Link href="/login" className="text-pink-400 hover:underline">Log in</Link> to comment
+            <p className="text-sm text-gray-500 mt-4 text-center">
+              <Link href="/login" className="text-[#ff950e] hover:underline font-semibold">Log in</Link> to comment
             </p>
           )}
           
           {/* Comments List */}
           {comments.length > 0 && (
-            <div className="mt-3 space-y-3">
+            <div className="mt-4 space-y-3">
               {comments.map((comment) => (
-                <div key={comment._id} className="flex gap-2 group">
-                  <div className="flex-1 bg-gray-700/50 rounded-lg px-3 py-2">
-                    <div className="flex items-center justify-between">
+                <div key={comment._id} className="flex gap-3 group">
+                  <div className="w-8 h-8 rounded-full bg-[#333] flex items-center justify-center text-gray-400 text-sm font-bold flex-shrink-0">
+                    {comment.author.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1 bg-[#222] rounded-2xl px-4 py-2">
+                    <div className="flex items-center justify-between gap-2">
                       <Link 
                         href={`/sellers/${comment.author}`}
-                        className="text-sm font-medium text-pink-400 hover:underline"
+                        className="text-sm font-semibold text-[#ff950e] hover:underline"
                       >
                         {comment.author}
                       </Link>
@@ -351,7 +557,7 @@ function PostCard({
                   {(currentUser?.username === comment.author || isOwner) && (
                     <button
                       onClick={() => handleDeleteComment(comment._id)}
-                      className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                      className="p-1 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all self-center"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -375,54 +581,93 @@ interface CreatePostModalProps {
 
 function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
   const [content, setContent] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { getAuthToken } = useAuth();
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload using YOUR EXISTING backend /api/upload endpoint
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
-    if (imageUrls.length + files.length > 4) {
-      setError('Maximum 4 images allowed');
+    if (mediaUrls.length + files.length > 4) {
+      setError('Maximum 4 media files allowed');
       return;
     }
     
     setIsUploading(true);
     setError('');
+    setUploadProgress(0);
     
     try {
+      const totalFiles = files.length;
+      let completedFiles = 0;
+      
       for (const file of Array.from(files)) {
+        // Validate file size (50MB max for videos, 10MB for images)
+        const isVideo = file.type.startsWith('video/');
+        const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+        
+        if (file.size > maxSize) {
+          setError(`File too large. Max ${isVideo ? '50MB' : '10MB'} for ${isVideo ? 'videos' : 'images'}`);
+          continue;
+        }
+        
+        // Create FormData for your existing backend upload endpoint
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('upload_preset', process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'pantypost');
         
-        const response = await fetch(
-          `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
-          { method: 'POST', body: formData }
-        );
+        // Get the auth token
+        const token = getAuthToken();
         
-        if (!response.ok) throw new Error('Upload failed');
+        // Use your existing /api/upload endpoint
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.pantypost.com'}/api/upload`, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
         
         const data = await response.json();
-        setImageUrls(prev => [...prev, data.secure_url]);
+        
+        if (data.success && (data.url || data.data?.url)) {
+          const uploadedUrl = data.url || data.data?.url;
+          setMediaUrls(prev => [...prev, uploadedUrl]);
+        } else {
+          throw new Error(data.error || 'Upload failed');
+        }
+        
+        completedFiles++;
+        setUploadProgress(Math.round((completedFiles / totalFiles) * 100));
       }
     } catch (err) {
-      setError('Failed to upload image');
-      console.error(err);
+      console.error('Upload error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload media. Please try again.');
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
-  const removeImage = (index: number) => {
-    setImageUrls(prev => prev.filter((_, i) => i !== index));
+  const removeMedia = (index: number) => {
+    setMediaUrls(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async () => {
-    if (!content.trim()) return;
+    if (!content.trim() && mediaUrls.length === 0) return;
     
     setIsSubmitting(true);
     setError('');
@@ -430,7 +675,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
     try {
       const post = await exploreService.createPost({
         content: content.trim(),
-        imageUrls
+        imageUrls: mediaUrls
       });
       onPostCreated(post);
       onClose();
@@ -442,14 +687,14 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-xl w-full max-w-lg border border-gray-700">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl w-full max-w-lg border border-[#333] shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-lg font-semibold text-white">Create Post</h2>
+        <div className="flex items-center justify-between p-4 border-b border-[#333] sticky top-0 bg-[#1a1a1a] z-10">
+          <h2 className="text-xl font-bold text-white">Create Post</h2>
           <button
             onClick={onClose}
-            className="p-1 text-gray-400 hover:text-white transition-colors"
+            className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -460,37 +705,52 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="What's on your mind? Use #hashtags to help people find your post..."
+            placeholder="What's happening? Use #hashtags to help people find your post..."
             maxLength={2000}
             rows={4}
-            className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-white placeholder-gray-400 resize-none focus:outline-none focus:border-pink-500"
+            className="w-full bg-[#222] border border-[#444] rounded-xl px-4 py-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-[#ff950e] transition-colors"
           />
-          <div className="flex justify-between mt-1">
+          <div className="flex justify-between mt-2">
             <span className="text-xs text-gray-500">
-              Tip: Use hashtags like #lingerie #worn #custom
+              Pro tip: Use hashtags like #lingerie #worn #custom
             </span>
-            <span className={`text-xs ${content.length > 1900 ? 'text-yellow-500' : 'text-gray-500'}`}>
+            <span className={`text-xs ${content.length > 1900 ? 'text-[#ff950e]' : 'text-gray-500'}`}>
               {content.length}/2000
             </span>
           </div>
           
-          {/* Image Preview */}
-          {imageUrls.length > 0 && (
+          {/* Media Preview */}
+          {mediaUrls.length > 0 && (
             <div className="mt-4 grid grid-cols-2 gap-2">
-              {imageUrls.map((url, index) => (
-                <div key={index} className="relative aspect-square rounded-lg overflow-hidden">
-                  <Image
-                    src={url}
-                    alt={`Upload ${index + 1}`}
-                    fill
-                    className="object-cover"
-                  />
-                  <button
-                    onClick={() => removeImage(index)}
-                    className="absolute top-2 right-2 p-1 bg-black/50 hover:bg-black/70 rounded-full text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+              {mediaUrls.map((url, index) => (
+                <div key={index} className="relative aspect-square rounded-xl overflow-hidden border border-[#444]">
+                  {isVideoUrl(url) ? (
+                    <video
+                      src={url}
+                      className="w-full h-full object-cover"
+                      muted
+                    />
+                  ) : (
+                    <Image
+                      src={url}
+                      alt={`Upload ${index + 1}`}
+                      fill
+                      className="object-cover"
+                    />
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <button
+                      onClick={() => removeMedia(index)}
+                      className="p-2 bg-red-500 hover:bg-red-600 rounded-full text-white"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  {isVideoUrl(url) && (
+                    <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded-full">
+                      <Film className="w-4 h-4 text-white" />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -501,42 +761,52 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,video/*"
               multiple
-              onChange={handleImageUpload}
+              onChange={handleMediaUpload}
               className="hidden"
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || imageUrls.length >= 4}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 rounded-lg text-gray-300 transition-colors"
+              disabled={isUploading || mediaUrls.length >= 4}
+              className="flex items-center gap-2 px-4 py-3 bg-[#222] hover:bg-[#333] disabled:bg-[#1a1a1a] disabled:text-gray-600 rounded-xl text-gray-300 transition-colors w-full justify-center border border-[#444] hover:border-[#ff950e]/50"
             >
               {isUploading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Uploading... {uploadProgress}%</span>
+                </>
               ) : (
-                <ImageIcon className="w-5 h-5" />
+                <>
+                  <ImageIcon className="w-5 h-5" />
+                  <span>Add Photos/Videos ({mediaUrls.length}/4)</span>
+                </>
               )}
-              <span>{isUploading ? 'Uploading...' : `Add Images (${imageUrls.length}/4)`}</span>
             </button>
+            <p className="text-xs text-gray-500 mt-2 text-center">
+              Images up to 10MB, Videos up to 50MB
+            </p>
           </div>
           
           {error && (
-            <p className="mt-3 text-sm text-red-400">{error}</p>
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+              <p className="text-sm text-red-400">{error}</p>
+            </div>
           )}
         </div>
         
         {/* Footer */}
-        <div className="p-4 border-t border-gray-700 flex justify-end gap-3">
+        <div className="p-4 border-t border-[#333] flex justify-end gap-3 sticky bottom-0 bg-[#1a1a1a]">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+            className="px-5 py-2.5 text-gray-400 hover:text-white transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!content.trim() || isSubmitting}
-            className="px-6 py-2 bg-pink-600 hover:bg-pink-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+            disabled={(!content.trim() && mediaUrls.length === 0) || isSubmitting}
+            className="px-6 py-2.5 bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-[#333] disabled:text-gray-500 disabled:cursor-not-allowed rounded-full text-black font-bold transition-all duration-200 flex items-center gap-2"
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             Post
@@ -554,7 +824,6 @@ export default function ExplorePage() {
   const { user, isLoggedIn } = useAuth();
   
   const [posts, setPosts] = useState<Post[]>([]);
-  const [trendingTags, setTrendingTags] = useState<TrendingTag[]>([]);
   const [feedType, setFeedType] = useState<'latest' | 'trending' | 'following'>('latest');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -562,8 +831,39 @@ export default function ExplorePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [visiblePostIds, setVisiblePostIds] = useState<Set<string>>(new Set());
   
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const postRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  // Intersection observer for video autoplay
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const postId = entry.target.getAttribute('data-post-id');
+          if (postId) {
+            setVisiblePostIds(prev => {
+              const next = new Set(prev);
+              if (entry.isIntersecting) {
+                next.add(postId);
+              } else {
+                next.delete(postId);
+              }
+              return next;
+            });
+          }
+        });
+      },
+      { threshold: 0.5 }
+    );
+
+    postRefs.current.forEach((element) => {
+      observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, [posts]);
 
   // Load posts
   const loadPosts = useCallback(async (reset: boolean = false) => {
@@ -579,11 +879,11 @@ export default function ExplorePage() {
       
       let response;
       if (feedType === 'following' && isLoggedIn) {
-        response = await exploreService.getFollowingFeed({ page: currentPage, limit: 20 });
+        response = await exploreService.getFollowingFeed({ page: currentPage, limit: 10 });
       } else {
         response = await exploreService.getFeed({ 
           page: currentPage, 
-          limit: 20, 
+          limit: 10, 
           type: feedType === 'following' ? 'latest' : feedType,
           tag: selectedTag || undefined
         });
@@ -605,21 +905,9 @@ export default function ExplorePage() {
     }
   }, [feedType, selectedTag, page, isLoggedIn]);
 
-  // Load trending tags
-  const loadTrendingTags = useCallback(async () => {
-    try {
-      const tags = await exploreService.getTrendingTags(10);
-      setTrendingTags(Array.isArray(tags) ? tags : []);
-    } catch (error) {
-      console.error('Failed to load trending tags:', error);
-      setTrendingTags([]);
-    }
-  }, []);
-
   // Initial load
   useEffect(() => {
     loadPosts(true);
-    loadTrendingTags();
   }, [feedType, selectedTag]);
 
   // Infinite scroll
@@ -684,191 +972,160 @@ export default function ExplorePage() {
   const isSeller = user?.role === 'seller';
 
   return (
-    <div className="min-h-screen bg-gray-900">
-      <Header />
-      
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex gap-6">
-          {/* Main Feed */}
-          <div className="flex-1 max-w-2xl">
-            {/* Feed Header */}
-            <div className="flex items-center justify-between mb-6">
-              <h1 className="text-2xl font-bold text-white">Explore</h1>
-              
-              {isSeller && (
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg text-white font-medium transition-colors"
-                >
-                  <Plus className="w-5 h-5" />
-                  New Post
-                </button>
-              )}
-            </div>
-            
-            {/* Feed Type Tabs */}
-            <div className="flex gap-2 mb-6 p-1 bg-gray-800 rounded-lg">
-              <button
-                onClick={() => setFeedType('latest')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-medium transition-colors ${
-                  feedType === 'latest'
-                    ? 'bg-pink-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                }`}
-              >
-                <Clock className="w-4 h-4" />
-                Latest
-              </button>
-              <button
-                onClick={() => setFeedType('trending')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-medium transition-colors ${
-                  feedType === 'trending'
-                    ? 'bg-pink-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                }`}
-              >
-                <TrendingUp className="w-4 h-4" />
-                Trending
-              </button>
-              <button
-                onClick={() => {
-                  if (!isLoggedIn) {
-                    router.push('/login');
-                    return;
-                  }
-                  setFeedType('following');
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-medium transition-colors ${
-                  feedType === 'following'
-                    ? 'bg-pink-600 text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                Following
-              </button>
-            </div>
-            
-            {/* Selected Tag Indicator */}
-            {selectedTag && (
-              <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-pink-600/20 border border-pink-500/30 rounded-lg">
-                <Hash className="w-4 h-4 text-pink-400" />
-                <span className="text-pink-400 font-medium">#{selectedTag}</span>
-                <button
-                  onClick={() => setSelectedTag(null)}
-                  className="ml-auto p-1 text-pink-400 hover:text-white transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            )}
-            
-            {/* Guest Banner */}
-            {!isLoggedIn && (
-              <div className="mb-6 p-4 bg-gradient-to-r from-pink-600/20 to-purple-600/20 border border-pink-500/30 rounded-xl">
-                <p className="text-gray-200 mb-3">
-                  Join PantyPost to like, comment, and follow your favorite sellers!
-                </p>
-                <div className="flex gap-3">
-                  <Link
-                    href="/signup"
-                    className="px-4 py-2 bg-pink-600 hover:bg-pink-700 rounded-lg text-white font-medium transition-colors"
-                  >
-                    Sign Up
-                  </Link>
-                  <Link
-                    href="/login"
-                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium transition-colors"
-                  >
-                    Log In
-                  </Link>
-                </div>
-              </div>
-            )}
-            
-            {/* Posts Feed */}
-            {isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 text-pink-500 animate-spin" />
-              </div>
-            ) : !posts || posts.length === 0 ? (
-              <div className="text-center py-20">
-                <div className="w-16 h-16 mx-auto mb-4 bg-gray-800 rounded-full flex items-center justify-center">
-                  <MessageCircle className="w-8 h-8 text-gray-600" />
-                </div>
-                <h3 className="text-lg font-medium text-gray-300 mb-2">No posts yet</h3>
-                <p className="text-gray-500">
-                  {feedType === 'following' 
-                    ? "Posts from sellers you follow will appear here"
-                    : selectedTag 
-                      ? `No posts with #${selectedTag} yet`
-                      : "Be the first to post something!"
-                  }
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {posts && posts.map((post) => (
-                  <PostCard
-                    key={post._id}
-                    post={post}
-                    currentUser={user}
-                    onLike={handleLike}
-                    onComment={handleComment}
-                    onDeleteComment={handleDeleteComment}
-                    onDelete={handleDeletePost}
-                    onTagClick={handleTagClick}
-                  />
-                ))}
-                
-                {/* Load More Trigger */}
-                <div ref={loadMoreRef} className="py-4">
-                  {isLoadingMore && (
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="w-6 h-6 text-pink-500 animate-spin" />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+    <div className="min-h-screen bg-gradient-to-b from-black via-[#0a0a0a] to-black">
+      <main className="max-w-2xl mx-auto px-4 py-6">
+        {/* Page Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Explore</h1>
+            <p className="text-gray-500 text-sm mt-1">See what sellers are sharing</p>
           </div>
           
-          {/* Sidebar - Trending Tags */}
-          <div className="hidden lg:block w-80">
-            <div className="sticky top-24">
-              <div className="bg-gray-800 rounded-xl border border-gray-700 p-4">
-                <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-pink-500" />
-                  Trending Tags
-                </h2>
-                
-                {trendingTags && trendingTags.length > 0 ? (
-                  <div className="space-y-2">
-                    {trendingTags.map((tag, index) => (
-                      <button
-                        key={tag.tag}
-                        onClick={() => handleTagClick(tag.tag)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors ${
-                          selectedTag === tag.tag
-                            ? 'bg-pink-600/20 text-pink-400'
-                            : 'hover:bg-gray-700 text-gray-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-500 text-sm w-4">{index + 1}</span>
-                          <span>#{tag.tag}</span>
-                        </div>
-                        <span className="text-xs text-gray-500">{tag.count} posts</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-sm">No trending tags yet</p>
-                )}
-              </div>
+          {isSeller && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#ff950e] hover:bg-[#ff6b00] rounded-full text-black font-bold transition-all duration-200 shadow-lg shadow-[#ff950e]/20 hover:shadow-[#ff950e]/40"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="hidden sm:inline">New Post</span>
+            </button>
+          )}
+        </div>
+        
+        {/* Feed Type Tabs */}
+        <div className="flex gap-1 mb-6 p-1 bg-[#1a1a1a] rounded-full border border-[#333]">
+          <button
+            onClick={() => setFeedType('latest')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all duration-200 ${
+              feedType === 'latest'
+                ? 'bg-[#ff950e] text-black'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            <span className="text-sm">Latest</span>
+          </button>
+          <button
+            onClick={() => setFeedType('trending')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all duration-200 ${
+              feedType === 'trending'
+                ? 'bg-[#ff950e] text-black'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span className="text-sm">Trending</span>
+          </button>
+          <button
+            onClick={() => {
+              if (!isLoggedIn) {
+                router.push('/login');
+                return;
+              }
+              setFeedType('following');
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all duration-200 ${
+              feedType === 'following'
+                ? 'bg-[#ff950e] text-black'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span className="text-sm">Following</span>
+          </button>
+        </div>
+        
+        {/* Selected Tag Indicator */}
+        {selectedTag && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-xl">
+            <span className="text-[#ff950e] font-bold">#{selectedTag}</span>
+            <button
+              onClick={() => setSelectedTag(null)}
+              className="ml-auto p-1 text-[#ff950e] hover:text-white hover:bg-[#ff950e]/20 rounded-full transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        
+        {/* Guest Banner */}
+        {!isLoggedIn && (
+          <div className="mb-6 p-5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 border border-[#ff950e]/30 rounded-2xl">
+            <p className="text-white font-semibold mb-3">
+              Join PantyPost to like, comment, and follow your favorite sellers!
+            </p>
+            <div className="flex gap-3">
+              <Link
+                href="/signup"
+                className="px-5 py-2.5 bg-[#ff950e] hover:bg-[#ff6b00] rounded-full text-black font-bold transition-colors"
+              >
+                Sign Up
+              </Link>
+              <Link
+                href="/login"
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white font-semibold transition-colors border border-white/20"
+              >
+                Log In
+              </Link>
             </div>
           </div>
-        </div>
+        )}
+        
+        {/* Posts Feed */}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <Loader2 className="w-10 h-10 text-[#ff950e] animate-spin mb-4" />
+            <p className="text-gray-500">Loading posts...</p>
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="w-20 h-20 mx-auto mb-4 bg-[#1a1a1a] rounded-full flex items-center justify-center border border-[#333]">
+              <MessageCircle className="w-10 h-10 text-gray-600" />
+            </div>
+            <h3 className="text-xl font-semibold text-white mb-2">No posts yet</h3>
+            <p className="text-gray-500 max-w-sm mx-auto">
+              {feedType === 'following' 
+                ? "Posts from sellers you follow will appear here"
+                : selectedTag 
+                  ? `No posts with #${selectedTag} yet`
+                  : "Be the first to post something!"
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {posts.map((post) => (
+              <div
+                key={post._id}
+                ref={(el) => {
+                  if (el) postRefs.current.set(post._id, el);
+                }}
+                data-post-id={post._id}
+              >
+                <PostCard
+                  post={post}
+                  currentUser={user}
+                  onLike={handleLike}
+                  onComment={handleComment}
+                  onDeleteComment={handleDeleteComment}
+                  onDelete={handleDeletePost}
+                  onTagClick={handleTagClick}
+                  isVisible={visiblePostIds.has(post._id)}
+                />
+              </div>
+            ))}
+            
+            {/* Load More Trigger */}
+            <div ref={loadMoreRef} className="py-8">
+              {isLoadingMore && (
+                <div className="flex items-center justify-center gap-3">
+                  <Loader2 className="w-6 h-6 text-[#ff950e] animate-spin" />
+                  <span className="text-gray-500">Loading more...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </main>
       
       {/* Create Post Modal */}
