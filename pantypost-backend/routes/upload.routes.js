@@ -78,6 +78,7 @@ router.post('/', authMiddleware, (req, res) => {
 
     try {
       const fileUrl = getFileUrl(req, req.file.path);
+      const isVideo = req.file.mimetype && req.file.mimetype.startsWith('video/');
 
       return res.json({
         success: true,
@@ -86,8 +87,10 @@ router.post('/', authMiddleware, (req, res) => {
           filename: req.file.filename,
           size: req.file.size,
           mimetype: req.file.mimetype,
+          isVideo,
         },
         url: fileUrl, // convenience
+        isVideo,
       });
     } catch (error) {
       await deleteFile(req.file.path).catch(() => {});
@@ -116,6 +119,7 @@ router.post('/single', authMiddleware, (req, res) => {
 
     try {
       const fileUrl = getFileUrl(req, req.file.path);
+      const isVideo = req.file.mimetype && req.file.mimetype.startsWith('video/');
 
       return res.json({
         success: true,
@@ -124,8 +128,10 @@ router.post('/single', authMiddleware, (req, res) => {
           filename: req.file.filename,
           size: req.file.size,
           mimetype: req.file.mimetype,
+          isVideo,
         },
         url: fileUrl,
+        isVideo,
       });
     } catch (error) {
       await deleteFile(req.file.path).catch(() => {});

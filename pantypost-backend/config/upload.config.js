@@ -38,27 +38,44 @@ const createStorage = (destination) => {
   });
 };
 
+// Allowed mime types
+const ALLOWED_IMAGE_MIMES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp'
+];
+
+const ALLOWED_VIDEO_MIMES = [
+  'video/mp4',
+  'video/webm',
+  'video/ogg',
+  'video/quicktime',
+  'video/x-m4v'
+];
+
 // File filter to only accept images
 const imageFileFilter = (req, file, cb) => {
-  // Accept images only
-  const allowedMimes = [
-    'image/jpeg',
-    'image/jpg',
-    'image/png',
-    'image/gif',
-    'image/webp'
-  ];
-  
-  if (allowedMimes.includes(file.mimetype)) {
+  if (ALLOWED_IMAGE_MIMES.includes(file.mimetype)) {
     cb(null, true);
   } else {
     cb(new Error('Only image files are allowed (JPEG, PNG, GIF, WebP)'), false);
   }
 };
 
+// File filter to accept images AND videos (for generic uploads like Explore posts)
+const mediaFileFilter = (req, file, cb) => {
+  if (ALLOWED_IMAGE_MIMES.includes(file.mimetype) || ALLOWED_VIDEO_MIMES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image and video files are allowed (JPEG, PNG, GIF, WebP, MP4, WEBM, MOV, etc.)'), false);
+  }
+};
+
 // Create multer instances for different purposes
 const uploadConfigs = {
-  // Profile pictures - single file, max 5MB
+  // Profile pictures - single file, max 5MB (images only)
   profilePic: multer({
     storage: createStorage('uploads/profiles'),
     fileFilter: imageFileFilter,
@@ -67,7 +84,7 @@ const uploadConfigs = {
     }
   }).single('profilePic'),
   
-  // Listing images - multiple files, max 10 files, 10MB each
+  // Listing images - multiple files, max 10 files, 10MB each (images only)
   listingImages: multer({
     storage: createStorage('uploads/listings'),
     fileFilter: imageFileFilter,
@@ -77,7 +94,7 @@ const uploadConfigs = {
     }
   }).array('images', 10),
   
-  // Verification documents - multiple specific fields
+  // Verification documents - multiple specific fields (images only)
   verification: multer({
     storage: createStorage('uploads/verification'),
     fileFilter: imageFileFilter,
@@ -90,7 +107,7 @@ const uploadConfigs = {
     { name: 'idBack', maxCount: 1 }
   ]),
   
-  // Gallery images for sellers - multiple files
+  // Gallery images for sellers - multiple files (images only)
   gallery: multer({
     storage: createStorage('uploads/profiles'),
     fileFilter: imageFileFilter,
@@ -100,12 +117,13 @@ const uploadConfigs = {
     }
   }).array('gallery', 20),
   
-  // General single file upload
+  // General single file upload (images OR videos)
+  // Used by: POST /api/upload (Explore posts, etc.)
   single: multer({
     storage: createStorage('uploads/temp'),
-    fileFilter: imageFileFilter,
+    fileFilter: mediaFileFilter,
     limits: {
-      fileSize: 10 * 1024 * 1024 // 10MB
+      fileSize: 50 * 1024 * 1024 // 50MB to allow videos
     }
   }).single('file')
 };
