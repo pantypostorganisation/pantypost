@@ -51,6 +51,7 @@ const statsRoutes = require('./routes/stats.routes');
 const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 const referralRoutes = require('./routes/referral.routes');
 const cryptoRoutes = require('./routes/crypto.routes'); // CRYPTO DIRECT DEPOSITS
+const postRoutes = require('./routes/post.routes'); // EXPLORE/SOCIAL POSTS
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -146,8 +147,9 @@ app.get('/api/health', (req, res) => {
       storage: true,
       referrals: true,
       subscriptionRenewals: true,
-      cryptoDeposits: true, // NEW FEATURE
-      cryptoAutoVerification: true // AUTOMATED VERIFICATION
+      cryptoDeposits: true,
+      cryptoAutoVerification: true,
+      explorePosts: true
     },
   });
 });
@@ -174,6 +176,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES
+app.use('/api/posts', postRoutes); // EXPLORE/SOCIAL POST ROUTES
 
 // NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
 app.use('/api/profilebuyer', profileBuyerRoutes);
@@ -668,6 +671,50 @@ app.get('/api/auctions/system-status', authMiddleware, async (req, res) => {
         endingSoon,
         timestamp: new Date(),
       },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Posts system status endpoint (admin only) - NEW
+app.get('/api/posts/system-status', authMiddleware, async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
+  }
+
+  try {
+    const Post = require('./models/Post');
+    
+    const totalPosts = await Post.countDocuments();
+    const activePosts = await Post.countDocuments({ status: 'active' });
+    const deletedPosts = await Post.countDocuments({ status: 'deleted' });
+    
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentPosts = await Post.countDocuments({ createdAt: { $gte: last24Hours } });
+    
+    const topPosters = await Post.aggregate([
+      { $match: { status: 'active' } },
+      { $group: { _id: '$author', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    const trendingTags = await Post.getTrendingTags(10);
+
+    res.json({
+      success: true,
+      data: {
+        statistics: {
+          total: totalPosts,
+          active: activePosts,
+          deleted: deletedPosts,
+          last24Hours: recentPosts
+        },
+        topPosters,
+        trendingTags,
+        timestamp: new Date()
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -1338,6 +1385,22 @@ async function initializeCryptoDepositSystem() {
   }
 }
 
+async function initializePostSystem() {
+  try {
+    const Post = require('./models/Post');
+    
+    const totalPosts = await Post.countDocuments({ status: 'active' });
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentPosts = await Post.countDocuments({ createdAt: { $gte: last24Hours }, status: 'active' });
+    
+    console.log(`✅ Explore/Post system initialized`);
+    console.log(`   - ${totalPosts} active posts`);
+    console.log(`   - ${recentPosts} posts in last 24 hours`);
+  } catch (error) {
+    console.error('⚠️ Error initializing post system:', error);
+  }
+}
+
 // Start server
 const HOST = '0.0.0.0';
 const os = require('os');
@@ -1389,6 +1452,9 @@ server.listen(PORT, HOST, async () => {
   
   await initializeCryptoDepositSystem();
   console.log(`💰 Crypto deposit system ready - Direct wallet deposits enabled!`);
+  
+  await initializePostSystem();
+  console.log(`📱 Explore/Post system ready - Social feed enabled!`);
 
   console.log('\n📍 Available endpoints:');
   console.log('  - Auth:          /api/auth/*');
@@ -1414,7 +1480,7 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Storage:       /api/storage/*');
   console.log('  - ProfileBuyer:  /api/profilebuyer');
   console.log('  - Referral:      /api/referral/*');
+  console.log('  - Posts:         /api/posts/*           🆕 EXPLORE FEED!');
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
-  console.log('🏆 POLYGON CRYPTO DEPOSITS = 0% FEES + AUTO-VERIFICATION! 🏆\n');
 });

@@ -9,7 +9,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
-import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X } from 'lucide-react';
+import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X, Compass } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
@@ -809,6 +809,7 @@ export default function Header(): React.ReactElement | null {
 
             <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
               {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
+              {renderMobileLink('/explore', <Compass className="w-5 h-5" />, 'Explore')}
 
               {isAdminUser && (
                 <>
@@ -987,6 +988,14 @@ export default function Header(): React.ReactElement | null {
           >
             <ShoppingBag className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-[#ff950e]" />
             <span className="font-medium">Browse</span>
+          </Link>
+
+          <Link
+            href="/explore"
+            className="group flex items-center gap-1.5 whitespace-nowrap bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+          >
+            <Compass className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-[#ff950e]" />
+            <span className="font-medium">Explore</span>
           </Link>
 
           {isAdminUser && (
