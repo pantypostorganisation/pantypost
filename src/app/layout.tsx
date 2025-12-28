@@ -36,25 +36,22 @@ export const metadata: Metadata = {
   creator: 'PantyPost',
   publisher: 'PantyPost',
 
-  // FAVICON CONFIGURATION
-  // We want browsers / favourites to use favicon.png
-  // but still expose favicon.ico for Google Search
+  // FAVICON CONFIGURATION - Using favicon.ico as primary for browser tabs AND Google search
   icons: {
     icon: [
-      { url: '/favicon.png', type: 'image/png' },
-      { url: '/favicon.png', type: 'image/png', sizes: '32x32' },
-      { url: '/favicon.png', type: 'image/png', sizes: '16x16' },
-      { url: '/favicon.ico', type: 'image/x-icon' }, // for Google / crawlers
+      { url: '/favicon.ico', type: 'image/x-icon' },
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: '32x32' },
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: '16x16' },
     ],
-    shortcut: ['/favicon.ico', '/favicon.png'],
+    shortcut: ['/favicon.ico'],
     apple: [
-      { url: '/favicon.png', sizes: '180x180' },
+      { url: '/favicon.ico', sizes: '180x180' },
       { url: '/icons/icon-192x192.png', sizes: '192x192' },
     ],
     other: [
       {
         rel: 'icon',
-        url: '/favicon.png',
+        url: '/favicon.ico',
       },
     ],
   },
@@ -80,7 +77,7 @@ export const metadata: Metadata = {
     },
   },
 
-  // Open Graph - UPDATED to use googlesearchimage.png
+  // Open Graph - Using googlesearchimage.png for social sharing
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -99,7 +96,7 @@ export const metadata: Metadata = {
     ],
   },
 
-  // Twitter Card - UPDATED to use googlesearchimage.png
+  // Twitter Card
   twitter: {
     card: 'summary_large_image',
     title: 'Panty Post - Buy & Sell Used Panties Anonymously',
@@ -148,18 +145,16 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
-        {/* Favicon links */}
-        {/* PNG first (what you want for favourites / tabs) */}
-        <link rel="icon" href="/favicon.png?v=2" type="image/png" />
-        <link rel="shortcut icon" href="/favicon.png?v=2" type="image/png" />
-        {/* ICO present for Google / older browsers */}
-        <link rel="icon" href="/favicon.ico" sizes="any" />
+        {/* Favicon links - favicon.ico as primary for browser tabs AND Google search */}
+        <link rel="icon" href="/favicon.ico?v=3" type="image/x-icon" />
+        <link rel="shortcut icon" href="/favicon.ico?v=3" type="image/x-icon" />
+        <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" type="image/x-icon" />
 
         {/* Age restriction meta tag */}
         <meta name="rating" content="adult" />
         <meta name="age" content="21" />
 
-        {/* Structured Data - UPDATED to use googlesearchimage.png */}
+        {/* Structured Data */}
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger
