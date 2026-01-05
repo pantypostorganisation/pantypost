@@ -36,26 +36,23 @@ export const metadata: Metadata = {
   creator: 'PantyPost',
   publisher: 'PantyPost',
 
-  // FAVICON CONFIGURATION - PNG for Google Search, ICO for browser fallback
+  // FAVICON CONFIGURATION - favicon.ico as primary for Google Search
   icons: {
     icon: [
-      // PNG first - Google Search prefers PNG format, must be 48px+ 
-      { url: '/favicon.png', type: 'image/png', sizes: '48x48' },
-      { url: '/favicon.png', type: 'image/png', sizes: '32x32' },
-      { url: '/favicon.png', type: 'image/png', sizes: '16x16' },
-      // ICO fallback for older browsers
-      { url: '/favicon.ico', type: 'image/x-icon', sizes: 'any' },
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: '256x256' },
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: '48x48' },
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: '32x32' },
+      { url: '/favicon.ico', type: 'image/x-icon', sizes: '16x16' },
     ],
-    shortcut: ['/favicon.png'],
+    shortcut: ['/favicon.ico'],
     apple: [
-      { url: '/favicon.png', sizes: '180x180', type: 'image/png' },
+      { url: '/favicon.ico', sizes: '180x180' },
       { url: '/icons/icon-192x192.png', sizes: '192x192' },
     ],
     other: [
       {
         rel: 'icon',
-        url: '/favicon.png',
-        type: 'image/png',
+        url: '/favicon.ico',
       },
     ],
   },
@@ -143,24 +140,18 @@ export default function RootLayout({
 
         {/* PWA tags */}
         <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+        <link rel="apple-touch-icon" href="/favicon.ico" />
 
         {/* Preconnect to external domains for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
-        {/* 
-          FAVICON - Google Search requires:
-          1. PNG format (preferred over ICO)
-          2. At least 48x48 pixels
-          3. Stable URL (avoid frequent version changes once indexed)
-        */}
-        <link rel="icon" href="/favicon.png" type="image/png" sizes="48x48" />
-        <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
-        <link rel="icon" href="/favicon.png" type="image/png" sizes="16x16" />
-        <link rel="shortcut icon" href="/favicon.png" type="image/png" />
-        {/* ICO fallback for older browsers */}
-        <link rel="icon" href="/favicon.ico" sizes="any" />
+        {/* Favicon - favicon.ico as primary for Google Search and browsers */}
+        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="256x256" />
+        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="48x48" />
+        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="32x32" />
+        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16" />
+        <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 
         {/* Age restriction meta tag */}
         <meta name="rating" content="adult" />
@@ -189,7 +180,7 @@ export default function RootLayout({
                 '@type': 'Organization',
                 name: 'PantyPost',
                 url: BASE_URL,
-                logo: `${BASE_URL}/favicon.png`,
+                logo: `${BASE_URL}/favicon.ico`,
                 sameAs: ['https://twitter.com/pantypost', 'https://www.instagram.com/pantypost'],
               },
             }),
