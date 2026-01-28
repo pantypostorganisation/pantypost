@@ -1,5 +1,12 @@
 # /etc/nginx/sites-available/api.pantypost.com
 
+# Map to dynamically set CORS origin based on request
+map $http_origin $cors_origin {
+    default "";
+    "https://pantypost.com" "https://pantypost.com";
+    "https://www.pantypost.com" "https://www.pantypost.com";
+}
+
 server {
     listen 80;
     listen [::]:80;
@@ -27,7 +34,7 @@ server {
         
         # Handle OPTIONS preflight for images
         if ($request_method = OPTIONS) {
-            add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+            add_header Access-Control-Allow-Origin $cors_origin always;
             add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
             add_header Access-Control-Allow-Headers "Origin, X-Requested-With, Content-Type, Accept, Range" always;
             add_header Access-Control-Allow-Credentials "true" always;
@@ -38,7 +45,7 @@ server {
         }
         
         # CORS headers for actual image requests
-        add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+        add_header Access-Control-Allow-Origin $cors_origin always;
         add_header Access-Control-Allow-Methods "GET, HEAD, OPTIONS" always;
         add_header Access-Control-Allow-Credentials "true" always;
         add_header Access-Control-Expose-Headers "Content-Length, Content-Range" always;
@@ -54,7 +61,7 @@ server {
     location /api {
         # Handle OPTIONS (preflight) separately
         if ($request_method = OPTIONS) {
-            add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+            add_header Access-Control-Allow-Origin $cors_origin always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
             add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Request-ID" always;
             add_header Access-Control-Allow-Credentials "true" always;
@@ -73,7 +80,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
 
         # Add CORS headers to actual responses
-        add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+        add_header Access-Control-Allow-Origin $cors_origin always;
         add_header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS" always;
         add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Request-ID" always;
         add_header Access-Control-Allow-Credentials "true" always;
@@ -107,7 +114,7 @@ server {
     # Root endpoint
     location = / {
         if ($request_method = OPTIONS) {
-            add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+            add_header Access-Control-Allow-Origin $cors_origin always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
             add_header Access-Control-Allow-Headers "Authorization, Content-Type, X-CSRF-Token, X-Client-Version, X-App-Name, X-Request-ID" always;
             add_header Access-Control-Allow-Credentials "true" always;
@@ -116,7 +123,7 @@ server {
         }
         
         default_type application/json;
-        add_header Access-Control-Allow-Origin "https://pantypost.com" always;
+        add_header Access-Control-Allow-Origin $cors_origin always;
         add_header Access-Control-Allow-Credentials "true" always;
         return 200 '{"status":"ok","message":"PantyPost API Server"}';
     }
