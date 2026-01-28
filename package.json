@@ -31,6 +31,10 @@
     "preflight": "npm run lint && npm run test:ci && npm run check-env",
     "production:check": "npm run preflight && npm run build:production && npm run lighthouse:ci"
   },
+  "overrides": {
+    "glob": "^10.4.5",
+    "inflight": "npm:lru-cache@^10.4.3"
+  },
   "dependencies": {
     "@sentry/nextjs": "^8.55.0",
     "@tanstack/react-virtual": "^3.13.12",
