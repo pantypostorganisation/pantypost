@@ -279,7 +279,7 @@ export default function HeroSection() {
               }}
             >
               <Image
-                src="/phone-mockup.png"
+                src="/test.png"
                 alt="PantyPost mobile app interface showcasing the marketplace"
                 width={300}
                 height={520}
