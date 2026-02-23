@@ -51,9 +51,9 @@ export const HERO_CONTENT = {
   title: 'The',
   titleHighlight: 'Ultimate',
   titleEnd: 'Lingerie Marketplace',
-  description: 'Discover unique intimate apparel from verified sellers. The trusted marketplace to buy premium lingerie.',
+  description: 'Discover unique intimate apparel from verified sellers. The trusted marketplace to buy and sell premium lingerie — securely and discreetly.',
   ctaPrimary: {
-    text: 'Browse Items',
+    text: 'Browse Listings',
     href: '/browse',
   },
   ctaSecondary: {
