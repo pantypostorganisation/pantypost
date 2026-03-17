@@ -36,7 +36,7 @@
     "inflight": "npm:lru-cache@^10.4.3"
   },
   "dependencies": {
-    "@sentry/nextjs": "^8.55.0",
+    "@sentry/nextjs": "^10.43.0",
     "@tanstack/react-virtual": "^3.13.12",
     "@types/crypto-js": "^4.2.2",
     "canvas-confetti": "^1.9.3",
