@@ -147,6 +147,40 @@ const userSchema = new mongoose.Schema({
     denialReason: String
   }],
   
+  // =====================================================
+  // AGE ASSURANCE
+  //
+  // Established by an independent provider, because regulators do not
+  // accept self-declaration. We store only the verdict — never the
+  // document, the selfie, the name or the date of birth. Those stay
+  // with the provider, so there is nothing here to leak.
+  // =====================================================
+  ageVerification: {
+    status: {
+      type: String,
+      enum: ['not_started', 'pending', 'approved', 'declined', 'in_review', 'abandoned', 'expired'],
+      default: 'not_started',
+      index: true
+    },
+    provider: String,
+    sessionId: String,
+    // 'age_estimation' when the selfie was sufficient, 'document' when
+    // the borderline fallback fired.
+    method: String,
+    // Rounded to a whole year. Coarse on purpose.
+    estimatedAge: Number,
+    verifiedAge: Number,
+    warnings: [String],
+    startedAt: Date,
+    verifiedAt: Date,
+    lastAttemptAt: Date,
+    updatedAt: Date,
+    attempts: {
+      type: Number,
+      default: 0
+    }
+  },
+
   // VERIFICATION
   isVerified: {
     type: Boolean,
@@ -426,6 +460,11 @@ userSchema.methods.submitGalleryImagesForReview = function(urls) {
  * awaiting review, otherwise the approved one. Prevents the confusing
  * experience of uploading a picture and seeing no change at all.
  */
+/** Whether this user has passed age assurance. */
+userSchema.methods.isAgeVerified = function() {
+  return this.ageVerification?.status === 'approved';
+};
+
 userSchema.methods.getOwnProfilePic = function() {
   if (this.pendingProfilePic?.url && this.pendingProfilePic.status === 'pending') {
     return this.pendingProfilePic.url;

@@ -107,7 +107,21 @@ connectDB();
 
 // CORS REMOVED - Nginx handles all CORS now
 
-app.use(bodyParser.json({ limit: '10mb' }));
+// The verify hook stashes the raw request bytes on req.rawBody for
+// webhook routes only.
+//
+// Webhook signatures are HMACs over the exact bytes the provider sent.
+// Re-serialising the parsed object produces different bytes — key order
+// and whitespace are not preserved — so every signature check would
+// fail. This is the standard cause of "signature invalid" bugs.
+app.use(bodyParser.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    if (req.originalUrl && req.originalUrl.includes('/webhook')) {
+      req.rawBody = buf.toString('utf8');
+    }
+  }
+}));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // =====================================================
@@ -223,6 +237,7 @@ app.use('/api/admin', banRoutes);
 app.use('/api/admin/approval', approvalRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/complaints', require('./routes/complaint.routes'));
+app.use('/api/age-verification', require('./routes/ageVerification.routes'));
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES
