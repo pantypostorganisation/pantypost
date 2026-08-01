@@ -3,7 +3,9 @@
 
 import { useState } from 'react';
 
-const AGE_VERIFIED_KEY = 'pantypost_age_verified';
+// Key is versioned: changing the stated threshold or terms should
+// re-prompt everyone rather than silently inheriting an old acceptance.
+const AGE_VERIFIED_KEY = 'pantypost_age_verified_v2';
 
 export default function AgeVerificationModal(): React.ReactElement | null {
   // Initialize state based on localStorage
@@ -40,16 +42,22 @@ export default function AgeVerificationModal(): React.ReactElement | null {
       <div className="bg-[#161616] border-2 border-[#ff950e]/50 p-8 rounded-2xl max-w-md w-full shadow-2xl shadow-[#ff950e]/10">
         <h2 className="text-2xl font-bold text-[#ff950e] mb-4 text-center">Age Verification</h2>
         <p className="mb-6 text-center text-gray-300">
-          You must be at least 21 years old to enter this site. By entering, you confirm you are at least 21 years old.
+          You must be at least 18 years old to enter this site. By entering, you confirm you are
+          at least 18 years old, or older if the law where you live requires it.
         </p>
-        <p className="text-sm mb-6 text-center text-gray-400">By entering our website, you agree to the terms & conditions.</p>
+        <p className="text-sm mb-6 text-center text-gray-400">
+          By entering, you agree to our{' '}
+          <a href="/terms" className="text-[#ff950e] hover:underline">Terms</a>,{' '}
+          <a href="/privacy" className="text-[#ff950e] hover:underline">Privacy Policy</a> and{' '}
+          <a href="/content-policy" className="text-[#ff950e] hover:underline">Content Policy</a>.
+        </p>
         <div className="flex gap-4 justify-center">
           <button
             onClick={handleYes}
             type="button"
             className="group relative inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-[#ff950e] to-[#ffb347] text-black font-bold rounded-full overflow-hidden transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg hover:shadow-[#ff950e]/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
-            <span className="relative z-10">I am 21+</span>
+            <span className="relative z-10">I am 18 or over</span>
           </button>
           <button
             onClick={handleNo}

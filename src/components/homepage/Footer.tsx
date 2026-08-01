@@ -59,6 +59,7 @@ const COMPLIANCE_LINKS = [
   { href: '/terms', label: 'Terms of Service' },
   { href: '/privacy', label: 'Privacy Policy' },
   { href: '/content-policy', label: 'Content Policy' },
+  { href: '/age-verification', label: 'Age Verification' },
 ];
 
 export default function Footer() {
@@ -133,7 +134,7 @@ export default function Footer() {
             </a>
           </p>
           <p className="mt-3 text-xs text-gray-600 max-w-2xl mx-auto">
-            Panty Post is committed to user safety and privacy. All users must be 21 or over.
+            Panty Post is committed to user safety and privacy. All users must be 18 or over.
             Every listing, post and image is reviewed before publication. We do not permit content
             published without the consent of everyone depicted — if you believe such content
             appears here, please use our{' '}
