@@ -70,7 +70,7 @@ export default function TermsCheckboxes({
             className="h-4 w-4 mt-1 rounded border-gray-700 text-[#ff950e] focus:ring-[#ff950e] focus:ring-offset-[#111] cursor-pointer"
           />
           <label htmlFor="ageVerified" className="ml-3 block text-sm text-gray-300 cursor-pointer select-none">
-            I confirm that I am at least 21 years old
+            I confirm that I am at least 18 years old
             {ageVerified && <CheckCircle className="inline-block w-3 h-3 ml-1 text-green-500" />}
           </label>
         </div>
