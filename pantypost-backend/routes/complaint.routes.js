@@ -22,6 +22,7 @@ const Post = require('../models/Post');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
+const { sendEmail } = require('../config/email');
 
 // Published commitment, surfaced by the API so the public page and the
 // backend can never drift apart.
@@ -105,6 +106,118 @@ async function removeContentPendingReview(contentType, contentId, referenceCode)
   }
 
   return false;
+}
+
+/**
+ * Email the compliance inbox.
+ *
+ * In-app notifications alone are not enough: a five business day
+ * commitment cannot depend on someone happening to open the dashboard.
+ * Failures are logged and swallowed — a complaint must never be lost
+ * because the mail server was unreachable.
+ */
+async function emailComplianceInbox(complaint) {
+  const to =
+    process.env.COMPLAINTS_EMAIL ||
+    process.env.EMAIL_USER ||
+    'support@pantypost.com';
+
+  const isUrgent = URGENT_TYPES.includes(complaint.complaintType);
+  const dueDate = new Date(complaint.dueBy).toLocaleDateString('en-AU');
+
+  try {
+    await sendEmail({
+      to,
+      subject: `${isUrgent ? '[URGENT] ' : ''}Complaint ${complaint.referenceCode} — ${complaint.complaintType}`,
+      text: [
+        `Reference: ${complaint.referenceCode}`,
+        `Category: ${complaint.complaintType}`,
+        `Priority: ${complaint.priority}`,
+        `Received: ${new Date(complaint.receivedAt).toLocaleString('en-AU')}`,
+        `Due by: ${dueDate}`,
+        '',
+        `From: ${complaint.complainantEmail}`,
+        complaint.complainantName ? `Name: ${complaint.complainantName}` : '',
+        complaint.reportedUser ? `About user: ${complaint.reportedUser}` : '',
+        complaint.contentUrl ? `Content: ${complaint.contentUrl}` : '',
+        complaint.declaresDepicted ? 'The complainant states they are the person depicted.' : '',
+        complaint.contentRemovedOnReceipt
+          ? 'The content was withdrawn from public view automatically on receipt.'
+          : '',
+        '',
+        'Description:',
+        complaint.description,
+        '',
+        `Review at: ${process.env.FRONTEND_URL || 'https://pantypost.com'}/admin/complaints`,
+      ].filter(Boolean).join('\n'),
+      html: `
+        <div style="font-family:system-ui,-apple-system,sans-serif;max-width:640px">
+          ${isUrgent ? '<p style="background:#fef2f2;border-left:4px solid #dc2626;padding:12px;color:#991b1b"><strong>Urgent category.</strong> This requires immediate review.</p>' : ''}
+          <h2 style="margin:0 0 4px">Complaint ${complaint.referenceCode}</h2>
+          <p style="color:#666;margin:0 0 16px">Due by <strong>${dueDate}</strong></p>
+          <table style="border-collapse:collapse;width:100%;font-size:14px">
+            <tr><td style="padding:6px 0;color:#666">Category</td><td>${complaint.complaintType}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Priority</td><td>${complaint.priority}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">From</td><td>${complaint.complainantEmail}</td></tr>
+            ${complaint.reportedUser ? `<tr><td style="padding:6px 0;color:#666">About</td><td>${complaint.reportedUser}</td></tr>` : ''}
+            ${complaint.contentUrl ? `<tr><td style="padding:6px 0;color:#666">Content</td><td><a href="${complaint.contentUrl}">${complaint.contentUrl}</a></td></tr>` : ''}
+          </table>
+          ${complaint.declaresDepicted ? '<p style="color:#991b1b"><strong>The complainant states they are the person depicted.</strong></p>' : ''}
+          ${complaint.contentRemovedOnReceipt ? '<p style="color:#065f46">The content was withdrawn from public view automatically on receipt.</p>' : ''}
+          <h3 style="margin:20px 0 6px">Description</h3>
+          <p style="white-space:pre-wrap;background:#f9fafb;padding:12px;border-radius:6px">${String(complaint.description).replace(/</g, '&lt;')}</p>
+          <p style="margin-top:20px"><a href="${process.env.FRONTEND_URL || 'https://pantypost.com'}/admin/complaints" style="background:#ff950e;color:#000;padding:10px 18px;border-radius:6px;text-decoration:none;font-weight:600">Review complaint</a></p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error('[Complaints] Failed to email compliance inbox:', error.message);
+  }
+}
+
+/**
+ * Acknowledge receipt to the complainant, with their reference code and
+ * the date by which they will hear back.
+ */
+async function emailAcknowledgement(complaint) {
+  const dueDate = new Date(complaint.dueBy).toLocaleDateString('en-AU');
+
+  try {
+    await sendEmail({
+      to: complaint.complainantEmail,
+      subject: `We have received your complaint (${complaint.referenceCode})`,
+      text: [
+        'Thank you for contacting PantyPost.',
+        '',
+        `Your reference is ${complaint.referenceCode}. Please keep it — you can use it to check progress at any time, without needing an account.`,
+        '',
+        complaint.contentRemovedOnReceipt
+          ? 'The content you reported has already been withdrawn from public view while we investigate.'
+          : '',
+        `We will investigate and respond by ${dueDate} (within five business days).`,
+        '',
+        `Check progress: ${process.env.FRONTEND_URL || 'https://pantypost.com'}/complaints`,
+        '',
+        'PantyPost',
+      ].filter(Boolean).join('\n'),
+      html: `
+        <div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px">
+          <h2 style="margin:0 0 12px">We have received your complaint</h2>
+          <p>Thank you for contacting PantyPost.</p>
+          <div style="background:#f9fafb;border-radius:8px;padding:16px;margin:16px 0">
+            <p style="margin:0;color:#666;font-size:13px">Your reference</p>
+            <p style="margin:4px 0 0;font-family:monospace;font-size:20px;font-weight:700">${complaint.referenceCode}</p>
+          </div>
+          ${complaint.contentRemovedOnReceipt ? '<p style="background:#ecfdf5;border-left:4px solid #059669;padding:12px;color:#065f46">The content you reported has already been withdrawn from public view while we investigate.</p>' : ''}
+          <p>We will investigate and respond by <strong>${dueDate}</strong>, within five business days.</p>
+          <p>You can check progress at any time using your reference — no account needed.</p>
+          <p><a href="${process.env.FRONTEND_URL || 'https://pantypost.com'}/complaints">Check the status of your complaint</a></p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error('[Complaints] Failed to send acknowledgement:', error.message);
+  }
 }
 
 /** Alert every admin. Urgent categories should not wait to be noticed. */
@@ -246,8 +359,10 @@ router.post('/submit', complaintLimiter, async (req, res) => {
 
     await complaint.save();
 
-    // Non-blocking: a notification failure must not cost us a complaint.
+    // All non-blocking: a delivery failure must not cost us a complaint.
     alertAdmins(complaint).catch(() => {});
+    emailComplianceInbox(complaint).catch(() => {});
+    emailAcknowledgement(complaint).catch(() => {});
 
     console.log(
       `[Complaints] ${complaint.referenceCode} received (${complaintType}, ${complaint.priority})`

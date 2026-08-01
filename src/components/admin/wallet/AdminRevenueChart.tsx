@@ -89,7 +89,12 @@ export default function AdminRevenueChart({ timeFilter, orderHistory, adminActio
         <>
           <div className="overflow-x-auto">
             <div className="min-w-[600px] mb-4">
-              <div className="relative h-64">
+              {/* Height raised from h-64 to h-80 to give the hover tooltip
+                  room above the tallest bar. The tooltip sits 36px above
+                  the bar top, which previously landed outside this box and
+                  was clipped by the overflow-x-auto wrapper.
+                  Bar sizing is unchanged. */}
+              <div className="relative h-80">
 
                 <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-2 pr-6">
                   {chartData.map((period, index) => {

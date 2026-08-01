@@ -9,7 +9,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
-import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X, Compass } from 'lucide-react';
+import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X, Compass, AlertTriangle } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
@@ -818,6 +818,7 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-purple-300 font-bold text-sm">ADMIN PANEL</span>
                   </div>
                   {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
+                  {renderMobileLink('/admin/complaints', <AlertTriangle className="w-5 h-5" />, 'Complaints')}
                   {renderMobileLink('/admin/approval', <ClipboardCheck className="w-5 h-5" />, 'Approval')}
                   {renderMobileLink('/admin/bans', <Ban className="w-5 h-5" />, 'Bans')}
                   {renderMobileLink('/admin/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
@@ -1014,6 +1015,16 @@ export default function Header(): React.ReactElement | null {
                   )}
                 </Link>
               </div>
+
+              {/* Complaints carry a published resolution deadline, so this
+                  sits beside Reports rather than being buried in a submenu. */}
+              <Link
+                href="/admin/complaints"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-900/20 to-red-900/20 hover:from-amber-900/30 hover:to-red-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 shadow-lg text-xs"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Complaints</span>
+              </Link>
 
               <Link
                 href="/admin/approval"
