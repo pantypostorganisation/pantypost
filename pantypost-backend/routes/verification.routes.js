@@ -4,10 +4,111 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs').promises;
+const fsSync = require('fs');
+const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Verification = require('../models/Verification');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
+
+/* =====================================================================
+ * SECURE VERIFICATION DOCUMENT ACCESS
+ *
+ * Identity documents (passports, licences, verification selfies) are no
+ * longer served from the public /uploads mount. They are only reachable
+ * through short-lived, single-file signed tokens issued to admins.
+ *
+ * Why tokens rather than a normal authenticated route: a browser <img>
+ * tag cannot send an Authorization header, so the admin panel could not
+ * display documents behind standard auth. The token travels in the URL
+ * instead, expires quickly, and is scoped to one specific file.
+ * ===================================================================== */
+
+// How long an issued document link stays valid.
+const DOCUMENT_TOKEN_TTL_SECONDS = 10 * 60; // 10 minutes
+
+// Absolute path to the verification upload directory.
+const VERIFICATION_DIR = path.resolve(process.cwd(), 'uploads', 'verification');
+
+/**
+ * Read the signing secret at call time rather than module load time.
+ * Route files are required before server.js validates JWT_SECRET, so
+ * capturing it at module scope could freeze an undefined value.
+ */
+function getSigningSecret() {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+  return secret;
+}
+
+/**
+ * Issue a short-lived token granting access to one document filename.
+ * The 'purpose' claim prevents an ordinary login token from being
+ * replayed here, and vice versa.
+ */
+function signDocumentToken(filename) {
+  return jwt.sign(
+    { file: filename, purpose: 'verification-document' },
+    getSigningSecret(),
+    { expiresIn: DOCUMENT_TOKEN_TTL_SECONDS }
+  );
+}
+
+/**
+ * Convert a stored document path such as
+ *   /uploads/verification/seller1-idFront-123.jpg
+ * into an absolute, signed, expiring URL.
+ * Returns undefined when there is no document, so the admin UI can
+ * continue to render its "Not provided" placeholder.
+ */
+function buildSignedDocumentUrl(req, storedUrl) {
+  if (!storedUrl || typeof storedUrl !== 'string') return undefined;
+
+  // Only the bare filename is ever trusted or embedded in the token.
+  const filename = path.basename(storedUrl);
+  if (!filename) return undefined;
+
+  const token = signDocumentToken(filename);
+
+  const host = req.get('host');
+  const protocol = host && host.includes('api.pantypost.com') ? 'https' : req.protocol;
+
+  return `${protocol}://${host}/api/verification/document/${token}`;
+}
+
+/**
+ * Replace every stored document URL on a verification record with a
+ * freshly signed URL. Operates on a plain object (from .lean()).
+ */
+function withSignedDocumentUrls(req, verification) {
+  if (!verification || !verification.documents) return verification;
+
+  const signed = {};
+  for (const field of Object.keys(verification.documents)) {
+    const doc = verification.documents[field];
+    if (doc && doc.url) {
+      signed[field] = {
+        ...doc,
+        url: buildSignedDocumentUrl(req, doc.url)
+      };
+    } else {
+      signed[field] = doc;
+    }
+  }
+
+  return { ...verification, documents: signed };
+}
+
+const MIME_TYPES = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif'
+};
+
 
 // Configure multer for document uploads
 const storage = multer.diskStorage({
@@ -206,6 +307,60 @@ router.post('/submit', authMiddleware, upload.fields([
   }
 });
 
+/* =====================================================================
+ * GET /api/verification/document/:token
+ *
+ * Serves a single identity document. Deliberately NOT behind
+ * authMiddleware: a browser <img> tag cannot send an Authorization
+ * header, so the signed token in the path is the credential.
+ *
+ * Tokens are only ever issued by admin-gated endpoints, are scoped to
+ * one filename, and expire after DOCUMENT_TOKEN_TTL_SECONDS.
+ * ===================================================================== */
+router.get('/document/:token', async (req, res) => {
+  // Identity documents must never be cached by browsers or proxies.
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+
+  let payload;
+  try {
+    payload = jwt.verify(req.params.token, getSigningSecret());
+  } catch (error) {
+    console.warn('[Verification] Rejected document token:', error.message);
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+
+  // Reject any token not minted specifically for document access.
+  if (!payload || payload.purpose !== 'verification-document' || !payload.file) {
+    console.warn('[Verification] Document token had wrong purpose');
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+
+  // Strip any directory component before touching the filesystem.
+  const safeName = path.basename(String(payload.file));
+  const absolutePath = path.resolve(VERIFICATION_DIR, safeName);
+
+  // Defence in depth: confirm the resolved path is inside the
+  // verification directory even after basename sanitisation.
+  if (!absolutePath.startsWith(VERIFICATION_DIR + path.sep)) {
+    console.error('[Verification] Blocked path traversal attempt:', payload.file);
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+
+  if (!fsSync.existsSync(absolutePath)) {
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+
+  const contentType = MIME_TYPES[path.extname(safeName).toLowerCase()];
+  if (contentType) {
+    res.setHeader('Content-Type', contentType);
+  }
+
+  return res.sendFile(absolutePath);
+});
+
 // GET /api/verification/status - Get verification status
 router.get('/status', authMiddleware, async (req, res) => {
   try {
@@ -268,13 +423,21 @@ router.get('/pending', authMiddleware, async (req, res) => {
       .populate('userId', 'username email role')
       .sort({ submittedAt: sortOrder })
       .skip(skip)
-      .limit(parseInt(limit));
-    
+      .limit(parseInt(limit))
+      .lean();
+
+    // Swap stored paths for short-lived signed URLs before responding.
+    // The raw /uploads/verification/... paths are no longer publicly
+    // reachable, so the admin panel relies on these signed links.
+    const verificationsWithSignedUrls = verifications.map(v =>
+      withSignedDocumentUrls(req, v)
+    );
+
     const total = await Verification.countDocuments({ status: 'pending' });
     
     res.json({
       success: true,
-      data: verifications,
+      data: verificationsWithSignedUrls,
       meta: {
         page: parseInt(page),
         pageSize: parseInt(limit),

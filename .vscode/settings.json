@@ -27,5 +27,6 @@
   },
   "files.associations": {
     "**/.next-dev/trace": "plaintext"
-  }
+  },
+  "js/ts.tsdk.path": "node_modules\\typescript\\lib"
 }

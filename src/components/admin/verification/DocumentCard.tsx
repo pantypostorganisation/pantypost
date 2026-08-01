@@ -1,8 +1,8 @@
 // src/components/admin/verification/DocumentCard.tsx
 'use client';
 
-import { useState } from 'react';
-import { ExternalLink, ImageIcon, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ExternalLink, ImageIcon, Loader2, RefreshCw } from 'lucide-react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface DocumentCardProps {
@@ -15,44 +15,21 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
   const [imageError, setImageError] = useState(false);
   const [imageLoading, setImageLoading] = useState(true);
 
-  // Fix URLs that incorrectly have /api/ in the path for static uploads
-  const getSafeImageUrl = (url?: string): string => {
-    if (!url) return '';
-    
-    // If it's a data URL, return as is
-    if (url.startsWith('data:image/')) {
-      return url;
-    }
-    
-    // FIX: Check for URLs with /api/uploads/ and fix them
-    // Backend serves uploads directly from /uploads/, not /api/uploads/
-    if (url.includes('/api/uploads/')) {
-      // Extract the base URL and the path
-      const baseUrl = url.substring(0, url.indexOf('/api/uploads/'));
-      const path = url.substring(url.indexOf('/api/uploads/') + 4); // Remove '/api' prefix
-      const fixedUrl = `${baseUrl}${path}`;
-      console.log('[DocumentCard] Fixed URL from:', url, 'to:', fixedUrl);
-      return fixedUrl;
-    }
-    
-    // If it's a relative upload path, construct the correct URL
-    if (url.startsWith('/uploads/')) {
-      // Use base URL without /api
-      const baseUrl = 'http://localhost:5000';
-      return `${baseUrl}${url}`;
-    }
-    
-    // If it's already a correct absolute URL from our backend, return as is
-    if (url.startsWith('http://localhost:5000/uploads/') || 
-        url.startsWith('https://localhost:5000/uploads/')) {
-      return url;
-    }
-    
-    // For any other URL, return as is
-    return url;
-  };
+  // Reset load/error state whenever the source changes, so a refreshed
+  // signed URL gets a clean attempt rather than inheriting a stale error.
+  useEffect(() => {
+    setImageError(false);
+    setImageLoading(true);
+  }, [imageSrc]);
 
-  const safeSrc = getSafeImageUrl(imageSrc);
+  /**
+   * The backend now returns absolute, short-lived signed URLs for
+   * verification documents, so no client-side URL rewriting is needed.
+   *
+   * This previously hardcoded http://localhost:5000 for relative paths,
+   * which meant document previews only ever worked in local development.
+   */
+  const safeSrc = imageSrc && imageSrc.trim() ? imageSrc : '';
   const hasImage = !!safeSrc && !imageError;
 
   const handleImageLoad = () => {
@@ -61,7 +38,9 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
   };
 
   const handleImageError = () => {
-    console.error('[DocumentCard] Failed to load image:', imageSrc, '-> Fixed to:', safeSrc);
+    // The most common cause is an expired signed link, since these are
+    // deliberately short-lived. Refreshing the page reissues them.
+    console.warn('[DocumentCard] Could not load document (link may have expired):', title);
     setImageLoading(false);
     setImageError(true);
   };
@@ -73,7 +52,7 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
       </h4>
 
       <div className="relative bg-[#1a1a1a] rounded-lg border border-gray-700 overflow-hidden aspect-[4/3]">
-        {safeSrc && !imageError ? (
+        {hasImage ? (
           <>
             {/* Loading state */}
             {imageLoading && (
@@ -91,12 +70,14 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
               onLoad={handleImageLoad}
               onError={handleImageError}
               draggable={false}
-              style={{ display: imageError ? 'none' : 'block' }}
+              // Identity documents should not leak the admin page URL
+              // to any intermediary.
+              referrerPolicy="no-referrer"
             />
 
             {/* Hover overlay */}
-            {!imageLoading && !imageError && (
-              <div 
+            {!imageLoading && (
+              <div
                 className="absolute inset-0 bg-black bg-opacity-30 hover:bg-opacity-0 transition flex items-center justify-center opacity-0 hover:opacity-100 cursor-pointer"
                 onClick={onViewFull}
               >
@@ -105,11 +86,23 @@ export default function DocumentCard({ title, imageSrc, onViewFull }: DocumentCa
             )}
           </>
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
-            <ImageIcon className="w-8 h-8 mb-2" />
-            <span className="text-xs text-center px-2">
-              {imageError ? 'Failed to load image' : 'Not provided'}
-            </span>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 px-3">
+            {imageError ? (
+              <>
+                <RefreshCw className="w-7 h-7 mb-2 text-amber-500/70" />
+                <span className="text-xs text-center text-amber-200/80 font-medium">
+                  Secure link expired
+                </span>
+                <span className="text-[0.7rem] text-center text-gray-500 mt-1">
+                  Refresh the page to view
+                </span>
+              </>
+            ) : (
+              <>
+                <ImageIcon className="w-8 h-8 mb-2" />
+                <span className="text-xs text-center">Not provided</span>
+              </>
+            )}
           </div>
         )}
       </div>

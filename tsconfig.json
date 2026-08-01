@@ -20,7 +20,6 @@
     // Silences the TypeScript 7.0 deprecation warnings for
     // "baseUrl" and "downlevelIteration" below. Both still work
     // normally; this only suppresses the editor warnings.
-    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@/*": [
