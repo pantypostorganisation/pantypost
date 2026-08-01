@@ -64,7 +64,30 @@ const SubscriptionRenewalService = require('./services/subscriptionRenewal');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// =====================================================
+// SECURITY: JWT secret must be supplied by the environment.
+// Previously this fell back to the literal string 'your-secret-key'.
+// If JWT_SECRET was ever missing on a deploy, anyone who knew that
+// fallback could forge a valid admin token. We now refuse to start.
+// =====================================================
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+  console.error('');
+  console.error('==============================================================');
+  console.error(' FATAL: JWT_SECRET is missing or too short.');
+  console.error('');
+  console.error(' Set a strong JWT_SECRET (at least 32 characters) in your .env');
+  console.error(' file before starting the server. Generate one with:');
+  console.error('');
+  console.error('   node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'hex\'))"');
+  console.error('');
+  console.error(' The server will not start without it.');
+  console.error('==============================================================');
+  console.error('');
+  process.exit(1);
+}
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -91,8 +114,28 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 // CRITICAL FIX: SERVE STATIC FILES BEFORE OTHER ROUTES
 // =====================================================
 
+// =====================================================
+// SECURITY: Identity documents must never be served publicly.
+//
+// uploads/verification/ holds passport scans, driver's licence photos
+// and verification selfies. Serving them from the public /uploads
+// mount meant anyone holding a URL could download them with no login.
+//
+// This block MUST stay above the express.static mount below, because
+// Express matches middleware in the order it is registered.
+// =====================================================
+app.use('/uploads/verification', (req, res) => {
+  console.warn(`[Security] Blocked public request for verification document: ${req.path}`);
+  return res.status(404).json({
+    success: false,
+    error: 'Not found'
+  });
+});
+
 // Serve uploaded files with proper headers
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  // Never serve dot-files from the uploads tree
+  dotfiles: 'ignore',
   maxAge: '7d',
   etag: true,
   setHeaders: (res, filePath) => {
@@ -123,10 +166,16 @@ app.use('/uploads', (req, res, next) => {
   next();
 });
 
-// Also serve files from the backend root (for backward compatibility)
-app.use(express.static(path.join(__dirname), {
-  maxAge: '1d'
-}));
+// =====================================================
+// SECURITY: The backend root is no longer served as static files.
+//
+// This previously published the entire backend directory, meaning
+// server.js, models/, routes/, config/ and the test-html/ pages were
+// all publicly readable at https://api.pantypost.com/<filename>.
+//
+// Anything the public genuinely needs must be placed in uploads/
+// and served through the /uploads mount above.
+// =====================================================
 
 // Health check
 app.get('/api/health', (req, res) => {
