@@ -85,6 +85,32 @@ const postSchema = new mongoose.Schema({
     default: 'active',
     index: true
   },
+
+  // =====================================================
+  // PRE-PUBLICATION MODERATION
+  //
+  // Posts previously went live the moment they were created, with no
+  // review of the text or attached media. These fields put them behind
+  // the same approval queue as listings.
+  //
+  // Defaults fail closed: a post is pending until an admin approves it.
+  // =====================================================
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'denied'],
+    default: 'pending',
+    index: true
+  },
+  requiresApproval: {
+    type: Boolean,
+    default: true
+  },
+  approvedAt: Date,
+  approvedBy: String,
+  deniedAt: Date,
+  deniedBy: String,
+  denialReason: String,
+  moderationNote: String,
   
   // Pinned post (one per seller)
   isPinned: {
@@ -181,10 +207,23 @@ postSchema.statics.getFeed = async function(options = {}) {
     type = 'latest',
     tag = null,
     followedUsers = null,
-    excludeAuthor = null
+    excludeAuthor = null,
+    viewerUsername = null
   } = options;
   
+  // Only approved posts are publicly visible. Authors may additionally
+  // see their own posts in any state, so they can track what is
+  // awaiting review.
   const query = { status: 'active' };
+
+  if (viewerUsername) {
+    query.$or = [
+      { approvalStatus: 'approved' },
+      { author: viewerUsername }
+    ];
+  } else {
+    query.approvalStatus = 'approved';
+  }
   
   // Filter by tag
   if (tag) {
@@ -239,6 +278,7 @@ postSchema.statics.getTrendingPosts = async function(limit = 10) {
   
   return this.find({
     status: 'active',
+    approvalStatus: 'approved',
     createdAt: { $gte: oneDayAgo }
   })
     .sort({ likeCount: -1, commentCount: -1, views: -1 })
@@ -248,13 +288,19 @@ postSchema.statics.getTrendingPosts = async function(limit = 10) {
 
 // Static method: Get posts by author
 postSchema.statics.getPostsByAuthor = async function(username, options = {}) {
-  const { page = 1, limit = 10 } = options;
+  const { page = 1, limit = 10, viewerUsername = null } = options;
   const skip = (page - 1) * limit;
   
   const query = {
     author: username,
     status: 'active'
   };
+
+  // Visitors only see approved posts. The author viewing their own
+  // profile also sees pending and denied ones.
+  if (viewerUsername !== username) {
+    query.approvalStatus = 'approved';
+  }
   
   const [posts, total] = await Promise.all([
     this.find(query)
@@ -284,6 +330,7 @@ postSchema.statics.getTrendingTags = async function(limit = 10) {
     {
       $match: {
         status: 'active',
+        approvalStatus: 'approved',
         createdAt: { $gte: oneDayAgo },
         tags: { $exists: true, $ne: [] }
       }

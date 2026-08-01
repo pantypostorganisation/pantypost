@@ -11,8 +11,17 @@ const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const AuctionSettlementService = require('../services/auctionSettlement');
 const jwt = require('jsonwebtoken');
+const {
+  markPending,
+  hasMaterialChange,
+  MATERIAL_LISTING_FIELDS,
+} = require('../utils/moderation');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// SECURITY: no fallback secret. Previously this defaulted to the literal
+// string 'your-secret-key', which would let anyone forge tokens if the
+// environment variable were ever missing. server.js refuses to start
+// without a valid JWT_SECRET, so by this point it is guaranteed present.
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // ============= HELPER FUNCTIONS FOR PREMIUM CONTENT =============
 
@@ -217,12 +226,19 @@ router.get('/', async (req, res) => {
     if (isAuction !== undefined) filter['auction.isAuction'] = isAuction === 'true';
 
     if (!includeAllApprovals) {
-      const approvalConditions = [
-        { approvalStatus: 'approved' },
-        { approvalStatus: { $exists: false } },
-        { requiresApproval: { $ne: true } },
-      ];
+      // =====================================================
+      // FAIL-CLOSED VISIBILITY
+      //
+      // Only explicitly approved listings are public.
+      //
+      // This previously also treated "approvalStatus missing" and
+      // "requiresApproval is not true" as publicly visible, which meant
+      // unreviewed content could surface simply by lacking a field.
+      // =====================================================
+      const approvalConditions = [{ approvalStatus: 'approved' }];
 
+      // Sellers can still see their own listings in any state, so they
+      // can track what is pending or fix what was denied.
       if (requester?.role === 'seller' && requester?.username) {
         approvalConditions.push({ seller: requester.username });
       }
@@ -298,7 +314,7 @@ router.get('/', async (req, res) => {
     if (token) {
       try {
         const jwt = require('jsonwebtoken');
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const username = decoded.username;
         const role = decoded.role;
         
@@ -479,21 +495,17 @@ router.post('/', authMiddleware, async (req, res) => {
     listingData.isVerified = isSellerVerified;
     listingData.verifiedSeller = isSellerVerified;
 
-    if (isSellerVerified) {
-      listingData.requiresApproval = false;
-      listingData.approvalStatus = 'approved';
-      listingData.approvedAt = new Date();
-      listingData.approvedBy = 'system';
-      listingData.deniedAt = undefined;
-      listingData.deniedBy = undefined;
-    } else {
-      listingData.requiresApproval = true;
-      listingData.approvalStatus = 'pending';
-      listingData.approvedAt = undefined;
-      listingData.approvedBy = undefined;
-      listingData.deniedAt = undefined;
-      listingData.deniedBy = undefined;
-    }
+    // =====================================================
+    // PRE-PUBLICATION REVIEW
+    //
+    // Every listing enters the moderation queue, with no exceptions.
+    //
+    // Verified sellers previously bypassed review entirely and were
+    // auto-approved by 'system'. Verification confirms who someone is;
+    // it says nothing about what they are about to upload, so it cannot
+    // stand in for content review.
+    // =====================================================
+    markPending(listingData, 'Awaiting initial review');
 
     // Handle images
     if (listingData.imageUrl && !listingData.imageUrls) {
@@ -561,6 +573,43 @@ router.get('/:id', async (req, res) => {
         error: 'Listing not found'
       });
     }
+
+    // =====================================================
+    // FAIL-CLOSED DIRECT ACCESS
+    //
+    // Fixing the browse filter alone is not enough: a listing awaiting
+    // review or already denied could still be viewed by anyone holding
+    // its direct URL, which a seller could simply share.
+    //
+    // Only the owning seller and admins may view unapproved listings.
+    // =====================================================
+    if (listing.approvalStatus !== 'approved') {
+      let viewerUsername = null;
+      let viewerRole = null;
+
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, JWT_SECRET);
+          viewerUsername = decoded.username;
+          viewerRole = decoded.role;
+        } catch (error) {
+          // Invalid token is treated as anonymous.
+        }
+      }
+
+      const isOwner = viewerUsername && viewerUsername === listing.seller;
+      const isAdmin = viewerRole === 'admin';
+
+      if (!isOwner && !isAdmin) {
+        // Deliberately a 404 rather than 403, so the existence of
+        // unapproved listings is not disclosed.
+        return res.status(404).json({
+          success: false,
+          error: 'Listing not found'
+        });
+      }
+    }
     
     // Populate seller profile
     const populatedListing = await populateSellerProfile(listing.toObject());
@@ -574,7 +623,7 @@ router.get('/:id', async (req, res) => {
       if (token) {
         try {
           const jwt = require('jsonwebtoken');
-          const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+          const decoded = jwt.verify(token, JWT_SECRET);
           const username = decoded.username;
           const role = decoded.role;
           
@@ -1212,6 +1261,23 @@ async function updateListing(req, res) {
       });
     }
     
+    // =====================================================
+    // RE-REVIEW ON MATERIAL EDIT
+    //
+    // Approval applies to the content that was reviewed, not to the
+    // listing in perpetuity. Changing the title, description, tags or
+    // images means buyers would see something a moderator never saw.
+    //
+    // Without this check the entire moderation system is defeated by
+    // submitting acceptable content, waiting for approval, then editing
+    // it into something else.
+    //
+    // Price and stock changes are deliberately excluded: they are not
+    // moderated content, and forcing re-review on every price tweak
+    // would flood the queue.
+    // =====================================================
+    const needsReReview = hasMaterialChange(listing, req.body, MATERIAL_LISTING_FIELDS);
+
     // CRITICAL FIX: Ensure price is properly updated and markedUpPrice is recalculated
     if (req.body.price !== undefined) {
       listing.price = Number(req.body.price);
@@ -1226,6 +1292,12 @@ async function updateListing(req, res) {
         listing[field] = req.body[field];
       }
     });
+
+    if (needsReReview) {
+      const editor = req.user.role === 'admin' ? `admin:${req.user.username}` : 'seller';
+      markPending(listing, `Returned to review after edit by ${editor}`);
+      console.log('[UPDATE] Listing returned to moderation queue after material edit:', listing._id);
+    }
     
     // Save the updated listing
     await listing.save();

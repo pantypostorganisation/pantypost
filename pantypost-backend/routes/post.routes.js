@@ -7,6 +7,11 @@ const User = require('../models/User');
 const Subscription = require('../models/Subscription');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
+const {
+  markPending,
+  hasMaterialChange,
+  MATERIAL_POST_FIELDS,
+} = require('../utils/moderation');
 
 // Helper: Get author info
 async function getAuthorInfo(username) {
@@ -124,10 +129,26 @@ router.get('/user/:username', async (req, res) => {
   try {
     const { username } = req.params;
     const { page = 1, limit = 10 } = req.query;
+
+    // Optionally identify the viewer. An author looking at their own
+    // profile should still see posts awaiting review, otherwise
+    // submitted content appears to vanish.
+    let viewerUsername = null;
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        viewerUsername = decoded.username;
+      } catch (error) {
+        // Anonymous viewer.
+      }
+    }
     
     const result = await Post.getPostsByAuthor(username, {
       page: parseInt(page),
-      limit: Math.min(parseInt(limit), 50)
+      limit: Math.min(parseInt(limit), 50),
+      viewerUsername
     });
     
     // Enrich with author info
@@ -215,6 +236,33 @@ router.get('/:id', async (req, res) => {
         error: 'Post not found'
       });
     }
+
+    // Unapproved posts must not be reachable by direct link. Only the
+    // author and admins may view them. A 404 rather than a 403 avoids
+    // confirming that a pending post exists.
+    if (post.approvalStatus !== 'approved') {
+      let viewerUsername = null;
+      let viewerRole = null;
+
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (token) {
+        try {
+          const jwt = require('jsonwebtoken');
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          viewerUsername = decoded.username;
+          viewerRole = decoded.role;
+        } catch (error) {
+          // Treat an invalid token as anonymous.
+        }
+      }
+
+      if (viewerUsername !== post.author && viewerRole !== 'admin') {
+        return res.status(404).json({
+          success: false,
+          error: 'Post not found'
+        });
+      }
+    }
     
     // Increment views
     post.incrementViews();
@@ -277,47 +325,33 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
     
-    // Create post
+    // Create post. The schema defaults to pending; this is explicit so
+    // the intent is obvious at the point of creation.
     const post = new Post({
       author: req.user.username,
       content: content || '',
       imageUrls: imageUrls || [],
       linkedListing
     });
+    markPending(post, 'Awaiting initial review');
     
     await post.save();
     
     // Get author info
     const authorInfo = await getAuthorInfo(req.user.username);
     
-    // Notify subscribers (async)
-    setImmediate(async () => {
-      try {
-        const subscriptions = await Subscription.find({
-          sellerUsername: req.user.username,
-          status: 'active'
-        }).populate('subscriberId', 'username');
-        
-        for (const sub of subscriptions) {
-          if (sub.subscriberId) {
-            await sendNotification(sub.subscriberId.username, 'post', {
-              title: 'New Post',
-              message: `${req.user.username} shared a new post`,
-              metadata: { postId: post._id }
-            });
-          }
-        }
-      } catch (err) {
-        console.error('[Post] Notification error:', err);
-      }
-    });
+    // NOTE: Subscribers are deliberately NOT notified here.
+    // A notification is itself a form of publication — it would push
+    // the post's existence to users before a moderator has seen it.
+    // Notifications are sent on approval instead.
     
     res.status(201).json({
       success: true,
       data: {
         ...post.toObject(),
         authorInfo
-      }
+      },
+      message: 'Post submitted and awaiting review before publication.'
     });
   } catch (error) {
     console.error('[Post] Create error:', error);
@@ -349,6 +383,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
     }
     
     const { content, imageUrls, isPinned } = req.body;
+
+    // Detect material changes before mutating the document, so the
+    // comparison is against what a moderator actually reviewed.
+    // Pinning is excluded: it changes placement, not content.
+    const needsReReview = hasMaterialChange(post, req.body, MATERIAL_POST_FIELDS);
     
     // Update fields
     if (content !== undefined) {
@@ -381,6 +420,14 @@ router.put('/:id', authMiddleware, async (req, res) => {
       }
       post.isPinned = isPinned;
     }
+
+    // Same principle as listings: approval covers the reviewed content,
+    // not the post forever. Editing the text or swapping the media
+    // returns it to the queue.
+    if (needsReReview) {
+      markPending(post, 'Returned to review after edit by author');
+      console.log('[Post] Returned to moderation queue after material edit:', post._id);
+    }
     
     await post.save();
     
@@ -392,7 +439,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
       data: {
         ...post.toObject(),
         authorInfo
-      }
+      },
+      ...(needsReReview
+        ? { message: 'Your edit has been submitted for review and is not publicly visible until approved.' }
+        : {})
     });
   } catch (error) {
     console.error('[Post] Update error:', error);
@@ -444,7 +494,9 @@ router.post('/:id/like', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
-    if (!post || post.status !== 'active') {
+    // Unapproved posts cannot be interacted with, since they are not
+    // publicly visible in the first place.
+    if (!post || post.status !== 'active' || post.approvalStatus !== 'approved') {
       return res.status(404).json({
         success: false,
         error: 'Post not found'
@@ -496,7 +548,8 @@ router.post('/:id/comment', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     
-    if (!post || post.status !== 'active') {
+    // Comments are only accepted on posts that are actually published.
+    if (!post || post.status !== 'active' || post.approvalStatus !== 'approved') {
       return res.status(404).json({
         success: false,
         error: 'Post not found'

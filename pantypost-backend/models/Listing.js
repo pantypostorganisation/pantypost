@@ -58,19 +58,25 @@ const listingSchema = new mongoose.Schema({
 
   requiresApproval: {
     type: Boolean,
-    default: false
+    // Fails closed: new listings require review unless explicitly approved.
+    default: true
   },
 
   approvalStatus: {
     type: String,
     enum: ['pending', 'approved', 'denied'],
-    default: 'approved'
+    // Previously defaulted to 'approved', which meant any listing created
+    // outside the main POST route went live without ever being reviewed.
+    default: 'pending',
+    index: true
   },
 
   approvedAt: Date,
   approvedBy: String,
   deniedAt: Date,
   deniedBy: String,
+  denialReason: String,
+  moderationNote: String,
   
   // Listing details
   tags: [{
@@ -186,6 +192,9 @@ listingSchema.index({ tags: 1 });
 listingSchema.index({ 'auction.endTime': 1, 'auction.status': 1 });
 listingSchema.index({ status: 1, createdAt: -1 });
 listingSchema.index({ 'auction.isAuction': 1, 'auction.status': 1 });
+// Supports the public browse query, which now always filters on
+// approvalStatus before anything else.
+listingSchema.index({ approvalStatus: 1, status: 1, createdAt: -1 });
 
 // Virtual to check if auction is still active
 listingSchema.virtual('auction.isActive').get(function() {
