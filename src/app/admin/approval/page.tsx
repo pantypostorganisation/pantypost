@@ -5,42 +5,117 @@ import { useEffect, useMemo, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
-import { approvalService, ApprovalStatus } from '@/services/approval.service';
-import { Listing } from '@/context/ListingContext';
-import { CheckCircle2, CircleSlash, Clock3, ShieldCheck, Sparkles } from 'lucide-react';
+import {
+  approvalService,
+  ApprovalStatus,
+  ContentType,
+  ModeratedItem,
+} from '@/services/approval.service';
+import {
+  CheckCircle2,
+  CircleSlash,
+  Clock3,
+  ShieldCheck,
+  Sparkles,
+  FileText,
+  Tag,
+  UserCircle,
+  Images,
+} from 'lucide-react';
+
+type QueueFilter = 'all' | ContentType;
+
+/** Visual treatment per content type, so reviewers can scan the queue. */
+const TYPE_STYLES: Record<string, { border: string; bg: string; chip: string }> = {
+  listing: {
+    border: 'border-purple-500/30',
+    bg: 'bg-gradient-to-br from-black via-[#0b0b0b] to-[#0f0717]',
+    chip: 'border-purple-500/40 bg-purple-500/10 text-purple-100',
+  },
+  post: {
+    border: 'border-sky-500/30',
+    bg: 'bg-gradient-to-br from-black via-[#0b0b0b] to-[#07131f]',
+    chip: 'border-sky-500/40 bg-sky-500/10 text-sky-100',
+  },
+  profile_pic: {
+    border: 'border-amber-500/30',
+    bg: 'bg-gradient-to-br from-black via-[#0b0b0b] to-[#1a1206]',
+    chip: 'border-amber-500/40 bg-amber-500/10 text-amber-100',
+  },
+  gallery_image: {
+    border: 'border-emerald-500/30',
+    bg: 'bg-gradient-to-br from-black via-[#0b0b0b] to-[#06170f]',
+    chip: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100',
+  },
+};
+
+function typeIcon(contentType: string) {
+  switch (contentType) {
+    case 'listing':
+      return <Tag className="h-3.5 w-3.5" />;
+    case 'post':
+      return <FileText className="h-3.5 w-3.5" />;
+    case 'profile_pic':
+      return <UserCircle className="h-3.5 w-3.5" />;
+    case 'gallery_image':
+      return <Images className="h-3.5 w-3.5" />;
+    default:
+      return <FileText className="h-3.5 w-3.5" />;
+  }
+}
 
 function formatDate(value?: string | Date) {
   if (!value) return '—';
   const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString();
 }
 
-function formatPrice(listing: Listing) {
-  const base = listing.auction?.startingPrice ?? listing.price;
-  if (!base) return '$0.00';
+/** Posts have no price, so this returns null rather than a misleading $0.00. */
+function formatPrice(item: ModeratedItem): string | null {
+  if (item.contentType !== 'listing') return null;
+  const base = item.auction?.startingPrice ?? item.price;
+  if (base === undefined || base === null) return null;
   return `$${Number(base).toFixed(2)}`;
+}
+
+function resolveImageUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+    return url;
+  }
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_BACKEND_URL || '';
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${base}${path}`;
 }
 
 export default function AdminApprovalPage() {
   const { user } = useAuth();
   const toast = useToast();
 
-  const [pendingListings, setPendingListings] = useState<Listing[]>([]);
-  const [historyListings, setHistoryListings] = useState<Listing[]>([]);
+  const [pendingItems, setPendingItems] = useState<ModeratedItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<ModeratedItem[]>([]);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyTotalPages, setHistoryTotalPages] = useState(1);
   const [historyFilter, setHistoryFilter] = useState<'all' | ApprovalStatus>('all');
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>('all');
   const [loadingPending, setLoadingPending] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
+  // Denial reasons are recorded per item and shown to the content owner.
+  const [denyingId, setDenyingId] = useState<string | null>(null);
+  const [denyReason, setDenyReason] = useState('');
+
   const isAdmin = useMemo(() => user?.role === 'admin', [user?.role]);
 
-  const loadPending = async () => {
+  const loadPending = async (filter: QueueFilter = queueFilter) => {
     setLoadingPending(true);
-    const response = await approvalService.getPendingListings();
+    const response = await approvalService.getPendingItems(
+      filter === 'all' ? undefined : filter
+    );
     if (response.success && response.data) {
-      setPendingListings(response.data);
+      setPendingItems(response.data);
     }
     setLoadingPending(false);
   };
@@ -49,7 +124,7 @@ export default function AdminApprovalPage() {
     setLoadingHistory(true);
     const response = await approvalService.getHistory(page, type);
     if (response.success && response.data) {
-      setHistoryListings(response.data.listings || []);
+      setHistoryItems(response.data.items || []);
       setHistoryPage(response.data.page || 1);
       setHistoryTotalPages(response.data.totalPages || 1);
     }
@@ -69,19 +144,50 @@ export default function AdminApprovalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [historyFilter]);
 
-  const handleDecision = async (listingId: string, decision: 'approve' | 'deny') => {
-    setProcessingId(listingId);
-    const action = decision === 'approve' ? approvalService.approveListing : approvalService.denyListing;
-    const response = await action.call(approvalService, listingId);
+  useEffect(() => {
+    if (!isAdmin) return;
+    loadPending(queueFilter);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueFilter]);
+
+  const handleApprove = async (item: ModeratedItem) => {
+    const id = item.id;
+    setProcessingId(id);
+
+    const response = await approvalService.approve(id, item.contentType);
 
     if (response.success) {
-      setPendingListings(prev => prev.filter(listing => listing.id !== listingId && (listing as any)._id !== listingId));
+      setPendingItems(prev => prev.filter(i => i.id !== id));
       toast.success(
-        decision === 'approve' ? 'Listing approved' : 'Listing denied',
-        decision === 'approve'
-          ? 'The listing is now live for buyers.'
-          : 'The listing has been hidden until the seller updates it.'
+        `${item.contentLabel} approved`,
+        `The ${item.contentLabel.toLowerCase()} is now publicly visible.`
       );
+      loadHistory();
+    } else {
+      toast.error('Action failed', 'Please try again.');
+    }
+
+    setProcessingId(null);
+  };
+
+  const handleDeny = async (item: ModeratedItem) => {
+    const id = item.id;
+    setProcessingId(id);
+
+    const response = await approvalService.deny(
+      id,
+      item.contentType,
+      denyReason.trim() || undefined
+    );
+
+    if (response.success) {
+      setPendingItems(prev => prev.filter(i => i.id !== id));
+      toast.success(
+        `${item.contentLabel} denied`,
+        'The author has been notified and it remains hidden.'
+      );
+      setDenyingId(null);
+      setDenyReason('');
       loadHistory();
     } else {
       toast.error('Action failed', 'Please try again.');
@@ -101,114 +207,227 @@ export default function AdminApprovalPage() {
     );
   }
 
-  const renderImages = (listing: Listing) => {
-    // Fixed: Changed from listing.images to listing.imageUrls
-    const firstImage =
-      typeof listing.imageUrls?.[0] === 'string'
-        ? listing.imageUrls[0].startsWith('http')
-          ? listing.imageUrls[0]
-          : `${process.env.NEXT_PUBLIC_BACKEND_URL}/uploads/${listing.imageUrls[0]}`
-        : undefined;
-
-    if (!firstImage) return null;
+  const renderImages = (item: ModeratedItem) => {
+    const urls = (item.imageUrls || []).slice(0, 6).map(resolveImageUrl).filter(Boolean) as string[];
+    if (urls.length === 0) return null;
 
     return (
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3">
-        <div
-          className="relative overflow-hidden rounded-lg border border-white/10 bg-[#0f0f0f]"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={firstImage}
-            alt={listing.title}
-            className="w-full h-full object-cover rounded-xl"
-            onError={e => (e.currentTarget.src = '/placeholder-image.png')}
-          />
-        </div>
+        {urls.map((url, index) => (
+          <div
+            key={`${item.id}-img-${index}`}
+            className="relative overflow-hidden rounded-lg border border-white/10 bg-[#0f0f0f] aspect-square"
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={`${item.displayTitle} — media ${index + 1}`}
+              className="w-full h-full object-cover"
+              onError={e => (e.currentTarget.src = '/placeholder-image.png')}
+            />
+          </div>
+        ))}
       </div>
     );
   };
 
-  const renderPendingCard = (listing: Listing) => {
-    const category = listing.tags?.[0] || 'General';
-    const listingId = listing.id || (listing as any)._id;
-    const createdAt = (listing as any).createdAt || listing.date;
+  const renderPendingCard = (item: ModeratedItem) => {
+    const isListing = item.contentType === 'listing';
+    const isMedia = item.contentType === 'profile_pic' || item.contentType === 'gallery_image';
+    const price = formatPrice(item);
+    const createdAt = item.createdAt || item.date;
+    const isProcessing = processingId === item.id;
+    const isDenying = denyingId === item.id;
+    const bodyText = isListing ? item.description : item.content;
+    const style = TYPE_STYLES[item.contentType] || TYPE_STYLES.listing;
+
     return (
       <div
-        key={listingId}
-        className="group relative overflow-hidden rounded-2xl border border-purple-500/30 bg-gradient-to-br from-black via-[#0b0b0b] to-[#0f0717] p-5 shadow-[0_10px_40px_-15px_rgba(168,85,247,0.5)] transition-all duration-300 hover:translate-y-[-2px]"
+        key={`${item.contentType}-${item.id}`}
+        className={`group relative overflow-hidden rounded-2xl border p-5 shadow-[0_10px_40px_-15px_rgba(0,0,0,0.6)] transition-all duration-300 hover:translate-y-[-2px] ${style.border} ${style.bg}`}
       >
         <div className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-100">
-                <Clock3 className="h-4 w-4" /> Pending since {formatDate(createdAt)}
-              </p>
-              <h3 className="mt-2 text-xl font-semibold text-white">{listing.title}</h3>
-              <p className="text-sm text-gray-400">{listing.seller}</p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${style.chip}`}
+                >
+                  {typeIcon(item.contentType)}
+                  {item.contentLabel}
+                </span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/70">
+                  <Clock3 className="h-3.5 w-3.5" /> {formatDate(createdAt)}
+                </span>
+              </div>
+
+              <h3 className="mt-2 text-xl font-semibold text-white break-words">
+                {item.displayTitle}
+              </h3>
+              <p className="text-sm text-gray-400">{item.owner}</p>
             </div>
-            <div className="text-right">
-              <p className="text-lg font-bold text-[#ff950e]">{formatPrice(listing)}</p>
-              <p className="text-xs text-gray-400">Category · {category}</p>
-            </div>
+
+            {price && (
+              <div className="text-right shrink-0">
+                <p className="text-lg font-bold text-[#ff950e]">{price}</p>
+                <p className="text-xs text-gray-400">Category · {item.tags?.[0] || 'General'}</p>
+              </div>
+            )}
           </div>
 
-          <p className="text-sm text-gray-300 leading-relaxed">{listing.description}</p>
+          {bodyText && (
+            <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap break-words">
+              {bodyText}
+            </p>
+          )}
 
-          <div className="flex flex-wrap gap-2 text-xs text-gray-400">
-            {listing.tags?.map(tag => (
-              <span key={tag} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/80">
-                {tag}
-              </span>
-            ))}
-          </div>
-
-          {renderImages(listing)}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
-            <div className="flex flex-col text-xs text-gray-400">
-              <span>Seller: <span className="text-white">{listing.seller}</span></span>
-              <span>Uploaded: {formatDate(createdAt)}</span>
+          {item.tags && item.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2 text-xs text-gray-400">
+              {item.tags.map(tag => (
+                <span
+                  key={`${item.id}-tag-${tag}`}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-white/80"
+                >
+                  {tag}
+                </span>
+              ))}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleDecision(listingId, 'deny')}
-                disabled={processingId === listingId}
-                className="rounded-lg border border-red-500/60 bg-red-600/10 px-4 py-2 text-sm font-semibold text-red-200 shadow-[0_0_20px_rgba(248,113,113,0.35)] transition hover:-translate-y-0.5 hover:border-red-400/80 hover:bg-red-600/15 disabled:cursor-not-allowed disabled:opacity-60"
+          )}
+
+          {item.contentType === 'profile_pic' && item.previousImage ? (
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <p className="mb-1.5 text-xs uppercase tracking-wider text-gray-500">
+                  Current
+                </p>
+                <div className="relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-[#0f0f0f]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resolveImageUrl(item.previousImage)}
+                    alt="Current profile picture"
+                    className="h-full w-full object-cover opacity-60"
+                    onError={e => (e.currentTarget.src = '/placeholder-image.png')}
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="mb-1.5 text-xs uppercase tracking-wider text-amber-300/80">
+                  Proposed
+                </p>
+                <div className="relative aspect-square overflow-hidden rounded-lg border border-amber-500/40 bg-[#0f0f0f]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={resolveImageUrl(item.imageUrls?.[0])}
+                    alt="Proposed profile picture"
+                    className="h-full w-full object-cover"
+                    onError={e => (e.currentTarget.src = '/placeholder-image.png')}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            renderImages(item)
+          )}
+
+          {/* Shows why something is back in the queue, e.g. after an edit */}
+          {item.moderationNote && (
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200/90">
+              {item.moderationNote}
+            </p>
+          )}
+
+          {isDenying ? (
+            <div className="space-y-2 pt-2">
+              <label
+                htmlFor={`deny-reason-${item.id}`}
+                className="block text-xs font-medium uppercase tracking-wider text-gray-400"
               >
-                {processingId === listingId ? 'Processing...' : 'Deny'}
-              </button>
-              <button
-                onClick={() => handleDecision(listingId, 'approve')}
-                disabled={processingId === listingId}
-                className="rounded-lg border border-emerald-500/60 bg-emerald-600/10 px-4 py-2 text-sm font-semibold text-emerald-100 shadow-[0_0_20px_rgba(52,211,153,0.35)] transition hover:-translate-y-0.5 hover:border-emerald-400/80 hover:bg-emerald-600/15 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {processingId === listingId ? 'Processing...' : 'Approve'}
-              </button>
+                Reason for denial (shown to the author)
+              </label>
+              <textarea
+                id={`deny-reason-${item.id}`}
+                value={denyReason}
+                onChange={e => setDenyReason(e.target.value.slice(0, 500))}
+                rows={2}
+                maxLength={500}
+                placeholder="e.g. Image does not meet content guidelines"
+                className="w-full rounded-lg border border-white/10 bg-[#0b0b0f] px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-red-400/60 focus:outline-none"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDeny(item)}
+                  disabled={isProcessing}
+                  className="rounded-lg border border-red-500/60 bg-red-600/15 px-4 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-600/25 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isProcessing ? 'Processing...' : 'Confirm denial'}
+                </button>
+                <button
+                  onClick={() => {
+                    setDenyingId(null);
+                    setDenyReason('');
+                  }}
+                  disabled={isProcessing}
+                  className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300 transition hover:border-white/25 disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+              <div className="flex flex-col text-xs text-gray-400">
+                <span>
+                  {isListing ? 'Seller' : isMedia ? 'User' : 'Author'}:{' '}
+                  <span className="text-white">{item.owner}</span>
+                </span>
+                <span>Submitted: {formatDate(createdAt)}</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setDenyingId(item.id);
+                    setDenyReason('');
+                  }}
+                  disabled={isProcessing}
+                  className="rounded-lg border border-red-500/60 bg-red-600/10 px-4 py-2 text-sm font-semibold text-red-200 shadow-[0_0_20px_rgba(248,113,113,0.35)] transition hover:-translate-y-0.5 hover:border-red-400/80 hover:bg-red-600/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Deny
+                </button>
+                <button
+                  onClick={() => handleApprove(item)}
+                  disabled={isProcessing}
+                  className="rounded-lg border border-emerald-500/60 bg-emerald-600/10 px-4 py-2 text-sm font-semibold text-emerald-100 shadow-[0_0_20px_rgba(52,211,153,0.35)] transition hover:-translate-y-0.5 hover:border-emerald-400/80 hover:bg-emerald-600/15 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isProcessing ? 'Processing...' : 'Approve'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   };
 
-  const renderHistoryRow = (listing: Listing) => {
-    const status = listing.approvalStatus;
-    const isApproved = status === 'approved';
-    const isDenied = status === 'denied';
-    const listingId = listing.id || (listing as any)._id;
-    const createdAt = (listing as any).createdAt || listing.date;
+  const renderHistoryRow = (item: ModeratedItem) => {
+    const isApproved = item.approvalStatus === 'approved';
+    const isDenied = item.approvalStatus === 'denied';
+    const createdAt = item.createdAt || item.date;
 
     return (
       <div
-        key={listingId}
+        key={`${item.contentType}-${item.id}`}
         className="grid grid-cols-1 gap-3 rounded-xl border border-white/5 bg-[#0b0b0f] p-4 sm:grid-cols-5 sm:items-center"
       >
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-white">{listing.title}</p>
-          <p className="text-xs text-gray-400">Seller · {listing.seller}</p>
+        <div className="space-y-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[0.65rem] uppercase tracking-wider text-white/60">
+              {item.contentLabel}
+            </span>
+          </div>
+          <p className="text-sm font-semibold text-white break-words">{item.displayTitle}</p>
+          <p className="text-xs text-gray-400">{item.owner}</p>
         </div>
-        <div className="text-sm text-gray-300">{formatPrice(listing)}</div>
+        <div className="text-sm text-gray-300">{formatPrice(item) || '—'}</div>
         <div className="flex items-center gap-2 text-sm">
           {isApproved && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
           {isDenied && <CircleSlash className="h-4 w-4 text-red-400" />}
@@ -217,8 +436,13 @@ export default function AdminApprovalPage() {
           </span>
         </div>
         <div className="text-xs text-gray-400">
-          <p>{isApproved ? formatDate(listing.approvedAt) : formatDate(listing.deniedAt)}</p>
-          <p className="text-white/70">By {isApproved ? listing.approvedBy || 'Admin' : listing.deniedBy || 'Admin'}</p>
+          <p>{isApproved ? formatDate(item.approvedAt) : formatDate(item.deniedAt)}</p>
+          <p className="text-white/70">
+            By {isApproved ? item.approvedBy || 'Admin' : item.deniedBy || 'Admin'}
+          </p>
+          {isDenied && item.denialReason && (
+            <p className="mt-1 text-red-300/80 break-words">{item.denialReason}</p>
+          )}
         </div>
         <div className="text-xs text-gray-400 sm:text-right">
           <p>Created {formatDate(createdAt)}</p>
@@ -226,6 +450,12 @@ export default function AdminApprovalPage() {
       </div>
     );
   };
+
+  const listingCount = pendingItems.filter(i => i.contentType === 'listing').length;
+  const postCount = pendingItems.filter(i => i.contentType === 'post').length;
+  const mediaCount = pendingItems.filter(
+    i => i.contentType === 'profile_pic' || i.contentType === 'gallery_image'
+  ).length;
 
   return (
     <RequireAuth role="admin">
@@ -236,44 +466,67 @@ export default function AdminApprovalPage() {
               <p className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold text-[#ff950e]">
                 <ShieldCheck className="h-4 w-4" /> Admin Control
               </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">Listing Approvals</h1>
-              <p className="text-sm text-gray-400">Review unverified seller listings, approve the good ones, and keep PantyPost clean.</p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">
+                Content Approvals
+              </h1>
+              <p className="text-sm text-gray-400">
+                All listings and posts are reviewed here before they become publicly visible.
+              </p>
             </div>
             <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm text-purple-100 shadow-[0_0_25px_rgba(168,85,247,0.3)]">
               <p className="font-semibold">Pending queue</p>
-              <p className="text-2xl font-bold">{pendingListings.length}</p>
+              <p className="text-2xl font-bold">{pendingItems.length}</p>
+              <p className="text-xs text-purple-200/70">
+                {listingCount} listing{listingCount === 1 ? '' : 's'} · {postCount} post
+                {postCount === 1 ? '' : 's'} · {mediaCount} image{mediaCount === 1 ? '' : 's'}
+              </p>
             </div>
           </header>
 
           <section className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
-                <Sparkles className="h-5 w-5 text-[#ff950e]" /> Pending Listings
+                <Sparkles className="h-5 w-5 text-[#ff950e]" /> Awaiting Review
               </h2>
-              <button
-                onClick={loadPending}
-                className="text-xs rounded-full border border-white/10 px-3 py-1 text-gray-300 hover:border-[#ff950e]/60 hover:text-white"
-              >
-                Refresh
-              </button>
+              <div className="flex items-center gap-2">
+                <select
+                  value={queueFilter}
+                  onChange={e => setQueueFilter(e.target.value as QueueFilter)}
+                  className="rounded-lg border border-white/10 bg-[#0b0b0f] px-3 py-2 text-sm text-white focus:border-[#ff950e]/60 focus:outline-none"
+                  aria-label="Filter queue by content type"
+                >
+                  <option value="all">All content</option>
+                  <option value="listing">Listings</option>
+                  <option value="post">Posts</option>
+                  <option value="profile_pic">Profile pictures</option>
+                  <option value="gallery_image">Gallery images</option>
+                </select>
+                <button
+                  onClick={() => loadPending()}
+                  className="text-xs rounded-full border border-white/10 px-3 py-1.5 text-gray-300 hover:border-[#ff950e]/60 hover:text-white"
+                >
+                  Refresh
+                </button>
+              </div>
             </div>
+
             {loadingPending ? (
-              <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-6 text-center text-gray-400">Loading pending listings...</div>
-            ) : pendingListings.length === 0 ? (
+              <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-6 text-center text-gray-400">
+                Loading pending content...
+              </div>
+            ) : pendingItems.length === 0 ? (
               <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-8 text-center text-gray-400">
-                No pending listings right now. Enjoy the calm!
+                Nothing awaiting review. Enjoy the calm!
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {pendingListings.map(renderPendingCard)}
-              </div>
+              <div className="grid grid-cols-1 gap-4">{pendingItems.map(renderPendingCard)}</div>
             )}
           </section>
 
           <section className="mt-10 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 text-xl font-semibold text-white">
-                <Clock3 className="h-5 w-5 text-[#ff950e]" /> History
+                <Clock3 className="h-5 w-5 text-[#ff950e]" /> Decision History
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
@@ -300,19 +553,23 @@ export default function AdminApprovalPage() {
                   >
                     Next
                   </button>
-                  <span className="text-xs text-gray-400">Page {historyPage} / {historyTotalPages}</span>
+                  <span className="text-xs text-gray-400">
+                    Page {historyPage} / {historyTotalPages}
+                  </span>
                 </div>
               </div>
             </div>
 
             {loadingHistory ? (
-              <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-6 text-center text-gray-400">Loading history...</div>
-            ) : historyListings.length === 0 ? (
-              <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-8 text-center text-gray-400">No history yet.</div>
-            ) : (
-              <div className="space-y-3">
-                {historyListings.map(renderHistoryRow)}
+              <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-6 text-center text-gray-400">
+                Loading history...
               </div>
+            ) : historyItems.length === 0 ? (
+              <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-8 text-center text-gray-400">
+                No decisions recorded yet.
+              </div>
+            ) : (
+              <div className="space-y-3">{historyItems.map(renderHistoryRow)}</div>
             )}
           </section>
         </div>

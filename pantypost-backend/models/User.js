@@ -59,6 +59,32 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'https://via.placeholder.com/150' // Default avatar
   },
+
+  // =====================================================
+  // PRE-PUBLICATION REVIEW FOR PROFILE MEDIA
+  //
+  // profilePic and galleryImages above hold APPROVED media only —
+  // whatever the public sees. Newly uploaded images land in the
+  // pending fields below and only move across once an admin approves
+  // them.
+  //
+  // Keeping the live fields as plain strings means nothing that reads
+  // them needs to change; the moderation layer sits alongside rather
+  // than replacing the existing shape.
+  // =====================================================
+  pendingProfilePic: {
+    url: String,
+    submittedAt: Date,
+    status: {
+      type: String,
+      enum: ['pending', 'denied'],
+      default: 'pending'
+    },
+    deniedAt: Date,
+    deniedBy: String,
+    denialReason: String
+  },
+
   phoneNumber: {
     type: String,
     default: ''
@@ -97,6 +123,28 @@ const userSchema = new mongoose.Schema({
   galleryImages: [{
     type: String,
     maxlength: 500
+  }],
+
+  // Gallery images awaiting review. Approved images are moved into
+  // galleryImages above and removed from here, so this array only ever
+  // holds items that are pending or were denied.
+  pendingGalleryImages: [{
+    url: {
+      type: String,
+      maxlength: 500
+    },
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'denied'],
+      default: 'pending'
+    },
+    deniedAt: Date,
+    deniedBy: String,
+    denialReason: String
   }],
   
   // VERIFICATION
@@ -262,6 +310,10 @@ userSchema.index({ isBanned: 1 });
 userSchema.index({ emailVerified: 1 });
 userSchema.index({ 'storage': 1 });
 userSchema.index({ referredBy: 1 }); // NEW: Index for referral queries
+// Supports the admin moderation queue, which looks for users holding
+// media awaiting review.
+userSchema.index({ 'pendingProfilePic.status': 1 });
+userSchema.index({ 'pendingGalleryImages.status': 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
@@ -290,6 +342,11 @@ userSchema.methods.toSafeObject = function() {
   delete user.verificationData; // Don't send verification data to frontend
   delete user.storage; // Don't send storage data to frontend
   delete user.storageUpdatedAt;
+  // Unreviewed media must not leak through generic serialisation.
+  // Endpoints that legitimately need it (the owner's own profile, the
+  // admin moderation queue) add it back explicitly.
+  delete user.pendingProfilePic;
+  delete user.pendingGalleryImages;
   return user;
 };
 
@@ -300,6 +357,10 @@ userSchema.methods.toJSON = function() {
   delete user.verificationData;
   delete user.storage; // Don't expose storage in API responses
   delete user.storageUpdatedAt;
+  // Fail closed: pending media is stripped from every response by
+  // default, and only re-added where the viewer is entitled to see it.
+  delete user.pendingProfilePic;
+  delete user.pendingGalleryImages;
   return user;
 };
 
@@ -320,6 +381,56 @@ userSchema.methods.setOffline = function() {
 // Check if email is verified (NEW)
 userSchema.methods.isEmailVerified = function() {
   return this.emailVerified === true;
+};
+
+// =====================================================
+// PROFILE MEDIA MODERATION HELPERS
+// =====================================================
+
+/**
+ * Queue a new profile picture for review.
+ * The live profilePic is left untouched until an admin approves.
+ */
+userSchema.methods.submitProfilePicForReview = function(url) {
+  this.pendingProfilePic = {
+    url,
+    submittedAt: new Date(),
+    status: 'pending',
+    deniedAt: undefined,
+    deniedBy: undefined,
+    denialReason: undefined
+  };
+  return this;
+};
+
+/**
+ * Queue one or more gallery images for review.
+ * Returns the pending entries that were added.
+ */
+userSchema.methods.submitGalleryImagesForReview = function(urls) {
+  if (!Array.isArray(this.pendingGalleryImages)) {
+    this.pendingGalleryImages = [];
+  }
+
+  const added = [];
+  for (const url of urls) {
+    const entry = { url, submittedAt: new Date(), status: 'pending' };
+    this.pendingGalleryImages.push(entry);
+    added.push(this.pendingGalleryImages[this.pendingGalleryImages.length - 1]);
+  }
+  return added;
+};
+
+/**
+ * What the owner themselves should see: their pending image if one is
+ * awaiting review, otherwise the approved one. Prevents the confusing
+ * experience of uploading a picture and seeing no change at all.
+ */
+userSchema.methods.getOwnProfilePic = function() {
+  if (this.pendingProfilePic?.url && this.pendingProfilePic.status === 'pending') {
+    return this.pendingProfilePic.url;
+  }
+  return this.profilePic;
 };
 
 // Mark email as verified (NEW)

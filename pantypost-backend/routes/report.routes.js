@@ -299,6 +299,45 @@ router.get('/resolved', authMiddleware, async (req, res) => {
   }
 });
 
+// NOTE ON ROUTE ORDER
+// This route MUST stay above '/:id'. Express matches in definition
+// order, so when /stats sat below /:id it was captured by the id
+// handler, which then called Report.findById('stats'), threw a
+// CastError and returned a 500. The stats endpoint was unreachable.
+
+// GET /api/reports/stats - Get reporting statistics (admin only)
+router.get('/stats', authMiddleware, async (req, res) => {
+  try {
+    // Check admin role
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+          message: 'Admin access required'
+        }
+      });
+    }
+
+    const stats = await Report.getReportStats();
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    console.error('[Reports] Error fetching stats:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: ERROR_CODES.INTERNAL_ERROR,
+        message: 'Failed to fetch statistics'
+      }
+    });
+  }
+});
+
 // GET /api/reports/:id - Get specific report details (admin only)
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
@@ -567,39 +606,6 @@ router.post('/:id/process', authMiddleware, async (req, res) => {
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: 'Failed to process report'
-      }
-    });
-  }
-});
-
-// GET /api/reports/stats - Get reporting statistics (admin only)
-router.get('/stats', authMiddleware, async (req, res) => {
-  try {
-    // Check admin role
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        error: {
-          code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
-          message: 'Admin access required'
-        }
-      });
-    }
-
-    const stats = await Report.getReportStats();
-
-    res.json({
-      success: true,
-      data: stats
-    });
-
-  } catch (error) {
-    console.error('[Reports] Error fetching stats:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: ERROR_CODES.INTERNAL_ERROR,
-        message: 'Failed to fetch statistics'
       }
     });
   }

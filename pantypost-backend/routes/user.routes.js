@@ -79,7 +79,7 @@ router.get('/', async (req, res) => {
     // Pagination
     const skip = (page - 1) * limit;
     const users = await User.find(filter)
-      .select('-password -verificationData')
+      .select('-password -verificationData -pendingProfilePic -pendingGalleryImages')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -127,11 +127,18 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
         username: user.username,
         role: user.role,
         bio: user.bio || '',
+        // Owner view: shows their pending image if one is in the queue.
         profilePic:
-          user.profilePic ||
+          user.getOwnProfilePic() ||
           user?.settings?.profilePic ||
           user?.settings?.profilePicture ||
           null,
+        profilePicPendingReview: Boolean(
+          user.pendingProfilePic?.url && user.pendingProfilePic.status === 'pending'
+        ),
+        pendingGalleryCount: Array.isArray(user.pendingGalleryImages)
+          ? user.pendingGalleryImages.filter(i => i.status === 'pending').length
+          : 0,
         country: user.country || user?.settings?.country,
         isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
@@ -180,10 +187,19 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
            pic.startsWith('/uploads/') ||
            pic.includes('placeholder')))
       ) {
-        user.profilePic = pic;
-        user.settings = user.settings || {};
-        user.settings.profilePic = pic;
-        user.settings.profilePicture = pic;
+        // PRE-PUBLICATION REVIEW
+        // Clearing the picture takes effect immediately (removing an
+        // image cannot introduce prohibited content). Setting a new one
+        // is queued for admin review.
+        if (pic === null || pic === '' || String(pic).includes('placeholder')) {
+          user.profilePic = pic;
+          user.settings = user.settings || {};
+          user.settings.profilePic = pic;
+          user.settings.profilePicture = pic;
+          user.pendingProfilePic = undefined;
+        } else {
+          user.submitProfilePicForReview(pic);
+        }
       } else {
         return res.status(400).json({
           success: false,
@@ -218,18 +234,27 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
 
     await user.save();
 
+    const profilePicPendingReview =
+      user.pendingProfilePic?.url && user.pendingProfilePic.status === 'pending';
+
     res.json({
       success: true,
-      message: 'Profile updated',
+      message: profilePicPendingReview
+        ? 'Profile updated. Your new picture is awaiting review and is not yet visible to others.'
+        : 'Profile updated',
       data: {
         username: user.username,
         role: user.role,
         bio: user.bio || '',
+        // Owners see their own pending image so the change is visible
+        // to them immediately, even though others still see the
+        // approved one.
         profilePic:
-          user.profilePic ||
+          user.getOwnProfilePic() ||
           user?.settings?.profilePic ||
           user?.settings?.profilePicture ||
           null,
+        profilePicPendingReview: Boolean(profilePicPendingReview),
         country: user.country || user?.settings?.country,
         isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
@@ -289,8 +314,10 @@ router.get('/:username/ban-status', async (req, res) => {
 // Buyers  => PUBLIC LIMITED if no token; full public fields if authenticated; 403 if bad token
 router.get('/:username/profile', async (req, res) => {
   try {
+    // Pending media is excluded here: this endpoint is public, and
+    // unreviewed images must never be exposed to other users.
     const user = await User.findOne({ username: req.params.username })
-      .select('-password -email -phoneNumber -verificationData'); // keep settings to read country
+      .select('-password -email -phoneNumber -verificationData -pendingProfilePic -pendingGalleryImages'); // keep settings to read country
     
     if (!user) {
       return res.status(404).json({
@@ -399,9 +426,20 @@ router.get('/:username/profile/full', authMiddleware, async (req, res) => {
       }
     }
     
+    // Reachable only by the account owner or an admin, so pending media
+    // is included here — the owner needs to see what is in the queue.
+    const payload = targetUser.toSafeObject ? targetUser.toSafeObject() : targetUser.toObject();
+
+    payload.profilePicPendingReview = Boolean(
+      targetUser.pendingProfilePic?.url && targetUser.pendingProfilePic.status === 'pending'
+    );
+    payload.pendingGalleryCount = Array.isArray(targetUser.pendingGalleryImages)
+      ? targetUser.pendingGalleryImages.filter(i => i.status === 'pending').length
+      : 0;
+
     res.json({
       success: true,
-      data: targetUser.toSafeObject ? targetUser.toSafeObject() : targetUser
+      data: payload
     });
   } catch (error) {
     res.status(500).json({
@@ -465,8 +503,23 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
               pic.startsWith('https://') || 
               pic.startsWith('/uploads/') ||
               pic.includes('placeholder')) {
-            user[field] = pic;
+            // PRE-PUBLICATION REVIEW
+            // Removing a picture applies immediately; setting a new one
+            // is queued. Admins editing another user's profile bypass
+            // the queue, since an admin action is itself the review.
+            if (pic === null || pic === '' || String(pic).includes('placeholder')) {
+              user[field] = pic;
+              user.pendingProfilePic = undefined;
+            } else if (req.user.role === 'admin' && req.user.username !== req.params.username) {
+              user[field] = pic;
+              user.pendingProfilePic = undefined;
+            } else {
+              user.submitProfilePicForReview(pic);
+            }
           }
+        } else if (field === 'galleryImages') {
+          // Handled separately below, after validation, so that invalid
+          // input cannot partially mutate the gallery.
         } else if (field === 'isLocationPublic') {
           if (typeof req.body[field] === 'boolean') {
             user[field] = req.body[field];
@@ -525,6 +578,59 @@ router.patch('/:username/profile', authMiddleware, async (req, res) => {
             message: 'Invalid gallery image URLs'
           }
         });
+      }
+
+      // =====================================================
+      // PRE-PUBLICATION REVIEW FOR GALLERY CHANGES
+      //
+      // Two distinct operations are possible here:
+      //   - Removing images already approved: applies immediately,
+      //     since removal cannot introduce prohibited content.
+      //   - Adding images not previously approved: queued for review.
+      //
+      // An admin editing someone else's profile bypasses the queue,
+      // as the admin action is itself the review.
+      // =====================================================
+      const submitted = req.body.galleryImages;
+      const approved = Array.isArray(user.galleryImages) ? user.galleryImages : [];
+      const approvedSet = new Set(approved);
+
+      const keptApproved = submitted.filter(url => approvedSet.has(url));
+      const newlyAdded = submitted.filter(url => !approvedSet.has(url));
+
+      const isAdminEditingOther =
+        req.user.role === 'admin' && req.user.username !== req.params.username;
+
+      if (isAdminEditingOther) {
+        user.galleryImages = submitted;
+      } else {
+        // Retain only the approved images the user chose to keep.
+        user.galleryImages = keptApproved;
+
+        if (newlyAdded.length > 0) {
+          const pending = Array.isArray(user.pendingGalleryImages)
+            ? user.pendingGalleryImages
+            : [];
+          const alreadyPending = new Set(pending.map(entry => entry.url));
+          const toQueue = newlyAdded.filter(url => !alreadyPending.has(url));
+
+          const remainingSlots = Math.max(
+            0,
+            20 - user.galleryImages.length - pending.length
+          );
+
+          if (toQueue.length > remainingSlots) {
+            return res.status(400).json({
+              success: false,
+              error: {
+                code: ERROR_CODES.VALIDATION_ERROR,
+                message: 'Gallery limit reached (20 images including any awaiting review)'
+              }
+            });
+          }
+
+          user.submitGalleryImagesForReview(toQueue);
+        }
       }
     }
     

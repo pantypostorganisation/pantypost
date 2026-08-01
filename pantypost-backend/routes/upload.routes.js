@@ -166,17 +166,29 @@ router.post('/profile-pic', authMiddleware, (req, res) => {
         return res.status(404).json({ success: false, error: 'User not found' });
       }
 
-      // If existing profilePic is local, remove it
-      await safeDeleteLocalFromUrl(user.profilePic);
-
       const fileUrl = getFileUrl(req, req.file.path);
-      user.profilePic = fileUrl;
+
+      // PRE-PUBLICATION REVIEW
+      // The live profilePic is deliberately NOT overwritten here. The
+      // new image is queued for admin review and only becomes visible
+      // to others once approved.
+      //
+      // The previous approved image is also NOT deleted, since it must
+      // remain in use until the replacement passes review.
+      user.submitProfilePicForReview(fileUrl);
       await user.save();
 
       return res.json({
         success: true,
-        data: { url: fileUrl, filename: req.file.filename, size: req.file.size },
+        data: {
+          url: fileUrl,
+          filename: req.file.filename,
+          size: req.file.size,
+          pendingReview: true,
+        },
         url: fileUrl,
+        pendingReview: true,
+        message: 'Profile picture submitted for review. It will be visible to others once approved.',
       });
     } catch (error) {
       await deleteFile(req.file.path).catch(() => {});
@@ -298,25 +310,89 @@ router.post('/gallery', authMiddleware, (req, res) => {
       }
 
       const newImageUrls = req.files.map((file) => getFileUrl(req, file.path));
-      const existing = Array.isArray(user.galleryImages) ? user.galleryImages : [];
-      const updated = [...existing, ...newImageUrls].slice(0, 20);
 
-      user.galleryImages = updated;
+      const approved = Array.isArray(user.galleryImages) ? user.galleryImages : [];
+      const pending = Array.isArray(user.pendingGalleryImages) ? user.pendingGalleryImages : [];
+
+      // The 20-image cap counts approved and pending together, so the
+      // queue cannot be used to sidestep the limit.
+      const remainingSlots = Math.max(0, 20 - approved.length - pending.length);
+      if (remainingSlots === 0) {
+        await Promise.all((req.files || []).map((f) => deleteFile(f.path).catch(() => {})));
+        return res.status(400).json({
+          success: false,
+          error: 'Gallery limit reached (20 images including any awaiting review)',
+        });
+      }
+
+      const accepted = newImageUrls.slice(0, remainingSlots);
+
+      // Remove any files beyond the cap rather than leaving them on disk.
+      if (accepted.length < newImageUrls.length) {
+        const rejectedFiles = (req.files || []).slice(accepted.length);
+        await Promise.all(rejectedFiles.map((f) => deleteFile(f.path).catch(() => {})));
+      }
+
+      // PRE-PUBLICATION REVIEW
+      // Images are queued rather than published. galleryImages continues
+      // to hold only approved media.
+      user.submitGalleryImagesForReview(accepted);
       await user.save();
 
       return res.json({
         success: true,
         data: {
-          newImages: newImageUrls,
-          totalImages: updated.length,
-          gallery: updated,
+          newImages: accepted,
+          pendingReview: true,
+          pendingCount: user.pendingGalleryImages.length,
+          totalImages: user.galleryImages.length,
+          gallery: user.galleryImages,
         },
+        message: 'Images submitted for review. They will appear on your profile once approved.',
       });
     } catch (error) {
       await Promise.all((req.files || []).map((f) => deleteFile(f.path).catch(() => {})));
       return res.status(500).json({ success: false, error: error.message });
     }
   });
+});
+
+/* =======================================================
+ * DELETE /api/upload/gallery/pending/:id
+ * Withdraw an image that is still awaiting review.
+ * Approved images are removed via /gallery/:index below.
+ * ===================================================== */
+router.delete('/gallery/pending/:id', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.user.username });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const pending = Array.isArray(user.pendingGalleryImages) ? user.pendingGalleryImages : [];
+    const entry = pending.id(req.params.id);
+
+    if (!entry) {
+      return res.status(404).json({ success: false, error: 'Pending image not found' });
+    }
+
+    const removedUrl = entry.url;
+    entry.deleteOne();
+    await user.save();
+
+    // Safe to delete from disk: the image was never published.
+    await safeDeleteLocalFromUrl(removedUrl);
+
+    return res.json({
+      success: true,
+      data: {
+        removedImage: removedUrl,
+        pendingCount: user.pendingGalleryImages.length,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /* =======================================================

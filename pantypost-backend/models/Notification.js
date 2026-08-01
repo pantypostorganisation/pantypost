@@ -34,7 +34,19 @@ const notificationSchema = new mongoose.Schema({
       'custom_request_paid',
       'order_shipped',
       'order_delivered',
-      'order_processing'
+      'order_processing',
+      // ADDED: types that were already in use elsewhere in the codebase
+      // but missing from this enum, so those notifications silently
+      // failed Mongoose validation and were never delivered:
+      //   'admin_alert' — used by server.js on startup
+      //   'post' / 'like' / 'comment' — used by post.routes.js
+      'admin_alert',
+      'post',
+      'like',
+      'comment',
+      // ADDED: pre-publication moderation outcomes
+      'content_approved',
+      'content_denied'
     ],
     required: true
   },
@@ -73,7 +85,7 @@ const notificationSchema = new mongoose.Schema({
   },
   relatedType: {
     type: String,
-    enum: ['listing', 'order', 'user', 'auction', 'message', null],
+    enum: ['listing', 'order', 'user', 'auction', 'message', 'post', 'comment', null],
     default: null
   },
   metadata: {

@@ -43,6 +43,125 @@ const CONTENT_TYPES = {
   },
 };
 
+/* =====================================================================
+ * PROFILE MEDIA
+ *
+ * Profile pictures and gallery images are subdocuments of User rather
+ * than records in their own collection, so they need dedicated handling
+ * instead of the generic model lookup used for listings and posts.
+ *
+ * Approval MOVES the image into the live field (profilePic /
+ * galleryImages); denial records a reason and leaves it out of view.
+ * ===================================================================== */
+
+/** Collect every profile picture currently awaiting review. */
+async function fetchPendingProfilePics() {
+  const users = await User.find({ 'pendingProfilePic.status': 'pending' })
+    .select('username role pendingProfilePic profilePic')
+    .lean();
+
+  return users
+    .filter((u) => u.pendingProfilePic?.url)
+    .map((u) => ({
+      _id: String(u._id),
+      id: String(u._id),
+      contentType: 'profile_pic',
+      contentLabel: 'Profile picture',
+      displayTitle: `Profile picture — ${u.username}`,
+      owner: u.username,
+      imageUrls: [u.pendingProfilePic.url],
+      createdAt: u.pendingProfilePic.submittedAt,
+      approvalStatus: 'pending',
+      // Lets the reviewer compare against the currently live image.
+      previousImage: u.profilePic,
+    }));
+}
+
+/** Collect every gallery image currently awaiting review. */
+async function fetchPendingGalleryImages() {
+  const users = await User.find({ 'pendingGalleryImages.status': 'pending' })
+    .select('username pendingGalleryImages')
+    .lean();
+
+  const items = [];
+  for (const u of users) {
+    for (const entry of u.pendingGalleryImages || []) {
+      if (entry.status !== 'pending' || !entry.url) continue;
+      items.push({
+        _id: String(entry._id),
+        id: String(entry._id),
+        contentType: 'gallery_image',
+        contentLabel: 'Gallery image',
+        displayTitle: `Gallery image — ${u.username}`,
+        owner: u.username,
+        imageUrls: [entry.url],
+        createdAt: entry.submittedAt,
+        approvalStatus: 'pending',
+      });
+    }
+  }
+  return items;
+}
+
+/**
+ * Approve or deny a profile picture.
+ * @param {string} userId   The User document id.
+ * @param {boolean} approve
+ */
+async function decideProfilePic(userId, approve, adminUsername, reason) {
+  const user = await User.findById(userId);
+  if (!user || !user.pendingProfilePic?.url) return null;
+
+  const url = user.pendingProfilePic.url;
+
+  if (approve) {
+    // Promote the reviewed image to the live field.
+    user.profilePic = url;
+    user.settings = user.settings || {};
+    user.settings.profilePic = url;
+    user.settings.profilePicture = url;
+    user.pendingProfilePic = undefined;
+  } else {
+    user.pendingProfilePic.status = 'denied';
+    user.pendingProfilePic.deniedAt = new Date();
+    user.pendingProfilePic.deniedBy = adminUsername;
+    user.pendingProfilePic.denialReason = reason;
+  }
+
+  await user.save();
+  return { owner: user.username, url };
+}
+
+/**
+ * Approve or deny a single gallery image, identified by its
+ * subdocument id.
+ */
+async function decideGalleryImage(entryId, approve, adminUsername, reason) {
+  const user = await User.findOne({ 'pendingGalleryImages._id': entryId });
+  if (!user) return null;
+
+  const entry = user.pendingGalleryImages.id(entryId);
+  if (!entry) return null;
+
+  const url = entry.url;
+
+  if (approve) {
+    if (!Array.isArray(user.galleryImages)) user.galleryImages = [];
+    if (!user.galleryImages.includes(url)) {
+      user.galleryImages.push(url);
+    }
+    entry.deleteOne(); // approved images leave the pending array
+  } else {
+    entry.status = 'denied';
+    entry.deniedAt = new Date();
+    entry.deniedBy = adminUsername;
+    entry.denialReason = reason;
+  }
+
+  await user.save();
+  return { owner: user.username, url };
+}
+
 function ensureAdmin(req, res, next) {
   if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
@@ -83,23 +202,22 @@ function decorate(doc, typeKey) {
  * Notify a content owner about a moderation decision.
  * Best-effort: a notification failure must never roll back the decision.
  */
-async function notifyOwner(username, { title, message, link }) {
+async function notifyOwner(username, { type, title, message, data, relatedId, relatedType }) {
   try {
     if (!username) return;
-    const user = await User.findOne({ username });
-    if (!user) return;
 
-    // NOTE: field shape follows the usage in server.js
-    // (recipient / type / title / message / link / priority).
-    // post.routes.js uses a different shape (userId / data), so the
-    // Notification model needs checking to confirm which is canonical.
-    await Notification.create({
+    // Uses the createNotification static rather than Notification.create()
+    // because the static also emits the WebSocket event, so the bell
+    // updates live instead of only on next page load.
+    await Notification.createNotification({
       recipient: username,
-      type: 'admin_alert',
+      type,
       title,
       message,
-      link,
+      data: data || {},
       priority: 'high',
+      relatedId: relatedId || null,
+      relatedType: relatedType || null,
     });
   } catch (error) {
     console.error('[Approval] Failed to notify owner:', error.message);
@@ -122,13 +240,15 @@ async function notifySubscribersOfPost(post) {
       const subscriberUsername = sub.subscriberId?.username;
       if (!subscriberUsername) continue;
 
-      await Notification.create({
+      await Notification.createNotification({
         recipient: subscriberUsername,
         type: 'post',
         title: 'New Post',
         message: `${post.author} shared a new post`,
-        link: `/explore/post/${post._id}`,
+        data: { postId: post._id, author: post.author },
         priority: 'low',
+        relatedId: String(post._id),
+        relatedType: 'post',
       });
     }
   } catch (error) {
@@ -148,13 +268,17 @@ router.get('/pending', authMiddleware, ensureAdmin, async (req, res) => {
     const requested = req.query.contentType;
 
     // Which types to include in this response.
+    const MEDIA_TYPES = ['profile_pic', 'gallery_image'];
+    const isMediaType = MEDIA_TYPES.includes(requested);
+
+    if (requested && !CONTENT_TYPES[requested] && !isMediaType) {
+      return res.status(400).json({ success: false, error: 'Unknown contentType' });
+    }
+
+    // Document-backed types only; media types are handled below.
     const typeKeys = requested
       ? (CONTENT_TYPES[requested] ? [requested] : [])
       : Object.keys(CONTENT_TYPES);
-
-    if (typeKeys.length === 0) {
-      return res.status(400).json({ success: false, error: 'Unknown contentType' });
-    }
 
     const results = await Promise.all(
       typeKeys.map(async (key) => {
@@ -167,10 +291,19 @@ router.get('/pending', authMiddleware, ensureAdmin, async (req, res) => {
       })
     );
 
+    // Profile media lives on User rather than in its own collection,
+    // so it is gathered separately and merged into the same queue.
+    const mediaResults = [];
+    if (!requested || requested === 'profile_pic') {
+      mediaResults.push(await fetchPendingProfilePics());
+    }
+    if (!requested || requested === 'gallery_image') {
+      mediaResults.push(await fetchPendingGalleryImages());
+    }
+
     // Interleave types by age rather than grouping them, so a post
     // submitted first is reviewed before a listing submitted later.
-    const combined = results
-      .flat()
+    const combined = [...results.flat(), ...mediaResults.flat()]
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
     return res.json({ success: true, data: combined });
@@ -194,7 +327,17 @@ router.get('/counts', authMiddleware, ensureAdmin, async (req, res) => {
     );
 
     const counts = Object.fromEntries(entries);
-    counts.total = entries.reduce((sum, [, count]) => sum + count, 0);
+
+    // Profile media counts come from User rather than a dedicated model.
+    const [pics, galleries] = await Promise.all([
+      fetchPendingProfilePics(),
+      fetchPendingGalleryImages(),
+    ]);
+    counts.profile_pic = pics.length;
+    counts.gallery_image = galleries.length;
+
+    counts.total =
+      entries.reduce((sum, [, count]) => sum + count, 0) + pics.length + galleries.length;
 
     return res.json({ success: true, data: counts });
   } catch (error) {
@@ -213,13 +356,39 @@ router.post('/approve', authMiddleware, ensureAdmin, async (req, res) => {
     // 'listingId' is accepted for backward compatibility with the
     // existing admin UI, which predates multi-type moderation.
     const contentId = body.contentId || body.listingId;
-    const config = resolveContentType(body.contentType);
 
-    if (!config) {
-      return res.status(400).json({ success: false, error: 'Unknown contentType' });
-    }
     if (!isValidObjectId(contentId)) {
       return res.status(400).json({ success: false, error: 'Invalid contentId' });
+    }
+
+    // Profile media is stored on User, so it takes a different path.
+    if (body.contentType === 'profile_pic' || body.contentType === 'gallery_image') {
+      const isPic = body.contentType === 'profile_pic';
+      const result = isPic
+        ? await decideProfilePic(contentId, true, req.user.username)
+        : await decideGalleryImage(contentId, true, req.user.username);
+
+      if (!result) {
+        return res.status(404).json({ success: false, error: 'Pending image not found' });
+      }
+
+      const label = isPic ? 'Profile picture' : 'Gallery image';
+      await notifyOwner(result.owner, {
+        type: 'content_approved',
+        title: `${label} approved`,
+        message: `Your ${label.toLowerCase()} has been reviewed and is now visible on your profile.`,
+        data: { contentType: body.contentType, url: result.url },
+        relatedType: 'user',
+        relatedId: result.owner,
+      });
+
+      console.log(`[Approval] ${label} for ${result.owner} approved by ${req.user.username}`);
+      return res.json({ success: true, data: { owner: result.owner, url: result.url } });
+    }
+
+    const config = resolveContentType(body.contentType);
+    if (!config) {
+      return res.status(400).json({ success: false, error: 'Unknown contentType' });
     }
 
     const doc = await config.model.findById(contentId);
@@ -234,9 +403,12 @@ router.post('/approve', authMiddleware, ensureAdmin, async (req, res) => {
     const typeKey = body.contentType || 'listing';
 
     await notifyOwner(owner, {
+      type: 'content_approved',
       title: `${config.label} approved`,
       message: `Your ${config.label.toLowerCase()} has been reviewed and is now live.`,
-      link: typeKey === 'post' ? `/explore/post/${doc._id}` : `/browse/${doc._id}`,
+      data: { contentType: typeKey, contentId: String(doc._id) },
+      relatedId: String(doc._id),
+      relatedType: typeKey,
     });
 
     // Subscriber announcements happen here rather than at creation,
@@ -262,14 +434,41 @@ router.post('/deny', authMiddleware, ensureAdmin, async (req, res) => {
   try {
     const body = req.body || {};
     const contentId = body.contentId || body.listingId;
-    const config = resolveContentType(body.contentType);
     const reason = typeof body.reason === 'string' ? body.reason.slice(0, 500) : undefined;
 
-    if (!config) {
-      return res.status(400).json({ success: false, error: 'Unknown contentType' });
-    }
     if (!isValidObjectId(contentId)) {
       return res.status(400).json({ success: false, error: 'Invalid contentId' });
+    }
+
+    if (body.contentType === 'profile_pic' || body.contentType === 'gallery_image') {
+      const isPic = body.contentType === 'profile_pic';
+      const result = isPic
+        ? await decideProfilePic(contentId, false, req.user.username, reason)
+        : await decideGalleryImage(contentId, false, req.user.username, reason);
+
+      if (!result) {
+        return res.status(404).json({ success: false, error: 'Pending image not found' });
+      }
+
+      const label = isPic ? 'Profile picture' : 'Gallery image';
+      await notifyOwner(result.owner, {
+        type: 'content_denied',
+        title: `${label} not approved`,
+        message: reason
+          ? `Your ${label.toLowerCase()} was not approved: ${reason}`
+          : `Your ${label.toLowerCase()} was not approved. Please review our content guidelines.`,
+        data: { contentType: body.contentType, reason },
+        relatedType: 'user',
+        relatedId: result.owner,
+      });
+
+      console.log(`[Approval] ${label} for ${result.owner} denied by ${req.user.username}`);
+      return res.json({ success: true, data: { owner: result.owner, url: result.url } });
+    }
+
+    const config = resolveContentType(body.contentType);
+    if (!config) {
+      return res.status(400).json({ success: false, error: 'Unknown contentType' });
     }
 
     const doc = await config.model.findById(contentId);
@@ -281,10 +480,14 @@ router.post('/deny', authMiddleware, ensureAdmin, async (req, res) => {
     await doc.save();
 
     await notifyOwner(doc[config.ownerField], {
+      type: 'content_denied',
       title: `${config.label} not approved`,
       message: reason
         ? `Your ${config.label.toLowerCase()} was not approved: ${reason}`
         : `Your ${config.label.toLowerCase()} was not approved. Please review our content guidelines.`,
+      data: { contentType: body.contentType || 'listing', contentId: String(doc._id), reason },
+      relatedId: String(doc._id),
+      relatedType: body.contentType || 'listing',
     });
 
     console.log(`[Approval] ${config.label} ${contentId} denied by ${req.user.username}`);
