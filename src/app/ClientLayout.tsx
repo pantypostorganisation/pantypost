@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import Providers from '@/components/Providers';
 import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
+import AgeGate from '@/components/AgeGate';
 import BanCheck from '@/components/BanCheck';
 import MessageNotifications from '@/components/MessageNotifications';
 import { PWAInstall } from '@/components/PWAInstall';
@@ -16,6 +17,69 @@ import { usePerformanceMonitoring } from '@/hooks/usePerformanceMonitoring';
 // SILENT loading - no spinner, just black screen
 function LoadingFallback() {
   return <div className="min-h-screen bg-black" />;
+}
+
+/* =====================================================================
+ * AGE GATE ROUTING
+ *
+ * Everything is gated unless it appears below. This is deliberate:
+ * an allow-list fails CLOSED, so a page added next month is protected
+ * automatically. A block-list would fail open, and the page nobody
+ * remembered to add is exactly the one a regulator finds.
+ * ===================================================================== */
+
+/** Routes reachable without having passed age verification. */
+const AGE_GATE_EXEMPT_EXACT = [
+  '/',                          // marketing homepage — no adult content
+  '/login',
+  '/signup',
+  '/forgot-password',
+  '/reset-password',
+  '/reset-password-final',
+  '/verify-reset-code',
+  '/verify-email',
+  '/verify-email-pending',
+  '/email-verified',
+  '/maintenance',
+  '/offline',
+
+  // Admin wallet dashboard lives outside /admin but is still a staff
+  // surface, so it is exempt alongside the rest of the admin tools.
+  '/wallet/admin',
+
+  // Policy and compliance pages must stay reachable by anyone, including
+  // people with no account who need the complaints process.
+  '/terms',
+  '/privacy',
+  '/content-policy',
+  '/complaints',
+  '/age-verification',
+  '/age-verification/complete',
+  '/help',
+];
+
+/** Prefixes that are exempt along with everything beneath them. */
+const AGE_GATE_EXEMPT_PREFIXES = [
+  '/blog',    // public SEO content, no adult material
+  '/admin',   // staff tools; admins are not consumers of the marketplace
+
+  // Signup must include its sub-routes: /signup/[referralCode] is how
+  // referred users arrive, and they cannot possibly have verified yet.
+  // Gating it would break the referral flow entirely.
+  '/signup',
+];
+
+function isAgeGateExempt(pathname: string): boolean {
+  if (!pathname) return true;
+
+  // Ignore any query string or hash when matching.
+  const path = pathname.split('?')[0].split('#')[0];
+
+  if (AGE_GATE_EXEMPT_EXACT.includes(path)) return true;
+
+  return AGE_GATE_EXEMPT_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(prefix + '/')
+  );
 }
 
 export default function ClientLayout({
@@ -48,6 +112,8 @@ export default function ClientLayout({
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
   }) || (isMessagesPage && isMobile && hasActiveThread);
+
+  const requiresAgeVerification = !isAgeGateExempt(pathname);
 
   useEffect(() => {
     setMounted(true);
@@ -115,8 +181,9 @@ export default function ClientLayout({
       console.log('Is messages page:', isMessagesPage);
       console.log('Has active thread:', hasActiveThread);
       console.log('Should hide header:', shouldHideHeader);
+      console.log('Requires age verification:', requiresAgeVerification);
     }
-  }, [pathname, shouldHideHeader, isMobile, isMessagesPage, hasActiveThread]);
+  }, [pathname, shouldHideHeader, isMobile, isMessagesPage, hasActiveThread, requiresAgeVerification]);
 
   if (!mounted) {
     return <LoadingFallback />;
@@ -133,7 +200,22 @@ export default function ClientLayout({
             <BanCheck>
               {!shouldHideHeader && <Header />}
               <main className="flex-1">
-                {children}
+                {/*
+                  Gated routes render inside AgeGate, which shows the
+                  verification prompt to signed-in users who have not
+                  passed the check. Signed-out visitors pass straight
+                  through — route protection is handled elsewhere, and
+                  AgeGate has nothing to say about them.
+
+                  To roll this out gently, pass block={false} instead:
+                  users then see a dismissible banner rather than being
+                  stopped.
+                */}
+                {requiresAgeVerification ? (
+                  <AgeGate>{children}</AgeGate>
+                ) : (
+                  children
+                )}
               </main>
               <AgeVerificationModal />
               <MessageNotifications />
