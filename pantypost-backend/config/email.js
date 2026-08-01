@@ -10,12 +10,26 @@ const createTransport = () => {
   }
   
   try {
-    // Create reusable transporter object using SMTP transport
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // true for 465, false for other ports
+    // SMTP settings come from the environment rather than being fixed to
+    // one provider. This was previously hardcoded to Gmail, which meant
+    // credentials for any other mailbox were rejected with a confusing
+    // "Username and Password not accepted" error.
+    //
+    // Defaults target Hostinger, which hosts support@pantypost.com.
+    //   Hostinger : smtp.hostinger.com  port 465 (secure)
+    //   Gmail     : smtp.gmail.com      port 587 (not secure, needs App Password)
+    const host = process.env.EMAIL_HOST || 'smtp.hostinger.com';
+    const port = parseInt(process.env.EMAIL_PORT, 10) || 465;
+
+    // Port 465 uses implicit TLS; 587 upgrades via STARTTLS.
+    const secure = process.env.EMAIL_SECURE
+      ? process.env.EMAIL_SECURE === 'true'
+      : port === 465;
+
+    const transportConfig = {
+      host,
+      port,
+      secure,
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
@@ -23,7 +37,17 @@ const createTransport = () => {
       tls: {
         rejectUnauthorized: false
       }
-    });
+    };
+
+    // nodemailer's 'service' shortcut overrides host/port, so it is only
+    // applied when Gmail is explicitly configured.
+    if (host.includes('gmail')) {
+      transportConfig.service = 'gmail';
+    }
+
+    console.log(`📧 Email transport: ${host}:${port} (secure: ${secure})`);
+
+    const transporter = nodemailer.createTransport(transportConfig);
     
     console.log('✅ Email transporter created successfully');
     
@@ -74,7 +98,9 @@ const sendEmail = async (options) => {
   try {
     // Send the email
     const info = await transporter.sendMail({
-      from: `"PantyPost" <${process.env.EMAIL_USER}>`,
+      // EMAIL_FROM lets the visible sender differ from the login
+      // address if needed; defaults to the authenticated mailbox.
+      from: `"${process.env.EMAIL_FROM_NAME || 'PantyPost'}" <${process.env.EMAIL_FROM || process.env.EMAIL_USER}>`,
       to: options.to,
       subject: options.subject,
       text: options.text,
