@@ -15,7 +15,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Eligibility',
     number: '1',
     content: [
-      { type: 'heading', title: '1.1. Age Requirement', text: 'To register and use the Service, all users must be at least 21 years old. By creating an account, you confirm that you are 21 years of age or older. All buyers must be over the age of 21 years.' },
+      { type: 'heading', title: '1.1. Age Requirement', text: 'To register and use the Service, all users must be at least 18 years old. By creating an account, you confirm that you are 18 years of age or older. All buyers and sellers must be 18 or over, or older where the law in their jurisdiction requires it. Age is confirmed through independent age assurance, not self-declaration.' },
       { type: 'heading', title: '1.2. Legal Compliance', text: 'Users are solely responsible for ensuring that their use of the Service complies with all applicable local, state, national, and international laws and regulations, including those regarding the sale of adult content and sexual products.' }
     ]
   },
