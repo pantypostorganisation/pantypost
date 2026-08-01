@@ -222,6 +222,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin', banRoutes);
 app.use('/api/admin/approval', approvalRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/complaints', require('./routes/complaint.routes'));
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES

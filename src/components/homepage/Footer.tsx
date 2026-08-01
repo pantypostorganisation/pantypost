@@ -26,6 +26,41 @@ const HelpCircleIcon = () => (
   </svg>
 );
 
+// Inline shield icon, matching the pattern above.
+const ShieldIcon = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="inline-block"
+  >
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+  </svg>
+);
+
+/**
+ * Links that must be reachable from every page without logging in.
+ *
+ * The "Complaints & Content Removal" label is required by our payment
+ * processor's compliance rules and should not be reworded — their
+ * review checks for this exact wording.
+ *
+ * Declared here rather than in FOOTER_LINKS so these cannot be removed
+ * by an unrelated change to the marketing navigation.
+ */
+const COMPLIANCE_LINKS = [
+  { href: '/complaints', label: 'Complaints & Content Removal' },
+  { href: '/terms', label: 'Terms of Service' },
+  { href: '/privacy', label: 'Privacy Policy' },
+  { href: '/content-policy', label: 'Content Policy' },
+];
+
 export default function Footer() {
   const currentYear = new Date().getFullYear();
 
@@ -64,23 +99,64 @@ export default function Footer() {
             ))}
           </div>
         </div>
+
+        {/* Compliance links — must remain reachable without an account */}
+        <div className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-3 md:justify-start">
+          {COMPLIANCE_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="text-gray-400 hover:text-[#ff950e] text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] rounded"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
         
         <div className="border-t border-white/10 mt-8 pt-8 text-center">
+          {/* Merchant identification.
+              Payment processors require the operating entity to be
+              identifiable on the site itself, not only in the terms. */}
           <p className="text-gray-500 text-sm">
             © {currentYear} Panty Post (PantyPost). All rights reserved.
-            <span className="block mt-2 text-xs text-gray-600">
-              Disclaimer: Panty Post is committed to user safety and privacy. 
-              All users must be 21+ and comply with our terms.
-            </span>
+          </p>
+          <p className="mt-2 text-xs text-gray-600">
+            Operated by G Dykyj &amp; O.S Richards, trading as Panty Post · ABN 16 501 428 474 · Australia
+          </p>
+          <p className="mt-2 text-xs text-gray-600">
+            Contact:{' '}
+            <a
+              href="mailto:support@pantypost.com"
+              className="hover:text-[#ff950e] transition-colors"
+            >
+              support@pantypost.com
+            </a>
+          </p>
+          <p className="mt-3 text-xs text-gray-600 max-w-2xl mx-auto">
+            Panty Post is committed to user safety and privacy. All users must be 21 or over.
+            Every listing, post and image is reviewed before publication. We do not permit content
+            published without the consent of everyone depicted — if you believe such content
+            appears here, please use our{' '}
+            <Link href="/complaints" className="text-[#ff950e] hover:underline">
+              Complaints &amp; Content Removal
+            </Link>{' '}
+            process. No account is required.
           </p>
           
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
             <Link
               href="/help"
               className="inline-flex items-center gap-2 text-[#ff950e] hover:underline text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] rounded"
             >
               <HelpCircleIcon />
               Contact Support
+            </Link>
+            <Link
+              href="/complaints"
+              className="inline-flex items-center gap-2 text-[#ff950e] hover:underline text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] rounded"
+            >
+              <ShieldIcon />
+              Report Content
             </Link>
           </div>
         </div>
