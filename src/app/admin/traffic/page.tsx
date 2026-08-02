@@ -15,43 +15,46 @@ import {
   Users,
   Eye,
   MousePointerClick,
-  ArrowUpRight,
-  ArrowDownRight,
+  TrendingUp,
+  TrendingDown,
   Minus,
   Loader2,
   Search,
+  Globe,
+  Smartphone,
+  FileText,
+  ExternalLink,
+  Activity,
+  Shield,
 } from 'lucide-react';
 
 const RANGES = [
-  { days: 1, label: '24 hours' },
+  { days: 1, label: '24h' },
   { days: 7, label: '7 days' },
   { days: 30, label: '30 days' },
   { days: 90, label: '90 days' },
 ];
 
-/** Period-on-period delta. Neutral styling at zero, so a flat week
-    doesn't read as either good or bad. */
+/* Period-on-period delta. Neutral at zero, so a flat week reads as
+   neither good nor bad. */
 function Delta({ value }: { value: number }) {
   if (value === 0) {
     return (
-      <span className="inline-flex items-center gap-0.5 text-xs text-ink-faint">
-        <Minus className="h-3 w-3" /> 0%
+      <span className="flex items-center gap-1 text-xs font-medium text-gray-500">
+        <Minus className="w-3 h-3" />
+        0%
       </span>
     );
   }
 
-  const positive = value > 0;
+  const up = value > 0;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 text-xs ${
-        positive ? 'text-success' : 'text-danger'
+      className={`flex items-center gap-1 text-xs font-medium ${
+        up ? 'text-green-400' : 'text-red-400'
       }`}
     >
-      {positive ? (
-        <ArrowUpRight className="h-3 w-3" />
-      ) : (
-        <ArrowDownRight className="h-3 w-3" />
-      )}
+      {up ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
       {Math.abs(value)}%
     </span>
   );
@@ -59,39 +62,47 @@ function Delta({ value }: { value: number }) {
 
 function StatCard({
   icon: Icon,
+  iconColor,
+  iconBg,
   label,
   value,
   change,
-  hint,
+  sub,
 }: {
   icon: React.ElementType;
+  iconColor: string;
+  iconBg: string;
   label: string;
   value: string | number;
   change?: number;
-  hint?: string;
+  sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-line bg-surface-raised p-4">
-      <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wide text-ink-faint">
-          <Icon className="h-3.5 w-3.5" />
-          {label}
-        </span>
+    <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 p-6">
+      <div className="flex items-start justify-between mb-4">
+        <div className={`p-3 ${iconBg} rounded-xl`}>
+          <Icon className={`w-5 h-5 ${iconColor}`} />
+        </div>
         {change !== undefined && <Delta value={change} />}
       </div>
-      <p className="mt-3 text-2xl font-semibold leading-none text-ink">{value}</p>
-      {hint && <p className="mt-1.5 text-xs text-ink-faint">{hint}</p>}
+      <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">{label}</p>
+      <p className="text-2xl font-bold text-white">{value}</p>
+      {sub && <p className="text-xs text-gray-500 mt-1">{sub}</p>}
     </div>
   );
 }
 
-/** Horizontal bars, proportional to the largest value in the list. */
+/* Ranked list with proportional bars behind each row. */
 function TopList({
+  icon: Icon,
+  iconColor,
   title,
   entries,
   empty,
   formatKey,
 }: {
+  icon: React.ElementType;
+  iconColor: string;
   title: string;
   entries: TopEntry[];
   empty: string;
@@ -100,25 +111,38 @@ function TopList({
   const max = Math.max(...entries.map((e) => e.count), 1);
 
   return (
-    <div className="rounded-lg border border-line bg-surface-raised p-4">
-      <h2 className="mb-3 text-sm font-medium text-ink">{title}</h2>
+    <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 p-6">
+      <div className="flex items-center gap-2 mb-5">
+        <Icon className={`w-5 h-5 ${iconColor}`} />
+        <h3 className="text-lg font-bold text-white">{title}</h3>
+      </div>
 
       {entries.length === 0 ? (
-        <p className="py-6 text-center text-xs text-ink-faint">{empty}</p>
+        <div className="py-8 text-center">
+          <p className="text-sm text-gray-500">{empty}</p>
+        </div>
       ) : (
-        <div className="space-y-1.5">
-          {entries.map((entry) => (
-            <div key={entry.key} className="relative">
+        <div className="space-y-2">
+          {entries.map((entry, index) => (
+            <div
+              key={`${entry.key}-${index}`}
+              className="relative bg-black/30 rounded-lg overflow-hidden hover:bg-black/50 transition-colors"
+            >
+              {/* Proportional fill sits behind the row rather than beside
+                  it, so the list stays scannable at a glance. */}
               <div
-                className="absolute inset-y-0 left-0 rounded bg-primary-soft"
+                className="absolute inset-y-0 left-0 bg-[#ff950e]/10"
                 style={{ width: `${(entry.count / max) * 100}%` }}
                 aria-hidden
               />
-              <div className="relative flex items-center justify-between px-2 py-1.5">
-                <span className="truncate text-xs text-ink-muted">
-                  {formatKey ? formatKey(entry.key) : entry.key}
-                </span>
-                <span className="ml-3 shrink-0 text-xs font-medium text-ink">
+              <div className="relative flex items-center justify-between px-4 py-2.5">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xs text-gray-600 w-4 shrink-0">{index + 1}</span>
+                  <span className="text-sm text-gray-300 truncate">
+                    {formatKey ? formatKey(entry.key) : entry.key}
+                  </span>
+                </div>
+                <span className="text-sm font-bold text-white ml-3 shrink-0">
                   {entry.count.toLocaleString()}
                 </span>
               </div>
@@ -130,42 +154,110 @@ function TopList({
   );
 }
 
-/** Minimal column chart. Recharts is available but overkill for a
-    single series, and this keeps the page light. */
 function TrendChart({ series }: { series: TrafficReport['series'] }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
   const max = Math.max(...series.map((p) => p.pageviews), 1);
+  const totalViews = series.reduce((sum, p) => sum + p.pageviews, 0);
+  const peak = series.reduce(
+    (best, p) => (p.pageviews > best.pageviews ? p : best),
+    series[0] || { date: '', pageviews: 0, visitors: 0 }
+  );
+  const average = series.length ? Math.round(totalViews / series.length) : 0;
 
   if (series.length === 0) {
     return (
-      <div className="rounded-lg border border-line bg-surface-raised p-8 text-center">
-        <p className="text-sm text-ink-faint">No traffic recorded in this period.</p>
+      <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 p-6">
+        <div className="flex items-center gap-2 mb-5">
+          <BarChart3 className="w-5 h-5 text-[#ff950e]" />
+          <h3 className="text-lg font-bold text-white">Traffic Trend</h3>
+        </div>
+        <div className="py-16 text-center">
+          <Activity className="w-10 h-10 text-gray-700 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">No traffic recorded in this period yet.</p>
+          <p className="text-xs text-gray-600 mt-1">
+            Data appears as visitors browse the site.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-line bg-surface-raised p-4">
-      <h2 className="mb-4 text-sm font-medium text-ink">Pageviews</h2>
-
-      <div className="flex h-40 items-end gap-1">
-        {series.map((point) => (
-          <div key={point.date} className="group relative flex flex-1 flex-col items-center">
-            <div
-              className="w-full rounded-t bg-primary/70 transition-colors group-hover:bg-primary"
-              style={{ height: `${Math.max((point.pageviews / max) * 100, 2)}%` }}
-            />
-            {/* Tooltip sits inside the container so it cannot be clipped. */}
-            <div className="pointer-events-none absolute bottom-full mb-2 hidden whitespace-nowrap rounded border border-line-strong bg-surface-overlay px-2 py-1 text-xs text-ink shadow-overlay group-hover:block">
-              {point.pageviews} views · {point.visitors} visitors
-              <span className="block text-ink-faint">{point.date}</span>
-            </div>
-          </div>
-        ))}
+    <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 p-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-5 h-5 text-[#ff950e]" />
+          <h3 className="text-lg font-bold text-white">Traffic Trend</h3>
+        </div>
+        <span className="text-sm text-gray-500">Pageviews per day</span>
       </div>
 
-      <div className="mt-2 flex justify-between text-xs text-ink-faint">
-        <span>{series[0]?.date}</span>
-        <span>{series[series.length - 1]?.date}</span>
+      {/* h-80 rather than h-64: the hover tooltip sits above the tallest
+          bar and was being clipped at the shorter height. Bar scaling is
+          unchanged. */}
+      <div className="relative h-80">
+        <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-1.5">
+          {series.map((point, index) => {
+            const heightPx = Math.max((point.pageviews / max) * 200, 4);
+            const isPeak = point.pageviews === peak.pageviews && point.pageviews > 0;
+
+            return (
+              <div
+                key={point.date}
+                className="flex flex-col items-center gap-3 flex-1 min-w-0"
+                onMouseEnter={() => setHovered(index)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                <div className="relative flex w-full justify-center">
+                  {hovered === index && (
+                    <div className="absolute -top-9 z-10 whitespace-nowrap rounded-lg border border-gray-700 bg-black px-2.5 py-1.5 text-xs shadow-xl">
+                      <span className="font-bold text-white">
+                        {point.pageviews.toLocaleString()}
+                      </span>
+                      <span className="text-gray-400"> views · </span>
+                      <span className="text-gray-300">{point.visitors}</span>
+                      <span className="text-gray-400"> visitors</span>
+                    </div>
+                  )}
+                  <div
+                    className={`w-full max-w-[42px] rounded-t-lg transition-all duration-200 ${
+                      isPeak
+                        ? 'bg-gradient-to-t from-[#ff950e] to-[#ffb347]'
+                        : 'bg-gradient-to-t from-[#ff950e] to-[#ff6b00]'
+                    } ${hovered === index ? 'opacity-100' : 'opacity-80'}`}
+                    style={{ height: `${heightPx}px` }}
+                  />
+                </div>
+                <span className="origin-top -rotate-45 whitespace-nowrap text-[10px] text-gray-500">
+                  {new Date(point.date).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-3 gap-4 border-t border-gray-800 pt-4">
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Peak Day</p>
+          <p className="mt-1 text-lg font-bold text-green-400">
+            {peak.pageviews.toLocaleString()}
+          </p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Daily Average</p>
+          <p className="mt-1 text-lg font-bold text-white">{average.toLocaleString()}</p>
+        </div>
+        <div className="text-center">
+          <p className="text-xs uppercase tracking-wider text-gray-500">Total</p>
+          <p className="mt-1 text-lg font-bold text-[#ff950e]">
+            {totalViews.toLocaleString()}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -202,10 +294,10 @@ export default function AdminTrafficPage() {
 
   if (!isAdmin) {
     return (
-      <main className="grid min-h-screen place-items-center bg-surface px-4 text-ink">
+      <main className="min-h-screen bg-black text-white flex items-center justify-center px-4">
         <div className="text-center">
-          <h1 className="text-2xl font-semibold">Admin access required</h1>
-          <p className="mt-2 text-ink-muted">You need admin permissions to view this page.</p>
+          <h1 className="text-2xl font-bold mb-2">Admin access required</h1>
+          <p className="text-gray-400">You need admin permissions to view this page.</p>
         </div>
       </main>
     );
@@ -213,125 +305,130 @@ export default function AdminTrafficPage() {
 
   return (
     <RequireAuth role="admin">
-      <main className="min-h-screen bg-surface text-ink">
-        <div className="mx-auto max-w-6xl px-4 py-10">
-          <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wide text-ink-faint">
-                <BarChart3 className="h-3.5 w-3.5" /> Analytics
-              </p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight">Traffic</h1>
+      <main className="min-h-screen bg-black text-white">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Header, matching the wallet admin treatment */}
+          <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-4">
+              <div className="bg-gradient-to-br from-[#ff950e] to-[#ff6b00] p-3 rounded-xl">
+                <BarChart3 className="w-6 h-6 text-black" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-white">Site Traffic</h1>
+                <p className="text-gray-400 mt-1">Visitor activity across the platform</p>
+              </div>
             </div>
 
-            <div className="flex rounded-md border border-line bg-surface-raised p-1">
+            <div className="flex bg-black/40 border border-gray-800 rounded-xl p-1">
               {RANGES.map((range) => (
                 <button
                   key={range.days}
                   onClick={() => setDays(range.days)}
-                  className={`rounded px-3 py-1.5 text-sm transition-colors ${
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     days === range.days
-                      ? 'bg-surface-hover font-medium text-ink'
-                      : 'text-ink-muted hover:text-ink'
+                      ? 'bg-[#ff950e] text-black'
+                      : 'text-gray-400 hover:text-white'
                   }`}
                 >
                   {range.label}
                 </button>
               ))}
             </div>
-          </header>
+          </div>
 
           {loading ? (
-            <div className="grid place-items-center py-24">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <div className="flex items-center justify-center py-32">
+              <Loader2 className="w-8 h-8 animate-spin text-[#ff950e]" />
             </div>
           ) : !report ? (
-            <div className="rounded-lg border border-line bg-surface-raised p-10 text-center">
-              <p className="text-sm text-ink-muted">Could not load traffic data.</p>
+            <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 p-12 text-center">
+              <p className="text-gray-400">Could not load traffic data.</p>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-6">
+              {/* Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard
                   icon={Eye}
+                  iconColor="text-[#ff950e]"
+                  iconBg="bg-[#ff950e]/10"
                   label="Pageviews"
                   value={report.summary.pageviews.toLocaleString()}
                   change={report.change.pageviews}
                 />
                 <StatCard
                   icon={Users}
+                  iconColor="text-blue-400"
+                  iconBg="bg-blue-500/10"
                   label="Visitors"
                   value={report.summary.visitors.toLocaleString()}
                   change={report.change.visitors}
-                  hint="Unique per day"
+                  sub="Unique per day"
                 />
                 <StatCard
                   icon={MousePointerClick}
+                  iconColor="text-purple-400"
+                  iconBg="bg-purple-500/10"
                   label="Sessions"
                   value={report.summary.sessions.toLocaleString()}
                   change={report.change.sessions}
                 />
                 <StatCard
-                  icon={BarChart3}
-                  label="Views / session"
+                  icon={Activity}
+                  iconColor="text-green-400"
+                  iconBg="bg-green-500/10"
+                  label="Views / Session"
                   value={report.summary.viewsPerSession}
-                  hint={`${report.summary.signedInViews.toLocaleString()} signed in · ${report.summary.guestViews.toLocaleString()} guest`}
+                  sub={`${report.summary.signedInViews.toLocaleString()} signed in · ${report.summary.guestViews.toLocaleString()} guest`}
                 />
               </div>
 
               <TrendChart series={report.series} />
 
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <TopList
-                  title="Top pages"
+                  icon={FileText}
+                  iconColor="text-[#ff950e]"
+                  title="Top Pages"
                   entries={report.topPages}
-                  empty="No pageviews yet."
+                  empty="No pageviews recorded yet."
                 />
                 <TopList
-                  title="Referrers"
+                  icon={ExternalLink}
+                  iconColor="text-blue-400"
+                  title="Traffic Sources"
                   entries={report.topReferrers}
                   empty="No referral data yet."
                 />
                 <TopList
+                  icon={Smartphone}
+                  iconColor="text-purple-400"
                   title="Devices"
                   entries={report.devices}
                   empty="No device data yet."
                   formatKey={(k) => k.charAt(0).toUpperCase() + k.slice(1)}
                 />
                 <TopList
+                  icon={Globe}
+                  iconColor="text-green-400"
                   title="Countries"
                   entries={report.countries}
-                  empty="No country data. This requires a CDN that provides geo headers."
+                  empty="Requires a CDN that provides geo headers."
                 />
               </div>
 
               {events && (events.searches.length > 0 || events.events.length > 0) && (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-lg border border-line bg-surface-raised p-4">
-                    <h2 className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-ink">
-                      <Search className="h-3.5 w-3.5" /> Search terms
-                    </h2>
-                    {events.searches.length === 0 ? (
-                      <p className="py-6 text-center text-xs text-ink-faint">
-                        No searches recorded.
-                      </p>
-                    ) : (
-                      <div className="space-y-1">
-                        {events.searches.map((s) => (
-                          <div
-                            key={s.term}
-                            className="flex items-center justify-between px-2 py-1.5 text-xs"
-                          >
-                            <span className="truncate text-ink-muted">{s.term}</span>
-                            <span className="ml-3 shrink-0 font-medium text-ink">
-                              {s.count}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <TopList
+                    icon={Search}
+                    iconColor="text-[#ff950e]"
+                    title="Search Terms"
+                    entries={events.searches.map((s) => ({ key: s.term, count: s.count }))}
+                    empty="No searches recorded."
+                  />
+                  <TopList
+                    icon={MousePointerClick}
+                    iconColor="text-blue-400"
                     title="Interactions"
                     entries={events.events.map((e) => ({
                       key: `${e.action} · ${e.category}`,
@@ -342,10 +439,23 @@ export default function AdminTrafficPage() {
                 </div>
               )}
 
-              <p className="pt-2 text-center text-xs text-ink-faint">
-                First-party analytics. No IP addresses or user agents are stored, and records
-                are deleted automatically after 90 days.
-              </p>
+              {/* Privacy note. Worth stating on-screen, since this is the
+                  page where someone would ask what we actually collect. */}
+              <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-gray-800 p-5">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-green-500/10 rounded-lg">
+                    <Shield className="w-4 h-4 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">First-party analytics</p>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                      Collected on our own infrastructure. No IP addresses, user agents or
+                      full referrer URLs are stored, and all records are deleted
+                      automatically after 90 days.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
