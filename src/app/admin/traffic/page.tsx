@@ -155,7 +155,16 @@ function TopList({
 }
 
 function TrendChart({ series }: { series: TrafficReport['series'] }) {
-  const [hovered, setHovered] = useState<number | null>(null);
+  /* Interaction model mirrors AdminRevenueChart exactly.
+     Desktop uses CSS group-hover, which avoids a React re-render on
+     every mouse move. Touch is handled separately in state, because
+     hover does not exist on mobile — a hover-only tooltip would leave
+     the chart unreadable on phones. */
+  const [touchedBarIndex, setTouchedBarIndex] = useState<number | null>(null);
+
+  const handleTouchStart = (index: number) => setTouchedBarIndex(index);
+  const handleTouchEnd = () => setTouchedBarIndex(null);
+  const handleTouchCancel = () => setTouchedBarIndex(null);
 
   const max = Math.max(...series.map((p) => p.pageviews), 1);
   const totalViews = series.reduce((sum, p) => sum + p.pageviews, 0);
@@ -164,6 +173,9 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
     series[0] || { date: '', pageviews: 0, visitors: 0 }
   );
   const average = series.length ? Math.round(totalViews / series.length) : 0;
+
+  const formatDate = (date: string) =>
+    new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
   if (series.length === 0) {
     return (
@@ -193,55 +205,59 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
         <span className="text-sm text-gray-500">Pageviews per day</span>
       </div>
 
-      {/* h-80 rather than h-64: the hover tooltip sits above the tallest
-          bar and was being clipped at the shorter height. Bar scaling is
-          unchanged. */}
-      <div className="relative h-80">
-        <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-1.5">
-          {series.map((point, index) => {
-            const heightPx = Math.max((point.pageviews / max) * 200, 4);
-            const isPeak = point.pageviews === peak.pageviews && point.pageviews > 0;
+      {/* Horizontal scroll so a 90-day range stays legible rather than
+          compressing bars to slivers. */}
+      <div className="overflow-x-auto custom-scrollbar">
+        <div className="min-w-full" style={{ minWidth: `${Math.max(series.length * 44, 320)}px` }}>
+          {/* h-80 rather than h-64: the tooltip sits 36px above the
+              tallest bar and was being clipped at the shorter height.
+              Bar scaling is unchanged. */}
+          <div className="relative h-80">
+            <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-2 pr-6">
+              {series.map((point, index) => {
+                const heightPx = Math.max((point.pageviews / max) * 200, 4);
+                const isActive = touchedBarIndex === index;
 
-            return (
-              <div
-                key={point.date}
-                className="flex flex-col items-center gap-3 flex-1 min-w-0"
-                onMouseEnter={() => setHovered(index)}
-                onMouseLeave={() => setHovered(null)}
-              >
-                <div className="relative flex w-full justify-center">
-                  {hovered === index && (
-                    <div className="absolute -top-9 z-10 whitespace-nowrap rounded-lg border border-gray-700 bg-black px-2.5 py-1.5 text-xs shadow-xl">
-                      <span className="font-bold text-white">
-                        {point.pageviews.toLocaleString()}
-                      </span>
-                      <span className="text-gray-400"> views · </span>
-                      <span className="text-gray-300">{point.visitors}</span>
-                      <span className="text-gray-400"> visitors</span>
-                    </div>
-                  )}
+                return (
                   <div
-                    className={`w-full max-w-[42px] rounded-t-lg transition-all duration-200 ${
-                      isPeak
-                        ? 'bg-gradient-to-t from-[#ff950e] to-[#ffb347]'
-                        : 'bg-gradient-to-t from-[#ff950e] to-[#ff6b00]'
-                    } ${hovered === index ? 'opacity-100' : 'opacity-80'}`}
-                    style={{ height: `${heightPx}px` }}
-                  />
-                </div>
-                <span className="origin-top -rotate-45 whitespace-nowrap text-[10px] text-gray-500">
-                  {new Date(point.date).toLocaleDateString(undefined, {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </span>
-              </div>
-            );
-          })}
+                    key={point.date}
+                    className="group flex flex-1 flex-col items-center gap-3"
+                    onTouchStart={() => handleTouchStart(index)}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchCancel={handleTouchCancel}
+                  >
+                    <div className="relative flex w-full justify-center">
+                      <div
+                        className={`w-9 rounded-lg bg-[#ff950e] transition-all duration-200 ease-out group-hover:bg-[#ffa53a] ${
+                          isActive ? 'ring-2 ring-[#ff950e]/40' : ''
+                        }`}
+                        style={{ height: `${heightPx}px` }}
+                        aria-label={`${formatDate(point.date)}: ${point.pageviews} pageviews from ${point.visitors} visitors`}
+                        role="img"
+                      />
+                      <div
+                        className={`absolute -top-9 whitespace-nowrap rounded-md border border-[#2a2a2a] bg-[#0c0c0c] px-2 py-1 text-xs text-gray-100 shadow-sm transition-opacity ${
+                          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                      >
+                        <span className="font-semibold">{point.pageviews.toLocaleString()}</span>
+                        <span className="text-gray-400"> views · </span>
+                        <span>{point.visitors.toLocaleString()}</span>
+                        <span className="text-gray-400"> visitors</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] uppercase tracking-wide text-gray-500 transform -rotate-45 origin-top whitespace-nowrap">
+                      {formatDate(point.date)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-3 gap-4 border-t border-gray-800 pt-4">
+      <div className="grid grid-cols-1 gap-4 pt-5 sm:grid-cols-3 border-t border-[#1f1f1f] mt-6">
         <div className="text-center">
           <p className="text-xs uppercase tracking-wider text-gray-500">Peak Day</p>
           <p className="mt-1 text-lg font-bold text-green-400">
@@ -253,7 +269,7 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
           <p className="mt-1 text-lg font-bold text-white">{average.toLocaleString()}</p>
         </div>
         <div className="text-center">
-          <p className="text-xs uppercase tracking-wider text-gray-500">Total</p>
+          <p className="text-xs uppercase tracking-wider text-gray-500">Total Period</p>
           <p className="mt-1 text-lg font-bold text-[#ff950e]">
             {totalViews.toLocaleString()}
           </p>
