@@ -52,6 +52,7 @@ const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 const referralRoutes = require('./routes/referral.routes');
 const cryptoRoutes = require('./routes/crypto.routes'); // CRYPTO DIRECT DEPOSITS
 const postRoutes = require('./routes/post.routes'); // EXPLORE/SOCIAL POSTS
+const trafficRoutes = require('./routes/traffic.routes'); // SITE TRAFFIC ANALYTICS
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -239,6 +240,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/complaints', require('./routes/complaint.routes'));
 app.use('/api/age-verification', require('./routes/ageVerification.routes'));
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/traffic', trafficRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES
 app.use('/api/posts', postRoutes); // EXPLORE/SOCIAL POST ROUTES
