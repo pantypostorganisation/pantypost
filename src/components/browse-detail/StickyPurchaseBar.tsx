@@ -13,33 +13,36 @@ export default function StickyPurchaseBar({
   userRole,
   onPurchase,
 }: StickyPurchaseBarProps) {
-  // Only buyers can see this; admins/sellers are excluded via userRole
   if (userRole !== 'buyer' || needsSubscription || isAuctionListing) return null;
 
   const total = listing.markedUpPrice ?? listing.price;
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden transition-all duration-300 ${
-        show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'
+      className={`fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur transition-all duration-200 lg:hidden ${
+        show ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-full opacity-0'
       }`}
     >
-      <div className="bg-black/95 p-4">
+      <div className="flex items-center gap-3 p-4 safe-bottom">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-ink-faint">Total</p>
+          <p className="text-lg font-semibold leading-none text-ink">${total.toFixed(2)}</p>
+        </div>
         <button
           onClick={onPurchase}
-          className="w-full bg-[#ff950e] text-black px-6 py-3 rounded-xl font-bold text-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
+          className="flex shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 text-sm font-semibold text-black transition-colors hover:bg-primary-hover disabled:opacity-50"
           disabled={isProcessing}
           aria-label="Buy now"
         >
           {isProcessing ? (
             <>
-              <div className="animate-spin h-5 w-5 border-2 border-black border-t-transparent rounded-full" />
-              Processing...
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
+              Processing
             </>
           ) : (
             <>
-              <ShoppingBag className="w-5 h-5" />
-              Buy Now • ${total.toFixed(2)}
+              <ShoppingBag className="h-4 w-4" />
+              Buy now
             </>
           )}
         </button>

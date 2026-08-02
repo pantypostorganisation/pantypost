@@ -30,138 +30,123 @@ export default function ImageGallery({
     onIndexChange((currentIndex + 1) % images.length);
   }, [currentIndex, images.length, onIndexChange]);
 
-  const handleMainImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+  /* Shared fallback for both main image and thumbnails. Previously two
+     near-identical handlers with inline SVG data URLs. */
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const target = e.currentTarget;
-    if (target.src.includes('placeholder-panty.png')) {
-      target.src =
-        'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"%3E%3Crect width="400" height="300" fill="%23333"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-family="sans-serif" font-size="16"%3EImage Not Available%3C/text%3E%3C/svg%3E';
-    } else {
-      target.src = '/placeholder-panty.png';
-    }
+    target.src = '/placeholder-panty.png';
     target.onerror = null;
-    // eslint-disable-next-line no-console
-    console.warn('Image failed to load:', images[currentIndex]);
-  };
-
-  const handleThumbnailError = (e: React.SyntheticEvent<HTMLImageElement>, originalUrl: string) => {
-    const target = e.currentTarget;
-    if (target.src.includes('placeholder-panty.png')) {
-      target.src =
-        'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"%3E%3Crect width="64" height="64" fill="%23333"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999" font-family="sans-serif" font-size="10"%3ENo Image%3C/text%3E%3C/svg%3E';
-    } else {
-      target.src = '/placeholder-panty.png';
-    }
-    target.onerror = null;
-    // eslint-disable-next-line no-console
-    console.warn('Thumbnail failed to load:', originalUrl);
   };
 
   return (
-    <div className="space-y-4">
-      {/* Main Image */}
-      <div className="relative group">
-        <div className="relative w-full h-[500px] lg:h-[600px] rounded-xl overflow-hidden bg-gray-900 shadow-xl">
-          {images.length > 0 ? (
-            <>
-              <img
-                src={images[currentIndex]}
-                alt={`${listing.title} - Image ${currentIndex + 1}`}
-                className="w-full h-full object-cover transition-transform duration-300"
-                onError={handleMainImageError}
-              />
+    <div className="space-y-3">
+      <div className="group relative aspect-[4/5] overflow-hidden rounded-lg bg-black lg:aspect-[4/3]">
+        {images.length > 0 ? (
+          <>
+            <img
+              src={images[currentIndex]}
+              alt={`${listing.title} — image ${currentIndex + 1} of ${images.length}`}
+              className="h-full w-full object-cover"
+              onError={handleImageError}
+            />
 
-              {/* Navigation */}
-              {images.length > 1 && (
-                <>
-                  <button
-                    onClick={handlePrevImage}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                    aria-label="Previous image"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <button
-                    onClick={handleNextImage}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/60 hover:bg-black/80 text-white p-2 rounded-full transition-all opacity-0 group-hover:opacity-100"
-                    aria-label="Next image"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </>
-              )}
-
-              {/* Counter */}
-              {images.length > 1 && (
-                <div className="absolute bottom-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs">
-                  {currentIndex + 1} / {images.length}
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center text-gray-400">
-                <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="text-sm">No Image Available</p>
-              </div>
-            </div>
-          )}
-
-          {/* Badges */}
-          <div className="absolute top-3 left-3 flex flex-col gap-2">
-            {isAuctionListing && (
-              <span className="bg-purple-600 text-white text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
-                <Gavel className="w-3 h-3 mr-1.5" />
-                {isAuctionEnded ? 'Ended' : 'Live Auction'}
-              </span>
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={handlePrevImage}
+                  className="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur transition-all hover:bg-black/80 group-hover:opacity-100 focus-visible:opacity-100"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={handleNextImage}
+                  className="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur transition-all hover:bg-black/80 group-hover:opacity-100 focus-visible:opacity-100"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </>
             )}
-            {listing.isPremium && (
-              <span className="bg-yellow-600 text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
-                <Crown className="w-3 h-3 mr-1.5" />
-                Premium
-              </span>
-            )}
-          </div>
-
-          {/* View count */}
-          <div className="absolute top-3 right-3 bg-black/70 text-white px-2 py-1 rounded-full text-xs flex items-center gap-1">
-            <Eye className="w-3 h-3" />
-            <AnimatedViewCounter value={viewCount} />
-          </div>
-
-          {/* Premium lock */}
-          {isLocked && (
-            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm">
-              <Lock className="w-12 h-12 text-[#ff950e] mb-4" />
-              <p className="text-sm font-bold text-white text-center px-4">Subscribe to view premium content</p>
+          </>
+        ) : (
+          <div className="grid h-full w-full place-items-center bg-surface-overlay">
+            <div className="text-center text-ink-faint">
+              <Package className="mx-auto mb-2 h-10 w-10" />
+              <p className="text-sm">No image available</p>
             </div>
+          </div>
+        )}
+
+        {/* Badges — tinted pills, consistent with the browse grid. */}
+        <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
+          {isAuctionListing && (
+            <span className="pill pill-auction backdrop-blur">
+              <Gavel className="h-3 w-3" />
+              {isAuctionEnded ? 'Ended' : 'Live auction'}
+            </span>
           )}
-
-          {/* Timer */}
-          {isAuctionListing && listing.auction && (
-            <div className="absolute bottom-4 left-4 z-10" key={`timer-${listing.id}-${forceUpdateTimer}`}>
-              <span className="bg-black/90 backdrop-blur-sm text-white text-xs px-3 py-2 rounded-lg font-bold flex items-center shadow-lg border border-purple-500/30">
-                <Clock className="w-4 h-4 mr-2 text-purple-400" />
-                {formatTimeRemaining(listing.auction.endTime)}
-              </span>
-            </div>
+          {listing.isPremium && (
+            <span className="pill pill-primary backdrop-blur">
+              <Crown className="h-3 w-3" /> Premium
+            </span>
           )}
         </div>
+
+        <div className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white backdrop-blur">
+          <Eye className="h-3 w-3" />
+          <AnimatedViewCounter value={viewCount} />
+        </div>
+
+        {isLocked && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/75 backdrop-blur-sm">
+            <Lock className="h-8 w-8 text-primary" />
+            <p className="px-6 text-center text-sm font-medium text-white">
+              Subscribe to view premium content
+            </p>
+          </div>
+        )}
+
+        {isAuctionListing && listing.auction && (
+          <div
+            className="absolute bottom-3 left-3"
+            key={`timer-${listing.id}-${forceUpdateTimer}`}
+          >
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-black/75 px-2.5 py-1.5 text-xs font-medium text-white backdrop-blur">
+              <Clock className="h-3.5 w-3.5 text-auction" />
+              {formatTimeRemaining(listing.auction.endTime)}
+            </span>
+          </div>
+        )}
+
+        {images.length > 1 && (
+          <div className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2 py-0.5 text-xs text-white backdrop-blur">
+            {currentIndex + 1} / {images.length}
+          </div>
+        )}
       </div>
 
-      {/* Thumbnails */}
       {images.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
           {images.map((url, index) => (
             <button
               type="button"
               key={index}
-              className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden cursor-pointer border-2 transition-all ${
-                index === currentIndex ? 'border-[#ff950e]' : 'border-gray-700 hover:border-gray-600'
-              }`}
               onClick={() => onIndexChange(index)}
+              className={`h-16 w-16 shrink-0 overflow-hidden rounded-md transition-all ${
+                index === currentIndex
+                  ? 'ring-2 ring-primary'
+                  : 'opacity-60 ring-1 ring-line hover:opacity-100'
+              }`}
               aria-label={`View image ${index + 1}`}
+              aria-current={index === currentIndex}
             >
-              <img src={url} alt={`Thumbnail ${index + 1}`} className="w-full h-full object-cover" onError={(e) => handleThumbnailError(e, url)} />
+              <img
+                src={url}
+                alt=""
+                className="h-full w-full object-cover"
+                onError={handleImageError}
+              />
             </button>
           ))}
         </div>

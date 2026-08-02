@@ -7,20 +7,20 @@ import { DetailHeaderProps } from '@/types/browseDetail';
 
 export default function DetailHeader({ onBack }: DetailHeaderProps) {
   return (
-    <div className="max-w-7xl mx-auto px-4 pt-6">
+    <div className="mx-auto max-w-7xl px-4 pt-6">
       <Link
         href="/browse"
-        className="inline-flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition-colors text-sm font-medium"
+        className="inline-flex items-center gap-1.5 text-sm text-ink-muted transition-colors hover:text-ink"
         onClick={(e) => {
           if (onBack) {
             e.preventDefault();
             onBack();
           }
         }}
-        aria-label="Back to Browse"
+        aria-label="Back to browse"
       >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Browse
+        <ArrowLeft className="h-4 w-4" />
+        Back to browse
       </Link>
     </div>
   );

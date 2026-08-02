@@ -1,24 +1,27 @@
 // src/components/browse-detail/TrustBadges.tsx
 'use client';
 
-import { Shield, Truck, Gift } from 'lucide-react';
+import { Shield, Truck, BadgeCheck } from 'lucide-react';
 import { TrustBadgesProps } from '@/types/browseDetail';
+
+/* Icons were previously green, blue and purple — three unrelated hues
+   for three items of equal weight. A single muted treatment reads as a
+   set rather than a collection of unrelated badges. */
+const BADGES = [
+  { icon: Shield, label: 'Secure payment' },
+  { icon: Truck, label: 'Discreet shipping' },
+  { icon: BadgeCheck, label: 'Verified sellers' },
+];
 
 export default function TrustBadges({}: TrustBadgesProps) {
   return (
-    <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-800">
-      <div className="text-center">
-        <Shield className="w-5 h-5 text-green-400 mx-auto mb-1" />
-        <p className="text-xs text-gray-400">Secure Payment</p>
-      </div>
-      <div className="text-center">
-        <Truck className="w-5 h-5 text-blue-400 mx-auto mb-1" />
-        <p className="text-xs text-gray-400">Discreet Shipping</p>
-      </div>
-      <div className="text-center">
-        <Gift className="w-5 h-5 text-purple-400 mx-auto mb-1" />
-        <p className="text-xs text-gray-400">Quality Guaranteed</p>
-      </div>
+    <div className="grid grid-cols-3 gap-3 border-t border-line pt-4">
+      {BADGES.map(({ icon: Icon, label }) => (
+        <div key={label} className="flex flex-col items-center gap-1.5 text-center">
+          <Icon className="h-4 w-4 text-ink-faint" />
+          <p className="text-xs text-ink-muted">{label}</p>
+        </div>
+      ))}
     </div>
   );
 }

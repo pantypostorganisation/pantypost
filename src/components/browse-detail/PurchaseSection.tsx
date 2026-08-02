@@ -2,15 +2,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Heart, Crown, ShoppingBag, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Heart, Crown, ShoppingBag, AlertCircle, ShieldAlert, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useToast } from '@/context/ToastContext';
-import { formatMoney } from '@/utils/format';
-import { Money } from '@/types/common';
 import { Listing } from '@/context/ListingContext';
-import { DeliveryAddress } from '@/types/order';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface PurchaseSectionProps {
@@ -23,15 +20,46 @@ interface PurchaseSectionProps {
   onSubscribeClick: () => void;
 }
 
-// Mock delivery address for now - in production you'd get this from user profile
-const DEFAULT_DELIVERY_ADDRESS: DeliveryAddress = {
-  fullName: 'John Doe',
-  addressLine1: '123 Main St',
-  city: 'New York',
-  state: 'NY',
-  postalCode: '10001',
-  country: 'US',
-};
+/* Shared notice block. Previously four near-identical inline blocks
+   with different colour classes; this keeps the states visually
+   consistent and makes adding another trivial. */
+function Notice({
+  tone,
+  icon: Icon,
+  title,
+  children,
+}: {
+  tone: 'info' | 'warning' | 'danger' | 'success';
+  icon: React.ElementType;
+  title: string;
+  children?: React.ReactNode;
+}) {
+  const tones = {
+    info: 'border-line bg-surface-overlay text-ink-muted',
+    warning: 'border-primary-line bg-primary-soft text-ink-muted',
+    danger: 'border-danger/40 bg-danger-soft text-ink-muted',
+    success: 'border-success/40 bg-success-soft text-ink-muted',
+  } as const;
+
+  const iconTones = {
+    info: 'text-ink-faint',
+    warning: 'text-primary',
+    danger: 'text-danger',
+    success: 'text-success',
+  } as const;
+
+  return (
+    <div className={`rounded-md border p-3.5 ${tones[tone]}`}>
+      <div className="flex items-start gap-2.5">
+        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconTones[tone]}`} />
+        <div className="flex-1 space-y-1">
+          <p className="text-sm font-medium text-ink">{title}</p>
+          {children && <div className="text-xs leading-relaxed">{children}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PurchaseSection({
   listing,
@@ -47,25 +75,19 @@ export default function PurchaseSection({
   const { getBuyerBalance, purchaseListing, reloadData, orderHistory } = useWallet();
   const { showToast } = useToast();
   const [isPurchasing, setIsPurchasing] = useState(false);
-  
-  // CRITICAL FIX: Add state to track if purchase was successful
   const [purchaseCompleted, setPurchaseCompleted] = useState(false);
 
   const isSeller = user?.username === listing.seller;
   const isAdmin = user?.role === 'admin';
-
-  // FIXED: Use the server's isLocked field directly instead of doing client-side checks
   const isPremiumLocked = listing.isLocked === true;
+  const isListingStillActive = listings.some((l) => l.id === listing.id);
 
-  // FIX: Check if listing still exists in active listings (if not, it's been sold)
-  const isListingStillActive = listings.some(l => l.id === listing.id);
-  
-  // FIX: Check if current user has this item in their order history
   useEffect(() => {
     if (user?.username && orderHistory) {
-      const userPurchasedThis = orderHistory.some(order => 
-        order.buyer === user.username && 
-        (order.listingId === listing.id || order.title === listing.title)
+      const userPurchasedThis = orderHistory.some(
+        (order) =>
+          order.buyer === user.username &&
+          (order.listingId === listing.id || order.title === listing.title)
       );
       if (userPurchasedThis) {
         setPurchaseCompleted(true);
@@ -73,31 +95,25 @@ export default function PurchaseSection({
     }
   }, [user?.username, orderHistory, listing.id, listing.title]);
 
-  // FIX: Use cents for comparison to avoid floating-point issues
+  // Compared in cents to avoid floating-point issues.
   const buyerBalanceInCents = user ? Math.round(getBuyerBalance(user.username) * 100) : 0;
   const purchasePriceInCents = Math.round((listing.markedUpPrice || listing.price) * 100);
-  
-  // Compare in cents (integers) to avoid floating-point issues
   const canAfford = buyerBalanceInCents >= purchasePriceInCents;
-  
-  // FIX: Calculate the actual difference in dollars
   const balanceNeeded = Math.max(0, (purchasePriceInCents - buyerBalanceInCents) / 100);
-  
-  // CRITICAL FIX: Don't show warning if purchase completed or listing not active
-  const shouldShowInsufficientBalance = !canAfford && 
-                                        balanceNeeded > 0.01 &&
-                                        !isSeller && 
-                                        !purchaseCompleted && 
-                                        !isPurchasing && 
-                                        !isProcessing &&
-                                        isListingStillActive &&
-                                        !isPremiumLocked;
 
-  // Real purchase handler with validation and admin guardrails
+  const shouldShowInsufficientBalance =
+    !canAfford &&
+    balanceNeeded > 0.01 &&
+    !isSeller &&
+    !purchaseCompleted &&
+    !isPurchasing &&
+    !isProcessing &&
+    isListingStillActive &&
+    !isPremiumLocked;
+
   const handleRealPurchase = async () => {
     if (!user || isPurchasing || isProcessing || purchaseCompleted || !isListingStillActive) return;
 
-    // Admins cannot act as buyers
     if (isAdmin) {
       showToast({
         type: 'error',
@@ -111,12 +127,11 @@ export default function PurchaseSection({
       return;
     }
 
-    // FIXED: Check for premium content using server's isLocked field
     if (isPremiumLocked) {
-      showToast({ 
-        type: 'error', 
-        title: 'Premium content locked', 
-        message: 'You must be subscribed to this seller to purchase premium content' 
+      showToast({
+        type: 'error',
+        title: 'Premium content locked',
+        message: 'You must be subscribed to this seller to purchase premium content',
       });
       return;
     }
@@ -130,7 +145,6 @@ export default function PurchaseSection({
     setIsPurchasing(true);
 
     try {
-      // Include isPremium flag in purchase request
       await purchaseListing(
         {
           id: listing.id,
@@ -146,30 +160,22 @@ export default function PurchaseSection({
         user.username
       );
 
-      // FIX: Mark purchase as completed to prevent warning from showing
       setPurchaseCompleted(true);
-      
       showToast({ type: 'success', title: 'Purchase successful! Your order has been created.' });
 
-      // Reload wallet/orders
       await reloadData();
-      
-      // Small delay to ensure state updates are visible
       await new Promise((r) => setTimeout(r, 500));
 
       router.push('/buyers/my-orders');
     } catch (error: any) {
       setIsPurchasing(false);
       setPurchaseCompleted(false);
-      
+
       let errorMessage = 'Purchase failed. Please try again.';
-      
-      // Handle premium content errors
+
       if (error.message?.includes('subscribe') || error.requiresSubscription) {
         errorMessage = 'You must be subscribed to this seller to purchase premium content.';
-        setTimeout(() => {
-          router.push(`/sellers/${listing.seller}`);
-        }, 2000);
+        setTimeout(() => router.push(`/sellers/${listing.seller}`), 2000);
       } else if (error.message?.includes('Missing required fields')) {
         errorMessage = 'Order creation failed due to missing information. Please try again.';
       } else if (error.message?.includes('Insufficient balance')) {
@@ -180,165 +186,158 @@ export default function PurchaseSection({
       } else {
         errorMessage = error.message || errorMessage;
       }
-      
+
       showToast({ type: 'error', title: errorMessage });
     }
   };
 
-  // If auction is active, purchase controls are handled by AuctionSection instead
+  // Auctions handle their own controls in AuctionSection.
   if (listing.auction && listing.auction.status === 'active') return null;
 
-  // If listing is no longer in active listings and user didn't purchase it
   if (!isListingStillActive && !purchaseCompleted) {
     return (
-      <div className="bg-gray-900 rounded-lg p-6 space-y-4">
-        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <ShoppingBag className="w-5 h-5 text-gray-500" />
-            <div className="flex-1">
-              <p className="text-gray-400 font-semibold">This item has been sold</p>
-            </div>
-          </div>
-        </div>
+      <div className="rounded-lg border border-line bg-surface-raised p-5">
+        <Notice tone="info" icon={ShoppingBag} title="This item has been sold" />
       </div>
     );
   }
 
-  return (
-    <div className="bg-gray-900 rounded-lg p-6 space-y-4">
-      {/* Admin notice */}
-      {user && isAdmin && (
-        <div className="bg-purple-900/20 border border-purple-700 rounded-lg p-3 -mt-1">
-          <div className="flex items-start gap-2">
-            <ShieldAlert className="w-5 h-5 text-purple-400 mt-0.5" />
-            <p className="text-sm text-purple-200">
-              Admin accounts cannot make purchases or act as buyers. Please use the{' '}
-              <span className="font-semibold text-purple-300">Crown Admin</span> tools.
-            </p>
-          </div>
-        </div>
-      )}
+  const buttonBase =
+    'flex w-full items-center justify-center gap-2 rounded-md px-4 py-3 text-sm font-semibold transition-colors';
 
-      <div className="flex items-center justify-between mb-4">
+  return (
+    <div className="space-y-4 rounded-lg border border-line bg-surface-raised p-5">
+      {/* Price and favourite */}
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm text-gray-400">Price</p>
-          <p className="text-3xl font-bold text-white">${(purchasePriceInCents / 100).toFixed(2)}</p>
+          <p className="text-xs uppercase tracking-wide text-ink-faint">Price</p>
+          <p className="mt-1 text-3xl font-semibold leading-none text-ink">
+            ${(purchasePriceInCents / 100).toFixed(2)}
+          </p>
         </div>
 
         {user?.role === 'buyer' && isListingStillActive && (
           <button
             onClick={toggleFavorite}
-            className="p-2 rounded-lg bg-[#222] hover:bg-[#333] transition-colors"
+            className="grid h-10 w-10 place-items-center rounded-md border border-line bg-surface-overlay transition-colors hover:border-line-strong"
             aria-label={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
           >
-            <Heart size={20} className={isFavorited ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-400'} />
+            <Heart
+              className={`h-4 w-4 ${isFavorited ? 'fill-primary text-primary' : 'text-ink-muted'}`}
+            />
           </button>
         )}
       </div>
 
-      {/* Premium content lock message with server-side indication */}
+      {/* States */}
+      {user && isAdmin && (
+        <Notice tone="info" icon={ShieldAlert} title="Admin account">
+          Admin accounts cannot make purchases. Please use the Crown Admin tools.
+        </Notice>
+      )}
+
       {isPremiumLocked && (
-        <div className="bg-yellow-900/20 border border-yellow-600 rounded-lg p-4 mb-2">
-          <div className="flex items-start gap-3">
-            <Crown className="w-5 h-5 text-yellow-500 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-yellow-500 font-semibold">Premium Content Locked</p>
-              <p className="text-sm text-yellow-400 mt-1">
-                This content is restricted. Subscribe to{' '}
-                <SecureMessageDisplay content={listing.seller} allowBasicFormatting={false} className="inline font-semibold" /> to unlock and purchase.
-              </p>
-            </div>
-          </div>
-        </div>
+        <Notice tone="warning" icon={Crown} title="Premium content locked">
+          Subscribe to{' '}
+          <SecureMessageDisplay
+            content={listing.seller}
+            allowBasicFormatting={false}
+            className="inline font-medium text-ink"
+          />{' '}
+          to unlock and purchase.
+        </Notice>
       )}
 
-      {/* FIX: Only show insufficient balance warning if truly insufficient and listing active */}
       {user && !isAdmin && shouldShowInsufficientBalance && (
-        <div className="bg-red-900/20 border border-red-600 rounded-lg p-4 mb-2">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-red-500 font-semibold">Insufficient Balance</p>
-              <p className="text-sm text-red-400 mt-1">
-                You need ${balanceNeeded.toFixed(2)} more to purchase this item
-              </p>
-              <button onClick={() => router.push('/wallet/buyer')} className="text-sm text-[#ff950e] hover:underline mt-2">
-                Add funds to wallet →
-              </button>
-            </div>
-          </div>
-        </div>
+        <Notice tone="danger" icon={AlertCircle} title="Insufficient balance">
+          You need ${balanceNeeded.toFixed(2)} more to purchase this item.{' '}
+          <button
+            onClick={() => router.push('/wallet/buyer')}
+            className="font-medium text-primary hover:underline"
+          >
+            Add funds
+          </button>
+        </Notice>
       )}
 
-      {/* FIX: Show success state if purchase completed */}
       {purchaseCompleted && (
-        <div className="bg-green-900/20 border border-green-600 rounded-lg p-4 mb-2">
-          <div className="flex items-center gap-3">
-            <ShoppingBag className="w-5 h-5 text-green-500" />
-            <div className="flex-1">
-              <p className="text-green-500 font-semibold">Purchase Complete!</p>
-              <p className="text-sm text-green-400 mt-1">
-                You own this item
-              </p>
-            </div>
-          </div>
-        </div>
+        <Notice tone="success" icon={Check} title="Purchase complete">
+          You own this item.
+        </Notice>
       )}
 
-      {/* Call-to-action */}
+      {/* Action */}
       {!user ? (
         <button
           onClick={() => router.push('/login')}
-          className="w-full bg-[#ff950e] text-black py-3 rounded-lg font-semibold hover:bg-[#e0850d] transition flex items-center justify-center gap-2"
+          className={`${buttonBase} bg-primary text-black hover:bg-primary-hover`}
         >
-          <ShoppingBag className="w-5 h-5" />
-          Login to Purchase
+          <ShoppingBag className="h-4 w-4" />
+          Log in to purchase
         </button>
       ) : isSeller ? (
-        <button disabled className="w-full bg-gray-700 text-gray-400 py-3 rounded-lg font-semibold cursor-not-allowed">
-          Your Listing
+        <button
+          disabled
+          className={`${buttonBase} cursor-not-allowed bg-surface-overlay text-ink-faint`}
+        >
+          Your listing
         </button>
       ) : isAdmin ? (
-        <button disabled className="w-full bg-purple-900/40 text-purple-300 py-3 rounded-lg font-semibold cursor-not-allowed">
+        <button
+          disabled
+          className={`${buttonBase} cursor-not-allowed bg-surface-overlay text-ink-faint`}
+        >
           Admin accounts cannot purchase
         </button>
       ) : isPremiumLocked ? (
         <button
           onClick={onSubscribeClick}
-          className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700 transition flex items-center justify-center gap-2"
+          className={`${buttonBase} bg-primary text-black hover:bg-primary-hover`}
         >
-          <Crown className="w-5 h-5" />
-          Subscribe to Unlock & Purchase
+          <Crown className="h-4 w-4" />
+          Subscribe to unlock
         </button>
       ) : purchaseCompleted || !isListingStillActive ? (
         <button
           disabled
-          className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold cursor-not-allowed flex items-center justify-center gap-2"
+          className={`${buttonBase} cursor-not-allowed border border-success/40 bg-success-soft text-success`}
         >
-          <ShoppingBag className="w-5 h-5" />
-          {purchaseCompleted ? 'You Own This Item ✓' : 'Item Sold'}
+          <Check className="h-4 w-4" />
+          {purchaseCompleted ? 'You own this item' : 'Item sold'}
         </button>
       ) : (
         <button
           onClick={handleRealPurchase}
           disabled={isPurchasing || isProcessing || !canAfford}
-          className={`w-full py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+          className={`${buttonBase} ${
             canAfford && !isPurchasing && !isProcessing
-              ? 'bg-[#ff950e] text-black hover:bg-[#e0850d]'
-              : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              ? 'bg-primary text-black hover:bg-primary-hover'
+              : 'cursor-not-allowed bg-surface-overlay text-ink-faint'
           }`}
           aria-label="Purchase now"
         >
-          <ShoppingBag className="w-5 h-5" />
-          {isPurchasing ? 'Processing Purchase...' : isProcessing ? 'Processing...' : 'Purchase Now'}
+          {isPurchasing || isProcessing ? (
+            <>
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              Processing
+            </>
+          ) : (
+            <>
+              <ShoppingBag className="h-4 w-4" />
+              Buy now
+            </>
+          )}
         </button>
       )}
 
-      {user && user.role === 'buyer' && !purchaseCompleted && isListingStillActive && !isPremiumLocked && (
-        <div className="text-sm text-gray-400 text-center">
-          Your balance: ${(buyerBalanceInCents / 100).toFixed(2)}
-        </div>
-      )}
+      {user?.role === 'buyer' &&
+        !purchaseCompleted &&
+        isListingStillActive &&
+        !isPremiumLocked && (
+          <p className="text-center text-xs text-ink-faint">
+            Wallet balance ${(buyerBalanceInCents / 100).toFixed(2)}
+          </p>
+        )}
     </div>
   );
 }
