@@ -40,9 +40,7 @@ export default function ImageGallery({
 
   return (
     <div className="space-y-3">
-      {/* Pure black behind product photography — the one justified use.
-          Everything else sits on the layered near-black scale. */}
-      <div className="group relative aspect-[4/5] overflow-hidden rounded-lg bg-surface-photo lg:aspect-[4/3]">
+      <div className="group relative aspect-[4/5] overflow-hidden rounded-lg bg-black lg:aspect-[4/3]">
         {images.length > 0 ? (
           <>
             <img
@@ -101,8 +99,8 @@ export default function ImageGallery({
         </div>
 
         {isLocked && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gradient-to-t from-black/85 via-black/50 to-black/30 backdrop-blur-md">
-            <Lock className="h-7 w-7 text-primary" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/75 backdrop-blur-sm">
+            <Lock className="h-8 w-8 text-primary" />
             <p className="px-6 text-center text-sm font-medium text-white">
               Subscribe to view premium content
             </p>

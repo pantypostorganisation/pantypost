@@ -26,9 +26,7 @@ export default function StickyPurchaseBar({
       <div className="flex items-center gap-3 p-4 safe-bottom">
         <div className="min-w-0 flex-1">
           <p className="text-xs text-ink-faint">Total</p>
-          <p className="font-display text-2xl leading-none text-ink">
-            ${total.toFixed(2).replace(/\.00$/, '')}
-          </p>
+          <p className="text-lg font-semibold leading-none text-ink">${total.toFixed(2)}</p>
         </div>
         <button
           onClick={onPurchase}

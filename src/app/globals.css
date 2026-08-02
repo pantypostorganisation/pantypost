@@ -18,15 +18,10 @@
      accumulated (#0a0a0a, #111, #121212, #131313, #171717, #1a1a1a,
      #0b0b0f, #101010). Each step is a clear stop, so depth reads as
      intentional rather than accidental. */
-  /* Layered near-blacks rather than flat pure black. Elevation is
-     expressed by lifting the surface, not by shadows, which barely
-     read on dark backgrounds. Pure #000 is reserved for the area
-     directly behind product photography, where it makes images pop. */
-  --color-surface: #0a0a0b;        /* page background */
-  --color-surface-raised: #121212; /* cards, panels */
-  --color-surface-overlay: #1e1e1e;/* inputs, modals, hover states */
-  --color-surface-hover: #242424;
-  --color-surface-photo: #000000;  /* behind product images only */
+  --color-surface: #0a0a0a;        /* page background */
+  --color-surface-raised: #141414; /* cards, panels */
+  --color-surface-overlay: #1c1c1c;/* inputs, modals, hover states */
+  --color-surface-hover: #222222;
 
   /* ---- Borders ----
      Alpha rather than solid greys, so borders sit correctly on any
@@ -65,10 +60,6 @@
      was never defined, so the whole site silently fell back to Arial. */
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  /* Display serif for headings, seller names and prices. Deliberately
-     NOT used for UI chrome, labels or body copy — a serif everywhere
-     reads as fussy rather than premium. */
-  --font-display: var(--font-display), Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 
   /* ---- Radii ----
@@ -119,14 +110,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-}
-
-/* Opt-in display type. Applied to headings, seller names and prices —
-   never to buttons, labels or metadata. */
-.font-display {
-  font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: -0.015em;
 }
 
 /* Headings carry the weight; body text stays comfortable. Tightening

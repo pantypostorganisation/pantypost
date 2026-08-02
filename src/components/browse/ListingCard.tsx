@@ -143,14 +143,6 @@ export default function ListingCard({
             <Crown className="h-3 w-3" /> Premium
           </span>
         )}
-        {/* Authentic scarcity. Worn garments are inherently unique, so
-            this is true by definition rather than a manufactured
-            urgency device — which is what keeps it credible. */}
-        {!hasAuction && !listing.isPremium && !isGuest && (
-          <span className="pill border-white/15 bg-black/60 text-white/80 backdrop-blur">
-            One of one
-          </span>
-        )}
       </div>
 
       {user?.role === 'buyer' && !isLockedPremium && !isGuest && (
@@ -168,10 +160,7 @@ export default function ListingCard({
       )}
 
       {/* --- Image --- */}
-      {/* Pure black behind product photography — the one place it is
-          justified, because it makes images pop. Everywhere else uses
-          the layered near-black scale. */}
-      <div ref={imageContainerRef} className="relative aspect-[4/5] overflow-hidden bg-surface-photo">
+      <div ref={imageContainerRef} className="relative aspect-[4/5] overflow-hidden bg-black">
         {listing.imageUrls && listing.imageUrls.length > 0 ? (
           <>
             <img
@@ -180,7 +169,7 @@ export default function ListingCard({
               /* Single hover effect. Previously the image scaled 1.10
                  while the card scaled 1.02 — two simultaneous zooms. */
               className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03] ${
-                isGuest ? 'blur-[10px] scale-105' : isLockedPremium ? 'blur-xl scale-105' : ''
+                isGuest ? 'blur-[6px]' : isLockedPremium ? 'blur-md' : ''
               }`}
               onError={(e) => {
                 const target = e.currentTarget;
@@ -232,9 +221,9 @@ export default function ListingCard({
 
         {/* Guest and premium locks */}
         {isGuest && !isLockedPremium && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-gradient-to-t from-black/70 via-black/20 to-transparent">
-            <Lock className="h-5 w-5 text-white/90" />
-            <p className="text-xs font-medium text-white/90">Sign in to view</p>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30">
+            <Lock className="h-6 w-6 text-white" />
+            <p className="text-xs font-medium text-white">Sign up to view</p>
           </div>
         )}
 
@@ -277,7 +266,7 @@ export default function ListingCard({
       <div className="flex flex-1 flex-col gap-3 p-4">
         {!isGuest ? (
           <div className="space-y-1">
-            <h3 className="font-display line-clamp-1 text-base text-ink transition-colors group-hover:text-primary">
+            <h3 className="line-clamp-1 text-sm font-semibold text-ink transition-colors group-hover:text-primary">
               {listing.title}
             </h3>
             <p className="line-clamp-2 text-xs leading-relaxed text-ink-muted">
@@ -363,11 +352,8 @@ export default function ListingCard({
 
           {!hasAuction && !isGuest && (
             <div className="shrink-0 text-right">
-              {/* Prestige pricing: clean numerals, display face, no
-                  decimal noise. Charm pricing signals "deal"; whole
-                  numbers signal "desirable". */}
-              <p className="font-display text-xl leading-none text-ink">
-                ${String(displayPrice.price).replace(/\.00$/, '')}
+              <p className="text-lg font-semibold leading-none text-ink">
+                ${displayPrice.price}
               </p>
             </div>
           )}

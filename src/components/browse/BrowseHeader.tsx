@@ -29,7 +29,7 @@ export default function BrowseHeader({
       : null;
 
   return (
-    <div className="mx-auto mb-6 max-w-[1600px] px-6">
+    <div className="mx-auto mb-6 max-w-[1700px] px-6">
       {notice && (
         <div className="mb-6 flex items-start gap-2.5 rounded-md border border-line bg-surface-raised px-4 py-3">
           <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
@@ -39,7 +39,7 @@ export default function BrowseHeader({
 
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="font-display text-3xl text-ink">Browse</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-ink">Browse</h1>
           <p className="mt-1 text-sm text-ink-muted">
             {filteredListingsCount} {filteredListingsCount === 1 ? 'listing' : 'listings'}
             {filter !== 'all' && ` in ${filter}`}

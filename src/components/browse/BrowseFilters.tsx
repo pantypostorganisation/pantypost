@@ -132,7 +132,7 @@ export default function BrowseFilters({
   };
 
   return (
-    <div className="mx-auto mb-4 max-w-[1600px] px-6">
+    <div className="mx-auto mb-4 max-w-[1700px] px-6">
       <div className="flex flex-wrap items-center gap-2">
         {/* Search */}
         <div className="relative min-w-[240px] flex-1">

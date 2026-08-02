@@ -1,19 +1,16 @@
 // src/components/browse-detail/TrustBadges.tsx
 'use client';
 
-import { Shield, Package, BadgeCheck } from 'lucide-react';
+import { Shield, Truck, BadgeCheck } from 'lucide-react';
 import { TrustBadgesProps } from '@/types/browseDetail';
 
 /* Icons were previously green, blue and purple — three unrelated hues
-   for three items of equal weight. One muted treatment reads as a set.
-
-   Wording is kept short here because the substantive versions of these
-   assurances appear directly beneath the purchase button, where they
-   actually influence the decision. */
+   for three items of equal weight. A single muted treatment reads as a
+   set rather than a collection of unrelated badges. */
 const BADGES = [
   { icon: Shield, label: 'Secure payment' },
-  { icon: Package, label: 'Discreet delivery' },
-  { icon: BadgeCheck, label: 'ID-verified sellers' },
+  { icon: Truck, label: 'Discreet shipping' },
+  { icon: BadgeCheck, label: 'Verified sellers' },
 ];
 
 export default function TrustBadges({}: TrustBadgesProps) {

@@ -25,7 +25,7 @@ export default function PopularTags({ tags, onTagClick, isLoading, error }: Popu
   const sortedTags = [...tags].sort((a, b) => b.count - a.count).slice(0, 12);
 
   return (
-    <div className="mx-auto mb-6 max-w-[1600px] px-6">
+    <div className="mx-auto mb-6 max-w-[1700px] px-6">
       <div className="flex flex-wrap items-center gap-2">
         <span className="mr-1 inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-ink-faint">
           <TrendingUp className="h-3.5 w-3.5" />

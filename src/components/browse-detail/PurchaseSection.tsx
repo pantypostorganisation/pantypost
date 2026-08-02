@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Heart, Crown, ShoppingBag, AlertCircle, ShieldAlert, Check, Package, Lock, BadgeCheck } from 'lucide-react';
+import { Heart, Crown, ShoppingBag, AlertCircle, ShieldAlert, Check } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
@@ -211,11 +211,8 @@ export default function PurchaseSection({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-wide text-ink-faint">Price</p>
-          {/* Prestige pricing: display serif, clean numerals, no
-              decimal noise on whole amounts. Charm pricing signals a
-              deal; whole numbers signal something worth having. */}
-          <p className="font-display mt-1 text-4xl leading-none text-ink">
-            ${(purchasePriceInCents / 100).toFixed(2).replace(/\.00$/, '')}
+          <p className="mt-1 text-3xl font-semibold leading-none text-ink">
+            ${(purchasePriceInCents / 100).toFixed(2)}
           </p>
         </div>
 
@@ -341,28 +338,6 @@ export default function PurchaseSection({
             Wallet balance ${(buyerBalanceInCents / 100).toFixed(2)}
           </p>
         )}
-
-      {/* Discretion and security assurances sit HERE, immediately below
-          the purchase action, rather than in the footer.
-          For sensitive purchases, hesitation peaks at the moment of
-          commitment — reassurance has to be where the doubt is, not
-          three scrolls away. */}
-      {!isSeller && !isAdmin && isListingStillActive && (
-        <div className="space-y-2 border-t border-line pt-4">
-          <p className="flex items-start gap-2 text-xs text-ink-muted">
-            <Package className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
-            Plain, unmarked packaging. Nothing identifies the contents or sender.
-          </p>
-          <p className="flex items-start gap-2 text-xs text-ink-muted">
-            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
-            Encrypted payment. Your billing statement will not name this site.
-          </p>
-          <p className="flex items-start gap-2 text-xs text-ink-muted">
-            <BadgeCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
-            Seller identity verified. Every listing reviewed before publication.
-          </p>
-        </div>
-      )}
     </div>
   );
 }
