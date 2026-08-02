@@ -9,7 +9,7 @@ export default function ProductInfo({ listing }: ProductInfoProps) {
   return (
     <div className="space-y-5">
       <div className="space-y-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+        <h1 className="font-display text-3xl leading-tight text-ink">
           <SecureMessageDisplay
             content={listing.title}
             allowBasicFormatting={false}

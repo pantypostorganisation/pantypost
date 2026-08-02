@@ -57,7 +57,7 @@ export default function SellerProfile({
 
       <div className="min-w-0 flex-1 space-y-1.5">
         <div className="flex items-center gap-1.5">
-          <h3 className="truncate text-sm font-semibold text-ink">{safeUsername}</h3>
+          <h3 className="font-display truncate text-lg text-ink">{safeUsername}</h3>
           {isVerified && (
             <BadgeCheck className="h-4 w-4 shrink-0 text-primary" aria-label="Verified seller" />
           )}

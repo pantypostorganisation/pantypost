@@ -27,18 +27,25 @@ export default function ListingGrid({
   isGuest = false
 }: ExtendedListingGridProps) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+    /* Capped at 4 columns and given generous gaps.
+       Premium marketplaces run lower grid density than discount ones —
+       more air per item reads as considered, while packing six across
+       reads as a bargain bin. Two columns on mobile matches how
+       Depop-style browsing actually happens on a phone. */
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5 xl:grid-cols-4 xl:gap-6">
       {listings.map((listing) => {
-        // Individual listing error handling
         if (listingErrors[listing.id]) {
           return (
-            <div key={listing.id} className="bg-red-900/20 border border-red-700 rounded-xl p-4 text-center">
-              <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-              <p className="text-red-400 text-sm">Error loading listing</p>
+            <div
+              key={listing.id}
+              className="flex flex-col items-center justify-center rounded-lg border border-danger/30 bg-danger-soft p-4 text-center"
+            >
+              <AlertTriangle className="mb-2 h-6 w-6 text-danger" />
+              <p className="text-sm text-danger">Could not load listing</p>
               <SecureMessageDisplay
                 content={listingErrors[listing.id]}
                 allowBasicFormatting={false}
-                className="text-gray-500 text-xs mt-1"
+                className="mt-1 text-xs text-ink-faint"
                 maxLength={100}
               />
             </div>

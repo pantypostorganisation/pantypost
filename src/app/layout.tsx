@@ -1,5 +1,5 @@
 // src/app/layout.tsx
-import { Inter } from 'next/font/google';
+import { Inter, Playfair_Display } from 'next/font/google';
 import './globals.css';
 import ClientLayout from './ClientLayout';
 import type { Metadata, Viewport } from 'next';
@@ -13,6 +13,17 @@ const inter = Inter({
   display: 'swap',
   preload: true,
   variable: '--font-inter',
+});
+
+// Display serif, used only for headings, seller names and prices.
+// A serif/sans pairing is the single strongest "premium" signal in
+// dark commerce UI — a sans-only interface reads as generic regardless
+// of how well the rest is executed.
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  display: 'swap',
+  weight: ['400', '500', '600'],
+  variable: '--font-display',
 });
 
 // Base URL for canonical URLs
@@ -139,7 +150,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
