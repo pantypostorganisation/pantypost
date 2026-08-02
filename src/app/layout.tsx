@@ -4,10 +4,15 @@ import './globals.css';
 import ClientLayout from './ClientLayout';
 import type { Metadata, Viewport } from 'next';
 
+// The `variable` option exposes Inter as a CSS custom property, which
+// globals.css consumes as --font-sans. Without it, the stylesheet fell
+// back to Arial and overrode the font entirely — Inter was downloaded
+// on every page load and then discarded.
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   preload: true,
+  variable: '--font-inter',
 });
 
 // Base URL for canonical URLs
@@ -21,7 +26,7 @@ export const metadata: Metadata = {
     template: '%s | PantyPost',
   },
   description:
-    'Panty Post - The premier discreet marketplace to buy and sell used panties. Connect with verified sellers, secure payments, and complete anonymity. 21+ adult platform.',
+    'Panty Post - The premier discreet marketplace to buy and sell used panties. Connect with verified sellers, secure payments, and complete anonymity. 18+ adult platform.',
   keywords: [
     'buy used panties',
     'sell used panties',
@@ -86,7 +91,7 @@ export const metadata: Metadata = {
     siteName: 'PantyPost',
     title: 'Panty Post - Buy & Sell Used Panties | Discreet Anonymous Marketplace',
     description:
-      'Safe, anonymous platform to buy and sell used panties. Verified sellers, secure transactions, complete privacy. 21+ only.',
+      'Safe, anonymous platform to buy and sell used panties. Verified sellers, secure transactions, complete privacy. 18+ only.',
     images: [
       {
         url: `${BASE_URL}/googlesearchimage.png`,
@@ -113,7 +118,7 @@ export const metadata: Metadata = {
 
   // Additional meta tags
   category: 'adult marketplace',
-  classification: 'Adult Content - 21+',
+  classification: 'Adult Content - 18+',
 };
 
 // Separate viewport export with viewport-fit=cover for iOS safe areas
@@ -134,7 +139,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={inter.variable}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
@@ -153,9 +158,11 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16" />
         <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 
-        {/* Age restriction meta tag */}
+        {/* Age restriction meta tags */}
         <meta name="rating" content="adult" />
-        <meta name="age" content="21" />
+        <meta name="age" content="18" />
+        {/* RTA label — recognised by parental filtering software. */}
+        <meta name="RATING" content="RTA-5042-1996-1400-1577-RTA" />
 
         {/* Structured Data */}
         <script

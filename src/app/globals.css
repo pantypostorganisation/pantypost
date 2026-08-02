@@ -1,65 +1,227 @@
 @import "tailwindcss";
 
+/* =====================================================================
+   DESIGN TOKENS
+   
+   Tailwind v4 reads theme values from this @theme block, NOT from
+   tailwind.config.js — that file is a v3 artefact and is ignored.
+   
+   This is why the codebase filled up with arbitrary values like
+   bg-[#1a1a1a]: semantic classes such as bg-card silently did nothing,
+   so every component reached for a literal instead. Defining tokens
+   here makes those classes real again.
+   ===================================================================== */
+
+@theme {
+  /* ---- Surfaces ----
+     One deliberate scale, replacing the eight near-blacks that had
+     accumulated (#0a0a0a, #111, #121212, #131313, #171717, #1a1a1a,
+     #0b0b0f, #101010). Each step is a clear stop, so depth reads as
+     intentional rather than accidental. */
+  --color-surface: #0a0a0a;        /* page background */
+  --color-surface-raised: #141414; /* cards, panels */
+  --color-surface-overlay: #1c1c1c;/* inputs, modals, hover states */
+  --color-surface-hover: #222222;
+
+  /* ---- Borders ----
+     Alpha rather than solid greys, so borders sit correctly on any
+     surface without needing a matched pair. */
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.14);
+
+  /* ---- Text ----
+     Three weights of emphasis. Anything beyond this is noise. */
+  --color-ink: #f2f2f2;      /* primary text */
+  --color-ink-muted: #a1a1a1;/* secondary text */
+  --color-ink-faint: #6b6b6b;/* metadata, timestamps */
+
+  /* ---- Brand ---- */
+  --color-primary: #ff950e;
+  --color-primary-hover: #ffa733;
+  --color-primary-press: #e0850d;
+  /* Low-alpha fill for badges and tinted backgrounds. Using the accent
+     at full strength on large areas is what makes a UI shout. */
+  --color-primary-soft: rgba(255, 149, 14, 0.12);
+  --color-primary-line: rgba(255, 149, 14, 0.32);
+
+  /* ---- Status ---- */
+  --color-success: #34d399;
+  --color-success-soft: rgba(52, 211, 153, 0.12);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgba(251, 191, 36, 0.12);
+  --color-danger: #f87171;
+  --color-danger-soft: rgba(248, 113, 113, 0.12);
+  --color-auction: #a78bfa;
+  --color-auction-soft: rgba(167, 139, 250, 0.12);
+
+  /* ---- Typography ----
+     Inter is loaded by next/font in layout.tsx and exposed as
+     --font-inter. Previously this pointed at --font-geist-sans, which
+     was never defined, so the whole site silently fell back to Arial. */
+  --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+
+  /* ---- Radii ----
+     Three values only. Mixing rounded-lg, rounded-xl and rounded-2xl
+     on sibling elements is a large part of what reads as unfinished. */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+
+  /* ---- Elevation ----
+     Shadows sized to the surface. A card does not need the same
+     shadow as a modal. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-raised: 0 4px 16px -4px rgba(0, 0, 0, 0.5);
+  --shadow-overlay: 0 24px 48px -12px rgba(0, 0, 0, 0.75);
+}
+
+/* =====================================================================
+   BASE
+   ===================================================================== */
 
 :root {
+  /* Retained for any code still reading these directly. */
   --background: #0a0a0a;
-  --foreground: #ededed;
+  --foreground: #f2f2f2;
+  --color-background: var(--color-surface);
+  --color-foreground: var(--color-ink);
+  --color-card: var(--color-surface-raised);
+  --color-primary-dark: var(--color-primary-press);
+  --color-primary-light: var(--color-primary-hover);
+}
 
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: #ff950e;
-  --color-primary-dark: #e0850d;
-  --color-primary-light: #ffb347;
-  --color-card: #171717;
-  --font-sans: var(--font-geist-sans, Arial, Helvetica, sans-serif);
-  --font-mono: var(--font-geist-mono, monospace);
+html,
+body,
+#__next {
+  height: 100%;
+  background: #000; /* prevents reveal behind iOS toolbars */
 }
 
 body {
-  background: var(--color-background);
-  color: var(--color-foreground);
-  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  /* NOTE: font-family is deliberately NOT set here.
+     next/font applies Inter via className on <body>, and a
+     font-family rule at this level overrides it. That is exactly what
+     was happening before: Inter was downloaded, then discarded, and
+     the site rendered in Arial. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings carry the weight; body text stays comfortable. Tightening
+   tracking on large type is most of what separates considered
+   typography from default typography. */
+h1, h2, h3, h4 {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
 }
 
 a {
   color: var(--color-primary);
   text-decoration: none;
+  transition: color 150ms ease;
 }
 
 a:hover {
-  color: var(--color-primary-light);
+  color: var(--color-primary-hover);
 }
+
+::selection {
+  background: var(--color-primary);
+  color: #000;
+}
+
+/* =====================================================================
+   COMPONENT PRIMITIVES
+   ===================================================================== */
 
 .card {
-  background: var(--color-card);
-  border-radius: 1rem;
-  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.12);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
   padding: 1.5rem;
-  color: var(--color-foreground);
+  color: var(--color-ink);
 }
 
-/* ======== SMOOTH APP FADE-IN ======== */
+/* One hover treatment, applied consistently. The previous card hover
+   ran five effects at once — scale, image zoom, shadow jump, border
+   colour and revealed controls. A single small lift reads as more
+   confident and is easier to keep consistent. */
+.card-interactive {
+  transition: border-color 200ms ease, box-shadow 200ms ease,
+    transform 200ms ease;
+}
+
+.card-interactive:hover {
+  border-color: var(--color-line-strong);
+  box-shadow: var(--shadow-raised);
+  transform: translateY(-2px);
+}
+
+/* Tinted status pills. Accent colour at low alpha rather than solid
+   gradient fills. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.pill-primary {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-line);
+  color: var(--color-primary);
+}
+
+.pill-auction {
+  background: var(--color-auction-soft);
+  border-color: rgba(167, 139, 250, 0.32);
+  color: var(--color-auction);
+}
+
+.pill-success {
+  background: var(--color-success-soft);
+  border-color: rgba(52, 211, 153, 0.32);
+  color: var(--color-success);
+}
+
+/* =====================================================================
+   MOTION
+   
+   Movement should signal that something happened. Ambient animation
+   that runs regardless of state adds noise and costs battery.
+   ===================================================================== */
+
 @keyframes appFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .app-fade-in {
-  animation: appFadeIn 1s ease-in-out;
+  animation: appFadeIn 400ms ease-out;
 }
 
-/* Loading screen that shows during initialization */
 .loading-screen {
   position: fixed;
   inset: 0;
   background: #000;
   z-index: 9999;
   opacity: 1;
-  transition: opacity 1s ease-in-out;
+  transition: opacity 400ms ease-in-out;
   pointer-events: none;
 }
 
@@ -67,62 +229,39 @@ a:hover {
   opacity: 0;
 }
 
-/* ======== Verification Page Enhancements ======== */
-
-/* Custom scrollbar styles */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #1a1a1a;
+.loading-spinner {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 800ms linear infinite;
 }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-/* Animated verification badge */
+/* Verification badge — retained, but a single subtle pulse rather
+   than a large expanding ring. */
 @keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(255, 149, 14, 0.4);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(255, 149, 14, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(255, 149, 14, 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 149, 14, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 149, 14, 0); }
 }
 
 .verification-badge {
-  animation: pulse 2s infinite;
+  animation: pulse 2.5s ease-in-out infinite;
 }
 
-/* Live listings badge pulse */
+/* Live status indicator */
 @keyframes livePulseGreen {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45);
-  }
-  50% {
-    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
 }
 
 @keyframes livePulseRed {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.5);
-  }
-  50% {
-    box-shadow: 0 0 0 12px rgba(244, 63, 94, 0);
-  }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.45); }
+  50% { box-shadow: 0 0 0 8px rgba(248, 113, 113, 0); }
 }
 
 .live-badge {
@@ -132,74 +271,97 @@ a:hover {
   box-shadow: 0 0 0 0 transparent;
 }
 
-.live-badge--active {
-  animation-name: livePulseGreen;
-}
+.live-badge--active { animation-name: livePulseGreen; }
+.live-badge--inactive { animation-name: livePulseRed; }
 
-.live-badge--inactive {
-  animation-name: livePulseRed;
-}
-
-/* Glassmorphism effect for modals */
-.glassmorphism {
-  background: rgba(10, 10, 10, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Animated gradient background */
-@keyframes gradientAnimation {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
-}
-
-.animated-gradient {
-  background: linear-gradient(-45deg, #0a0a0a, #121212, #1a1a1a, #222);
-  background-size: 400% 400%;
-  animation: gradientAnimation 15s ease infinite;
-}
-
-/* Image zoom effect */
-.img-zoom-container {
-  overflow: hidden;
-}
+.img-zoom-container { overflow: hidden; }
 
 .img-zoom {
-  transition: transform 0.5s ease;
+  transition: transform 400ms ease;
 }
 
 .img-zoom:hover {
-  transform: scale(1.05);
+  /* Was 1.05 alongside a card scale of 1.02 — two simultaneous zooms.
+     One, smaller, is enough. */
+  transform: scale(1.03);
 }
 
-/* Modal styling */
+/* =====================================================================
+   OVERLAYS
+   ===================================================================== */
+
+.glassmorphism {
+  background: rgba(10, 10, 10, 0.72);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--color-line);
+}
+
 .modal-backdrop {
   background-color: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(5px);
+  backdrop-filter: blur(4px);
 }
 
 .modal-content {
-  background: linear-gradient(to bottom, #0e0e0e, #080808);
-  border: 1px solid #2a2a2a;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-overlay);
 }
 
-/* Button variations for verification actions */
+/* =====================================================================
+   FORM CONTROLS
+   ===================================================================== */
+
+.search-field {
+  background: var(--color-surface-overlay);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.search-field:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+  outline: none;
+}
+
+/* Admin review actions. Flat fills rather than gradients — the colour
+   already carries the meaning. */
 .btn-approve {
-  background: linear-gradient(to right, #38a169, #48bb78);
-  color: white;
-  transition: all 0.3s;
-  box-shadow: 0 4px 6px -1px rgba(56, 161, 105, 0.2);
+  background: var(--color-success-soft);
+  border: 1px solid rgba(52, 211, 153, 0.4);
+  color: var(--color-success);
+  transition: background 150ms ease, border-color 150ms ease;
 }
 
-/* Save All button glow inspired by Button 2 */
+.btn-approve:hover {
+  background: rgba(52, 211, 153, 0.2);
+  border-color: rgba(52, 211, 153, 0.6);
+}
+
+.btn-reject {
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: var(--color-danger);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+
+.btn-reject:hover {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: rgba(248, 113, 113, 0.6);
+}
+
+.document-card {
+  transition: border-color 200ms ease, transform 200ms ease;
+  border: 1px solid var(--color-line);
+}
+
+.document-card:hover {
+  border-color: var(--color-primary-line);
+  transform: translateY(-2px);
+}
+
+/* Retained: used by the seller settings save action. */
 .save-all-glow-wrapper {
   position: relative;
   display: inline-flex;
@@ -225,19 +387,13 @@ a:hover {
   border-radius: inherit;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.2s ease-out;
+  transition: opacity 200ms ease-out;
 }
 
 .save-all-glow-wrapper::before {
   inset: -1px;
   padding: 1px;
-  background: conic-gradient(
-    #ff950e,
-    #ff4ecd,
-    #4f46e5,
-    #06b6d4,
-    #ff950e
-  );
+  background: conic-gradient(#ff950e, #ff4ecd, #4f46e5, #06b6d4, #ff950e);
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -248,13 +404,7 @@ a:hover {
 
 .save-all-glow-wrapper::after {
   inset: -16px;
-  background: conic-gradient(
-    #ff950e,
-    #ff4ecd,
-    #4f46e5,
-    #06b6d4,
-    #ff950e
-  );
+  background: conic-gradient(#ff950e, #ff4ecd, #4f46e5, #06b6d4, #ff950e);
   filter: blur(26px);
   z-index: -1;
 }
@@ -264,121 +414,125 @@ a:hover {
   opacity: 1;
 }
 
-.btn-approve:hover {
-  background: linear-gradient(to right, #48bb78, #68d391);
-  box-shadow: 0 10px 15px -3px rgba(56, 161, 105, 0.3);
-}
-
-.btn-reject {
-  background: linear-gradient(to right, #e53e3e, #f56565);
-  color: white;
-  transition: all 0.3s;
-  box-shadow: 0 4px 6px -1px rgba(229, 62, 62, 0.2);
-}
-
-.btn-reject:hover {
-  background: linear-gradient(to right, #f56565, #fc8181);
-  box-shadow: 0 10px 15px -3px rgba(229, 62, 62, 0.3);
-}
-
-/* Document card hover effects */
-.document-card {
-  transition: all 0.3s ease;
-  border: 1px solid #222;
-}
-
-.document-card:hover {
-  border-color: var(--color-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-}
-
-/* Loading spinner */
-.loading-spinner {
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top: 3px solid var(--color-primary);
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Search field styling */
-.search-field {
-  background: rgba(26, 26, 26, 0.8);
-  border: 1px solid #2a2a2a;
-  transition: all 0.3s;
-}
-
-.search-field:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(255, 149, 14, 0.2);
-  background: rgba(26, 26, 26, 1);
-}
-
-/* ======== NEW: Breathing green hover for Verify button text ======== */
+/* Retained: verify button hover treatment. */
 @keyframes breathe-green {
   0%, 100% { color: black; }
-  50% { color: #22c55e; } /* Tailwind green-500 */
+  50% { color: #22c55e; }
 }
 
 .breathe-green-hover:hover {
   animation: breathe-green 2s ease-in-out infinite;
 }
 
-/* ======== iOS Safari Safe Area Fixes ======== */
+/* =====================================================================
+   SCROLLBARS
+   ===================================================================== */
 
-html, body, #__next {
-  height: 100%;
-  background: #000; /* prevents reveal behind toolbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
 }
 
-/* Fullscreen helper that prefers modern dynamic viewport units */
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* =====================================================================
+   BACKGROUNDS
+   ===================================================================== */
+
+/* Retained for compatibility. Animation removed: a background that
+   never stops moving competes with the content in front of it. */
+.animated-gradient {
+  background: linear-gradient(180deg, #0a0a0a 0%, #111111 100%);
+}
+
+.bg-gradient-radial {
+  background-image: radial-gradient(circle, var(--tw-gradient-stops));
+}
+
+/* =====================================================================
+   iOS SAFE AREA
+   ===================================================================== */
+
 .fullscreen {
   min-height: 100dvh;
-  min-height: 100svh; /* fallback for some engines */
+  min-height: 100svh;
 }
+
 @supports not (height: 100dvh) {
   .fullscreen {
     min-height: -webkit-fill-available;
   }
 }
 
-/* Safe-area utilities */
-.safe-top { 
-  padding-top: env(safe-area-inset-top); 
-}
-.safe-bottom { 
-  padding-bottom: env(safe-area-inset-bottom); 
-}
-.safe-inset { 
-  padding-top: env(safe-area-inset-top); 
-  padding-bottom: env(safe-area-inset-bottom); 
+.safe-top { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-inset {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Prevent body overscroll revealing background on iOS */
 @media (max-width: 767px) {
-  body { 
-    overscroll-behavior: none; 
-  }
-  
-  /* Ensure mobile messages take full height */
+  body { overscroll-behavior: none; }
+
   .mobile-messages-container {
     height: 100vh;
     height: 100dvh;
   }
-  
-  /* Mobile message header styling */
+
   .mobile-message-header {
     position: sticky;
     top: 0;
     z-index: 50;
-    background: #1a1a1a;
-    border-bottom: 1px solid rgba(55, 65, 81, 1);
+    background: var(--color-surface-raised);
+    border-bottom: 1px solid var(--color-line);
+  }
+}
+
+/* =====================================================================
+   FOCUS
+   ===================================================================== */
+
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* =====================================================================
+   REDUCED MOTION
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .verification-badge,
+  .live-badge,
+  .breathe-green-hover:hover {
+    animation: none !important;
   }
 }
