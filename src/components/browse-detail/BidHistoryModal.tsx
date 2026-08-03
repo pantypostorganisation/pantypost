@@ -38,7 +38,7 @@ export default function BidHistoryModal({
               Bid History
               {bidsHistory.length > 0 && (
                 <span className="text-sm bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full">
-                  {bidsHistory.length} bids
+                  {bidsHistory.length} {bidsHistory.length === 1 ? 'bid' : 'bids'}
                 </span>
               )}
             </h3>

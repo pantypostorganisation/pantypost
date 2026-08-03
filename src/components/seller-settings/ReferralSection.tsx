@@ -420,7 +420,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
                   <span className="text-sm font-semibold text-green-400">
                     +{formatCurrency(referral.earnings)}
                   </span>
-                  <p className="text-xs text-gray-500">{referral.sales} sales</p>
+                  <p className="text-xs text-gray-500">{referral.sales} {referral.sales === 1 ? 'sale' : 'sales'}</p>
                 </div>
               </div>
             ))}

@@ -1167,7 +1167,7 @@ export default function SellerAnalyticsPage() {
                               {formatCurrency(referral.earnings)}
                             </p>
                             <p className="text-xs text-gray-400">
-                              {referral.sales} sales
+                              {referral.sales} {referral.sales === 1 ? 'sale' : 'sales'}
                             </p>
                           </div>
                         </div>

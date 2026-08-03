@@ -49,7 +49,7 @@ export default function ProfileStats(rawProps: ProfileStatsProps) {
       <div className="bg-[#1a1a1a] p-4 rounded-xl text-center border border-gray-800">
         <Star className="w-6 h-6 mx-auto mb-2 text-[#ff950e]" />
         <p className="text-2xl font-bold text-white">{avgDisplay}</p>
-        <p className="text-sm text-gray-400">{reviewsCount} Reviews</p>
+        <p className="text-sm text-gray-400">{reviewsCount} {reviewsCount === 1 ? 'Review' : 'Reviews'}</p>
       </div>
     </div>
   );

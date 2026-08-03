@@ -180,7 +180,8 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
               <div className="flex justify-between items-center text-[10px] sm:text-xs">
                 <span className="text-gray-400 flex items-center gap-0.5 sm:gap-1">
                   <Gavel className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                  {listing.auction.bids?.length || 0} bids
+                  {listing.auction.bids?.length || 0}{' '}
+                  {(listing.auction.bids?.length || 0) === 1 ? 'bid' : 'bids'}
                 </span>
                 {listing.auction.reservePrice && (
                   <span

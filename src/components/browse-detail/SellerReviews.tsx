@@ -144,7 +144,7 @@ export default function SellerReviews({ seller, limit = 3 }: SellerReviewsProps)
           href={`/sellers/${safeSeller}`}
           className="mt-3 inline-flex items-center gap-1 text-sm text-ink-muted transition-colors hover:text-ink"
         >
-          See all {totalReviews} reviews
+          See all {totalReviews} {totalReviews === 1 ? 'review' : 'reviews'}
           <ChevronRight className="h-4 w-4" />
         </Link>
       )}

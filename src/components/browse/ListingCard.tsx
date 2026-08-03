@@ -343,7 +343,8 @@ export default function ListingCard({
 
         {hasAuction && listing.auction && !isGuest && (
           <p className="text-xs text-gray-500">
-            {listing.auction.bids?.length || 0} bids
+            {listing.auction.bids?.length || 0}{' '}
+            {(listing.auction.bids?.length || 0) === 1 ? 'bid' : 'bids'}
           </p>
         )}
       </div>
