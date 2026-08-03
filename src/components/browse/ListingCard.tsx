@@ -35,6 +35,10 @@ export default function ListingCard({
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
+  // profilePic URLs can point at files that no longer exist (the DB row
+  // outlives the upload), so a failed avatar drops to the seller's
+  // initial rather than chaining to another image that can also 404.
+  const [sellerPicFailed, setSellerPicFailed] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
   const isLockedPremium = listing.isLocked === true;
@@ -58,6 +62,9 @@ export default function ListingCard({
 
   useEffect(() => {
     setCurrentImageIndex(0);
+    // Cards are recycled across pagination; a failure flag from the
+    // previous seller must not hide the next seller's picture.
+    setSellerPicFailed(false);
   }, [listing.id]);
 
   const handleFavoriteClick = async (e: React.MouseEvent) => {
@@ -320,6 +327,22 @@ export default function ListingCard({
               className="inline-flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-300 hover:underline"
             >
               {hasRating && <span className="text-gray-700">·</span>}
+              {resolvedSellerPic && !sellerPicFailed ? (
+                <img
+                  src={resolvedSellerPic}
+                  alt=""
+                  loading="lazy"
+                  onError={() => setSellerPicFailed(true)}
+                  className="h-4 w-4 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-surface-overlay text-[9px] font-semibold text-ink-muted"
+                >
+                  {listing.seller?.charAt(0)?.toUpperCase()}
+                </span>
+              )}
               <span className="truncate">{listing.seller}</span>
               {isSellerVerified && (
                 <BadgeCheck className="h-3 w-3 shrink-0 text-[#ff950e]" aria-label="Verified" />

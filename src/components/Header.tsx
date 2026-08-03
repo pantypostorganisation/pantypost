@@ -17,6 +17,7 @@ import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
 import { resolveApiUrl } from '@/utils/url';
 import { isAdmin } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
+import { approvalService } from '@/services/approval.service';
 import dynamic from 'next/dynamic';
 
 // OPTIMIZED: Lazy load HeaderSearch to reduce initial bundle
@@ -126,6 +127,7 @@ export default function Header(): React.ReactElement | null {
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
+  const [approvalCount, setApprovalCount] = useState(0);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
@@ -501,6 +503,40 @@ export default function Header(): React.ReactElement | null {
     }
   }, [isAdminUser]);
 
+  // Pending-moderation badge. Exists because the queue is invisible
+  // unless an admin thinks to open /admin/approval — content sat
+  // unreviewed for days purely for lack of a signal. Polling plus a
+  // focus refresh is deliberately boring: a websocket event would be
+  // fancier, but a 60s-stale count on a moderation badge is fine and
+  // this cannot break when the socket does.
+  const refreshApprovalCount = useCallback(async () => {
+    if (!isAdminUser || !isMountedRef.current) return;
+    try {
+      const resp = await approvalService.getPendingCounts();
+      if (isMountedRef.current && resp.success && resp.data) {
+        const total = Number(resp.data.total);
+        setApprovalCount(Number.isFinite(total) && total > 0 ? total : 0);
+      }
+    } catch {
+      // Best-effort: keep the last known count rather than flashing 0.
+    }
+  }, [isAdminUser]);
+
+  useEffect(() => {
+    if (!isAdminUser) {
+      setApprovalCount(0);
+      return;
+    }
+    void refreshApprovalCount();
+    const interval = setInterval(() => void refreshApprovalCount(), 60_000);
+    const onFocus = () => void refreshApprovalCount();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [isAdminUser, refreshApprovalCount]);
+
   const handleClearOne = useCallback((notification: UINotification) => {
     if (notification.source === 'legacy') {
       clearSellerNotification(notification.id);
@@ -820,7 +856,7 @@ export default function Header(): React.ReactElement | null {
                   {renderMobileLink('/admin/reports', <Shield className="w-5 h-5" />, 'Reports', reportCount)}
                   {renderMobileLink('/admin/complaints', <AlertTriangle className="w-5 h-5" />, 'Complaints')}
                   {renderMobileLink('/admin/traffic', <BarChart3 className="w-5 h-5" />, 'Traffic')}
-                  {renderMobileLink('/admin/approval', <ClipboardCheck className="w-5 h-5" />, 'Approval')}
+                  {renderMobileLink('/admin/approval', <ClipboardCheck className="w-5 h-5" />, 'Approval', approvalCount)}
                   {renderMobileLink('/admin/bans', <Ban className="w-5 h-5" />, 'Bans')}
                   {renderMobileLink('/admin/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/admin/verification-requests', <ClipboardCheck className="w-5 h-5" />, 'Verify')}
@@ -1038,10 +1074,16 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/admin/approval"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-orange-900/20 hover:from-purple-900/30 hover:to-orange-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
+                className="relative flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-orange-900/20 hover:from-purple-900/30 hover:to-orange-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
               >
                 <ClipboardCheck className="w-3.5 h-3.5 text-purple-300" />
                 <span>Approval</span>
+                {approvalCount > 0 && (
+                  /* Black on the accent — white here is 2.20:1 and fails. */
+                  <span className="absolute -top-2 -right-2 min-w-[18px] rounded-full border-2 border-white bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold text-black">
+                    {approvalCount > 99 ? '99+' : approvalCount}
+                  </span>
+                )}
               </Link>
 
               <Link
@@ -1059,7 +1101,7 @@ export default function Header(): React.ReactElement | null {
                 <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
                 <span>Messages</span>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
+                  <span className="absolute -top-2 -right-2 bg-primary text-black text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg">
                     {unreadCount}
                   </span>
                 )}
