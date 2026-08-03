@@ -104,11 +104,17 @@ export default function ProfileHeader({
   // mean a grey "Invalid image" block. Tracking the failure here lets the
   // plain surface show through instead.
   const [coverFailed, setCoverFailed] = useState(false);
+  // A profilePic URL can point at a file that no longer exists on the
+  // server — the DB row outlives the upload. Falling back to another
+  // file only chains one 404 to the next, so a failed avatar drops to
+  // the initial instead, which cannot break.
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   const safeUsername = sanitizeStrict(username);
   const hasRating = typeof averageRating === 'number' && averageRating > 0;
   const membership = membershipLabel(memberSince);
   const showCover = Boolean(coverPhoto) && !coverFailed;
+  const showAvatar = Boolean(profilePic) && !avatarFailed;
 
   const priceLabel =
     typeof subscriptionPrice === 'number' && subscriptionPrice > 0
@@ -146,12 +152,12 @@ export default function ProfileHeader({
           <div className="flex items-end gap-4">
             <div className="relative shrink-0">
               <div className="h-24 w-24 overflow-hidden rounded-lg border-4 border-surface bg-surface-overlay sm:h-28 sm:w-28">
-                {profilePic ? (
+                {showAvatar ? (
                   <SecureImage
-                    src={profilePic}
+                    src={profilePic as string}
                     alt={safeUsername}
                     className="h-full w-full object-cover"
-                    fallbackSrc="/default-avatar.png"
+                    onError={() => setAvatarFailed(true)}
                   />
                 ) : (
                   <span className="grid h-full w-full place-items-center text-3xl font-bold text-primary">
