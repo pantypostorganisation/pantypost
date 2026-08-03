@@ -3,16 +3,16 @@
 
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
-import { listingsService } from '@/services/listings.service';
 import {
-  Crown, Clock, Lock, Gavel, ArrowUp, Eye, Package, Heart,
-  ChevronLeft, ChevronRight, BadgeCheck, Trash2, X
+  Crown, Clock, Lock, Gavel, Eye, Package, Heart,
+  ChevronLeft, ChevronRight, BadgeCheck, Star, Trash2, X
 } from 'lucide-react';
 import { ListingCardProps } from '@/types/browse';
 import { isAuctionListing } from '@/utils/browseUtils';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
 import { resolveApiUrl } from '@/utils/url';
+import { listingsService } from '@/services/listings.service';
 
 interface ExtendedListingCardProps extends ListingCardProps {
   isGuest?: boolean;
@@ -49,6 +49,13 @@ export default function ListingCard({
   const resolvedSellerPic = resolveApiUrl(listing.sellerProfile?.pic);
   const isSellerVerified = (listing.isSellerVerified ?? listing.isVerified) || false;
 
+  /* Seller rating, if the API supplies it.
+     Renders only when present, so the card degrades cleanly rather than
+     showing an empty or zeroed star row. */
+  const sellerRating = (listing.sellerProfile as any)?.rating as number | undefined;
+  const sellerReviewCount = (listing.sellerProfile as any)?.reviewCount as number | undefined;
+  const hasRating = typeof sellerRating === 'number' && sellerRating > 0;
+
   useEffect(() => {
     setCurrentImageIndex(0);
   }, [listing.id]);
@@ -75,29 +82,10 @@ export default function ListingCard({
     }
   };
 
-  const handlePrevImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!hasMultipleImages) return;
-    setCurrentImageIndex((prev) => (prev === 0 ? listing.imageUrls.length - 1 : prev - 1));
-  };
-
-  const handleNextImage = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!hasMultipleImages) return;
-    setCurrentImageIndex((prev) => (prev === listing.imageUrls.length - 1 ? 0 : prev + 1));
-  };
-
-  /* Admin removal.
-     The backend performs a soft delete (status = 'deleted') rather than
-     destroying the record, so a listing removed after a complaint can
-     still be evidenced to the complainant, the payment processor or an
-     authority. It also means an accidental removal is recoverable.
-
-     No prop threading is needed: listingsService dispatches a
-     'listingDeleted' event, and useBrowseListings already refreshes on
-     that event. */
+  /* Admin removal. The backend soft-deletes (status = 'deleted'), so a
+     listing removed after a complaint remains evidenceable and an
+     accidental removal is recoverable. listingsService dispatches
+     'listingDeleted', which useBrowseListings already refreshes on. */
   const handleRemove = async (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -119,128 +107,47 @@ export default function ListingCard({
     }
   };
 
+  const handlePrevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!hasMultipleImages) return;
+    setCurrentImageIndex((prev) => (prev === 0 ? listing.imageUrls.length - 1 : prev - 1));
+  };
+
+  const handleNextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!hasMultipleImages) return;
+    setCurrentImageIndex((prev) => (prev === listing.imageUrls.length - 1 ? 0 : prev + 1));
+  };
+
   const handleCardClick = () => {
     if (!isGuest) onClick();
   };
 
-  /* Seller identity block. Rendered once and reused for both the linked
-     (member) and unlinked (guest) variants, rather than duplicating the
-     whole markup as before. */
-  const sellerBlock = (
-    <>
-      {resolvedSellerPic ? (
-        <img
-          src={resolvedSellerPic}
-          alt={listing.seller}
-          className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-white/10"
-          onError={(e) => {
-            const target = e.currentTarget;
-            target.src = '/default-avatar.png';
-            target.onerror = null;
-          }}
-        />
-      ) : (
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-overlay text-xs font-semibold text-primary ring-1 ring-white/10">
-          {listing.seller.charAt(0).toUpperCase()}
-        </span>
-      )}
-      <span className="flex min-w-0 items-center gap-1">
-        <span className="truncate text-sm font-medium text-ink">{listing.seller}</span>
-        {isSellerVerified && (
-          <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-primary" aria-label="Verified seller" />
-        )}
-      </span>
-    </>
-  );
-
   return (
+    /* Marketplace-grid card, in the Etsy idiom: the image does the
+       selling, and everything beneath it is compact scannable metadata.
+       No card border or background — the photo defines the tile, which
+       keeps a dense grid from looking like a wall of boxes. */
     <article
-      className={`group relative flex flex-col overflow-hidden rounded-lg border border-line bg-surface-raised transition-all duration-200 ${
-        isGuest ? '' : 'cursor-pointer'
-      } hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised`}
+      className={`group flex flex-col ${isGuest ? '' : 'cursor-pointer'}`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={handleCardClick}
     >
-      {/* --- Badges and favourite ---
-          Tinted pills rather than solid gradient fills. The colour still
-          reads clearly but no longer competes with the product image. */}
-      <div className="absolute left-3 top-3 z-20 flex items-center gap-1.5">
-        {hasAuction && (
-          <span className="pill pill-auction">
-            <Gavel className="h-3 w-3" /> Auction
-          </span>
-        )}
-        {!hasAuction && listing.isPremium && (
-          <span className="pill pill-primary">
-            <Crown className="h-3 w-3" /> Premium
-          </span>
-        )}
-      </div>
-
-      {user?.role === 'buyer' && !isLockedPremium && !isGuest && (
-        <button
-          onClick={handleFavoriteClick}
-          className="absolute right-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-full bg-black/60 backdrop-blur transition-colors hover:bg-black/80"
-          aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
-        >
-          <Heart
-            className={`h-4 w-4 transition-colors ${
-              isFav ? 'fill-primary text-primary' : 'text-white'
-            }`}
-          />
-        </button>
-      )}
-
-      {/* Admin moderation control.
-          Two-step: the first click asks for confirmation, so a listing
-          cannot be removed by a stray tap while browsing. */}
-      {user?.role === 'admin' && !isGuest && (
-        <div className="absolute right-3 top-3 z-30 flex items-center gap-1.5">
-          {confirmingRemove && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                setConfirmingRemove(false);
-              }}
-              className="grid h-8 w-8 place-items-center rounded-full bg-black/70 text-white backdrop-blur transition-colors hover:bg-black/90"
-              aria-label="Cancel removal"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-          <button
-            onClick={handleRemove}
-            disabled={removing}
-            className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 backdrop-blur transition-colors disabled:opacity-60 ${
-              confirmingRemove
-                ? 'bg-red-600 text-white hover:bg-red-500'
-                : 'bg-black/60 text-white hover:bg-red-600/80'
-            }`}
-            aria-label={confirmingRemove ? 'Confirm removal' : 'Remove listing'}
-          >
-            <Trash2 className="h-4 w-4" />
-            {confirmingRemove && (
-              <span className="text-xs font-semibold">
-                {removing ? 'Removing…' : 'Confirm'}
-              </span>
-            )}
-          </button>
-        </div>
-      )}
-
       {/* --- Image --- */}
-      <div ref={imageContainerRef} className="relative aspect-[4/5] overflow-hidden bg-black">
+      <div
+        ref={imageContainerRef}
+        className="relative aspect-square overflow-hidden rounded-xl bg-black"
+      >
         {listing.imageUrls && listing.imageUrls.length > 0 ? (
           <>
             <img
               src={listing.imageUrls[currentImageIndex]}
               alt={listing.title}
-              /* Single hover effect. Previously the image scaled 1.10
-                 while the card scaled 1.02 — two simultaneous zooms. */
-              className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03] ${
-                isGuest ? 'blur-[6px]' : isLockedPremium ? 'blur-md' : ''
+              className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04] ${
+                isGuest ? 'blur-[10px] scale-105' : isLockedPremium ? 'blur-xl scale-105' : ''
               }`}
               onError={(e) => {
                 const target = e.currentTarget;
@@ -253,195 +160,191 @@ export default function ListingCard({
               <>
                 <button
                   onClick={handlePrevImage}
-                  className="absolute left-2 top-1/2 z-20 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition-colors hover:bg-black/80"
+                  className="absolute left-2 top-1/2 z-20 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-black shadow-md transition hover:bg-white"
                   aria-label="Previous image"
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </button>
                 <button
                   onClick={handleNextImage}
-                  className="absolute right-2 top-1/2 z-20 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/60 text-white backdrop-blur transition-colors hover:bg-black/80"
+                  className="absolute right-2 top-1/2 z-20 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-black shadow-md transition hover:bg-white"
                   aria-label="Next image"
                 >
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </>
             )}
-
-            {hasMultipleImages && (
-              <div className="absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-1">
-                {listing.imageUrls.map((_, index) => (
-                  <span
-                    key={index}
-                    className={`h-1 rounded-full transition-all ${
-                      index === currentImageIndex ? 'w-4 bg-white' : 'w-1 bg-white/40'
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
           </>
         ) : (
-          <div className="grid h-full w-full place-items-center bg-surface-overlay">
-            <div className="text-center text-ink-faint">
-              <Package className="mx-auto mb-2 h-8 w-8" />
-              <p className="text-xs">No image</p>
-            </div>
+          <div className="grid h-full w-full place-items-center bg-[#1a1a1a]">
+            <Package className="h-8 w-8 text-gray-700" />
+          </div>
+        )}
+
+        {/* Status chips, top-left. Only ever one at a time. */}
+        <div className="absolute left-2 top-2 z-20">
+          {hasAuction ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/90 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur">
+              <Gavel className="h-3 w-3" /> Auction
+            </span>
+          ) : listing.isPremium ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#ff950e] px-2 py-1 text-[11px] font-semibold text-black">
+              <Crown className="h-3 w-3" /> Premium
+            </span>
+          ) : null}
+        </div>
+
+        {/* Favourite */}
+        {user?.role === 'buyer' && !isLockedPremium && !isGuest && (
+          <button
+            onClick={handleFavoriteClick}
+            className="absolute right-2 top-2 z-20 grid h-8 w-8 place-items-center rounded-full bg-white/90 shadow-md transition hover:bg-white"
+            aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart
+              className={`h-4 w-4 transition-colors ${
+                isFav ? 'fill-[#ff950e] text-[#ff950e]' : 'text-gray-700'
+              }`}
+            />
+          </button>
+        )}
+
+        {/* Admin removal. Two-step, so a stray tap cannot delete. */}
+        {user?.role === 'admin' && !isGuest && (
+          <div className="absolute right-2 top-2 z-30 flex items-center gap-1.5">
+            {confirmingRemove && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setConfirmingRemove(false);
+                }}
+                className="grid h-8 w-8 place-items-center rounded-full bg-white/90 text-black shadow-md transition hover:bg-white"
+                aria-label="Cancel removal"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              onClick={handleRemove}
+              disabled={removing}
+              className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 shadow-md transition disabled:opacity-60 ${
+                confirmingRemove
+                  ? 'bg-red-600 text-white hover:bg-red-500'
+                  : 'bg-white/90 text-gray-700 hover:bg-red-600 hover:text-white'
+              }`}
+              aria-label={confirmingRemove ? 'Confirm removal' : 'Remove listing'}
+            >
+              <Trash2 className="h-4 w-4" />
+              {confirmingRemove && (
+                <span className="text-xs font-semibold">
+                  {removing ? 'Removing…' : 'Confirm'}
+                </span>
+              )}
+            </button>
           </div>
         )}
 
         {/* Guest and premium locks */}
         {isGuest && !isLockedPremium && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/30">
-            <Lock className="h-6 w-6 text-white" />
-            <p className="text-xs font-medium text-white">Sign up to view</p>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gradient-to-t from-black/70 via-black/20 to-transparent">
+            <Lock className="h-5 w-5 text-white/90" />
+            <p className="text-xs font-medium text-white/90">Sign in to view</p>
           </div>
         )}
 
         {isLockedPremium && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
-            <Lock className="h-7 w-7 text-primary" />
-            <p className="px-4 text-center text-xs font-medium text-white">
-              Subscribe to view
-            </p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 backdrop-blur-sm">
+            <Lock className="h-6 w-6 text-[#ff950e]" />
+            <p className="px-4 text-center text-xs font-medium text-white">Subscribe to view</p>
           </div>
         )}
 
         {/* Auction countdown */}
         {hasAuction && listing.auction && (
           <div
-            className="absolute bottom-3 left-3 z-20"
+            className="absolute bottom-2 left-2 z-20"
             key={`timer-${listing.id}-${forceUpdateTimer}`}
           >
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-black/75 px-2 py-1 text-xs font-medium text-white backdrop-blur">
-              <Clock className="h-3 w-3 text-auction" />
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">
+              <Clock className="h-3 w-3 text-purple-300" />
               {formatTimeRemaining(listing.auction.endTime)}
             </span>
           </div>
         )}
 
         {isHovered && !isLockedPremium && !isGuest && (
-          <div className="absolute bottom-3 right-3 z-20 hidden sm:block">
-            <button
-              className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black transition-colors hover:bg-white/90"
-              onClick={onQuickView}
-              aria-label="Quick view"
-            >
-              <Eye className="h-3.5 w-3.5" /> Quick view
-            </button>
-          </div>
+          <button
+            className="absolute bottom-2 right-2 z-20 hidden items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-black shadow-md transition hover:bg-white/90 sm:inline-flex"
+            onClick={onQuickView}
+            aria-label="Quick view"
+          >
+            <Eye className="h-3.5 w-3.5" /> Quick view
+          </button>
         )}
       </div>
 
-      {/* --- Body --- */}
-      <div className="flex flex-1 flex-col gap-3 p-4">
+      {/* --- Metadata ---
+          Etsy ordering: title, then rating, then seller, then price.
+          Rating sits above the seller name because social proof is what
+          buyers scan for first. */}
+      <div className="flex flex-1 flex-col gap-1 pt-2.5">
         {!isGuest ? (
-          <div className="space-y-1">
-            <h3 className="line-clamp-1 text-sm font-semibold text-ink transition-colors group-hover:text-primary">
-              {listing.title}
-            </h3>
-            <p className="line-clamp-2 text-xs leading-relaxed text-ink-muted">
-              {listing.description}
-            </p>
-          </div>
+          <h3 className="line-clamp-2 text-sm leading-snug text-gray-200 transition-colors group-hover:underline">
+            {listing.title}
+          </h3>
         ) : (
-          <div className="space-y-2">
-            <div className="h-4 w-3/4 rounded bg-surface-overlay" />
-            <div className="h-3 w-full rounded bg-surface-overlay/60" />
+          <div className="space-y-1.5 py-1">
+            <div className="h-3 w-3/4 rounded bg-[#1f1f1f]" />
+            <div className="h-3 w-1/2 rounded bg-[#1a1a1a]" />
           </div>
         )}
 
-        {listing.tags && listing.tags.length > 0 && !isGuest && (
-          <div className="hidden flex-wrap gap-1.5 sm:flex">
-            {listing.tags.slice(0, 3).map((tag, i) => (
-              <span
-                key={i}
-                className="rounded bg-surface-overlay px-2 py-0.5 text-[11px] text-ink-muted"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Auction detail */}
-        {hasAuction && listing.auction && !isGuest && (
-          <div className="rounded-md border border-line bg-surface-overlay/50 p-3">
-            <div className="flex items-baseline justify-between">
-              <span className="text-[11px] uppercase tracking-wide text-ink-faint">
-                {displayPrice.label}
-              </span>
-              <span className="flex items-center gap-1 text-base font-semibold text-ink">
-                {listing.auction.bids && listing.auction.bids.length > 0 && (
-                  <ArrowUp className="h-3.5 w-3.5 text-success" />
+        {!isGuest && (
+          <div className="flex flex-wrap items-center gap-x-1.5 text-xs">
+            {hasRating && (
+              <span className="inline-flex items-center gap-0.5">
+                <span className="font-medium text-gray-300">{sellerRating!.toFixed(1)}</span>
+                <Star className="h-3 w-3 fill-[#ff950e] text-[#ff950e]" />
+                {typeof sellerReviewCount === 'number' && sellerReviewCount > 0 && (
+                  <span className="text-gray-500">({sellerReviewCount})</span>
                 )}
-                ${displayPrice.price}
               </span>
-            </div>
-            <div className="mt-1.5 flex items-center justify-between text-[11px]">
-              <span className="text-ink-faint">
-                {listing.auction.bids?.length || 0} bids
-              </span>
-              {listing.auction.reservePrice && (
-                <span
-                  className={
-                    !listing.auction.highestBid ||
-                    listing.auction.highestBid < listing.auction.reservePrice
-                      ? 'text-warning'
-                      : 'text-success'
-                  }
-                >
-                  {!listing.auction.highestBid ||
-                  listing.auction.highestBid < listing.auction.reservePrice
-                    ? 'Reserve not met'
-                    : 'Reserve met'}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
+            )}
 
-        {hasAuction && listing.auction && isGuest && (
-          <div className="rounded-md border border-line bg-surface-overlay/50 p-3 text-center">
-            <span className="text-xs text-ink-faint">Log in to view auction details</span>
-          </div>
-        )}
-
-        {/* Seller and price */}
-        <div className="mt-auto flex items-end justify-between gap-3 border-t border-line pt-3">
-          {!isGuest ? (
+            {/* Seller name links straight to the profile, as on Etsy.
+                stopPropagation so it does not also open the listing. */}
             <Link
               href={`/sellers/${listing.seller}`}
-              className="flex min-w-0 items-center gap-2 transition-opacity hover:opacity-80"
               onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-300 hover:underline"
             >
-              {sellerBlock}
+              {hasRating && <span className="text-gray-700">·</span>}
+              <span className="truncate">{listing.seller}</span>
+              {isSellerVerified && (
+                <BadgeCheck className="h-3 w-3 shrink-0 text-[#ff950e]" aria-label="Verified" />
+              )}
             </Link>
-          ) : (
-            <div className="flex min-w-0 items-center gap-2">{sellerBlock}</div>
-          )}
+          </div>
+        )}
 
-          {!hasAuction && !isGuest && (
-            <div className="shrink-0 text-right">
-              <p className="text-lg font-semibold leading-none text-ink">
-                ${displayPrice.price}
-              </p>
-            </div>
-          )}
+        {!isGuest ? (
+          <p className="mt-0.5 text-base font-semibold text-white">
+            ${String(displayPrice.price).replace(/\.00$/, '')}
+            {hasAuction && (
+              <span className="ml-1.5 text-xs font-normal text-gray-500">
+                {displayPrice.label}
+              </span>
+            )}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-xs text-gray-600">Sign in to view price</p>
+        )}
 
-          {!hasAuction && isGuest && (
-            <span className="shrink-0 text-xs text-ink-faint">Log in to view</span>
-          )}
-        </div>
-
-        {user?.role === 'buyer' && isLockedPremium && !isGuest && (
-          <Link
-            href={`/sellers/${listing.seller}`}
-            className="flex items-center justify-center gap-2 rounded-md border border-line bg-surface-overlay px-4 py-2 text-xs font-medium text-ink transition-colors hover:border-line-strong hover:bg-surface-hover"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Lock className="h-3.5 w-3.5" /> Subscribe to unlock
-          </Link>
+        {hasAuction && listing.auction && !isGuest && (
+          <p className="text-xs text-gray-500">
+            {listing.auction.bids?.length || 0} bids
+          </p>
         )}
       </div>
     </article>

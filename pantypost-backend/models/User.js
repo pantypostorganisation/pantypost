@@ -61,6 +61,33 @@ const userSchema = new mongoose.Schema({
   },
 
   // =====================================================
+  // COVER PHOTO
+  //
+  // Banner image on the seller profile. Like profile pictures and
+  // gallery images, the live field holds only APPROVED media — a new
+  // upload lands in pendingCoverPhoto until an administrator reviews
+  // it. Exempting a large, prominent public image from review would be
+  // an odd hole in the moderation policy.
+  // =====================================================
+  coverPhoto: {
+    type: String,
+    default: null
+  },
+
+  pendingCoverPhoto: {
+    url: String,
+    submittedAt: Date,
+    status: {
+      type: String,
+      enum: ['pending', 'denied'],
+      default: 'pending'
+    },
+    deniedAt: Date,
+    deniedBy: String,
+    denialReason: String
+  },
+
+  // =====================================================
   // PRE-PUBLICATION REVIEW FOR PROFILE MEDIA
   //
   // profilePic and galleryImages above hold APPROVED media only —
@@ -347,6 +374,7 @@ userSchema.index({ referredBy: 1 }); // NEW: Index for referral queries
 // Supports the admin moderation queue, which looks for users holding
 // media awaiting review.
 userSchema.index({ 'pendingProfilePic.status': 1 });
+userSchema.index({ 'pendingCoverPhoto.status': 1 });
 userSchema.index({ 'pendingGalleryImages.status': 1 });
 
 // Hash password before saving
@@ -381,6 +409,7 @@ userSchema.methods.toSafeObject = function() {
   // admin moderation queue) add it back explicitly.
   delete user.pendingProfilePic;
   delete user.pendingGalleryImages;
+  delete user.pendingCoverPhoto;
   return user;
 };
 
@@ -395,6 +424,7 @@ userSchema.methods.toJSON = function() {
   // default, and only re-added where the viewer is entitled to see it.
   delete user.pendingProfilePic;
   delete user.pendingGalleryImages;
+  delete user.pendingCoverPhoto;
   return user;
 };
 
@@ -425,6 +455,26 @@ userSchema.methods.isEmailVerified = function() {
  * Queue a new profile picture for review.
  * The live profilePic is left untouched until an admin approves.
  */
+userSchema.methods.submitCoverPhotoForReview = function(url) {
+  this.pendingCoverPhoto = {
+    url,
+    submittedAt: new Date(),
+    status: 'pending',
+    deniedAt: undefined,
+    deniedBy: undefined,
+    denialReason: undefined
+  };
+  return this;
+};
+
+/** Owner view: their pending cover if one is queued, else the live one. */
+userSchema.methods.getOwnCoverPhoto = function() {
+  if (this.pendingCoverPhoto?.url && this.pendingCoverPhoto.status === 'pending') {
+    return this.pendingCoverPhoto.url;
+  }
+  return this.coverPhoto;
+};
+
 userSchema.methods.submitProfilePicForReview = function(url) {
   this.pendingProfilePic = {
     url,

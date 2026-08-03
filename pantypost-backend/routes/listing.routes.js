@@ -6,6 +6,7 @@ const Order = require('../models/Order');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const Review = require('../models/Review');
 const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
@@ -48,14 +49,74 @@ async function isUserSubscribedToSeller(buyer, seller) {
 /**
  * Populate seller profile data for a listing
  */
-async function populateSellerProfile(listing) {
+/**
+ * Aggregate review ratings for a set of sellers in ONE query.
+ *
+ * User.rating and User.reviewCount exist on the schema but nothing
+ * maintains them — there is no post-save hook on Review — so they are
+ * zero for every seller and cannot be used. Ratings are therefore
+ * computed from the Review collection directly.
+ *
+ * Batched deliberately: calling this per listing would mean twenty
+ * aggregations to render one page of browse results.
+ *
+ * @param {string[]} usernames
+ * @returns {Promise<Map<string, {rating:number, reviewCount:number}>>}
+ */
+async function getSellerRatings(usernames) {
+  const map = new Map();
+  if (!usernames || usernames.length === 0) return map;
+
+  try {
+    const unique = [...new Set(usernames.filter(Boolean))];
+
+    const results = await Review.aggregate([
+      { $match: { reviewee: { $in: unique } } },
+      {
+        $group: {
+          _id: '$reviewee',
+          rating: { $avg: '$rating' },
+          reviewCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    for (const r of results) {
+      map.set(r._id, {
+        rating: Math.round(r.rating * 10) / 10,
+        reviewCount: r.reviewCount
+      });
+    }
+  } catch (error) {
+    console.error('[Listing] Error aggregating seller ratings:', error.message);
+  }
+
+  return map;
+}
+
+/**
+ * @param {object} listing
+ * @param {Map} [ratingsMap] Pre-computed ratings. Supply this when
+ *   populating many listings; omit it for a single listing and one
+ *   aggregation will be run for that seller.
+ */
+async function populateSellerProfile(listing, ratingsMap) {
   try {
     const seller = await User.findOne({ username: listing.seller });
     if (seller) {
+      const ratings =
+        ratingsMap || (await getSellerRatings([listing.seller]));
+      const sellerRating = ratings.get(listing.seller);
+
       // Add seller profile data to listing
       listing.sellerProfile = {
         bio: seller.bio || null,
-        pic: seller.profilePic || null
+        pic: seller.profilePic || null,
+        // Consumed by the browse card's star row. Omitted rather than
+        // zeroed when a seller has no reviews, so the UI can hide the
+        // row instead of showing an empty rating.
+        rating: sellerRating?.rating,
+        reviewCount: sellerRating?.reviewCount
       };
       listing.isSellerVerified = seller.isVerified || false;
       listing.sellerSalesCount = await Order.countDocuments({ 
@@ -304,7 +365,13 @@ router.get('/', async (req, res) => {
     
     // Populate seller profiles for all listings
     const populatedListings = await Promise.all(
-      listings.map(listing => populateSellerProfile(listing.toObject()))
+      // One aggregation for the whole page, rather than one per listing.
+      await (async () => {
+        const ratingsMap = await getSellerRatings(listings.map(l => l.seller));
+        return listings.map(listing =>
+          populateSellerProfile(listing.toObject(), ratingsMap)
+        );
+      })()
     );
     
     // Check user authentication and subscriptions for premium content filtering
