@@ -3,9 +3,10 @@
 
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
+import { listingsService } from '@/services/listings.service';
 import {
   Crown, Clock, Lock, Gavel, ArrowUp, Eye, Package, Heart,
-  ChevronLeft, ChevronRight, BadgeCheck
+  ChevronLeft, ChevronRight, BadgeCheck, Trash2, X
 } from 'lucide-react';
 import { ListingCardProps } from '@/types/browse';
 import { isAuctionListing } from '@/utils/browseUtils';
@@ -32,6 +33,8 @@ export default function ListingCard({
   isGuest = false
 }: ExtendedListingCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
 
   const isLockedPremium = listing.isLocked === true;
@@ -84,6 +87,36 @@ export default function ListingCard({
     e.preventDefault();
     if (!hasMultipleImages) return;
     setCurrentImageIndex((prev) => (prev === listing.imageUrls.length - 1 ? 0 : prev + 1));
+  };
+
+  /* Admin removal.
+     The backend performs a soft delete (status = 'deleted') rather than
+     destroying the record, so a listing removed after a complaint can
+     still be evidenced to the complainant, the payment processor or an
+     authority. It also means an accidental removal is recoverable.
+
+     No prop threading is needed: listingsService dispatches a
+     'listingDeleted' event, and useBrowseListings already refreshes on
+     that event. */
+  const handleRemove = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (!confirmingRemove) {
+      setConfirmingRemove(true);
+      return;
+    }
+
+    setRemoving(true);
+    const response = await listingsService.deleteListing(listing.id);
+
+    if (response.success) {
+      showSuccessToast('Listing removed from the marketplace');
+    } else {
+      showErrorToast('Could not remove listing');
+      setRemoving(false);
+      setConfirmingRemove(false);
+    }
   };
 
   const handleCardClick = () => {
@@ -157,6 +190,44 @@ export default function ListingCard({
             }`}
           />
         </button>
+      )}
+
+      {/* Admin moderation control.
+          Two-step: the first click asks for confirmation, so a listing
+          cannot be removed by a stray tap while browsing. */}
+      {user?.role === 'admin' && !isGuest && (
+        <div className="absolute right-3 top-3 z-30 flex items-center gap-1.5">
+          {confirmingRemove && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setConfirmingRemove(false);
+              }}
+              className="grid h-8 w-8 place-items-center rounded-full bg-black/70 text-white backdrop-blur transition-colors hover:bg-black/90"
+              aria-label="Cancel removal"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={handleRemove}
+            disabled={removing}
+            className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 backdrop-blur transition-colors disabled:opacity-60 ${
+              confirmingRemove
+                ? 'bg-red-600 text-white hover:bg-red-500'
+                : 'bg-black/60 text-white hover:bg-red-600/80'
+            }`}
+            aria-label={confirmingRemove ? 'Confirm removal' : 'Remove listing'}
+          >
+            <Trash2 className="h-4 w-4" />
+            {confirmingRemove && (
+              <span className="text-xs font-semibold">
+                {removing ? 'Removing…' : 'Confirm'}
+              </span>
+            )}
+          </button>
+        </div>
       )}
 
       {/* --- Image --- */}
