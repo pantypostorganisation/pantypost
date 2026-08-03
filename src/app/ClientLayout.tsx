@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
 import AgeGate from '@/components/AgeGate';
 import BanCheck from '@/components/BanCheck';
+import Footer from '@/components/homepage/Footer';
 import MessageNotifications from '@/components/MessageNotifications';
 import { PWAInstall } from '@/components/PWAInstall';
 import { GoogleAnalytics } from '@/components/GoogleAnalytics';
@@ -115,6 +116,29 @@ export default function ClientLayout({
 
   const requiresAgeVerification = !isAgeGateExempt(pathname);
 
+  /* The footer carries the Complaints & Content Removal link, which our
+     payment processor requires to be reachable from every page without
+     an account. It previously rendered only on the homepage.
+
+     Excluded from: the homepage, which renders its own animated copy;
+     the auth pages, which have their own compact footers; and the
+     full-height messaging views, where a footer would break the
+     fixed-height layout. */
+  const hideFooterRoutes = [
+    ...hideHeaderRoutes,
+    '/buyers/messages',
+    '/sellers/messages',
+    '/admin/messages',
+    '/maintenance',
+    '/offline',
+  ];
+
+  const shouldHideFooter =
+    pathname === '/' ||
+    hideFooterRoutes.some(
+      (route) => pathname === route || pathname.startsWith(route + '/')
+    );
+
   useEffect(() => {
     setMounted(true);
     
@@ -217,6 +241,7 @@ export default function ClientLayout({
                   children
                 )}
               </main>
+              {!shouldHideFooter && <Footer />}
               <AgeVerificationModal />
               <MessageNotifications />
             </BanCheck>

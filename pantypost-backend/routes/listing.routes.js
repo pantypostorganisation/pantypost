@@ -492,6 +492,26 @@ router.post('/', authMiddleware, async (req, res) => {
     const sellerRecord = await User.findOne({ username: req.user.username });
     const isSellerVerified = Boolean(sellerRecord?.isVerified || sellerRecord?.verificationStatus === 'verified');
 
+    // =====================================================
+    // VERIFICATION REQUIRED TO LIST
+    //
+    // Only sellers who have completed identity verification may create
+    // listings. Previously this value was read but used only to LABEL
+    // the listing, so an unverified seller could publish freely.
+    //
+    // Payment processor rules require uploads be restricted to verified
+    // creators, and it is trivially testable — someone can simply
+    // register and try.
+    // =====================================================
+    if (!isSellerVerified) {
+      return res.status(403).json({
+        success: false,
+        error: 'Identity verification required',
+        message: 'You must complete identity verification before creating listings.',
+        requiresVerification: true
+      });
+    }
+
     listingData.isVerified = isSellerVerified;
     listingData.verifiedSeller = isSellerVerified;
 

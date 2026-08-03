@@ -17,6 +17,53 @@ const {
   getFileUrl,
 } = require('../config/upload.config');
 
+/* =======================================================
+ * VERIFICATION GATE
+ *
+ * Uploads that result in publicly visible content are restricted to
+ * sellers who have completed identity verification.
+ *
+ * Payment processor rules require uploads be limited to verified
+ * creators. This was previously only a role check, so an unverified
+ * seller could upload listing and gallery images freely.
+ *
+ * Deliberately NOT applied to /verification — that is the route by
+ * which a seller becomes verified in the first place.
+ * ===================================================== */
+async function requireVerifiedSeller(req, res, next) {
+  try {
+    // Admins are platform staff, not creators, and are not subject to
+    // seller verification.
+    if (req.user.role === 'admin') return next();
+
+    const user = await User.findOne({ username: req.user.username })
+      .select('isVerified verificationStatus')
+      .lean();
+
+    const isVerified = Boolean(
+      user?.isVerified || user?.verificationStatus === 'verified'
+    );
+
+    if (!isVerified) {
+      return res.status(403).json({
+        success: false,
+        error: 'Identity verification required',
+        message: 'You must complete identity verification before uploading images.',
+        requiresVerification: true,
+      });
+    }
+
+    return next();
+  } catch (error) {
+    console.error('[Upload] Verification check failed:', error.message);
+    // Fail closed: an error checking verification must not grant access.
+    return res.status(403).json({
+      success: false,
+      error: 'Could not confirm verification status',
+    });
+  }
+}
+
 /* -------------------------------------------------------
  * Helper: best-effort delete for local files referenced by URL
  * Only deletes if URL contains '/uploads/' and the file exists locally.
@@ -202,7 +249,7 @@ router.post('/profile-pic', authMiddleware, (req, res) => {
  * Sellers/Admins only. Multi-file upload (field strategy defined
  * in uploadConfigs.listingImages). Returns array of file URLs.
  * ===================================================== */
-router.post('/listing-images', authMiddleware, (req, res) => {
+router.post('/listing-images', authMiddleware, requireVerifiedSeller, (req, res) => {
   if (req.user.role !== 'seller' && req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
@@ -286,7 +333,7 @@ router.post('/verification', authMiddleware, (req, res) => {
  * Sellers/Admins only. Multi-file. Appends to user.galleryImages
  * (max 20 images retained).
  * ===================================================== */
-router.post('/gallery', authMiddleware, (req, res) => {
+router.post('/gallery', authMiddleware, requireVerifiedSeller, (req, res) => {
   if (req.user.role !== 'seller' && req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
