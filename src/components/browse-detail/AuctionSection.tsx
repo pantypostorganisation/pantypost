@@ -2,7 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock, TrendingUp, Users, Eye, Shield, Trophy, AlertCircle, Target, Lock } from 'lucide-react';
+import { Clock, TrendingUp, Users, Shield, Trophy, AlertCircle, Target, Lock } from 'lucide-react';
 import { AuctionSectionProps, BidHistoryItem } from '@/types/browseDetail';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { sanitizeCurrency } from '@/utils/security/sanitization';
@@ -11,7 +11,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface ExtendedAuctionSectionProps extends AuctionSectionProps {
   realtimeBids?: BidHistoryItem[];
   mergedBidsHistory?: BidHistoryItem[];
-  viewerCount?: number;
 }
 
 export default function AuctionSection({
@@ -36,9 +35,7 @@ export default function AuctionSection({
   bidButtonRef,
   realtimeBids,
   mergedBidsHistory,
-  viewerCount = 0
 }: ExtendedAuctionSectionProps) {
-  const [localViewerCount, setLocalViewerCount] = useState(viewerCount || Math.floor(Math.random() * 5) + 2);
   const [isUrgent, setIsUrgent] = useState(false);
   const [userBidPosition, setUserBidPosition] = useState<number | null>(null);
 
@@ -81,14 +78,6 @@ export default function AuctionSection({
     const idx = sorted.findIndex((b) => b.bidder === username);
     setUserBidPosition(idx === -1 ? null : idx + 1);
   }, [username, mergedBidsHistory]);
-
-  // Simulated viewer fluctuations (for UX feel)
-  useEffect(() => {
-    const id = setInterval(() => {
-      setLocalViewerCount((prev) => Math.max(1, prev + (Math.random() > 0.5 ? 1 : -1)));
-    }, 8000);
-    return () => clearInterval(id);
-  }, []);
 
   const handleSecureBidChange = (value: string) => {
     if (value === '') onBidAmountChange('');
@@ -145,10 +134,6 @@ export default function AuctionSection({
 
         {!isAuctionEnded && (
           <div className="flex items-center gap-3 text-xs text-gray-400">
-            <div className="flex items-center gap-1" aria-label="Viewers">
-              <Eye className="w-3 h-3" />
-              <span>{localViewerCount}</span>
-            </div>
             <div className="flex items-center gap-1" aria-label="Total bids">
               <Users className="w-3 h-3" />
               <span>{bidsCount || 0}</span>

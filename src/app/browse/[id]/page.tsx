@@ -9,6 +9,8 @@ import ProductInfo from '@/components/browse-detail/ProductInfo';
 import AuctionSection from '@/components/browse-detail/AuctionSection';
 import PurchaseSection from '@/components/browse-detail/PurchaseSection';
 import SellerProfile from '@/components/browse-detail/SellerProfile';
+import SellerReviews from '@/components/browse-detail/SellerReviews';
+import RelatedListings from '@/components/browse-detail/RelatedListings';
 import TrustBadges from '@/components/browse-detail/TrustBadges';
 import BidHistoryModal from '@/components/browse-detail/BidHistoryModal';
 import AuctionEndedModal from '@/components/browse-detail/AuctionEndedModal';
@@ -28,7 +30,6 @@ export default function ListingDetailPage() {
   const { trackEvent, trackPurchase } = useAnalytics();
   const isMountedRef = useRef(true);
   const trackingRef = useRef({ hasTrackedView: false, hasTrackedPurchase: false });
-  const [viewerCount, setViewerCount] = useState(Math.floor(Math.random() * 10) + 3);
   const [localListing, setLocalListing] = useState<any>(null);
   
   const {
@@ -150,23 +151,21 @@ export default function ListingDetailPage() {
               
               // Show toast notification
               if (event.detail.action === 'subscribed') {
-                toast.success('Premium content unlocked!', {
+                toast.success('Premium content unlocked', {
                   duration: 3000,
-                  icon: '🔓',
                   style: {
-                    background: '#1a1a1a',
-                    color: '#fff',
-                    border: '1px solid #22c55e',
+                    background: 'var(--color-surface-raised)',
+                    color: 'var(--color-ink)',
+                    border: '1px solid var(--color-success)',
                   },
                 });
               } else {
                 toast('Premium content locked', {
                   duration: 3000,
-                  icon: '🔒',
                   style: {
-                    background: '#1a1a1a',
-                    color: '#fff',
-                    border: '1px solid #ef4444',
+                    background: 'var(--color-surface-raised)',
+                    color: 'var(--color-ink)',
+                    border: '1px solid var(--color-danger)',
                   },
                 });
               }
@@ -185,27 +184,15 @@ export default function ListingDetailPage() {
     };
   }, [listing, listingId, user]);
 
-  // Simulate viewer count changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setViewerCount(prev => {
-        const change = Math.random() > 0.5 ? 1 : -1;
-        return Math.max(1, prev + change);
-      });
-    }, Math.random() * 10000 + 5000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Show toast notifications for bid events
   useEffect(() => {
     if (bidSuccess && isMountedRef.current) {
       toast.success(bidSuccess, {
         duration: 4000,
-        icon: '🎉',
         style: {
-          background: '#1a1a1a',
-          color: '#fff',
-          border: '1px solid #22c55e',
+          background: 'var(--color-surface-raised)',
+          color: 'var(--color-ink)',
+          border: '1px solid var(--color-success)',
         },
       });
     }
@@ -216,9 +203,9 @@ export default function ListingDetailPage() {
       toast.error(bidError, {
         duration: 4000,
         style: {
-          background: '#1a1a1a',
-          color: '#fff',
-          border: '1px solid #ef4444',
+          background: 'var(--color-surface-raised)',
+          color: 'var(--color-ink)',
+          border: '1px solid var(--color-danger)',
         },
       });
     }
@@ -331,9 +318,9 @@ export default function ListingDetailPage() {
           {
             duration: 3000,
             style: {
-              background: '#1a1a1a',
-              color: '#fff',
-              border: '1px solid #ff950e',
+              background: 'var(--color-surface-raised)',
+              color: 'var(--color-ink)',
+              border: '1px solid var(--color-primary)',
             },
           }
         );
@@ -408,7 +395,7 @@ export default function ListingDetailPage() {
             <p className="text-gray-400 mb-4">The listing URL is invalid or malformed.</p>
             <button
               onClick={() => router.push('/browse')}
-              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors"
+              className="rounded-md bg-primary px-4 py-2 font-semibold text-black transition-colors hover:bg-primary-hover"
             >
               Back to Browse
             </button>
@@ -428,7 +415,7 @@ export default function ListingDetailPage() {
             animate={{ opacity: 1 }}
             className="text-center"
           >
-            <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
+            <Loader2 className="mx-auto mb-4 h-8 w-8 animate-spin text-primary" />
             <p className="text-gray-400">Loading listing details...</p>
           </motion.div>
         </div>
@@ -447,7 +434,7 @@ export default function ListingDetailPage() {
             <p className="text-gray-400 mb-4">{error}</p>
             <button
               onClick={() => router.push('/browse')}
-              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors"
+              className="rounded-md bg-primary px-4 py-2 font-semibold text-black transition-colors hover:bg-primary-hover"
             >
               Back to Browse
             </button>
@@ -468,7 +455,7 @@ export default function ListingDetailPage() {
             <p className="text-gray-400 mb-4">This listing may have been removed or sold.</p>
             <button
               onClick={() => router.push('/browse')}
-              className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors"
+              className="rounded-md bg-primary px-4 py-2 font-semibold text-black transition-colors hover:bg-primary-hover"
             >
               Back to Browse
             </button>
@@ -484,7 +471,7 @@ export default function ListingDetailPage() {
       <main className="min-h-screen bg-black text-white">
         <DetailHeader onBack={() => router.push('/browse')} />
 
-        <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="mx-auto max-w-6xl px-4 py-6">
           {/* Rate Limit Error */}
           <AnimatePresence>
             {rateLimitError && (
@@ -560,7 +547,6 @@ export default function ListingDetailPage() {
                   bidButtonRef={bidButtonRef}
                   realtimeBids={realtimeBids}
                   mergedBidsHistory={mergedBidsHistory}
-                  viewerCount={viewerCount}
                 />
               )}
 
@@ -600,22 +586,35 @@ export default function ListingDetailPage() {
                 <PremiumLockMessage listing={listing} userRole={user?.role} />
               )}
 
-              {/* Seller Profile - FIXED: Use the correct props from hook */}
-              {user?.role === 'buyer' && (
-                <SellerProfile
-                  seller={listing.seller}
-                  sellerProfile={sellerProfile}
-                  sellerTierInfo={sellerTierInfo}
-                  sellerAverageRating={sellerAverageRating}
-                  sellerReviewCount={sellerReviewCount}
-                  isVerified={isVerified}
-                />
-              )}
+              {/* Seller card.
+                  Previously gated behind user?.role === 'buyer', so
+                  sellers, admins and signed-out visitors saw no seller
+                  at all on a listing page. Who made this is the single
+                  most important thing on the page — it shows for
+                  everyone. */}
+              <SellerProfile
+                seller={listing.seller}
+                sellerProfile={sellerProfile}
+                sellerTierInfo={sellerTierInfo}
+                sellerAverageRating={sellerAverageRating}
+                sellerReviewCount={sellerReviewCount}
+                isVerified={isVerified}
+              />
+
+              {/* Renders nothing until the seller has a review, so a new
+                  seller's page does not carry an empty heading. */}
+              <SellerReviews seller={listing.seller} />
 
               {/* Trust & Safety */}
               <TrustBadges />
             </motion.div>
           </div>
+
+          <RelatedListings
+            currentListingId={listingId}
+            seller={listing.seller}
+            tags={listing.tags}
+          />
 
           {/* Modals */}
           <BidHistoryModal

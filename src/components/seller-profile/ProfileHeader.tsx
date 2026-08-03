@@ -23,8 +23,8 @@ import type { TierInfo } from '@/utils/sellerTiers';
 interface ProfileHeaderProps {
   username: string;
   profilePic: string | null;
-  /* Approved banner only. Falls back to a brand gradient when the seller
-     has not set one, so a new profile still looks finished. */
+  /* Approved banner only. Falls back to a flat raised surface when the
+     seller has not set one. */
   coverPhoto?: string | null;
   bio: string;
   isVerified: boolean;
@@ -102,7 +102,7 @@ export default function ProfileHeader({
 }: ProfileHeaderProps) {
   // SecureImage swaps to its fallback on error, which for a banner would
   // mean a grey "Invalid image" block. Tracking the failure here lets the
-  // gradient show through instead.
+  // plain surface show through instead.
   const [coverFailed, setCoverFailed] = useState(false);
 
   const safeUsername = sanitizeStrict(username);
@@ -120,18 +120,24 @@ export default function ProfileHeader({
   return (
     <header>
       {/* --- Cover ---
-          Full-bleed banner, as on a shop page. Falls back to a subtle
-          brand gradient rather than a grey block when no image exists. */}
-      <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-[#1a1a1a] via-[#241505] to-[#0f0f0f] sm:h-56 md:h-64">
+          Full-bleed banner. With no image it is a single flat surface
+          from the token scale, not a gradient: a gradient here was the
+          only decorative surface treatment left on the page. */}
+      <div className="relative h-40 w-full overflow-hidden bg-surface-overlay sm:h-56 md:h-64">
         {showCover && (
-          <SecureImage
-            src={coverPhoto as string}
-            alt=""
-            className="h-full w-full object-cover"
-            onError={() => setCoverFailed(true)}
-          />
+          <>
+            <SecureImage
+              src={coverPhoto as string}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => setCoverFailed(true)}
+            />
+            {/* Scrim exists to keep the avatar edge legible against a
+                photo. Over the flat fallback there is nothing to
+                separate, so it only renders with an image behind it. */}
+            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/20 to-transparent" />
+          </>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
       </div>
 
       {/* --- Identity --- */}
@@ -139,7 +145,7 @@ export default function ProfileHeader({
         <div className="-mt-12 flex flex-col gap-5 pb-6 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-end gap-4">
             <div className="relative shrink-0">
-              <div className="h-24 w-24 overflow-hidden rounded-2xl border-4 border-black bg-[#1a1a1a] sm:h-28 sm:w-28">
+              <div className="h-24 w-24 overflow-hidden rounded-lg border-4 border-surface bg-surface-overlay sm:h-28 sm:w-28">
                 {profilePic ? (
                   <SecureImage
                     src={profilePic}
@@ -148,7 +154,7 @@ export default function ProfileHeader({
                     fallbackSrc="/default-avatar.png"
                   />
                 ) : (
-                  <span className="grid h-full w-full place-items-center text-3xl font-bold text-[#ff950e]">
+                  <span className="grid h-full w-full place-items-center text-3xl font-bold text-primary">
                     {safeUsername.charAt(0).toUpperCase()}
                   </span>
                 )}
@@ -162,11 +168,11 @@ export default function ProfileHeader({
             </div>
 
             <div className="min-w-0 pb-1">
-              <h1 className="flex items-center gap-2 text-2xl font-bold text-white sm:text-3xl">
+              <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink sm:text-3xl">
                 <span className="truncate">{safeUsername}</span>
                 {isVerified && (
                   <BadgeCheck
-                    className="h-5 w-5 shrink-0 text-[#ff950e]"
+                    className="h-5 w-5 shrink-0 text-primary"
                     aria-label="Identity verified"
                   />
                 )}
@@ -175,11 +181,11 @@ export default function ProfileHeader({
               {/* Stats row. Reads as one sentence of credentials rather
                   than a grid of boxes, which is what keeps a shop header
                   compact. */}
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-400">
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted">
                 {hasRating ? (
                   <span className="inline-flex items-center gap-1">
-                    <Star className="h-3.5 w-3.5 fill-[#ff950e] text-[#ff950e]" />
-                    <span className="font-semibold text-white">
+                    <Star className="h-3.5 w-3.5 fill-primary text-primary" />
+                    <span className="font-semibold text-ink">
                       {(averageRating as number).toFixed(1)}
                     </span>
                     <span>
@@ -187,17 +193,17 @@ export default function ProfileHeader({
                     </span>
                   </span>
                 ) : (
-                  <span className="text-gray-500">No reviews yet</span>
+                  <span className="text-ink-faint">No reviews yet</span>
                 )}
 
-                <span className="text-gray-700">·</span>
+                <span className="text-ink-faint">·</span>
 
                 <span className="inline-flex items-center gap-1">
                   <ShoppingBag className="h-3.5 w-3.5" />
                   {totalSales.toLocaleString()} {totalSales === 1 ? 'sale' : 'sales'}
                 </span>
 
-                <span className="text-gray-700">·</span>
+                <span className="text-ink-faint">·</span>
 
                 <span className="inline-flex items-center gap-1">
                   <Package className="h-3.5 w-3.5" />
@@ -206,7 +212,7 @@ export default function ProfileHeader({
 
                 {membership && (
                   <>
-                    <span className="text-gray-700">·</span>
+                    <span className="text-ink-faint">·</span>
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
                       {membership}
@@ -218,7 +224,7 @@ export default function ProfileHeader({
               {/* Kept on its own line so the credentials row above stays
                   exactly as specified. */}
               {location && (
-                <p className="mt-1 inline-flex items-center gap-1 text-sm text-gray-500">
+                <p className="mt-1 inline-flex items-center gap-1 text-sm text-ink-faint">
                   <MapPin className="h-3.5 w-3.5" />
                   Ships from {sanitizeStrict(location)}
                 </p>
@@ -236,20 +242,20 @@ export default function ProfileHeader({
                   aria-pressed={isFavorited}
                   aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
                   title={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition ${
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition-colors ${
                     isFavorited
-                      ? 'border-[#ff950e] bg-[#ff950e]/10 text-[#ff950e]'
-                      : 'border-gray-700 text-white hover:border-gray-500'
+                      ? 'border-primary-line bg-primary-soft text-primary'
+                      : 'border-line text-ink hover:border-line-strong'
                   }`}
                 >
-                  <Heart className={`h-4 w-4 ${isFavorited ? 'fill-[#ff950e]' : ''}`} />
+                  <Heart className={`h-4 w-4 ${isFavorited ? 'fill-primary' : ''}`} />
                 </button>
               )}
 
               {onMessage && (
                 <button
                   onClick={onMessage}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-full border border-gray-700 px-5 py-2.5 text-sm font-medium text-white transition hover:border-gray-500 sm:flex-none"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-line-strong sm:flex-none"
                 >
                   <MessageCircle className="h-4 w-4" />
                   Message
@@ -262,7 +268,7 @@ export default function ProfileHeader({
               {hasAccess && onUnsubscribe ? (
                 <button
                   onClick={onUnsubscribe}
-                  className="group flex flex-1 items-center justify-center gap-2 rounded-full border border-[#ff950e]/60 bg-[#ff950e]/10 px-5 py-2.5 text-sm font-semibold text-[#ff950e] transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-300 sm:flex-none"
+                  className="group flex flex-1 items-center justify-center gap-2 rounded-full border border-primary-line bg-primary-soft px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:border-danger hover:text-danger sm:flex-none"
                 >
                   <Check className="h-4 w-4 group-hover:hidden" />
                   <span className="group-hover:hidden">Subscribed</span>
@@ -271,11 +277,11 @@ export default function ProfileHeader({
               ) : (
                 !hasAccess &&
                 onSubscribe && (
-                  /* Black text on #ff950e is 9.56:1. White would be
+                  /* Black text on the accent is 9.56:1. White would be
                      2.20:1 and fail WCAG AA. */
                   <button
                     onClick={onSubscribe}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#ff950e] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-[#ffa733] sm:flex-none"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover sm:flex-none"
                   >
                     <Heart className="h-4 w-4" />
                     Subscribe{priceLabel ? ` · ${priceLabel}` : ''}
@@ -286,7 +292,7 @@ export default function ProfileHeader({
               {onTip && (
                 <button
                   onClick={onTip}
-                  className="hidden items-center justify-center rounded-full border border-gray-700 px-4 py-2.5 text-sm font-medium text-white transition hover:border-gray-500 sm:flex"
+                  className="hidden items-center justify-center rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-line-strong sm:flex"
                 >
                   Tip
                 </button>
@@ -296,7 +302,7 @@ export default function ProfileHeader({
         </div>
 
         {bio && (
-          <p className="max-w-3xl pb-6 text-sm leading-relaxed text-gray-400">
+          <p className="max-w-3xl pb-6 text-sm leading-relaxed text-ink-muted">
             {sanitizeStrict(bio)}
           </p>
         )}

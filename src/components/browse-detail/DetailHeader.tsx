@@ -7,7 +7,7 @@ import { DetailHeaderProps } from '@/types/browseDetail';
 
 export default function DetailHeader({ onBack }: DetailHeaderProps) {
   return (
-    <div className="mx-auto max-w-7xl px-4 pt-6">
+    <div className="mx-auto max-w-6xl px-4 pt-6">
       <Link
         href="/browse"
         className="inline-flex items-center gap-1.5 text-sm text-ink-muted transition-colors hover:text-ink"
