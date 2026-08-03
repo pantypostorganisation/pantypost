@@ -15,6 +15,10 @@ interface UseProfileDataReturn {
   bio: string;
   setBio: (bio: string) => void;
   profilePic: string | null;
+  /** True while an uploaded picture is sitting in the moderation queue. */
+  profilePicPendingReview: boolean;
+  /** Set only when the seller explicitly clears their picture. */
+  profilePicRemoved: boolean;
   setProfilePic: (pic: string | null) => void;
   preview: string | null;
   setPreview: (preview: string | null) => void;
@@ -61,6 +65,8 @@ export function useProfileData(): UseProfileDataReturn {
   // Profile state
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [profilePicPendingReview, setProfilePicPendingReview] = useState(false);
+  const [profilePicRemoved, setProfilePicRemoved] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<string>('');
   const [country, setCountry] = useState<string>('');
@@ -294,8 +300,15 @@ export function useProfileData(): UseProfileDataReturn {
         throw new Error('Invalid image URL returned');
       }
       
-      // Set the preview
+      // Set the preview.
+      //
+      // POST /api/upload/profile-pic has already called
+      // submitProfilePicForReview on the server, so at this point the
+      // image is IN the moderation queue. Save must not send it again —
+      // doing so re-queues it and resets its place in the line.
       setPreview(sanitizedUrl);
+      setProfilePicPendingReview(Boolean((result as any)?.pendingReview ?? true));
+      setProfilePicRemoved(false);
       
       // Track upload activity
       await usersService.trackActivity({
@@ -322,6 +335,11 @@ export function useProfileData(): UseProfileDataReturn {
   const removeProfilePic = () => {
     setProfilePic(null);
     setPreview(null);
+    setProfilePicPendingReview(false);
+    // Removal is the one profilePic change Save still has to transmit:
+    // clearing an image cannot introduce prohibited content, so the
+    // backend applies it immediately rather than queueing it.
+    setProfilePicRemoved(true);
   };
 
   // Save profile with optimistic update and security
@@ -537,6 +555,8 @@ export function useProfileData(): UseProfileDataReturn {
     setBio: secureBioSetter,
     profilePic,
     setProfilePic,
+    profilePicPendingReview,
+    profilePicRemoved,
     preview,
     setPreview,
     subscriptionPrice,

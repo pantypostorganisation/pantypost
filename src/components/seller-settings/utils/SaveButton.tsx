@@ -1,22 +1,25 @@
 // src/components/seller-settings/utils/SaveButton.tsx
 'use client';
 
+import { Check, Loader2, AlertCircle } from 'lucide-react';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface SaveButtonProps {
-  onClick: () => void | Promise<void> | Promise<boolean> | Promise<any>; // Accept various async return types
+  onClick: () => void | Promise<void> | Promise<boolean> | Promise<unknown>;
   showSuccess?: boolean;
-  showError?: string | boolean; // Accept both string and boolean
+  showError?: string | boolean;
   isLoading?: boolean;
+  /** Disables the button when there is nothing to save. */
+  disabled?: boolean;
 }
 
 export default function SaveButton({
   onClick,
   showSuccess = false,
   showError,
-  isLoading = false
+  isLoading = false,
+  disabled = false,
 }: SaveButtonProps) {
-  // Convert boolean error to string if needed
   let errorMessage: string | undefined;
   if (typeof showError === 'string') {
     errorMessage = sanitizeStrict(showError);
@@ -24,58 +27,45 @@ export default function SaveButton({
     errorMessage = 'An error occurred';
   }
 
-  // Handle click with proper async handling
   const handleClick = () => {
-    // Call onClick and handle any potential promise
     Promise.resolve(onClick()).catch(console.error);
   };
 
   return (
-    <div className="flex flex-col items-center">
-      {/* Save Button (image inside an accessible button) or Loading State */}
-      {isLoading ? (
-        <div
-          className="w-24 h-auto flex flex-col items-center justify-center p-3 bg-gray-800 rounded-lg"
-          role="status"
-          aria-live="polite"
-        >
-          <div className="w-6 h-6 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin mb-2" />
-          <span className="text-xs text-[#ff950e]">Saving...</span>
-        </div>
-      ) : (
-        <div className="save-all-glow-wrapper">
-          <button
-            type="button"
-            onClick={handleClick}
-            className="save-all-button relative inline-flex items-center justify-center px-8 py-3 text-sm font-medium text-white bg-black rounded-full shadow-[0_0_25px_rgba(0,0,0,0.35)] transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#ff950e] overflow-visible"
-            aria-label="Save all profile changes"
-          >
-            Save All
-          </button>
-        </div>
-      )}
-
-      {/* Success Message */}
-      {showSuccess && !isLoading && (
-        <div
-          className="bg-green-900 text-green-100 p-3 rounded-lg mt-3 text-center"
-          role="status"
-          aria-live="polite"
-        >
-          ✅ Profile updated successfully!
-        </div>
-      )}
-
-      {/* Error Message */}
+    <div className="flex flex-wrap items-center justify-end gap-3">
+      {/* Status sits beside the button rather than below it, so the bar
+          does not change height when a message appears. */}
       {errorMessage && !isLoading && (
-        <div
-          className="bg-red-900 text-red-100 p-3 rounded-lg mt-3 text-center max-w-xs"
-          role="alert"
-          aria-live="assertive"
-        >
-          ❌ {errorMessage}
-        </div>
+        <span className="inline-flex items-center gap-1.5 text-sm text-danger" role="alert">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {errorMessage}
+        </span>
       )}
+
+      {showSuccess && !isLoading && !errorMessage && (
+        <span className="inline-flex items-center gap-1.5 text-sm text-success" role="status">
+          <Check className="h-4 w-4 shrink-0" />
+          Saved
+        </span>
+      )}
+
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={isLoading || disabled}
+        /* Black on the accent is 9.56:1. White would be 2.20:1. */
+        className="inline-flex min-w-[7.5rem] items-center justify-center gap-2 rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label="Save profile changes"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Saving
+          </>
+        ) : (
+          'Save changes'
+        )}
+      </button>
     </div>
   );
 }

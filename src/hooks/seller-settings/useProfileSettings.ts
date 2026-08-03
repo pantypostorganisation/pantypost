@@ -11,6 +11,7 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 
 const MAX_GALLERY_IMAGES = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_COVER_SIZE = 8 * 1024 * 1024; // matches uploadConfigs.coverPhoto
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const;
 
 type AllowedMime = typeof ALLOWED_IMAGE_TYPES[number];
@@ -32,11 +33,21 @@ export function useProfileSettings() {
   const profilePicInputRef = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
 
-  const { saveSuccess, saveError, isSaving, handleSave: baseSaveProfile, handleSaveWithGallery } = useProfileSave();
+  const { saveSuccess, saveError, isSaving, handleSave: baseSaveProfile } = useProfileSave();
   const tierData = useTierCalculation();
 
   const [selectedTierDetails, setSelectedTierDetails] = useState<any>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  // ---- Cover photo ----
+  // Uploaded and moderated exactly like the profile picture: the POST
+  // queues it, an admin approves it, and only then does it become the
+  // live banner. Nothing here goes through Save.
+  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
+  const [coverPending, setCoverPending] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverError, setCoverError] = useState<string>('');
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -82,6 +93,142 @@ export function useProfileSettings() {
     void load();
     return () => controller.abort();
   }, [user?.username, token]);
+
+  // Owner view of the cover photo. /users/me/profile returns the queued
+  // banner when one is awaiting review, so the seller sees their own
+  // change immediately even though buyers still see the approved one.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadCover = async () => {
+      if (!user?.username || !token) return;
+      try {
+        const resp = await fetch(buildApiUrl('/users/me/profile'), {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal
+        });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const payload = data?.data || {};
+        const raw = payload.coverPhoto || null;
+        const normalized = raw
+          ? (raw.startsWith('/uploads/') ? `${API_BASE_URL}${raw}` : sanitizeUrl(raw))
+          : null;
+        if (mountedRef.current) {
+          setCoverPhoto(normalized || null);
+          setCoverPending(Boolean(payload.coverPhotoPendingReview));
+        }
+      } catch {
+        /* a missing cover is not an error worth surfacing */
+      }
+    };
+
+    void loadCover();
+    return () => controller.abort();
+  }, [user?.username, token]);
+
+  const handleCoverPhotoChangeAsync = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !token) return;
+
+    setCoverError('');
+
+    if (file.size > MAX_COVER_SIZE) {
+      setCoverError('Cover photo must be 8MB or smaller.');
+      if (coverInputRef.current) coverInputRef.current.value = '';
+      return;
+    }
+    if (!isAllowed(file.type)) {
+      setCoverError('Unsupported file type. Use JPG, PNG or WEBP.');
+      if (coverInputRef.current) coverInputRef.current.value = '';
+      return;
+    }
+
+    if (user?.username) {
+      const rateLimitResult = rateLimiter.check('IMAGE_UPLOAD', {
+        ...RATE_LIMITS.IMAGE_UPLOAD,
+        identifier: user.username
+      });
+      if (!rateLimitResult.allowed) {
+        setCoverError(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
+        return;
+      }
+    }
+
+    setCoverUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('coverPhoto', file);
+
+      const response = await fetch(buildApiUrl('/upload/cover-photo'), {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || result?.error || 'Upload failed');
+      }
+
+      const raw = result?.data?.url || result?.url;
+      const normalized = raw?.startsWith('/uploads/') ? `${API_BASE_URL}${raw}` : sanitizeUrl(raw);
+
+      if (mountedRef.current) {
+        setCoverPhoto(normalized || null);
+        setCoverPending(true);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      if (mountedRef.current) setCoverError(`Failed to upload cover photo: ${msg}`);
+    } finally {
+      if (mountedRef.current) setCoverUploading(false);
+      if (coverInputRef.current) coverInputRef.current.value = '';
+    }
+  };
+
+  const handleCoverPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    void handleCoverPhotoChangeAsync(e);
+  };
+
+  const removeCoverPhotoAsync = async () => {
+    if (!token) return;
+    setCoverError('');
+    setCoverUploading(true);
+    try {
+      // Withdraw a queued banner; otherwise remove the live one. Both
+      // apply immediately — taking an image down cannot introduce
+      // prohibited content.
+      const endpoint = coverPending ? '/upload/cover-photo/pending' : '/upload/cover-photo';
+      const response = await fetch(buildApiUrl(endpoint), {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Failed to remove cover photo');
+      }
+
+      const remaining = result?.data?.coverPhoto || null;
+      const normalized = remaining
+        ? (remaining.startsWith('/uploads/') ? `${API_BASE_URL}${remaining}` : sanitizeUrl(remaining))
+        : null;
+
+      if (mountedRef.current) {
+        setCoverPhoto(normalized || null);
+        setCoverPending(false);
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      if (mountedRef.current) setCoverError(msg);
+    } finally {
+      if (mountedRef.current) setCoverUploading(false);
+    }
+  };
+
+  const removeCoverPhoto = () => { void removeCoverPhotoAsync(); };
 
   // Refresh tier data when profile is saved
   useEffect(() => {
@@ -286,23 +433,40 @@ export function useProfileSettings() {
     }
     setLocationError(null);
 
-    const payload = {
+    // =====================================================
+    // WHAT SAVE DOES *NOT* SEND, AND WHY
+    //
+    // profilePic: POST /api/upload/profile-pic already calls
+    //   submitProfilePicForReview, so the image is in the moderation
+    //   queue the moment it uploads. Re-sending it here made the PATCH
+    //   handler queue it a second time, resetting submittedAt and
+    //   pushing it to the back of the line on every save. The only
+    //   profilePic change Save still transmits is an explicit removal,
+    //   which the backend applies immediately.
+    //
+    // galleryImages: managed entirely by POST/DELETE /api/upload/gallery,
+    //   which persist on their own. Sending the array here re-queued
+    //   every not-yet-approved image — and it was being sent twice,
+    //   once in this payload and again via handleSaveWithGallery.
+    // =====================================================
+    const payload: {
+      bio: string;
+      subscriptionPrice: string;
+      country: string;
+      isLocationPublic: boolean;
+      profilePic?: string | null;
+    } = {
       bio: profileData.bio,
-      profilePic: profileData.preview || profileData.profilePic,
       subscriptionPrice: profileData.subscriptionPrice,
-      galleryImages: galleryImages.map((url) => {
-        // Persist /uploads paths without API_BASE_URL prefix
-        if (url.startsWith(`${API_BASE_URL}/uploads/`)) return url.replace(API_BASE_URL, '');
-        return url;
-      }),
       country: sanitizedCountry,
       isLocationPublic: profileData.isLocationPublic ?? true,
     };
 
-    await baseSaveProfile(payload);
-    if (galleryImages.length > 0) {
-      await handleSaveWithGallery(galleryImages);
+    if (profileData.profilePicRemoved) {
+      payload.profilePic = null;
     }
+
+    await baseSaveProfile(payload as any);
     if (tierData.refreshTierData) await tierData.refreshTierData();
     return saveSuccess;
   };
@@ -326,9 +490,19 @@ export function useProfileSettings() {
     isLocationPublic: profileData.isLocationPublic,
     setIsLocationPublic: profileData.setIsLocationPublic,
     profileUploading: profileData.isUploading,
+    profilePicPendingReview: profileData.profilePicPendingReview,
     handleProfilePicChange: profileData.handleProfilePicChange,
     removeProfilePic: profileData.removeProfilePic,
     profilePicInputRef,
+
+    // Cover photo
+    coverPhoto,
+    coverPending,
+    coverUploading,
+    coverError,
+    coverInputRef,
+    handleCoverPhotoChange,
+    removeCoverPhoto,
 
     // Gallery - Backend only
     galleryImages,
