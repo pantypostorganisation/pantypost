@@ -3,9 +3,75 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Ban = require('../models/Ban');
+const Review = require('../models/Review');
+const Order = require('../models/Order');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const jwt = require('jsonwebtoken');
+
+/* =====================================================================
+ * SELLER STATS
+ *
+ * User.rating and User.reviewCount exist on the schema but nothing ever
+ * writes to them — there is no post-save hook on Review — so they are
+ * always 0. The real figures have to come from the Review collection.
+ *
+ * This mirrors the batched helper in listing.routes.js so a seller's
+ * rating reads identically on a browse card and on their profile. It is
+ * written to take an array even though the profile only ever needs one
+ * seller, so the two implementations stay interchangeable.
+ * ===================================================================== */
+async function getSellerRatings(usernames) {
+  const map = new Map();
+  if (!usernames || usernames.length === 0) return map;
+
+  try {
+    const unique = [...new Set(usernames.filter(Boolean))];
+
+    const results = await Review.aggregate([
+      // Only approved reviews count towards a public rating — the same
+      // filter GET /api/reviews/:username applies, so the header and the
+      // reviews list below it can never disagree.
+      { $match: { reviewee: { $in: unique }, status: 'approved' } },
+      {
+        $group: {
+          _id: '$reviewee',
+          rating: { $avg: '$rating' },
+          reviewCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    for (const r of results) {
+      map.set(r._id, {
+        rating: Math.round(r.rating * 10) / 10,
+        reviewCount: r.reviewCount
+      });
+    }
+  } catch (error) {
+    console.error('[User] Error aggregating seller ratings:', error.message);
+  }
+
+  return map;
+}
+
+/**
+ * Completed sales for a seller.
+ *
+ * Counted from Order rather than read from User.totalSales, which is
+ * not reliably maintained. Orders are created with paymentStatus
+ * 'completed' at purchase and move to 'refunded' if reversed, so this
+ * counts paid, unreversed orders — the honest definition of a sale.
+ */
+async function getSellerSalesCount(username) {
+  try {
+    if (!username) return 0;
+    return await Order.countDocuments({ seller: username, paymentStatus: 'completed' });
+  } catch (error) {
+    console.error('[User] Error counting seller sales:', error.message);
+    return 0;
+  }
+}
 
 // ============= USER ROUTES =============
 
@@ -136,6 +202,11 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
         profilePicPendingReview: Boolean(
           user.pendingProfilePic?.url && user.pendingProfilePic.status === 'pending'
         ),
+        // Owner view: their pending banner if one is in the queue.
+        coverPhoto: user.getOwnCoverPhoto() || null,
+        coverPhotoPendingReview: Boolean(
+          user.pendingCoverPhoto?.url && user.pendingCoverPhoto.status === 'pending'
+        ),
         pendingGalleryCount: Array.isArray(user.pendingGalleryImages)
           ? user.pendingGalleryImages.filter(i => i.status === 'pending').length
           : 0,
@@ -255,6 +326,10 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           user?.settings?.profilePicture ||
           null,
         profilePicPendingReview: Boolean(profilePicPendingReview),
+        coverPhoto: user.getOwnCoverPhoto() || null,
+        coverPhotoPendingReview: Boolean(
+          user.pendingCoverPhoto?.url && user.pendingCoverPhoto.status === 'pending'
+        ),
         country: user.country || user?.settings?.country,
         isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
@@ -317,8 +392,8 @@ router.get('/:username/profile', async (req, res) => {
     // Pending media is excluded here: this endpoint is public, and
     // unreviewed images must never be exposed to other users.
     const user = await User.findOne({ username: req.params.username })
-      .select('-password -email -phoneNumber -verificationData -pendingProfilePic -pendingGalleryImages'); // keep settings to read country
-    
+      .select('-password -email -phoneNumber -verificationData -pendingProfilePic -pendingCoverPhoto -pendingGalleryImages'); // keep settings to read country
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -369,6 +444,16 @@ router.get('/:username/profile', async (req, res) => {
     }
     
     // For sellers OR authenticated requests, return the fuller public payload
+    const isSeller = user.role === 'seller';
+
+    // Aggregated from Review/Order rather than read off the User
+    // document, because the stored counters are never written to.
+    const [ratingsMap, salesCount] = await Promise.all([
+      getSellerRatings([user.username]),
+      isSeller ? getSellerSalesCount(user.username) : Promise.resolve(0)
+    ]);
+    const aggregate = ratingsMap.get(user.username);
+
     res.json({
       success: true,
       data: {
@@ -379,18 +464,25 @@ router.get('/:username/profile', async (req, res) => {
           user?.settings?.profilePic ||
           user?.settings?.profilePicture ||
           null,
+        // Approved banner only. The pending field was excluded from the
+        // query above, so there is nothing unreviewed to leak here.
+        coverPhoto: isSeller ? (user.coverPhoto || null) : null,
         country: user.country || user?.settings?.country,
         isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true,
         isVerified: user.isVerified,
         tier: user.tier,
         subscriptionPrice: user.subscriptionPrice,
-        rating: user.rating,
-        reviewCount: user.reviewCount,
+        // null rather than 0 when a seller has no reviews, so the UI can
+        // say "No reviews yet" instead of showing a zero-star rating.
+        rating: aggregate?.rating ?? null,
+        reviewCount: aggregate?.reviewCount ?? 0,
         subscriberCount: user.subscriberCount,
-        totalSales: user.totalSales,
+        totalSales: salesCount,
         joinedDate: user.joinedDate,
+        // Drives "X years on Panty Post" in the profile header.
+        createdAt: user.createdAt,
         role: user.role,
-        galleryImages: user.role === 'seller' ? user.galleryImages : undefined
+        galleryImages: isSeller ? user.galleryImages : undefined
       }
     });
   } catch (error) {
@@ -426,16 +518,81 @@ router.get('/:username/profile/full', authMiddleware, async (req, res) => {
       }
     }
     
-    // Reachable only by the account owner or an admin, so pending media
-    // is included here — the owner needs to see what is in the queue.
+    const isSeller = targetUser.role === 'seller';
+
+    const [ratingsMap, salesCount] = await Promise.all([
+      getSellerRatings([targetUser.username]),
+      isSeller ? getSellerSalesCount(targetUser.username) : Promise.resolve(0)
+    ]);
+    const aggregate = ratingsMap.get(targetUser.username);
+
+    const isOwner = req.user.username === targetUser.username;
+    const isAdmin = req.user.role === 'admin';
+
+    // =====================================================
+    // The buyer check above only stops one authenticated user reading
+    // another BUYER's record. Seller profiles fall straight through, and
+    // toSafeObject() strips password, verification data and pending
+    // media but NOT email, phone number, age-assurance detail, referral
+    // history or ban reasons. Any logged-in account viewing a seller
+    // profile was therefore receiving all of it.
+    //
+    // Privileged viewers (the account owner, or an admin) still get the
+    // full record — the owner's own settings page depends on it.
+    // Everyone else gets the same curated payload the public endpoint
+    // returns, with the gallery added.
+    // =====================================================
+    if (!isOwner && !isAdmin) {
+      return res.json({
+        success: true,
+        data: {
+          username: targetUser.username,
+          role: targetUser.role,
+          bio: targetUser.bio,
+          profilePic:
+            targetUser.profilePic ||
+            targetUser?.settings?.profilePic ||
+            targetUser?.settings?.profilePicture ||
+            null,
+          coverPhoto: isSeller ? (targetUser.coverPhoto || null) : null,
+          country: targetUser.country || targetUser?.settings?.country,
+          isLocationPublic:
+            typeof targetUser.isLocationPublic === 'boolean' ? targetUser.isLocationPublic : true,
+          isVerified: targetUser.isVerified,
+          tier: targetUser.tier,
+          subscriptionPrice: targetUser.subscriptionPrice,
+          rating: aggregate?.rating ?? null,
+          reviewCount: aggregate?.reviewCount ?? 0,
+          subscriberCount: targetUser.subscriberCount,
+          totalSales: salesCount,
+          joinedDate: targetUser.joinedDate,
+          createdAt: targetUser.createdAt,
+          galleryImages: isSeller ? targetUser.galleryImages : undefined
+        }
+      });
+    }
+
+    // Owner or admin: pending media is included here — the owner needs
+    // to see what is sitting in the queue.
     const payload = targetUser.toSafeObject ? targetUser.toSafeObject() : targetUser.toObject();
 
     payload.profilePicPendingReview = Boolean(
       targetUser.pendingProfilePic?.url && targetUser.pendingProfilePic.status === 'pending'
     );
+    payload.coverPhotoPendingReview = Boolean(
+      targetUser.pendingCoverPhoto?.url && targetUser.pendingCoverPhoto.status === 'pending'
+    );
+    // Owners see their own queued banner so the change is visible to
+    // them immediately, even though others still see the approved one.
+    payload.coverPhoto = targetUser.getOwnCoverPhoto() || null;
     payload.pendingGalleryCount = Array.isArray(targetUser.pendingGalleryImages)
       ? targetUser.pendingGalleryImages.filter(i => i.status === 'pending').length
       : 0;
+
+    // Live figures, not the stale counters on the document.
+    payload.rating = aggregate?.rating ?? null;
+    payload.reviewCount = aggregate?.reviewCount ?? 0;
+    payload.totalSales = salesCount;
 
     res.json({
       success: true,

@@ -77,6 +77,29 @@ async function fetchPendingProfilePics() {
     }));
 }
 
+/** Collect every cover photo currently awaiting review. */
+async function fetchPendingCoverPhotos() {
+  const users = await User.find({ 'pendingCoverPhoto.status': 'pending' })
+    .select('username role pendingCoverPhoto coverPhoto')
+    .lean();
+
+  return users
+    .filter((u) => u.pendingCoverPhoto?.url)
+    .map((u) => ({
+      _id: String(u._id),
+      id: String(u._id),
+      contentType: 'cover_photo',
+      contentLabel: 'Cover photo',
+      displayTitle: `Cover photo — ${u.username}`,
+      owner: u.username,
+      imageUrls: [u.pendingCoverPhoto.url],
+      createdAt: u.pendingCoverPhoto.submittedAt,
+      approvalStatus: 'pending',
+      // Lets the reviewer compare against the currently live banner.
+      previousImage: u.coverPhoto,
+    }));
+}
+
 /** Collect every gallery image currently awaiting review. */
 async function fetchPendingGalleryImages() {
   const users = await User.find({ 'pendingGalleryImages.status': 'pending' })
@@ -133,6 +156,32 @@ async function decideProfilePic(userId, approve, adminUsername, reason) {
 }
 
 /**
+ * Approve or deny a cover photo.
+ * @param {string} userId   The User document id.
+ * @param {boolean} approve
+ */
+async function decideCoverPhoto(userId, approve, adminUsername, reason) {
+  const user = await User.findById(userId);
+  if (!user || !user.pendingCoverPhoto?.url) return null;
+
+  const url = user.pendingCoverPhoto.url;
+
+  if (approve) {
+    // Promote the reviewed banner to the live field.
+    user.coverPhoto = url;
+    user.pendingCoverPhoto = undefined;
+  } else {
+    user.pendingCoverPhoto.status = 'denied';
+    user.pendingCoverPhoto.deniedAt = new Date();
+    user.pendingCoverPhoto.deniedBy = adminUsername;
+    user.pendingCoverPhoto.denialReason = reason;
+  }
+
+  await user.save();
+  return { owner: user.username, url };
+}
+
+/**
  * Approve or deny a single gallery image, identified by its
  * subdocument id.
  */
@@ -161,6 +210,20 @@ async function decideGalleryImage(entryId, approve, adminUsername, reason) {
   await user.save();
   return { owner: user.username, url };
 }
+
+/**
+ * Profile media types, keyed by the contentType the admin UI sends.
+ *
+ * These are subdocuments of User rather than records in their own
+ * collection, so they cannot go through CONTENT_TYPES above. Registering
+ * them here means adding a further moderated media type is one entry,
+ * not another pair of branches in /approve and /deny.
+ */
+const MEDIA_TYPES = {
+  profile_pic: { label: 'Profile picture', decide: decideProfilePic },
+  cover_photo: { label: 'Cover photo', decide: decideCoverPhoto },
+  gallery_image: { label: 'Gallery image', decide: decideGalleryImage },
+};
 
 function ensureAdmin(req, res, next) {
   if (!req.user || req.user.role !== 'admin') {
@@ -268,8 +331,7 @@ router.get('/pending', authMiddleware, ensureAdmin, async (req, res) => {
     const requested = req.query.contentType;
 
     // Which types to include in this response.
-    const MEDIA_TYPES = ['profile_pic', 'gallery_image'];
-    const isMediaType = MEDIA_TYPES.includes(requested);
+    const isMediaType = Boolean(requested && MEDIA_TYPES[requested]);
 
     if (requested && !CONTENT_TYPES[requested] && !isMediaType) {
       return res.status(400).json({ success: false, error: 'Unknown contentType' });
@@ -296,6 +358,9 @@ router.get('/pending', authMiddleware, ensureAdmin, async (req, res) => {
     const mediaResults = [];
     if (!requested || requested === 'profile_pic') {
       mediaResults.push(await fetchPendingProfilePics());
+    }
+    if (!requested || requested === 'cover_photo') {
+      mediaResults.push(await fetchPendingCoverPhotos());
     }
     if (!requested || requested === 'gallery_image') {
       mediaResults.push(await fetchPendingGalleryImages());
@@ -329,15 +394,20 @@ router.get('/counts', authMiddleware, ensureAdmin, async (req, res) => {
     const counts = Object.fromEntries(entries);
 
     // Profile media counts come from User rather than a dedicated model.
-    const [pics, galleries] = await Promise.all([
+    const [pics, covers, galleries] = await Promise.all([
       fetchPendingProfilePics(),
+      fetchPendingCoverPhotos(),
       fetchPendingGalleryImages(),
     ]);
     counts.profile_pic = pics.length;
+    counts.cover_photo = covers.length;
     counts.gallery_image = galleries.length;
 
     counts.total =
-      entries.reduce((sum, [, count]) => sum + count, 0) + pics.length + galleries.length;
+      entries.reduce((sum, [, count]) => sum + count, 0) +
+      pics.length +
+      covers.length +
+      galleries.length;
 
     return res.json({ success: true, data: counts });
   } catch (error) {
@@ -362,17 +432,15 @@ router.post('/approve', authMiddleware, ensureAdmin, async (req, res) => {
     }
 
     // Profile media is stored on User, so it takes a different path.
-    if (body.contentType === 'profile_pic' || body.contentType === 'gallery_image') {
-      const isPic = body.contentType === 'profile_pic';
-      const result = isPic
-        ? await decideProfilePic(contentId, true, req.user.username)
-        : await decideGalleryImage(contentId, true, req.user.username);
+    const mediaConfig = MEDIA_TYPES[body.contentType];
+    if (mediaConfig) {
+      const result = await mediaConfig.decide(contentId, true, req.user.username);
 
       if (!result) {
         return res.status(404).json({ success: false, error: 'Pending image not found' });
       }
 
-      const label = isPic ? 'Profile picture' : 'Gallery image';
+      const label = mediaConfig.label;
       await notifyOwner(result.owner, {
         type: 'content_approved',
         title: `${label} approved`,
@@ -440,17 +508,15 @@ router.post('/deny', authMiddleware, ensureAdmin, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid contentId' });
     }
 
-    if (body.contentType === 'profile_pic' || body.contentType === 'gallery_image') {
-      const isPic = body.contentType === 'profile_pic';
-      const result = isPic
-        ? await decideProfilePic(contentId, false, req.user.username, reason)
-        : await decideGalleryImage(contentId, false, req.user.username, reason);
+    const mediaConfig = MEDIA_TYPES[body.contentType];
+    if (mediaConfig) {
+      const result = await mediaConfig.decide(contentId, false, req.user.username, reason);
 
       if (!result) {
         return res.status(404).json({ success: false, error: 'Pending image not found' });
       }
 
-      const label = isPic ? 'Profile picture' : 'Gallery image';
+      const label = mediaConfig.label;
       await notifyOwner(result.owner, {
         type: 'content_denied',
         title: `${label} not approved`,

@@ -7,6 +7,7 @@ const fs = require('fs');
 const uploadDirs = [
   'uploads',
   'uploads/profiles',
+  'uploads/covers',
   'uploads/listings',
   'uploads/verification',
   'uploads/temp'
@@ -83,7 +84,21 @@ const uploadConfigs = {
       fileSize: 5 * 1024 * 1024 // 5MB
     }
   }).single('profilePic'),
-  
+
+  // Cover photos - single file, max 8MB (images only).
+  //
+  // Larger than the profile picture allowance because a banner is a wide
+  // image displayed at full page width, so it needs more pixels to avoid
+  // looking soft. Stored separately from uploads/profiles so a cover can
+  // never be confused with an avatar when auditing the moderation queue.
+  coverPhoto: multer({
+    storage: createStorage('uploads/covers'),
+    fileFilter: imageFileFilter,
+    limits: {
+      fileSize: 8 * 1024 * 1024 // 8MB
+    }
+  }).single('coverPhoto'),
+
   // Listing images - multiple files, max 10 files, 10MB each (images only)
   listingImages: multer({
     storage: createStorage('uploads/listings'),

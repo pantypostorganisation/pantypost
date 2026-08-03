@@ -71,7 +71,10 @@ async function getSellerRatings(usernames) {
     const unique = [...new Set(usernames.filter(Boolean))];
 
     const results = await Review.aggregate([
-      { $match: { reviewee: { $in: unique } } },
+      // Only approved reviews count. GET /api/reviews/:username already
+      // filters this way, so without it a denied review would still move
+      // the rating shown on a browse card.
+      { $match: { reviewee: { $in: unique }, status: 'approved' } },
       {
         $group: {
           _id: '$reviewee',
@@ -119,9 +122,15 @@ async function populateSellerProfile(listing, ratingsMap) {
         reviewCount: sellerRating?.reviewCount
       };
       listing.isSellerVerified = seller.isVerified || false;
-      listing.sellerSalesCount = await Order.countDocuments({ 
-        seller: listing.seller, 
-        status: { $in: ['completed', 'delivered'] } 
+      // Order has no top-level `status` field — it has shippingStatus
+      // and paymentStatus — so the previous filter on `status` matched
+      // nothing and every browse card showed 0 sales. Orders are created
+      // with paymentStatus 'completed' and move to 'refunded' if
+      // reversed, so this counts paid, unreversed orders. The seller
+      // profile header uses the identical query, so the two agree.
+      listing.sellerSalesCount = await Order.countDocuments({
+        seller: listing.seller,
+        paymentStatus: 'completed'
       });
     }
     return listing;

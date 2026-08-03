@@ -1,37 +1,63 @@
 // src/components/seller-profile/ProfileHeader.tsx
 'use client';
 
-import { BadgeCheck, Star, MessageCircle, Heart, Package, Calendar, ShoppingBag } from 'lucide-react';
+import { useState } from 'react';
+import {
+  BadgeCheck,
+  Star,
+  MessageCircle,
+  Heart,
+  Package,
+  Calendar,
+  ShoppingBag,
+  Check,
+  MapPin,
+} from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
-import { SecureImage } from '@/components/ui/SecureImage';
+// SecureImage is exported from SecureMessageDisplay — there is no
+// separate SecureImage module in this codebase.
+import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
+import type { TierInfo } from '@/utils/sellerTiers';
 
 interface ProfileHeaderProps {
   username: string;
   profilePic: string | null;
-  /* Not yet stored on the User model. Supported here so the field can be
-     added later without touching this component; until then the header
-     falls back to a brand gradient. */
+  /* Approved banner only. Falls back to a brand gradient when the seller
+     has not set one, so a new profile still looks finished. */
   coverPhoto?: string | null;
   bio: string;
   isVerified: boolean;
-  sellerTierInfo?: { tier: string; credibilityScore?: number } | null;
+  sellerTierInfo?: TierInfo | null;
 
   averageRating: number | null;
   reviewCount: number;
   totalSales: number;
   listingCount: number;
-  /* ISO date. Rendered as "X years on Panty Post" once available from
-     the profile endpoint. */
+  /* ISO date. Rendered as "X years on Panty Post". */
   memberSince?: string | null;
+  /* Only pass this when the seller has location sharing switched on —
+     the component does not know about the privacy flag. */
+  location?: string | null;
 
   isOwnProfile?: boolean;
+
+  /* Subscription state. hasAccess is undefined until the check resolves,
+     so the button stays in its neutral state rather than flashing
+     "Subscribe" and then correcting itself. */
+  hasAccess?: boolean;
+  subscriptionPrice?: number | null;
+
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
+
   onMessage?: () => void;
   onSubscribe?: () => void;
+  onUnsubscribe?: () => void;
   onTip?: () => void;
 }
 
-/** Whole years, or "New seller" for anything under a year. */
+/** Whole years, or a month count for anything under a year. */
 function membershipLabel(memberSince?: string | null): string | null {
   if (!memberSince) return null;
 
@@ -63,28 +89,46 @@ export default function ProfileHeader({
   totalSales,
   listingCount,
   memberSince,
+  location,
   isOwnProfile = false,
+  hasAccess,
+  subscriptionPrice,
+  isFavorited = false,
+  onToggleFavorite,
   onMessage,
   onSubscribe,
+  onUnsubscribe,
   onTip,
 }: ProfileHeaderProps) {
+  // SecureImage swaps to its fallback on error, which for a banner would
+  // mean a grey "Invalid image" block. Tracking the failure here lets the
+  // gradient show through instead.
+  const [coverFailed, setCoverFailed] = useState(false);
+
   const safeUsername = sanitizeStrict(username);
   const hasRating = typeof averageRating === 'number' && averageRating > 0;
   const membership = membershipLabel(memberSince);
+  const showCover = Boolean(coverPhoto) && !coverFailed;
+
+  const priceLabel =
+    typeof subscriptionPrice === 'number' && subscriptionPrice > 0
+      ? `$${subscriptionPrice.toFixed(2)}`
+      : null;
+
+  const showActions = !isOwnProfile;
 
   return (
     <header>
       {/* --- Cover ---
           Full-bleed banner, as on a shop page. Falls back to a subtle
-          brand gradient rather than a grey block when no image exists,
-          so a new seller's profile still looks finished. */}
+          brand gradient rather than a grey block when no image exists. */}
       <div className="relative h-40 w-full overflow-hidden bg-gradient-to-br from-[#1a1a1a] via-[#241505] to-[#0f0f0f] sm:h-56 md:h-64">
-        {coverPhoto && (
+        {showCover && (
           <SecureImage
-            src={coverPhoto}
+            src={coverPhoto as string}
             alt=""
             className="h-full w-full object-cover"
-            fallbackSrc=""
+            onError={() => setCoverFailed(true)}
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
@@ -136,7 +180,7 @@ export default function ProfileHeader({
                   <span className="inline-flex items-center gap-1">
                     <Star className="h-3.5 w-3.5 fill-[#ff950e] text-[#ff950e]" />
                     <span className="font-semibold text-white">
-                      {averageRating!.toFixed(1)}
+                      {(averageRating as number).toFixed(1)}
                     </span>
                     <span>
                       ({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})
@@ -170,13 +214,38 @@ export default function ProfileHeader({
                   </>
                 )}
               </div>
+
+              {/* Kept on its own line so the credentials row above stays
+                  exactly as specified. */}
+              {location && (
+                <p className="mt-1 inline-flex items-center gap-1 text-sm text-gray-500">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Ships from {sanitizeStrict(location)}
+                </p>
+              )}
             </div>
           </div>
 
           {/* Actions, right-aligned on desktop and full-width on mobile
               so they sit in the thumb zone. */}
-          {!isOwnProfile && (
-            <div className="flex shrink-0 gap-2">
+          {showActions && (
+            <div className="flex shrink-0 items-center gap-2">
+              {onToggleFavorite && (
+                <button
+                  onClick={onToggleFavorite}
+                  aria-pressed={isFavorited}
+                  aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
+                  title={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full border transition ${
+                    isFavorited
+                      ? 'border-[#ff950e] bg-[#ff950e]/10 text-[#ff950e]'
+                      : 'border-gray-700 text-white hover:border-gray-500'
+                  }`}
+                >
+                  <Heart className={`h-4 w-4 ${isFavorited ? 'fill-[#ff950e]' : ''}`} />
+                </button>
+              )}
+
               {onMessage && (
                 <button
                   onClick={onMessage}
@@ -186,15 +255,34 @@ export default function ProfileHeader({
                   Message
                 </button>
               )}
-              {onSubscribe && (
+
+              {/* One button covers both directions. When the viewer is
+                  already subscribed it reads as state, not as another
+                  invitation to subscribe. */}
+              {hasAccess && onUnsubscribe ? (
                 <button
-                  onClick={onSubscribe}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#ff950e] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-[#ffa733] sm:flex-none"
+                  onClick={onUnsubscribe}
+                  className="group flex flex-1 items-center justify-center gap-2 rounded-full border border-[#ff950e]/60 bg-[#ff950e]/10 px-5 py-2.5 text-sm font-semibold text-[#ff950e] transition hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-300 sm:flex-none"
                 >
-                  <Heart className="h-4 w-4" />
-                  Subscribe
+                  <Check className="h-4 w-4 group-hover:hidden" />
+                  <span className="group-hover:hidden">Subscribed</span>
+                  <span className="hidden group-hover:inline">Unsubscribe</span>
                 </button>
+              ) : (
+                !hasAccess &&
+                onSubscribe && (
+                  /* Black text on #ff950e is 9.56:1. White would be
+                     2.20:1 and fail WCAG AA. */
+                  <button
+                    onClick={onSubscribe}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-full bg-[#ff950e] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-[#ffa733] sm:flex-none"
+                  >
+                    <Heart className="h-4 w-4" />
+                    Subscribe{priceLabel ? ` · ${priceLabel}` : ''}
+                  </button>
+                )
               )}
+
               {onTip && (
                 <button
                   onClick={onTip}

@@ -40,6 +40,7 @@ export function useSellerProfile(username: string) {
   const [sellerUser, setSellerUser] = useState<any>(null);
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
+  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [isVerified, setIsVerified] = useState(false);
@@ -52,6 +53,14 @@ export function useSellerProfile(username: string) {
   const [followers, setFollowers] = useState(0);
   const [averageRating, setAverageRating] = useState<number | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
+
+  // Shop-header stats. These come from the profile endpoint, which
+  // aggregates them from the Review and Order collections rather than
+  // reading the User counters (which nothing writes to).
+  const [reviewCount, setReviewCount] = useState(0);
+  const [totalSales, setTotalSales] = useState(0);
+  const [listingCount, setListingCount] = useState(0);
+  const [memberSince, setMemberSince] = useState<string | null>(null);
 
   const [standardListings, setStandardListings] = useState<any[]>([]);
   const [premiumListings, setPremiumListings] = useState<any[]>([]);
@@ -143,6 +152,26 @@ export function useSellerProfile(username: string) {
           null;
         setProfilePic(normalizeImageUrl(resolvedPic));
 
+        const resolvedCover = userData?.coverPhoto ?? profileData?.coverPhoto ?? null;
+        setCoverPhoto(normalizeImageUrl(resolvedCover));
+
+        // "X years on Panty Post". createdAt is the account's real
+        // creation date; joinedDate is kept as a fallback for older
+        // records where it was set and createdAt was not.
+        const rawJoined =
+          userData?.createdAt ??
+          profileData?.createdAt ??
+          userData?.joinedDate ??
+          profileData?.joinedDate ??
+          null;
+        setMemberSince(rawJoined ? String(rawJoined) : null);
+
+        const rawSales = Number(userData?.totalSales ?? profileData?.totalSales ?? 0);
+        setTotalSales(Number.isFinite(rawSales) ? rawSales : 0);
+
+        const rawReviewCount = Number(userData?.reviewCount ?? profileData?.reviewCount ?? 0);
+        setReviewCount(Number.isFinite(rawReviewCount) ? rawReviewCount : 0);
+
         const rawPrice =
           userData?.subscriptionPrice ??
           profileData?.subscriptionPrice ??
@@ -182,6 +211,9 @@ export function useSellerProfile(username: string) {
           setStandardListings(listings.filter((l: any) => !l.isPremium));
           setPremiumListings(listings.filter((l: any) => l.isPremium));
           setTotalPhotos(gallery.length + listings.length);
+          // Counts premium listings too — the header says "items", and a
+          // locked item is still an item in the shop.
+          setListingCount(listings.length);
         }
 
         if (user?.role === 'buyer' && user.username !== username) {
@@ -199,6 +231,12 @@ export function useSellerProfile(username: string) {
         if (reviewsResult.success && reviewsResult.data) {
           setReviews(reviewsResult.data.reviews || []);
           setAverageRating(reviewsResult.data.stats?.avgRating || null);
+          const statTotal = reviewsResult.data.stats?.totalReviews;
+          setReviewCount(
+            typeof statTotal === 'number'
+              ? statTotal
+              : (reviewsResult.data.reviews || []).length
+          );
           if (user?.username) {
             const userReview = reviewsResult.data.reviews.find(
               (r: any) => r.reviewer === user.username
@@ -409,6 +447,7 @@ export function useSellerProfile(username: string) {
     isVerified,
     bio,
     profilePic,
+    coverPhoto,
     subscriptionPrice,
     galleryImages,
     sellerTierInfo,
@@ -417,6 +456,10 @@ export function useSellerProfile(username: string) {
     followers,
     averageRating,
     reviews,
+    reviewCount,
+    totalSales,
+    listingCount,
+    memberSince,
     standardListings,
     premiumListings,
     hasAccess,

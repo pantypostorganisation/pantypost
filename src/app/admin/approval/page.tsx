@@ -21,6 +21,7 @@ import {
   Tag,
   UserCircle,
   Images,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 type QueueFilter = 'all' | ContentType;
@@ -42,6 +43,11 @@ const TYPE_STYLES: Record<string, { border: string; bg: string; chip: string }> 
     bg: 'bg-gradient-to-br from-black via-[#0b0b0b] to-[#1a1206]',
     chip: 'border-amber-500/40 bg-amber-500/10 text-amber-100',
   },
+  cover_photo: {
+    border: 'border-rose-500/30',
+    bg: 'bg-gradient-to-br from-black via-[#0b0b0b] to-[#1a0810]',
+    chip: 'border-rose-500/40 bg-rose-500/10 text-rose-100',
+  },
   gallery_image: {
     border: 'border-emerald-500/30',
     bg: 'bg-gradient-to-br from-black via-[#0b0b0b] to-[#06170f]',
@@ -57,6 +63,8 @@ function typeIcon(contentType: string) {
       return <FileText className="h-3.5 w-3.5" />;
     case 'profile_pic':
       return <UserCircle className="h-3.5 w-3.5" />;
+    case 'cover_photo':
+      return <ImageIcon className="h-3.5 w-3.5" />;
     case 'gallery_image':
       return <Images className="h-3.5 w-3.5" />;
     default:
@@ -233,13 +241,25 @@ export default function AdminApprovalPage() {
 
   const renderPendingCard = (item: ModeratedItem) => {
     const isListing = item.contentType === 'listing';
-    const isMedia = item.contentType === 'profile_pic' || item.contentType === 'gallery_image';
+    const isMedia =
+      item.contentType === 'profile_pic' ||
+      item.contentType === 'cover_photo' ||
+      item.contentType === 'gallery_image';
     const price = formatPrice(item);
     const createdAt = item.createdAt || item.date;
     const isProcessing = processingId === item.id;
     const isDenying = denyingId === item.id;
     const bodyText = isListing ? item.description : item.content;
     const style = TYPE_STYLES[item.contentType] || TYPE_STYLES.listing;
+
+    // Profile pictures and cover photos replace something already live,
+    // so the reviewer is shown the current image beside the proposed one.
+    // Gallery images are additive and have nothing to compare against.
+    const isCover = item.contentType === 'cover_photo';
+    const isReplaceableMedia = item.contentType === 'profile_pic' || isCover;
+    const mediaNoun = isCover ? 'cover photo' : 'profile picture';
+    const comparisonAspect = isCover ? 'aspect-[3/1]' : 'aspect-square';
+    const comparisonColumns = isCover ? 'grid-cols-1' : 'grid-cols-2';
 
     return (
       <div
@@ -294,17 +314,22 @@ export default function AdminApprovalPage() {
             </div>
           )}
 
-          {item.contentType === 'profile_pic' && item.previousImage ? (
-            <div className="mt-3 grid grid-cols-2 gap-3">
+          {isReplaceableMedia && item.previousImage ? (
+            // A banner is wide and an avatar is square, so covers stack
+            // vertically at 3:1 — squeezing one into a square frame would
+            // crop away most of what the reviewer needs to see.
+            <div className={`mt-3 grid gap-3 ${comparisonColumns}`}>
               <div>
                 <p className="mb-1.5 text-xs uppercase tracking-wider text-gray-500">
                   Current
                 </p>
-                <div className="relative aspect-square overflow-hidden rounded-lg border border-white/10 bg-[#0f0f0f]">
+                <div
+                  className={`relative overflow-hidden rounded-lg border border-white/10 bg-[#0f0f0f] ${comparisonAspect}`}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={resolveImageUrl(item.previousImage)}
-                    alt="Current profile picture"
+                    alt={`Current ${mediaNoun}`}
                     className="h-full w-full object-cover opacity-60"
                     onError={e => (e.currentTarget.src = '/placeholder-image.png')}
                   />
@@ -314,11 +339,13 @@ export default function AdminApprovalPage() {
                 <p className="mb-1.5 text-xs uppercase tracking-wider text-amber-300/80">
                   Proposed
                 </p>
-                <div className="relative aspect-square overflow-hidden rounded-lg border border-amber-500/40 bg-[#0f0f0f]">
+                <div
+                  className={`relative overflow-hidden rounded-lg border border-amber-500/40 bg-[#0f0f0f] ${comparisonAspect}`}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={resolveImageUrl(item.imageUrls?.[0])}
-                    alt="Proposed profile picture"
+                    alt={`Proposed ${mediaNoun}`}
                     className="h-full w-full object-cover"
                     onError={e => (e.currentTarget.src = '/placeholder-image.png')}
                   />
@@ -454,7 +481,10 @@ export default function AdminApprovalPage() {
   const listingCount = pendingItems.filter(i => i.contentType === 'listing').length;
   const postCount = pendingItems.filter(i => i.contentType === 'post').length;
   const mediaCount = pendingItems.filter(
-    i => i.contentType === 'profile_pic' || i.contentType === 'gallery_image'
+    i =>
+      i.contentType === 'profile_pic' ||
+      i.contentType === 'cover_photo' ||
+      i.contentType === 'gallery_image'
   ).length;
 
   return (
@@ -499,6 +529,7 @@ export default function AdminApprovalPage() {
                   <option value="listing">Listings</option>
                   <option value="post">Posts</option>
                   <option value="profile_pic">Profile pictures</option>
+                  <option value="cover_photo">Cover photos</option>
                   <option value="gallery_image">Gallery images</option>
                 </select>
                 <button

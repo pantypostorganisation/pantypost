@@ -4,7 +4,12 @@ import { apiCall } from './api.config';
 export type ApprovalStatus = 'pending' | 'approved' | 'denied';
 
 /** Content types that pass through pre-publication review. */
-export type ContentType = 'listing' | 'post' | 'profile_pic' | 'gallery_image';
+export type ContentType =
+  | 'listing'
+  | 'post'
+  | 'profile_pic'
+  | 'cover_photo'
+  | 'gallery_image';
 
 /**
  * A single item in the moderation queue.
@@ -63,6 +68,7 @@ export interface PendingCounts {
   listing: number;
   post: number;
   profile_pic: number;
+  cover_photo: number;
   gallery_image: number;
   total: number;
 }

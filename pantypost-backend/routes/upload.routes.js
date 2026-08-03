@@ -98,10 +98,13 @@ router.get('/test', (_req, res) => {
     endpoints: [
       'POST /api/upload                (single file -> returns URL only)',
       'POST /api/upload/single         (single file -> returns URL only)',
-      'POST /api/upload/profile-pic    (single file -> updates user.profilePic and returns URL)',
+      'POST /api/upload/profile-pic    (single file -> queues user.pendingProfilePic)',
+      'POST /api/upload/cover-photo    (single file -> queues user.pendingCoverPhoto)',
       'POST /api/upload/listing-images (multi file -> returns URLs)',
       'POST /api/upload/verification   (multi field -> returns URLs per field)',
       'POST /api/upload/gallery        (multi file -> stores to user.galleryImages)',
+      'DELETE /api/upload/cover-photo/pending',
+      'DELETE /api/upload/cover-photo',
       'DELETE /api/upload/gallery/:index',
     ],
   });
@@ -242,6 +245,150 @@ router.post('/profile-pic', authMiddleware, (req, res) => {
       return res.status(500).json({ success: false, error: error.message });
     }
   });
+});
+
+/* =======================================================
+ * POST /api/upload/cover-photo
+ *
+ * Banner image for the seller profile header. (Field: "coverPhoto")
+ *
+ * Behaves exactly like /profile-pic: the live coverPhoto field is not
+ * touched, the upload is queued in pendingCoverPhoto, and an admin
+ * decides. A cover photo is the largest, most prominent image on a
+ * public profile, so exempting it from review would be the widest hole
+ * we could leave in the moderation policy.
+ *
+ * Gated behind requireVerifiedSeller for the same reason as gallery and
+ * listing images: it produces publicly visible content.
+ * ===================================================== */
+router.post('/cover-photo', authMiddleware, requireVerifiedSeller, (req, res) => {
+  if (req.user.role !== 'seller' && req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      error: 'Only sellers can upload a cover photo',
+    });
+  }
+
+  uploadConfigs.coverPhoto(req, res, async (err) => {
+    if (err) return handleUploadError(err, req, res);
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No file uploaded',
+      });
+    }
+
+    try {
+      const user = await User.findOne({ username: req.user.username });
+      if (!user) {
+        await deleteFile(req.file.path).catch(() => {});
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
+
+      const fileUrl = getFileUrl(req, req.file.path);
+
+      // If a previous submission is still sitting in the queue, it is
+      // being replaced — remove that file rather than orphaning it on
+      // disk. The approved cover is left alone: it stays live until the
+      // replacement passes review.
+      const supersededPending = user.pendingCoverPhoto?.url;
+
+      user.submitCoverPhotoForReview(fileUrl);
+      await user.save();
+
+      if (supersededPending && supersededPending !== user.coverPhoto) {
+        await safeDeleteLocalFromUrl(supersededPending);
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          url: fileUrl,
+          filename: req.file.filename,
+          size: req.file.size,
+          pendingReview: true,
+        },
+        url: fileUrl,
+        pendingReview: true,
+        message: 'Cover photo submitted for review. It will be visible to others once approved.',
+      });
+    } catch (error) {
+      await deleteFile(req.file.path).catch(() => {});
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  });
+});
+
+/* =======================================================
+ * DELETE /api/upload/cover-photo/pending
+ * Withdraw a cover photo that is still awaiting review.
+ * The approved cover, if any, is untouched.
+ * ===================================================== */
+router.delete('/cover-photo/pending', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.user.username });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const pendingUrl = user.pendingCoverPhoto?.url;
+    if (!pendingUrl) {
+      return res.status(404).json({ success: false, error: 'No cover photo awaiting review' });
+    }
+
+    user.pendingCoverPhoto = undefined;
+    await user.save();
+
+    // Safe to delete: this image was never published.
+    if (pendingUrl !== user.coverPhoto) {
+      await safeDeleteLocalFromUrl(pendingUrl);
+    }
+
+    return res.json({
+      success: true,
+      data: { removedImage: pendingUrl, coverPhoto: user.coverPhoto || null },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/* =======================================================
+ * DELETE /api/upload/cover-photo
+ * Remove the live cover photo, and any pending replacement with it.
+ *
+ * Removal applies immediately and is deliberately NOT queued: taking an
+ * image down cannot introduce prohibited content, and making sellers
+ * wait for review before they can remove something is the wrong way
+ * round.
+ * ===================================================== */
+router.delete('/cover-photo', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.user.username });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const removed = user.coverPhoto;
+    const removedPending = user.pendingCoverPhoto?.url;
+
+    user.coverPhoto = null;
+    user.pendingCoverPhoto = undefined;
+    await user.save();
+
+    await safeDeleteLocalFromUrl(removed);
+    if (removedPending && removedPending !== removed) {
+      await safeDeleteLocalFromUrl(removedPending);
+    }
+
+    return res.json({
+      success: true,
+      data: { removedImage: removed || null, coverPhoto: null },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 /* =======================================================
