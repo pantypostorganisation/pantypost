@@ -20,7 +20,10 @@ interface UseProfileSaveReturn {
   saveSuccess: boolean;
   saveError: string;
   isSaving: boolean;
-  handleSave: (data: ProfileSaveData) => Promise<void>;
+  // Partial: Save no longer transmits profilePic or galleryImages —
+  // uploads commit those themselves. Every field is validated
+  // individually below, so a subset is safe.
+  handleSave: (data: Partial<ProfileSaveData>) => Promise<void>;
   handleSaveWithGallery: (galleryImages: string[]) => Promise<void>;
   handleQuickSave: (data: Partial<ProfileSaveData>) => Promise<void>;
   debouncedSave: (data: Partial<ProfileSaveData>) => void;
@@ -193,7 +196,7 @@ export function useProfileSave(): UseProfileSaveReturn {
     }, 1500);
   }, [handleQuickSave]);
 
-  const handleSave = async (data: ProfileSaveData) => {
+  const handleSave = async (data: Partial<ProfileSaveData>) => {
     if (!user?.username) {
       setSaveError('User not authenticated');
       return;

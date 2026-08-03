@@ -12,6 +12,27 @@ import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
 const MAX_GALLERY_IMAGES = 20;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const MAX_COVER_SIZE = 8 * 1024 * 1024; // matches uploadConfigs.coverPhoto
+
+interface PendingGalleryEntry {
+  id: string;
+  url: string;
+  submittedAt?: string;
+}
+
+/** Shape of a queued gallery entry as the API returns it. */
+interface RawPendingGalleryEntry {
+  id?: string;
+  url?: string;
+  submittedAt?: string;
+}
+
+/** Backend returns bare /uploads/... paths; make them absolute. */
+const normalizeUploadUrl = (url?: string | null): string | null => {
+  if (!url) return null;
+  if (url.startsWith('http://') || url.startsWith('https://')) return sanitizeUrl(url);
+  if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
+  return sanitizeUrl(url);
+};
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'] as const;
 
 type AllowedMime = typeof ALLOWED_IMAGE_TYPES[number];
@@ -47,6 +68,11 @@ export function useProfileSettings() {
   const [coverPending, setCoverPending] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
   const [coverError, setCoverError] = useState<string>('');
+
+  // Images the seller has uploaded that are still in the moderation
+  // queue. Kept apart from galleryImages because the delete endpoints
+  // differ: approved images go by index, queued ones by subdocument id.
+  const [pendingGalleryImages, setPendingGalleryImages] = useState<PendingGalleryEntry[]>([]);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,7 +91,10 @@ export function useProfileSettings() {
       }
 
       try {
-        const resp = await fetch(buildApiUrl('/users/:username/profile', { username: user.username }), {
+        // /users/me/profile, NOT /users/:username/profile. The latter is
+        // the public view and returns approved images only, which is why
+        // a seller's own queued uploads vanished on reload.
+        const resp = await fetch(buildApiUrl('/users/me/profile'), {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal
         });
@@ -75,18 +104,31 @@ export function useProfileSettings() {
         const validated = Array.isArray(userData.galleryImages) ? userData.galleryImages : [];
 
         const normalized = validated
-          .map((url: string) => {
-            if (!url) return null;
-            if (url.startsWith('http://') || url.startsWith('https://')) return sanitizeUrl(url);
-            if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
-            return sanitizeUrl(url);
-          })
+          .map((url: string) => normalizeUploadUrl(url))
           .filter((u: string | null): u is string => !!u)
           .slice(0, MAX_GALLERY_IMAGES);
 
-        if (mountedRef.current) setGalleryImages(normalized);
+        const pending = (Array.isArray(userData.pendingGalleryImages)
+          ? userData.pendingGalleryImages
+          : []
+        )
+          .map((entry: RawPendingGalleryEntry) => {
+            const url = normalizeUploadUrl(entry?.url);
+            return url && entry?.id
+              ? { id: String(entry.id), url, submittedAt: entry.submittedAt }
+              : null;
+          })
+          .filter(Boolean) as PendingGalleryEntry[];
+
+        if (mountedRef.current) {
+          setGalleryImages(normalized);
+          setPendingGalleryImages(pending);
+        }
       } catch {
-        if (mountedRef.current) setGalleryImages([]);
+        if (mountedRef.current) {
+          setGalleryImages([]);
+          setPendingGalleryImages([]);
+        }
       }
     };
 
@@ -334,13 +376,13 @@ export function useProfileSettings() {
       }
 
       const result = await response.json();
+
+      // data.gallery is the APPROVED list, which does not include what
+      // was just uploaded — the upload endpoint queues rather than
+      // publishes. Rendering only that made images appear to vanish the
+      // instant they finished uploading.
       const newGallery = (result?.data?.gallery || [])
-        .map((url: string) => {
-          if (!url) return null;
-          if (url.startsWith('http://') || url.startsWith('https://')) return sanitizeUrl(url);
-          if (url.startsWith('/uploads/')) return `${API_BASE_URL}${url}`;
-          return sanitizeUrl(url);
-        })
+        .map((url: string) => normalizeUploadUrl(url))
         .filter((u: string | null): u is string => !!u)
         .slice(0, MAX_GALLERY_IMAGES);
 
@@ -349,6 +391,9 @@ export function useProfileSettings() {
         setSelectedFiles([]);
         setUploadProgress(100);
         setTimeout(() => mountedRef.current && setUploadProgress(0), 800);
+        // Re-read the owner view so the newly queued images appear with
+        // their subdocument ids, which withdrawal needs.
+        void refreshPendingGallery();
       }
     } catch (error) {
       clearInterval(progressInterval);
@@ -360,6 +405,48 @@ export function useProfileSettings() {
   };
 
   const uploadGalleryImages = () => { void uploadGalleryImagesAsync(); };
+
+  async function refreshPendingGallery() {
+    if (!token) return;
+    try {
+      const resp = await fetch(buildApiUrl('/users/me/profile'), {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const entries = data?.data?.pendingGalleryImages;
+      const pending = (Array.isArray(entries) ? entries : [])
+        .map((entry: RawPendingGalleryEntry) => {
+          const url = normalizeUploadUrl(entry?.url);
+          return url && entry?.id
+            ? { id: String(entry.id), url, submittedAt: entry.submittedAt }
+            : null;
+        })
+        .filter(Boolean) as PendingGalleryEntry[];
+      if (mountedRef.current) setPendingGalleryImages(pending);
+    } catch {
+      /* leaving the previous list in place is the safer failure */
+    }
+  }
+
+  /** Withdraw an image that is still awaiting review. */
+  const withdrawPendingGalleryImage = (id: string) => {
+    void (async () => {
+      if (!token || !id) return;
+      try {
+        const response = await fetch(buildApiUrl(`/upload/gallery/pending/${id}`), {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Failed to withdraw image');
+        if (mountedRef.current) {
+          setPendingGalleryImages((prev) => prev.filter((entry) => entry.id !== id));
+        }
+      } catch {
+        void refreshPendingGallery();
+      }
+    })();
+  };
 
   const removeGalleryImageAsync = async (index: number) => {
     if (index < 0 || index >= galleryImages.length || !token) return;
@@ -466,7 +553,7 @@ export function useProfileSettings() {
       payload.profilePic = null;
     }
 
-    await baseSaveProfile(payload as any);
+    await baseSaveProfile(payload);
     if (tierData.refreshTierData) await tierData.refreshTierData();
     return saveSuccess;
   };
@@ -516,6 +603,8 @@ export function useProfileSettings() {
     removeGalleryImage,
     clearAllGalleryImages,
     validationError,
+    pendingGalleryImages,
+    withdrawPendingGalleryImage,
 
     // Tier info
     sellerTierInfo: tierData.sellerTierInfo,

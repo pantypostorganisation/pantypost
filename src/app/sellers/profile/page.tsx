@@ -7,6 +7,7 @@ import ProfileInfoCard from '@/components/seller-settings/ProfileInfoCard';
 import CoverPhotoCard from '@/components/seller-settings/CoverPhotoCard';
 import TierProgressCard from '@/components/seller-settings/TierProgressCard';
 import GalleryManager from '@/components/seller-settings/GalleryManager';
+import PendingGalleryStrip from '@/components/seller-settings/PendingGalleryStrip';
 import LocationPrivacyCard from '@/components/seller-settings/LocationPrivacyCard';
 import ReferralSection from '@/components/seller-settings/ReferralSection';
 import TierDetailsModal from '@/components/seller-settings/modals/TierDetailsModal';
@@ -55,6 +56,8 @@ export default function SellerProfileSettingsPage() {
     uploadGalleryImages,
     removeGalleryImage,
     clearAllGalleryImages,
+    pendingGalleryImages,
+    withdrawPendingGalleryImage,
 
     // Tier info
     sellerTierInfo,
@@ -139,6 +142,11 @@ export default function SellerProfileSettingsPage() {
                   removeGalleryImage={removeGalleryImage}
                   removeSelectedFile={removeSelectedFile}
                   clearAllGalleryImages={clearAllGalleryImages}
+                />
+
+                <PendingGalleryStrip
+                  images={pendingGalleryImages}
+                  onWithdraw={withdrawPendingGalleryImage}
                 />
 
                 <LocationPrivacyCard

@@ -210,6 +210,20 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
         pendingGalleryCount: Array.isArray(user.pendingGalleryImages)
           ? user.pendingGalleryImages.filter(i => i.status === 'pending').length
           : 0,
+        // Approved gallery, plus what is still in the queue.
+        //
+        // The seller settings page used to read the gallery from the
+        // PUBLIC profile endpoint, which by design returns approved
+        // images only. A seller therefore uploaded images, reloaded,
+        // and found them gone. Nothing was lost — the images were in
+        // pendingGalleryImages the whole time, just invisible to the
+        // one person entitled to see them.
+        galleryImages: Array.isArray(user.galleryImages) ? user.galleryImages : [],
+        pendingGalleryImages: Array.isArray(user.pendingGalleryImages)
+          ? user.pendingGalleryImages
+              .filter(i => i.status === 'pending' && i.url)
+              .map(i => ({ id: String(i._id), url: i.url, submittedAt: i.submittedAt }))
+          : [],
         country: user.country || user?.settings?.country,
         isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
       }
@@ -585,6 +599,20 @@ router.get('/:username/profile/full', authMiddleware, async (req, res) => {
     // Owners see their own queued banner so the change is visible to
     // them immediately, even though others still see the approved one.
     payload.coverPhoto = targetUser.getOwnCoverPhoto() || null;
+    // profilePic was missing from the owner view: toSafeObject()
+    // returns the APPROVED picture, so a seller who uploaded a new one
+    // reloaded this page and watched their old avatar come back. The
+    // upload had worked; it was queued and simply never shown to them.
+    payload.profilePic =
+      targetUser.getOwnProfilePic() ||
+      targetUser?.settings?.profilePic ||
+      targetUser?.settings?.profilePicture ||
+      null;
+    payload.pendingGalleryImages = Array.isArray(targetUser.pendingGalleryImages)
+      ? targetUser.pendingGalleryImages
+          .filter(i => i.status === 'pending' && i.url)
+          .map(i => ({ id: String(i._id), url: i.url, submittedAt: i.submittedAt }))
+      : [];
     payload.pendingGalleryCount = Array.isArray(targetUser.pendingGalleryImages)
       ? targetUser.pendingGalleryImages.filter(i => i.status === 'pending').length
       : 0;
