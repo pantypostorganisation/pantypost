@@ -53,6 +53,7 @@ const referralRoutes = require('./routes/referral.routes');
 const cryptoRoutes = require('./routes/crypto.routes'); // CRYPTO DIRECT DEPOSITS
 const postRoutes = require('./routes/post.routes'); // EXPLORE/SOCIAL POSTS
 const trafficRoutes = require('./routes/traffic.routes'); // SITE TRAFFIC ANALYTICS
+const customRequestRoutes = require('./routes/customRequest.routes'); // CUSTOM REQUEST NEGOTIATION
 
 // Import tier service for initialization
 const tierService = require('./services/tierService');
@@ -244,6 +245,10 @@ app.use('/api/traffic', trafficRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES
 app.use('/api/posts', postRoutes); // EXPLORE/SOCIAL POST ROUTES
+
+// Custom request negotiation. Previously this state lived only in the
+// creating user's sessionStorage, so the other party never saw it.
+app.use('/api/custom-requests', customRequestRoutes);
 
 // NEW: buyer self profile (matches the FE calls to /api/profilebuyer)
 app.use('/api/profilebuyer', profileBuyerRoutes);

@@ -46,7 +46,12 @@ const notificationSchema = new mongoose.Schema({
       'comment',
       // ADDED: pre-publication moderation outcomes
       'content_approved',
-      'content_denied'
+      'content_denied',
+      // ADDED: custom request negotiation (created / accepted / declined /
+      // countered). 'custom_request_paid' already existed above and still
+      // covers the payment step. Without this entry every notification
+      // from customRequest.routes.js would fail validation and vanish.
+      'custom_request'
     ],
     required: true
   },
