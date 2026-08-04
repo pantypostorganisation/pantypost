@@ -29,8 +29,12 @@ const TRUST_SIGNALS = [
   {
     icon: '/support_badge.png',
     iconType: 'image',
-    title: '24/7 Support',
-    desc: 'Our team is here to help anytime.'
+    // Was "24/7 Support / Our team is here to help anytime." We do not run
+    // a 24/7 desk, and an unstaffed promise is the sort of claim a payment
+    // processor can check against the complaints log. What we do commit to
+    // is published, tracked and true.
+    title: 'Real Support',
+    desc: 'Every complaint answered within five business days.'
   }
 ];
 

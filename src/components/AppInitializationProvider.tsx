@@ -283,8 +283,27 @@ export function AppInitializationProvider({ children }: { children: ReactNode })
     );
   }
 
-  // SILENT LOADING - Just show black screen while initializing
-  if (isInitializing && !isInitialized) {
+  /* =====================================================================
+     DEVELOPMENT ONLY.
+
+     `isInitializing` starts true and is only ever cleared inside an
+     effect, and effects do not run during server rendering. So this
+     branch used to be the server's answer for every route on the site:
+     a single empty black div, with no body for a crawler to read. It sat
+     directly beneath the identical `mounted` gate in ClientLayout —
+     removing either one on its own changes nothing.
+
+     In production it also bought us nothing. Look at initializeApp():
+     production skips the health check entirely and hard-codes every
+     service to true, so there is no state worth waiting for. The check
+     only does real work in development, where a dead backend genuinely
+     does mean nothing on the page will function — so the block is worth
+     keeping there, and only there.
+
+     NODE_ENV is identical on the server and the client, so gating on it
+     cannot cause a hydration mismatch.
+     ===================================================================== */
+  if (process.env.NODE_ENV === 'development' && isInitializing && !isInitialized) {
     return (
       <AppInitializationContext.Provider
         value={{
