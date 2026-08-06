@@ -21,6 +21,35 @@ function LoadingFallback() {
 }
 
 /* =====================================================================
+ * WHY THERE IS NO `mounted` GATE HERE
+ *
+ * This component used to open with:
+ *
+ *     const [mounted, setMounted] = useState(false);
+ *     useEffect(() => setMounted(true), []);
+ *     if (!mounted) return <LoadingFallback />;
+ *
+ * `mounted` is only ever set inside an effect, and effects do not run
+ * during server rendering. So the server's answer for EVERY route on the
+ * site — homepage, policy pages, browse, seller shops, both blog guides —
+ * was one empty black div. A crawler received <head> metadata and nothing
+ * else. Not because the pages are client components (client components do
+ * server-render in the App Router) but because four lines threw the body
+ * away before it was serialised.
+ *
+ * Nothing below needs the gate. `isMobile` and `hasActiveThread` both
+ * start false on the server AND on the client's first render, so
+ * hydration matches; their effects run afterwards. The fade-in is now a
+ * pure CSS animation rather than a state flip, so it needs no gate either.
+ *
+ * If you find yourself adding `if (!mounted)` here again, put it around
+ * the specific thing that reads `window`, not around the whole tree.
+ *
+ * Note: AppInitializationProvider carried an identical gate and had to be
+ * fixed at the same time — either one alone still blanks the page.
+ * ===================================================================== */
+
+/* =====================================================================
  * AGE GATE ROUTING
  *
  * Everything is gated unless it appears below. This is deliberate:
@@ -57,6 +86,7 @@ const AGE_GATE_EXEMPT_EXACT = [
   '/age-verification',
   '/age-verification/complete',
   '/help',
+  '/contact',
 ];
 
 /** Prefixes that are exempt along with everything beneath them. */
@@ -88,9 +118,7 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [showContent, setShowContent] = useState(false);
   const [hasActiveThread, setHasActiveThread] = useState(false);
   const pathname = usePathname();
 
@@ -108,7 +136,7 @@ export default function ClientLayout({
 
   // Check if we're on a messages page on mobile
   const isMessagesPage = pathname === '/buyers/messages' || pathname === '/sellers/messages';
-  
+
   // Only hide header if on mobile messages page WITH an active thread
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
@@ -140,24 +168,16 @@ export default function ClientLayout({
     );
 
   useEffect(() => {
-    setMounted(true);
-    
     // Check if mobile
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
-    // Trigger fade-in after mount
-    const timer = setTimeout(() => {
-      setShowContent(true);
-    }, 100);
-    
+
     return () => {
       window.removeEventListener('resize', checkMobile);
-      clearTimeout(timer);
     };
   }, []);
 
@@ -169,7 +189,7 @@ export default function ClientLayout({
     };
 
     window.addEventListener('threadStateChange', handleThreadStateChange as EventListener);
-    
+
     return () => {
       window.removeEventListener('threadStateChange', handleThreadStateChange as EventListener);
     };
@@ -209,18 +229,32 @@ export default function ClientLayout({
     }
   }, [pathname, shouldHideHeader, isMobile, isMessagesPage, hasActiveThread, requiresAgeVerification]);
 
-  if (!mounted) {
-    return <LoadingFallback />;
-  }
-
   return (
     <>
       {/* Google Analytics */}
       <GoogleAnalytics />
-      
+
       <Providers>
+        {/*
+          NOTE: this boundary wraps the whole app, so any client component
+          below that calls useSearchParams() makes the SERVER render this
+          fallback instead of the page — an empty body again, for that
+          route only. Today that is /browse/[id], the messages pages,
+          /signup, the verify-email routes and /wallet/buyer.
+
+          None of those are pages we need indexed right now, but when
+          /browse/[id] gets its server wrapper it will need its own
+          Suspense boundary lower down rather than relying on this one.
+        */}
         <Suspense fallback={<LoadingFallback />}>
-          <div className={`flex flex-col fullscreen md:min-h-screen bg-black text-white ${showContent ? 'app-fade-in' : 'opacity-0'}`}>
+          {/*
+            app-fade-in is a plain CSS animation (opacity 0 -> 1). It used
+            to be driven by a `showContent` state flipped 100ms after
+            mount, which meant the server emitted opacity-0 markup and the
+            page sat blank for a beat. The animation gets us the same
+            entrance without hiding anything from a crawler.
+          */}
+          <div className="flex flex-col fullscreen md:min-h-screen bg-black text-white app-fade-in">
             <BanCheck>
               {!shouldHideHeader && <Header />}
               <main className="flex-1">

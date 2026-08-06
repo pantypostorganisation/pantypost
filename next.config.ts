@@ -123,6 +123,17 @@ const nextConfig: NextConfig = {
     return [
       { source: '/home', destination: '/', permanent: true },
       { source: '/shop', destination: '/browse', permanent: true },
+
+      // /contact was linked from the footer and 404'd. Rather than a
+      // second page saying what /help already says — which would just be
+      // duplicate content competing with it in search — send it there.
+      // A 301 also passes on any links that already point at it.
+      { source: '/contact', destination: '/help', permanent: true },
+
+      // Both of these appeared in the old static public/sitemap.xml, so
+      // search engines have been told they exist. Neither was ever built.
+      { source: '/about', destination: '/help', permanent: true },
+      { source: '/faq', destination: '/help', permanent: true },
     ];
   },
 

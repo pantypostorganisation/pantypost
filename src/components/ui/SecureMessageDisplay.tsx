@@ -1,8 +1,24 @@
 // src/components/ui/SecureMessageDisplay.tsx
 
 import React, { useMemo } from 'react';
-import DOMPurify from 'dompurify';
-import { sanitizeHtml, sanitizeMarkdown } from '@/utils/security/sanitization';
+import { sanitizeHtml, sanitizeMarkdown, sanitizeStrict } from '@/utils/security/sanitization';
+
+/* =====================================================================
+ * DO NOT IMPORT dompurify DIRECTLY HERE.
+ *
+ * DOMPurify needs a DOM. In Node it exports a factory that has to be
+ * handed a window, so `DOMPurify.sanitize` is simply undefined during
+ * server rendering. This file used to call it directly, which threw
+ *
+ *     TypeError: g.A.sanitize is not a function
+ *
+ * and failed the production build on /terms the moment pages actually
+ * started rendering on the server. It had been dormant only because the
+ * `mounted` gate in ClientLayout meant nothing ever server-rendered.
+ *
+ * Everything goes through @/utils/security/sanitization instead, which
+ * checks `typeof window` and falls back appropriately.
+ * ===================================================================== */
 
 // Simple gray placeholder as a data URL (1x1 pixel stretched)
 // This is a tiny base64 encoded transparent PNG that won't cause 404 errors
@@ -45,8 +61,10 @@ export const SecureMessageDisplay: React.FC<SecureMessageDisplayProps> = ({
     } else if (allowBasicFormatting) {
       processed = sanitizeHtml(processed);
     } else {
-      // Strip all HTML
-      processed = DOMPurify.sanitize(processed, { ALLOWED_TAGS: [] });
+      // Strip all HTML. sanitizeStrict applies the identical DOMPurify
+      // config ({ ALLOWED_TAGS: [], ALLOWED_ATTR: [], KEEP_CONTENT: true })
+      // in the browser, and a tag-strip fallback on the server.
+      processed = sanitizeStrict(processed);
     }
 
     return processed;
