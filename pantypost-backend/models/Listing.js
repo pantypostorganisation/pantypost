@@ -56,6 +56,33 @@ const listingSchema = new mongoose.Schema({
     default: false
   },
 
+  // =====================================================
+  // THIRD-PARTY CONSENT ATTESTATION
+  //
+  // Recorded per listing rather than relying on a blanket clause in the
+  // Terms. A timestamped attestation against a specific listing is
+  // evidence; a term nobody re-reads is only a statement.
+  //
+  // Required by card scheme and payment processor rules covering
+  // user-generated content depicting third parties.
+  // =====================================================
+  consentAttestation: {
+    // True when the seller confirms nobody other than themselves
+    // appears in the content.
+    noThirdPartyDepicted: {
+      type: Boolean,
+      default: false
+    },
+    // True when the seller confirms they hold identity, age and written
+    // consent records for every person depicted.
+    holdsConsentRecords: {
+      type: Boolean,
+      default: false
+    },
+    attestedAt: Date,
+    attestedBy: String
+  },
+
   requiresApproval: {
     type: Boolean,
     // Fails closed: new listings require review unless explicitly approved.

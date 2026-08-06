@@ -456,13 +456,29 @@ export const useMyListings = () => {
   }, [formState]);
 
   // Save listing with validation and sanitization
-  const handleSaveListing = useCallback(async () => {
+  /* consentChoice is supplied by the listing form and records which
+     third-party consent statement the seller selected. Stored against
+     the listing so the attestation is evidenced per item rather than
+     resting on a clause in the Terms. */
+  const handleSaveListing = useCallback(async (consentChoice?: 'sole' | 'records') => {
     if (!validateFormData()) {
       setError('Please fix the validation errors');
       return;
     }
     
     const { title, description, imageUrls, isAuction, startingPrice, reservePrice, auctionDuration, price, tags, hoursWorn, isPremium } = formState;
+
+    // Timestamped attestation, recorded against this specific listing
+    // so the seller's declaration is evidenced per item rather than
+    // resting on a clause in the Terms.
+    const consentAttestation = consentChoice
+      ? {
+          noThirdPartyDepicted: consentChoice === 'sole',
+          holdsConsentRecords: consentChoice === 'records',
+          attestedAt: new Date().toISOString(),
+          attestedBy: user?.username || 'unknown',
+        }
+      : undefined;
     
     setError(null);
     
@@ -494,6 +510,7 @@ export const useMyListings = () => {
           isPremium,
           tags: tagsList,
           hoursWorn: hoursWorn === '' ? undefined : sanitizeNumber(hoursWorn.toString(), 0, 168),
+          consentAttestation,
         };
 
         const auctionSettings = {
@@ -523,6 +540,7 @@ export const useMyListings = () => {
           isPremium,
           tags: tagsList,
           hoursWorn: hoursWorn === '' ? undefined : sanitizeNumber(hoursWorn.toString(), 0, 168),
+          consentAttestation,
         };
 
         if (editingState.isEditing && editingState.listingId) {

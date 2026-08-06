@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Crown,
   CheckCircle,
+  ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
@@ -128,6 +129,13 @@ export default function ListingForm({
   }, [formState, selectedFiles.length]);
 
   // Check if form is valid overall
+  /* Third-party consent attestation.
+     Required by card scheme and payment processor rules for
+     user-generated content depicting people other than the uploader.
+     Captured per listing so there is a timestamped record, rather than
+     relying on a clause in the Terms nobody re-reads. */
+  const [consentChoice, setConsentChoice] = useState<'none' | 'sole' | 'records'>('none');
+
   const isFormValid = useMemo(() => {
     return validation.title.isValid && 
            validation.description.isValid && 
@@ -135,8 +143,9 @@ export default function ListingForm({
            validation.startingPrice.isValid &&
            validation.reservePrice.isValid &&
            validation.images.isValid &&
-           validation.tags.isValid;
-  }, [validation]);
+           validation.tags.isValid &&
+           consentChoice !== 'none';
+  }, [validation, consentChoice]);
 
   // Handle file selection with validation
   const handleSecureFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -258,7 +267,7 @@ export default function ListingForm({
       }
 
       // If all validations pass, submit the form
-      await onSave();
+      await onSave(consentChoice === 'none' ? undefined : consentChoice);
       
     } catch (error) {
       console.error('Form submission error:', error);
@@ -266,7 +275,7 @@ export default function ListingForm({
     } finally {
       setIsSubmitting(false);
     }
-  }, [formState, isSubmitting, validateForm, onSave]);
+  }, [formState, isSubmitting, validateForm, onSave, consentChoice]);
 
   // Handle field blur
   const handleFieldBlur = useCallback((fieldName: string) => {
@@ -795,6 +804,59 @@ export default function ListingForm({
           </div>
         )}
         
+        {/* Consent attestation. Deliberately not a single pre-tickable
+            checkbox: the seller must actively choose which statement
+            applies, so the record reflects a decision rather than a
+            default. */}
+        <div className="mt-6 rounded-lg border border-[#ff950e]/30 bg-[#ff950e]/5 p-4">
+          <div className="flex items-start gap-2.5 mb-3">
+            <ShieldCheck className="w-5 h-5 text-[#ff950e] shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-bold text-white">People shown in this listing</h4>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Required before publishing. Select the statement that applies.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-start gap-2.5 cursor-pointer rounded-md p-2.5 hover:bg-white/5 transition">
+              <input
+                type="radio"
+                name="consentAttestation"
+                checked={consentChoice === 'sole'}
+                onChange={() => setConsentChoice('sole')}
+                className="mt-0.5 accent-[#ff950e]"
+              />
+              <span className="text-sm text-gray-300">
+                No one other than me appears in these images.
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2.5 cursor-pointer rounded-md p-2.5 hover:bg-white/5 transition">
+              <input
+                type="radio"
+                name="consentAttestation"
+                checked={consentChoice === 'records'}
+                onChange={() => setConsentChoice('records')}
+                className="mt-0.5 accent-[#ff950e]"
+              />
+              <span className="text-sm text-gray-300">
+                Someone else appears in these images. I have verified their identity and age using
+                government-issued photographic identification, and I hold their written consent to
+                be depicted and to this content being published. I can provide these records within
+                48 hours if asked.
+              </span>
+            </label>
+          </div>
+
+          {consentChoice === 'none' && Object.keys(touched).length > 0 && (
+            <p className="mt-2 text-xs text-red-400">
+              Please select one of the statements above.
+            </p>
+          )}
+        </div>
+
         <div className="flex flex-col sm:flex-row gap-4 mt-6">
           <button
             type="submit"

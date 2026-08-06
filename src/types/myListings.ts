@@ -55,7 +55,7 @@ export interface ListingFormProps {
   onUploadFiles: () => void;
   onRemoveImage: (url: string) => void;
   onImageReorder: (dragIndex: number, dropIndex: number) => void;
-  onSave: () => void;
+  onSave: (consentChoice?: 'sole' | 'records') => void | Promise<void>;
   onCancel: () => void;
   onSaveDraft?: () => void;
   onLoadDraft?: (draft: ListingDraft) => void;

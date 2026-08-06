@@ -111,6 +111,20 @@ export default function ContentPolicyPage() {
               consented to that content being published here. By uploading, a user confirms both.
             </p>
             <p className="mt-3">
+              Where content shows anyone other than the seller, the seller must, before uploading,
+              verify that person&apos;s identity and age using government-issued photographic
+              identification, and obtain their written consent to being depicted, to the content
+              being published here, and to it being downloaded where that is possible. Those
+              records must be kept for as long as the content remains published and produced to us
+              within 48 hours if we ask for them.
+            </p>
+
+            <p className="mt-3">
+              Sellers confirm this when creating each listing. Content for which consent records
+              cannot be produced on request is removed immediately.
+            </p>
+
+            <p className="mt-3">
               Consent can be withdrawn at any time. If you appear in content on Panty Post and did
               not consent, or no longer consent, tell us through our{' '}
               <Link href="/complaints" className="text-[#ff950e] hover:underline">
