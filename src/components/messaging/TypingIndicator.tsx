@@ -1,7 +1,27 @@
 // src/components/messaging/TypingIndicator.tsx
 'use client';
 
-import React from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Avatar from './Avatar';
+
+/* =====================================================================
+ * "{name} is typing" — a small incoming-style bubble in the same left
+ * gutter as incoming message groups, with the same-size avatar, so the
+ * transcript never shifts sideways when the indicator swaps for the real
+ * message.
+ *
+ * Per the motion brief (§12): it fades/slides in, and on stop it plays a
+ * slightly faster exit before unmounting rather than vanishing between
+ * frames. The keyframes live in globals.css and are neutralised wholesale
+ * by the prefers-reduced-motion block there.
+ *
+ * The previous version carried its own avatar renderer with a purple→pink
+ * gradient fallback, hard-coded hex surfaces and inline style objects for
+ * every dot. Props are a superset of the old component's, so the legacy
+ * ConversationViews keep compiling until they are deleted.
+ * ===================================================================== */
+
+const LEAVE_MS = 160;
 
 interface TypingIndicatorProps {
   username: string;
@@ -10,109 +30,75 @@ interface TypingIndicatorProps {
 }
 
 export default function TypingIndicator({ username, isTyping, userPic }: TypingIndicatorProps) {
-  if (!isTyping) return null;
+  const [mounted, setMounted] = useState(isTyping);
+  const [leaving, setLeaving] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isTyping) {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      setMounted(true);
+      setLeaving(false);
+    } else if (mounted) {
+      setLeaving(true);
+      timerRef.current = setTimeout(() => {
+        setMounted(false);
+        setLeaving(false);
+        timerRef.current = null;
+      }, LEAVE_MS);
+    }
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+    // `mounted` is deliberately not a dependency: it would re-arm the
+    // leave timer the moment it flips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTyping]);
+
+  if (!mounted) return null;
 
   return (
     <div
-      className="flex items-end gap-2 mb-3"
-      style={{ animation: 'fadeIn 0.3s ease-out' }}
+      className={`flex items-end gap-2 pt-2 ${leaving ? 'soft-leave' : 'soft-enter'}`}
       aria-live="polite"
       aria-atomic="true"
     >
-      {/* User Avatar */}
-      <div className="flex-shrink-0">
-        {userPic ? (
-          <img
-            src={userPic}
-            alt={username}
-            className="w-8 h-8 rounded-full object-cover"
-          />
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xs font-bold">
-            {username.charAt(0).toUpperCase()}
-          </div>
-        )}
-      </div>
+      <Avatar username={username} src={userPic} size="sm" />
 
-      {/* Typing Bubble Container */}
-      <div className="flex flex-col">
-        <div className="text-xs text-gray-400 mb-1" aria-label={`${username} is typing`}>
-          {username} is typing
-        </div>
-
-        {/* Clean bubble without tail */}
+      <div>
+        <p className="mb-1 text-xs text-ink-faint">{username} is typing</p>
         <div
-          className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded shadow-sm"
-          style={{
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%)',
-            border: '1px solid rgba(255, 149, 14, 0.15)',
-            borderRadius: '6px',
-            width: 'fit-content',
-            minWidth: '48px',
-            maxWidth: '56px',
-          }}
+          className="inline-flex items-center gap-1 rounded-tl-sm rounded-tr-lg rounded-b-lg border border-line bg-surface-raised px-3 py-2.5"
+          aria-hidden="true"
         >
-          {/* Typing dots */}
-          <span
-            className="typing-dot"
-            style={{
-              width: '5px',
-              height: '5px',
-              background: '#ff950e',
-              borderRadius: '50%',
-              display: 'inline-block',
-              animation: 'typingBounce 1.4s infinite ease-in-out',
-              animationDelay: '0ms',
-            }}
-          />
-          <span
-            className="typing-dot"
-            style={{
-              width: '5px',
-              height: '5px',
-              background: '#ff950e',
-              borderRadius: '50%',
-              display: 'inline-block',
-              animation: 'typingBounce 1.4s infinite ease-in-out',
-              animationDelay: '200ms',
-            }}
-          />
-          <span
-            className="typing-dot"
-            style={{
-              width: '5px',
-              height: '5px',
-              background: '#ff950e',
-              borderRadius: '50%',
-              display: 'inline-block',
-              animation: 'typingBounce 1.4s infinite ease-in-out',
-              animationDelay: '400ms',
-            }}
-          />
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary" />
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary [animation-delay:200ms]" />
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary [animation-delay:400ms]" />
         </div>
       </div>
 
-      {/* Inline styles for animations - REDUCED BOUNCE HEIGHT */}
+      {/* Scoped keyframes; globals.css deliberately carries no ambient
+          animation, and this one only exists while someone is typing. */}
       <style jsx>{`
+        .typing-dot {
+          animation: typingBounce 1.4s infinite ease-in-out;
+        }
         @keyframes typingBounce {
-          0%, 60%, 100% {
+          0%,
+          60%,
+          100% {
             transform: translateY(0);
-            opacity: 0.6;
+            opacity: 0.5;
           }
           30% {
-            transform: translateY(-4px);
+            transform: translateY(-3px);
             opacity: 1;
-          }
-        }
-
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
           }
         }
       `}</style>

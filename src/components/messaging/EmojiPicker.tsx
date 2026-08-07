@@ -13,7 +13,7 @@ import { Clock, X } from 'lucide-react';
  * Two bugs are fixed here:
  *
  *  1. The toggle button could not close it. The old close-on-outside-click
- *     listened for `mousedown`, and the toggle sat outside the picker — so
+ *     listened for `mousedown`, and the toggle sat outside the picker â€” so
  *     mousedown set open=false, then the button's own click flipped the
  *     now-false value back to true. It reopened every time. The button is
  *     passed in as `anchorRef` and excluded from the outside test.
@@ -24,10 +24,10 @@ import { Clock, X } from 'lucide-react';
  * ===================================================================== */
 
 const CATEGORIES: { label: string; emojis: string[] }[] = [
-  { label: 'Smileys', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤗','🤭','🤫','🤔'] },
-  { label: 'Gestures', emojis: ['👋','🤚','✋','🖐️','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','👈','👉','👆','👇','👍','👎','👊','🤛','🤜','👏','🙌','🫶','🙏','💅','💪'] },
-  { label: 'Hearts', emojis: ['❤️','🩷','🧡','💛','💚','💙','🩵','💜','🖤','🩶','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝'] },
-  { label: 'Objects', emojis: ['🔥','✨','⭐','🌟','💫','💯','🎁','🎀','🌹','🌸','💐','👗','👙','🧦','👠','💋','🍑','🍒','🥂','🍾','💸','💰'] },
+  { label: 'Smileys', emojis: ['ðŸ˜€','ðŸ˜ƒ','ðŸ˜„','ðŸ˜','ðŸ˜†','ðŸ˜…','ðŸ¤£','ðŸ˜‚','ðŸ™‚','ðŸ™ƒ','ðŸ˜‰','ðŸ˜Š','ðŸ˜‡','ðŸ¥°','ðŸ˜','ðŸ¤©','ðŸ˜˜','ðŸ˜—','ðŸ˜š','ðŸ˜™','ðŸ¥²','ðŸ˜‹','ðŸ˜›','ðŸ˜œ','ðŸ¤ª','ðŸ˜','ðŸ¤—','ðŸ¤­','ðŸ¤«','ðŸ¤”'] },
+  { label: 'Gestures', emojis: ['ðŸ‘‹','ðŸ¤š','âœ‹','ðŸ–ï¸','ðŸ‘Œ','ðŸ¤Œ','ðŸ¤','âœŒï¸','ðŸ¤ž','ðŸ«°','ðŸ¤Ÿ','ðŸ¤˜','ðŸ‘ˆ','ðŸ‘‰','ðŸ‘†','ðŸ‘‡','ðŸ‘','ðŸ‘Ž','ðŸ‘Š','ðŸ¤›','ðŸ¤œ','ðŸ‘','ðŸ™Œ','ðŸ«¶','ðŸ™','ðŸ’…','ðŸ’ª'] },
+  { label: 'Hearts', emojis: ['â¤ï¸','ðŸ©·','ðŸ§¡','ðŸ’›','ðŸ’š','ðŸ’™','ðŸ©µ','ðŸ’œ','ðŸ–¤','ðŸ©¶','ðŸ¤','ðŸ¤Ž','ðŸ’”','â£ï¸','ðŸ’•','ðŸ’ž','ðŸ’“','ðŸ’—','ðŸ’–','ðŸ’˜','ðŸ’'] },
+  { label: 'Objects', emojis: ['ðŸ”¥','âœ¨','â­','ðŸŒŸ','ðŸ’«','ðŸ’¯','ðŸŽ','ðŸŽ€','ðŸŒ¹','ðŸŒ¸','ðŸ’','ðŸ‘—','ðŸ‘™','ðŸ§¦','ðŸ‘ ','ðŸ’‹','ðŸ‘','ðŸ’','ðŸ¥‚','ðŸ¾','ðŸ’¸','ðŸ’°'] },
 ];
 
 interface EmojiPickerProps {
@@ -48,7 +48,7 @@ export default function EmojiPicker({ open, recent, onSelect, onClose, anchorRef
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node;
       if (panelRef.current?.contains(target)) return;
-      // Excluding the toggle is the whole fix — see the note above.
+      // Excluding the toggle is the whole fix â€” see the note above.
       if (anchorRef?.current?.contains(target)) return;
       onClose();
     };
@@ -77,7 +77,7 @@ export default function EmojiPicker({ open, recent, onSelect, onClose, anchorRef
       ref={panelRef}
       role="dialog"
       aria-label="Choose an emoji"
-      className="absolute bottom-full left-0 right-0 z-30 mb-2 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface-overlay p-3 shadow-overlay sm:right-auto sm:w-80"
+      className="pop-in custom-scrollbar absolute bottom-full left-0 right-0 z-30 mb-2 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface-overlay p-3 shadow-overlay sm:right-auto sm:w-80"
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Emoji</span>

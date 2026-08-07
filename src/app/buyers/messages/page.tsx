@@ -1,17 +1,51 @@
 // src/app/buyers/messages/page.tsx
 'use client';
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import { useBuyerMessages } from '@/hooks/useBuyerMessages';
-import ThreadsSidebar from '@/components/buyers/messages/ThreadsSidebar';
-import ConversationView from '@/components/buyers/messages/ConversationView';
-import EmptyState from '@/components/buyers/messages/EmptyState';
+import {
+  MessagingLayout,
+  ThreadList,
+  ConversationPane,
+  EmptyConversation,
+  ImagePreviewModal,
+} from '@/components/messaging';
+import type { UICustomRequest, UIThread } from '@/components/messaging';
 import CustomRequestModal from '@/components/buyers/messages/CustomRequestModal';
 import PaymentModal from '@/components/buyers/messages/PaymentModal';
 import TipModal from '@/components/buyers/messages/TipModal';
-import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
+
+/* =====================================================================
+ * Buyer messages — now a thin adapter over the SHARED messaging set.
+ *
+ * The interesting code lives in components/messaging/*. This file only:
+ *   1. maps the hook's thread map into UIThread rows,
+ *   2. binds the hook's composer / request state onto ConversationPane,
+ *   3. keeps the buyer-only modals (custom request, payment, tip).
+ *
+ * The old page rendered components/buyers/messages/{ThreadsSidebar,
+ * ConversationView} — one half of two parallel, drifting trees. Those
+ * files are now unreferenced and can be deleted in a later cleanup pass.
+ * ===================================================================== */
+
+/** Requests arrive from RequestContext with server fields (pendingWith,
+    lastEditedBy) that the legacy CustomRequest type predates. */
+function toUIRequest(request: any): UICustomRequest {
+  return {
+    id: request.id,
+    title: request.title || '',
+    description: request.description || '',
+    price: Number(request.price) || 0,
+    tags: Array.isArray(request.tags) ? request.tags : [],
+    status: request.status || 'pending',
+    pendingWith: request.pendingWith,
+    lastEditedBy: request.lastEditedBy,
+    lastModifiedBy: request.lastModifiedBy,
+    paid: Boolean(request.paid),
+  };
+}
 
 export default function BuyerMessagesPage() {
   const {
@@ -24,26 +58,16 @@ export default function BuyerMessagesPage() {
     uiUnreadCounts,
     lastMessages,
     sellerProfiles,
-    totalUnreadCount,
     activeThread,
     setActiveThread,
     buyerRequests,
-    
+
     // UI State
     mounted,
-    searchQuery,
-    setSearchQuery,
-    activeTab,
-    setActiveTab,
-    filterBy,
-    setFilterBy,
     previewImage,
     setPreviewImage,
-    showEmojiPicker,
-    setShowEmojiPicker,
     recentEmojis,
-    setObserverReadMessages,
-    
+
     // Message input
     replyMessage,
     setReplyMessage,
@@ -51,7 +75,7 @@ export default function BuyerMessagesPage() {
     setSelectedImage,
     isImageLoading,
     imageError,
-    
+
     // Custom requests
     showCustomRequestModal,
     setShowCustomRequestModal,
@@ -65,18 +89,16 @@ export default function BuyerMessagesPage() {
     setEditPrice,
     editTitle,
     setEditTitle,
-    editTags,
-    setEditTags,
     editMessage,
     setEditMessage,
-    
+
     // Payment
     showPayModal,
     setShowPayModal,
     payingRequest,
     setPayingRequest,
     handleConfirmPay,
-    
+
     // Tips
     showTipModal,
     setShowTipModal,
@@ -84,15 +106,7 @@ export default function BuyerMessagesPage() {
     setTipAmount,
     tipResult,
     setTipResult,
-    
-    // Refs
-    fileInputRef,
-    emojiPickerRef,
-    messagesEndRef,
-    messagesContainerRef,
-    inputRef,
-    lastManualScrollTime,
-    
+
     // Actions
     handleReply,
     handleBlockToggle,
@@ -108,268 +122,256 @@ export default function BuyerMessagesPage() {
     handleSendTip,
     handleCustomRequestSubmit,
     closeCustomRequestModal,
-    validateCustomRequest,
-    
+
     // Status checks
     isUserBlocked,
     isUserReported,
   } = useBuyerMessages();
 
-  // Detect if we're on mobile
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  /* ---- Normalise the hook's map types once ----
+     The hook's memos early-return `{}` before a user exists, so these
+     come back typed `{record} | {}` and TypeScript refuses to
+     string-index the empty branch. The values are also the hook's
+     Message shape, whose `id` is optional, while UIThread.lastMessage
+     requires one — ThreadRow never reads `id`, and the runtime objects
+     from Mongo always carry it, hence the through-unknown cast. */
+  const lastMessageMap = lastMessages as unknown as {
+    [seller: string]: UIThread['lastMessage'];
+  };
+  const unreadMap = uiUnreadCounts as { [seller: string]: number };
+  const profileMap = sellerProfiles as {
+    [seller: string]: { profilePic: string | null; isVerified: boolean };
+  };
 
-  // Notify parent layout about active thread state
+  /* ClientLayout hides the site header on mobile while a thread is open;
+     this event is how it knows. Dispatching regardless of viewport is
+     fine — the layout applies it only where it matters. */
   useEffect(() => {
-    if (isMobile) {
-      // Dispatch custom event to notify ClientLayout about thread state
-      const event = new CustomEvent('threadStateChange', {
-        detail: { hasActiveThread: !!activeThread }
+    window.dispatchEvent(
+      new CustomEvent('threadStateChange', { detail: { hasActiveThread: !!activeThread } })
+    );
+  }, [activeThread]);
+
+  /* ---- Requests, indexed and counted ----
+     Two indexes on purpose: the card renders the UI shape, but the hook's
+     handlers (handleAccept, handlePayNow → handleConfirmPay) read fields
+     the UI shape deliberately drops — request.seller above all. Action
+     callbacks therefore hand back the RAW hook object. */
+  const requestsById = useMemo(() => {
+    const map: Record<string, UICustomRequest> = {};
+    (buyerRequests || []).forEach((request: any) => {
+      if (request?.id) map[request.id] = toUIRequest(request);
+    });
+    return map;
+  }, [buyerRequests]);
+
+  const rawRequestsById = useMemo(() => {
+    const map: Record<string, any> = {};
+    (buyerRequests || []).forEach((request: any) => {
+      if (request?.id) map[request.id] = request;
+    });
+    return map;
+  }, [buyerRequests]);
+
+  const awaitingMeBySeller = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (!user) return counts;
+    (buyerRequests || []).forEach((request: any) => {
+      const open = request?.status === 'pending' || request?.status === 'edited';
+      if (!open) return;
+      const myTurn = request.pendingWith
+        ? request.pendingWith === user.username
+        : (request.lastModifiedBy || request.lastEditedBy) !== user.username;
+      if (!myTurn) return;
+      const seller = request.seller;
+      if (seller) counts[seller] = (counts[seller] || 0) + 1;
+    });
+    return counts;
+  }, [buyerRequests, user]);
+
+  /* ---- Thread map → sorted rows ---- */
+  const threadRows: UIThread[] = useMemo(() => {
+    return Object.keys(threads)
+      .map((seller) => ({
+        username: seller,
+        lastMessage: lastMessageMap[seller],
+        unreadCount: unreadMap[seller] || 0,
+        profilePic: profileMap[seller]?.profilePic ?? null,
+        isVerified: profileMap[seller]?.isVerified ?? false,
+        pendingRequests: awaitingMeBySeller[seller] || 0,
+      }))
+      .sort((a, b) => {
+        const ta = a.lastMessage?.date ? new Date(a.lastMessage.date).getTime() : 0;
+        const tb = b.lastMessage?.date ? new Date(b.lastMessage.date).getTime() : 0;
+        return tb - ta;
       });
-      window.dispatchEvent(event);
-    }
-  }, [activeThread, isMobile]);
+  }, [threads, lastMessageMap, unreadMap, profileMap, awaitingMeBySeller]);
 
-  // Force re-render when mobile state changes
-  useEffect(() => {
-    console.log('Mobile state changed:', isMobile);
-  }, [isMobile]);
+  /* The modal types its form as {title, price, description}; the hook's
+     form also carries tags and hoursWorn. The modal only ever updates via
+     functional set with a spread, so state is safe either way — this
+     wrapper exists purely to bridge the two TypeScript shapes. */
+  const handleCustomRequestFormChange = useCallback(
+    (update: any) => {
+      setCustomRequestForm((prev: any) =>
+        typeof update === 'function' ? { ...prev, ...update(prev) } : { ...prev, ...update }
+      );
+    },
+    [setCustomRequestForm]
+  );
 
-  // Ensure wallet is in the correct format
-  const walletData = wallet || {};
-  
-  // Handle edit price conversion properly
-  const handleEditPriceChange = useCallback((value: string | number) => {
-    const str = String(value);
-    // Only accept numbers and a single dot; avoid passing NaN later
-    const cleaned = str.replace(/[^\d.]/g, '');
-    setEditPrice(cleaned);
-  }, [setEditPrice]);
+  /* The hook validates uploads via a change-event handler; the shared
+     composer hands over a File. Bridging here beats editing a 53KB hook
+     mid-UI-rebuild. */
+  const handleImageFile = useCallback(
+    (file: File) => {
+      handleImageSelect({ target: { files: [file], value: '' } } as unknown as React.ChangeEvent<HTMLInputElement>);
+    },
+    [handleImageSelect]
+  );
 
-  // Get numeric edit price for component props (never NaN)
-  const numericEditPrice =
-    editPrice !== undefined &&
-    editPrice !== null &&
-    editPrice !== '' &&
-    !Number.isNaN(Number(editPrice))
-      ? Number(editPrice)
-      : '';
-
-  // Safer custom request form setter (preserve 0/'' with nullish coalescing)
-  const handleCustomRequestFormChange = useCallback((update: any) => {
-    if (typeof update === 'function') {
-      setCustomRequestForm(prev => {
-        const newForm = update(prev) || {};
-        return {
-          title: newForm.title ?? prev.title ?? '',
-          price: newForm.price ?? prev.price ?? '',
-          description: newForm.description ?? prev.description ?? '',
-          tags: newForm.tags ?? prev.tags ?? [],
-          hoursWorn: newForm.hoursWorn ?? prev.hoursWorn ?? 0
-        };
-      });
-    } else {
-      setCustomRequestForm(prev => ({
-        title: update.title ?? prev.title ?? '',
-        price: update.price ?? prev.price ?? '',
-        description: update.description ?? prev.description ?? '',
-        tags: update.tags ?? prev.tags ?? [],
-        hoursWorn: update.hoursWorn ?? prev.hoursWorn ?? 0
-      }));
-    }
-  }, [setCustomRequestForm]);
-
-  // Mobile back navigation handler
-  const handleMobileBack = useCallback(() => {
-    setActiveThread(null);
-  }, [setActiveThread]);
+  const activeMessages = activeThread ? threads[activeThread] || [] : [];
+  const activeProfile = activeThread ? profileMap[activeThread] : undefined;
 
   if (!mounted || !user) {
     return (
       <BanCheck>
         <RequireAuth role="buyer">
-          <div className="py-3 bg-black"></div>
-          <div className="h-full bg-black flex items-center justify-center">
-            <div className="text-white">Loading...</div>
+          <div className="flex h-full items-center justify-center bg-surface">
+            <div className="loading-spinner" aria-label="Loading messages" />
           </div>
         </RequireAuth>
       </BanCheck>
     );
   }
 
-  const showSidebar = !isMobile || !activeThread;
-  const showConversation = !isMobile || !!activeThread;
-
-  const innerWrap = isMobile
-    ? 'flex h-full w-full flex-1 min-h-0 overflow-hidden bg-[#121212]'
-    : 'mx-auto flex h-full w-full flex-1 min-h-0 max-w-6xl overflow-hidden rounded-lg shadow-lg bg-[#121212]';
-
-  const sidebarWrap = `${showSidebar ? 'flex' : 'hidden'} ${
-    isMobile ? 'w-full' : 'w-[320px] border-r border-gray-800'
-  } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 h-full overflow-hidden`;
-
-  const conversationWrap = `${
-    showConversation ? 'flex' : 'hidden'
-  } flex-1 min-w-0 flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden`;
-
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        {/* Was h-[100dvh] — a full viewport height declared *inside* a shell
-            that already renders a header, so the page was taller than the
-            window and the whole document scrolled behind a chat that was
-            supposed to be fixed. ClientLayout owns the viewport now. */}
-        <main className="flex h-full min-h-0 w-full flex-1 overflow-hidden overscroll-contain bg-black pt-2 sm:pt-3">
-          <div className={innerWrap}>
-            <aside className={sidebarWrap}>
-              <ThreadsSidebar
-                threads={threads}
-                lastMessages={lastMessages}
-                sellerProfiles={sellerProfiles}
-                uiUnreadCounts={uiUnreadCounts}
+        {/* Height comes from ClientLayout, which pins messaging routes to
+            the viewport. No local viewport arithmetic — both old pages did
+            their own and both got it wrong in different directions. */}
+        <main className="h-full min-h-0 w-full overflow-hidden bg-surface">
+          <MessagingLayout
+            hasActiveThread={!!activeThread}
+            sidebar={
+              <ThreadList
+                threads={threadRows}
                 activeThread={activeThread}
-                setActiveThread={setActiveThread}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                filterBy={filterBy}
-                setFilterBy={setFilterBy}
-                totalUnreadCount={totalUnreadCount}
-                buyerRequests={buyerRequests}
-                setObserverReadMessages={setObserverReadMessages}
+                currentUser={user.username}
+                role="buyer"
+                onSelect={setActiveThread}
               />
-            </aside>
-
-            <section className={conversationWrap}>
-              {activeThread ? (
-                <ConversationView
+            }
+            conversation={
+              activeThread ? (
+                <ConversationPane
+                  role="buyer"
+                  currentUser={user.username}
                   activeThread={activeThread}
-                  threads={threads}
-                  user={user}
-                  sellerProfiles={sellerProfiles}
-                  buyerRequests={buyerRequests}
-                  wallet={walletData}
-                  previewImage={previewImage}
-                  setPreviewImage={setPreviewImage}
-                  showEmojiPicker={showEmojiPicker}
-                  setShowEmojiPicker={setShowEmojiPicker}
-                  recentEmojis={recentEmojis}
-                  replyMessage={replyMessage}
-                  setReplyMessage={setReplyMessage}
-                  selectedImage={selectedImage}
-                  setSelectedImage={setSelectedImage}
-                  isImageLoading={isImageLoading}
-                  imageError={imageError}
-                  editRequestId={editRequestId}
-                  setEditRequestId={setEditRequestId}
-                  editPrice={numericEditPrice}
-                  setEditPrice={handleEditPriceChange}
-                  editTitle={editTitle}
-                  setEditTitle={setEditTitle}
-                  editTags={editTags}
-                  setEditTags={setEditTags}
-                  editMessage={editMessage}
-                  setEditMessage={setEditMessage}
-                  handleReply={handleReply}
-                  handleBlockToggle={handleBlockToggle}
-                  handleReport={handleReport}
-                  handleAccept={handleAccept}
-                  handleDecline={handleDecline}
-                  handleEditRequest={handleEditRequest}
-                  handleEditSubmit={handleEditSubmit}
-                  handlePayNow={handlePayNow}
-                  handleImageSelect={handleImageSelect}
-                  handleMessageVisible={handleMessageVisible}
-                  handleEmojiClick={handleEmojiClick}
-                  isUserBlocked={isUserBlocked(activeThread)}
-                  isUserReported={isUserReported(activeThread)}
-                  messagesEndRef={messagesEndRef}
-                  messagesContainerRef={messagesContainerRef}
-                  fileInputRef={fileInputRef}
-                  emojiPickerRef={emojiPickerRef}
-                  inputRef={inputRef}
-                  lastManualScrollTime={lastManualScrollTime}
-                  setShowCustomRequestModal={setShowCustomRequestModal}
-                  setShowTipModal={setShowTipModal}
-                  isMobile={isMobile}
-                  onBack={handleMobileBack}
+                  messages={activeMessages}
+                  profilePic={activeProfile?.profilePic ?? null}
+                  isVerified={activeProfile?.isVerified ?? false}
+                  isBlocked={isUserBlocked(activeThread)}
+                  hasReported={isUserReported(activeThread)}
+                  onBack={() => setActiveThread(null)}
+                  onBlockToggle={handleBlockToggle}
+                  onReport={handleReport}
+                  composer={{
+                    value: replyMessage,
+                    onChange: setReplyMessage,
+                    onSend: handleReply,
+                    imagePreviewUrl: selectedImage,
+                    onImageFile: handleImageFile,
+                    onClearImage: () => setSelectedImage(null),
+                    isUploading: isImageLoading,
+                    uploadError: imageError,
+                    recentEmojis,
+                    onEmojiSelect: handleEmojiClick,
+                    onRequestCustom: () => setShowCustomRequestModal(true),
+                    onSendTip: () => setShowTipModal(true),
+                  }}
+                  requestsById={requestsById}
+                  onAcceptRequest={(request) => handleAccept(rawRequestsById[request.id] ?? request)}
+                  onDeclineRequest={(request) => handleDecline(rawRequestsById[request.id] ?? request)}
+                  onCounterRequest={(request) => handleEditRequest(rawRequestsById[request.id] ?? request)}
+                  onPayRequest={(request) => handlePayNow(rawRequestsById[request.id] ?? request)}
+                  requestEditState={{
+                    requestId: editRequestId,
+                    title: editTitle,
+                    price: String(editPrice ?? ''),
+                    message: editMessage,
+                    setTitle: setEditTitle,
+                    setPrice: setEditPrice,
+                    setMessage: setEditMessage,
+                    onSubmit: handleEditSubmit,
+                    onCancel: () => setEditRequestId(null),
+                  }}
+                  onMessageVisible={handleMessageVisible}
+                  onImagePreview={setPreviewImage}
                 />
               ) : (
-                <EmptyState />
-              )}
-            </section>
-          </div>
+                <EmptyConversation hasThreads={threadRows.length > 0} />
+              )
+            }
+          />
         </main>
 
-      {/* Modals */}
-      {previewImage && (
-        <ImagePreviewModal
-          imageUrl={previewImage}
-          isOpen={true}
-          onClose={() => setPreviewImage(null)}
-        />
-      )}
+        {/* ---- Buyer-only modals (unchanged contracts) ---- */}
+        {previewImage && (
+          <ImagePreviewModal imageUrl={previewImage} isOpen onClose={() => setPreviewImage(null)} />
+        )}
 
-      {showCustomRequestModal && activeThread && (
-        <CustomRequestModal
-          show={showCustomRequestModal}
-          onClose={closeCustomRequestModal}
-          activeThread={activeThread}
-          onSubmit={handleCustomRequestSubmit}
-          customRequestForm={{
-            title: customRequestForm.title ?? '',
-            price: customRequestForm.price ?? '',
-            description: customRequestForm.description ?? ''
-          }}
-          setCustomRequestForm={handleCustomRequestFormChange}
-          customRequestErrors={customRequestErrors}
-          isSubmittingRequest={isSubmittingRequest}
-          wallet={walletData}
-          user={user}
-        />
-      )}
+        {showCustomRequestModal && activeThread && (
+          <CustomRequestModal
+            show={showCustomRequestModal}
+            onClose={closeCustomRequestModal}
+            activeThread={activeThread}
+            onSubmit={handleCustomRequestSubmit}
+            customRequestForm={{
+              title: customRequestForm.title ?? '',
+              price: customRequestForm.price ?? '',
+              description: customRequestForm.description ?? '',
+            }}
+            setCustomRequestForm={handleCustomRequestFormChange}
+            customRequestErrors={customRequestErrors}
+            isSubmittingRequest={isSubmittingRequest}
+            wallet={wallet || {}}
+            user={user}
+          />
+        )}
 
-      {showPayModal && payingRequest && activeThread && (
-        <PaymentModal
-          show={showPayModal}
-          onClose={() => {
-            setShowPayModal(false);
-            setPayingRequest(null);
-          }}
-          payingRequest={payingRequest}
-          wallet={walletData}
-          user={user}
-          onConfirmPay={handleConfirmPay}
-        />
-      )}
+        {showPayModal && payingRequest && activeThread && (
+          <PaymentModal
+            show={showPayModal}
+            onClose={() => {
+              setShowPayModal(false);
+              setPayingRequest(null);
+            }}
+            payingRequest={payingRequest}
+            wallet={wallet || {}}
+            user={user}
+            onConfirmPay={handleConfirmPay}
+          />
+        )}
 
-      {showTipModal && activeThread && (
-        <TipModal
-          show={showTipModal}
-          onClose={() => {
-            setShowTipModal(false);
-            setTipAmount('');
-            setTipResult(null);
-          }}
-          activeThread={activeThread}
-          tipAmount={tipAmount}
-          setTipAmount={setTipAmount}
-          tipResult={tipResult}
-          wallet={walletData}
-          user={user}
-          onSendTip={handleSendTip}
-        />
-      )}
+        {showTipModal && activeThread && (
+          <TipModal
+            show={showTipModal}
+            onClose={() => {
+              setShowTipModal(false);
+              setTipAmount('');
+              setTipResult(null);
+            }}
+            activeThread={activeThread}
+            tipAmount={tipAmount}
+            setTipAmount={setTipAmount}
+            tipResult={tipResult}
+            wallet={wallet || {}}
+            user={user}
+            onSendTip={handleSendTip}
+          />
+        )}
       </RequireAuth>
     </BanCheck>
   );

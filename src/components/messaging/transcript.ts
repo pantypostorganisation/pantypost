@@ -46,6 +46,46 @@ export function timeLabel(iso: string): string {
 }
 
 /**
+ * ONE conversation key, matching the backend.
+ *
+ * The old code had three different implementations — raw, sanitizeStrict,
+ * and sanitizeUsername — so a typing event emitted under one key could be
+ * checked against another and silently dropped for some usernames. The
+ * server (Message.getThreadId) sorts the RAW usernames, so that is the
+ * only correct client-side form.
+ */
+export function getConversationKey(userA: string, userB: string): string {
+  return [userA, userB].sort().join('-');
+}
+
+/**
+ * Keep only the NEWEST message per custom request.
+ *
+ * Every edit and counter-offer emits another `customRequest` message into
+ * the thread, so without this a three-round negotiation renders three
+ * cards, two of them stale — and the stale ones still showed action
+ * buttons. Both old ConversationViews did this collapse; the shared list
+ * has to do it too.
+ */
+export function collapseSupersededRequests(messages: UIMessage[]): UIMessage[] {
+  const seen = new Set<string>();
+  const result: UIMessage[] = [];
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    const requestId = message.type === 'customRequest' ? message.meta?.id : undefined;
+
+    if (requestId) {
+      if (seen.has(requestId)) continue;
+      seen.add(requestId);
+    }
+    result.unshift(message);
+  }
+
+  return result;
+}
+
+/**
  * Build the render list.
  *
  * `firstUnreadId` marks where the "new messages" divider goes. It is

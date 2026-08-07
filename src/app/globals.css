@@ -4,7 +4,7 @@
    DESIGN TOKENS
    
    Tailwind v4 reads theme values from this @theme block, NOT from
-   tailwind.config.js — that file is a v3 artefact and is ignored.
+   tailwind.config.js â€” that file is a v3 artefact and is ignored.
    
    This is why the codebase filled up with arbitrary values like
    bg-[#1a1a1a]: semantic classes such as bg-card silently did nothing,
@@ -153,7 +153,7 @@ a:hover {
 }
 
 /* One hover treatment, applied consistently. The previous card hover
-   ran five effects at once — scale, image zoom, shadow jump, border
+   ran five effects at once â€” scale, image zoom, shadow jump, border
    colour and revealed controls. A single small lift reads as more
    confident and is easier to keep consistent. */
 .card-interactive {
@@ -242,7 +242,7 @@ a:hover {
   animation: spin 800ms linear infinite;
 }
 
-/* Verification badge — retained, but a single subtle pulse rather
+/* Verification badge â€” retained, but a single subtle pulse rather
    than a large expanding ring. */
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 149, 14, 0.35); }
@@ -281,9 +281,69 @@ a:hover {
 }
 
 .img-zoom:hover {
-  /* Was 1.05 alongside a card scale of 1.02 — two simultaneous zooms.
+  /* Was 1.05 alongside a card scale of 1.02 â€” two simultaneous zooms.
      One, smaller, is enough. */
   transform: scale(1.03);
+}
+
+/* =====================================================================
+   MESSAGING MOTION
+
+   The brief's rule: messages join the conversation, they don't snap into
+   it. Entrances are opacity + a few pixels of translate on the
+   compositor; the "stack glides up" effect is the scroll itself, driven
+   by a JS glide in MessageList. Horizontal travel is deliberately tiny —
+   vertical flow is the effect.
+
+   Everything here is disabled wholesale by the prefers-reduced-motion
+   block at the bottom of this file.
+   ===================================================================== */
+
+@keyframes msgInLeft {
+  from { opacity: 0; transform: translate(-6px, 10px); }
+  to   { opacity: 1; transform: translate(0, 0); }
+}
+
+@keyframes msgInRight {
+  from { opacity: 0; transform: translate(6px, 10px); }
+  to   { opacity: 1; transform: translate(0, 0); }
+}
+
+.msg-enter-left {
+  animation: msgInLeft 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.msg-enter-right {
+  animation: msgInRight 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Typing indicator and small popovers: in, and a slightly faster out. */
+@keyframes softInUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes softOutDown {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(6px); }
+}
+
+.soft-enter {
+  animation: softInUp 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.soft-leave {
+  animation: softOutDown 160ms ease-in both;
+}
+
+/* Menus, emoji panel, modals: opacity + 4-8px, finished inside ~200ms. */
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pop-in {
+  animation: popIn 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* =====================================================================
@@ -325,7 +385,7 @@ a:hover {
   outline: none;
 }
 
-/* Admin review actions. Flat fills rather than gradients — the colour
+/* Admin review actions. Flat fills rather than gradients â€” the colour
    already carries the meaning. */
 .btn-approve {
   background: var(--color-success-soft);
@@ -427,6 +487,14 @@ a:hover {
 /* =====================================================================
    SCROLLBARS
    ===================================================================== */
+
+/* Firefox has no ::-webkit-scrollbar; scrollbar-color is its whole API.
+   Without these two lines Firefox users got the browser-default light
+   grey bar inside every dark messaging panel. */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px;

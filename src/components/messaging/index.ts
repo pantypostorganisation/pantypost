@@ -7,6 +7,7 @@
 export { default as MessagingLayout } from './MessagingLayout';
 export { default as ThreadList } from './ThreadList';
 export { default as ThreadRow } from './ThreadRow';
+export { default as ConversationPane } from './ConversationPane';
 export { default as ConversationHeader } from './ConversationHeader';
 export { default as MessageList } from './MessageList';
 export { default as MessageBubble } from './MessageBubble';
@@ -16,8 +17,19 @@ export { default as Composer } from './Composer';
 export { default as EmojiPicker } from './EmojiPicker';
 export { default as EmptyConversation } from './EmptyConversation';
 export { default as Avatar } from './Avatar';
+export { default as TypingIndicator } from './TypingIndicator';
+export { default as ImagePreviewModal } from './ImagePreviewModal';
 
-export { buildTranscript, dayLabel, timeLabel } from './transcript';
+export type { PaneComposerBindings, ConversationPaneProps } from './ConversationPane';
+export type { RequestEditState } from './CustomRequestCard';
+
+export {
+  buildTranscript,
+  collapseSupersededRequests,
+  dayLabel,
+  getConversationKey,
+  timeLabel,
+} from './transcript';
 export type {
   MessagingRole,
   MessageKind,

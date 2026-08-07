@@ -1,40 +1,63 @@
 // src/app/sellers/messages/page.tsx
 'use client';
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import { useSellerMessages } from '@/hooks/useSellerMessages';
-import ThreadsSidebar from '@/components/seller/messages/ThreadsSidebar';
-import ConversationView from '@/components/seller/messages/ConversationView';
-import EmptyState from '@/components/seller/messages/EmptyState';
-import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
+import {
+  MessagingLayout,
+  ThreadList,
+  ConversationPane,
+  EmptyConversation,
+  ImagePreviewModal,
+} from '@/components/messaging';
+import type { UICustomRequest, UIThread } from '@/components/messaging';
+
+/* =====================================================================
+ * Seller messages — the same shared set the buyer page renders.
+ *
+ * Role differences are expressed as props, not as a second component
+ * tree: no tip / custom-request buttons in the composer, request actions
+ * call the seller hook's id-based handlers, and "view profile" in the
+ * header points at the buyer rather than a shop.
+ *
+ * components/seller/messages/* is now unreferenced dead code, to be
+ * deleted in a later cleanup pass.
+ * ===================================================================== */
+
+function toUIRequest(request: any): UICustomRequest {
+  return {
+    id: request.id,
+    title: request.title || '',
+    description: request.description || '',
+    price: Number(request.price) || 0,
+    tags: Array.isArray(request.tags) ? request.tags : [],
+    status: request.status || 'pending',
+    pendingWith: request.pendingWith,
+    lastEditedBy: request.lastEditedBy,
+    lastModifiedBy: request.lastModifiedBy,
+    paid: Boolean(request.paid),
+  };
+}
 
 export default function SellerMessagesPage() {
   const {
     // Auth
     user,
-    isAdmin,
 
     // Messages & threads
     threads,
-    unreadCounts,
     uiUnreadCounts,
     lastMessages,
     buyerProfiles,
-    totalUnreadCount,
     activeThread,
     setActiveThread,
 
     // UI State
     previewImage,
     setPreviewImage,
-    searchQuery,
-    setSearchQuery,
-    filterBy,
-    setFilterBy,
-    observerReadMessages,
-    setObserverReadMessages,
+    recentEmojis,
 
     // Message input
     replyMessage,
@@ -42,12 +65,7 @@ export default function SellerMessagesPage() {
     selectedImage,
     setSelectedImage,
     isImageLoading,
-    setIsImageLoading,
     imageError,
-    setImageError,
-    showEmojiPicker,
-    setShowEmojiPicker,
-    recentEmojis,
 
     // Custom requests
     sellerRequests,
@@ -72,158 +90,171 @@ export default function SellerMessagesPage() {
     handleMessageVisible,
     handleEmojiClick,
 
-    // Status
+    // Status (booleans for the active thread on this hook)
     isUserBlocked,
     isUserReported,
   } = useSellerMessages();
 
-  // Detect if we're on mobile
-  const [isMobile, setIsMobile] = useState(false);
+  /* ---- Normalise the hook's map types once ----
+     This hook's messages pass through a Zod schema that omits `id`, so
+     `lastMessages` is typed without the one field UIMessage requires.
+     The runtime objects carry it, and ThreadRow never reads it — hence
+     the through-unknown cast. (The schema gap itself is logged in the
+     debt list: validation is silently stripping a field the app uses.) */
+  const lastMessageMap = lastMessages as unknown as {
+    [buyer: string]: UIThread['lastMessage'];
+  };
 
+  /* ClientLayout hides the site header on mobile while a thread is open. */
   useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    window.dispatchEvent(
+      new CustomEvent('threadStateChange', { detail: { hasActiveThread: !!activeThread } })
+    );
+  }, [activeThread]);
 
-  // Notify parent layout about active thread state
-  useEffect(() => {
-    if (isMobile) {
-      const event = new CustomEvent('threadStateChange', {
-        detail: { hasActiveThread: !!activeThread },
+  /* ---- Requests, indexed and counted ---- */
+  const requestsById = useMemo(() => {
+    const map: Record<string, UICustomRequest> = {};
+    (sellerRequests || []).forEach((request: any) => {
+      if (request?.id) map[request.id] = toUIRequest(request);
+    });
+    return map;
+  }, [sellerRequests]);
+
+  const awaitingMeByBuyer = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (!user) return counts;
+    (sellerRequests || []).forEach((request: any) => {
+      const open = request?.status === 'pending' || request?.status === 'edited';
+      if (!open) return;
+      const myTurn = request.pendingWith
+        ? request.pendingWith === user.username
+        : (request.lastModifiedBy || request.lastEditedBy) !== user.username;
+      if (!myTurn) return;
+      const buyer = request.buyer;
+      if (buyer) counts[buyer] = (counts[buyer] || 0) + 1;
+    });
+    return counts;
+  }, [sellerRequests, user]);
+
+  /* ---- Thread map → sorted rows ----
+     Note the profile shape: this hook exposes { pic, verified }, the buyer
+     hook exposes { profilePic, isVerified }. Normalised here so the shared
+     components only ever see one vocabulary. */
+  const threadRows: UIThread[] = useMemo(() => {
+    return Object.keys(threads)
+      .map((buyer) => ({
+        username: buyer,
+        lastMessage: lastMessageMap[buyer],
+        unreadCount: uiUnreadCounts[buyer] || 0,
+        profilePic: buyerProfiles[buyer]?.pic ?? null,
+        isVerified: buyerProfiles[buyer]?.verified ?? false,
+        pendingRequests: awaitingMeByBuyer[buyer] || 0,
+      }))
+      .sort((a, b) => {
+        const ta = a.lastMessage?.date ? new Date(a.lastMessage.date).getTime() : 0;
+        const tb = b.lastMessage?.date ? new Date(b.lastMessage.date).getTime() : 0;
+        return tb - ta;
       });
-      window.dispatchEvent(event);
-    }
-  }, [activeThread, isMobile]);
+  }, [threads, lastMessageMap, uiUnreadCounts, buyerProfiles, awaitingMeByBuyer]);
 
-  // Mobile back navigation handler
-  const handleMobileBack = useCallback(() => {
-    setActiveThread(null);
-  }, [setActiveThread]);
+  /* Seller's edit-price state is number | ''; the card's input speaks
+     strings. Parse at the boundary. */
+  const setEditPriceFromString = useCallback(
+    (value: string) => {
+      const cleaned = value.replace(/[^\d.]/g, '');
+      const parsed = parseFloat(cleaned);
+      setEditPrice(cleaned === '' || Number.isNaN(parsed) ? '' : parsed);
+    },
+    [setEditPrice]
+  );
+
+  const activeMessages = activeThread ? threads[activeThread] || [] : [];
+  const activeProfile = activeThread ? buyerProfiles[activeThread] : undefined;
 
   if (!user) {
     return (
       <BanCheck>
         <RequireAuth role="seller">
-          <div className="py-3 bg-black" />
-          <div className="h-full bg-black flex items-center justify-center">
-            <div className="text-white">Loading...</div>
+          <div className="flex h-full items-center justify-center bg-surface">
+            <div className="loading-spinner" aria-label="Loading messages" />
           </div>
         </RequireAuth>
       </BanCheck>
     );
   }
 
-  // ----- className helpers (purely to keep JSX simple & error-proof) -----
-  const showSidebar = !isMobile || !activeThread;
-  const showConversation = !isMobile || !!activeThread;
-
-  const innerWrap = isMobile
-    ? 'flex h-full w-full min-h-0 overflow-hidden bg-[#121212]'
-    : 'mx-auto flex h-full w-full min-h-0 max-w-6xl overflow-hidden rounded-lg shadow-lg bg-[#121212]';
-
-  const sidebarWrap = `${showSidebar ? 'flex' : 'hidden'} ${
-    isMobile ? 'w-full' : 'w-[320px] border-r border-gray-800'
-  } flex-shrink-0 flex-col bg-[#1a1a1a] min-h-0 h-full overflow-hidden`;
-
-  const conversationWrap = `${showConversation ? 'flex' : 'hidden'} flex-1 flex h-full flex-col bg-[#121212] min-h-0 overflow-hidden`;
-
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        {/* h-full, not a viewport calculation.
-
-            This was `h-[calc(100dvh-64px)]`, subtracting an assumed header
-            height. The header is not reliably 64px, and ClientLayout removes
-            it entirely on mobile once a thread is open — which left a 64px
-            strip of dead black below the composer. ClientLayout now pins the
-            shell to the viewport for messaging routes, so the correct answer
-            here is simply "whatever is left". */}
-        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-black pt-2 sm:pt-3">
-          <main className="flex h-full min-h-0 w-full flex-1 overscroll-contain">
-            <div className={innerWrap}>
-              <aside className={sidebarWrap}>
-                <ThreadsSidebar
-                  isAdmin={isAdmin}
-                  threads={threads}
-                  lastMessages={lastMessages}
-                  buyerProfiles={buyerProfiles}
-                  totalUnreadCount={totalUnreadCount}
-                  uiUnreadCounts={uiUnreadCounts}
+        <main className="h-full min-h-0 w-full overflow-hidden bg-surface">
+          <MessagingLayout
+            hasActiveThread={!!activeThread}
+            sidebar={
+              <ThreadList
+                threads={threadRows}
+                activeThread={activeThread}
+                currentUser={user.username}
+                role="seller"
+                onSelect={setActiveThread}
+              />
+            }
+            conversation={
+              activeThread ? (
+                <ConversationPane
+                  role="seller"
+                  currentUser={user.username}
                   activeThread={activeThread}
-                  setActiveThread={setActiveThread}
-                  searchQuery={searchQuery}
-                  setSearchQuery={setSearchQuery}
-                  filterBy={filterBy}
-                  setFilterBy={setFilterBy}
-                  setObserverReadMessages={setObserverReadMessages}
+                  messages={activeMessages}
+                  profilePic={activeProfile?.pic ?? null}
+                  isVerified={activeProfile?.verified ?? false}
+                  isBlocked={isUserBlocked}
+                  hasReported={isUserReported}
+                  onBack={() => setActiveThread(null)}
+                  onBlockToggle={handleBlockToggle}
+                  onReport={handleReport}
+                  composer={{
+                    value: replyMessage,
+                    onChange: setReplyMessage,
+                    onSend: handleReply,
+                    imagePreviewUrl: selectedImage,
+                    onImageFile: handleImageSelect,
+                    onClearImage: () => setSelectedImage(null),
+                    isUploading: isImageLoading,
+                    uploadError: imageError,
+                    recentEmojis,
+                    onEmojiSelect: handleEmojiClick,
+                  }}
+                  requestsById={requestsById}
+                  onAcceptRequest={(request) => handleAccept(request.id)}
+                  onDeclineRequest={(request) => handleDecline(request.id)}
+                  onCounterRequest={(request) =>
+                    handleEditRequest(request.id, request.title, request.price, request.description)
+                  }
+                  requestEditState={{
+                    requestId: editRequestId,
+                    title: editTitle,
+                    price: editPrice === '' ? '' : String(editPrice),
+                    message: editMessage,
+                    setTitle: setEditTitle,
+                    setPrice: setEditPriceFromString,
+                    setMessage: setEditMessage,
+                    onSubmit: handleEditSubmit,
+                    onCancel: () => setEditRequestId(null),
+                  }}
+                  onMessageVisible={handleMessageVisible}
+                  onImagePreview={setPreviewImage}
                 />
-              </aside>
+              ) : (
+                <EmptyConversation hasThreads={threadRows.length > 0} />
+              )
+            }
+          />
+        </main>
 
-              <section className={conversationWrap}>
-                {activeThread ? (
-                  <ConversationView
-                    activeThread={activeThread}
-                    threads={threads}
-                    buyerProfiles={buyerProfiles}
-                    sellerRequests={sellerRequests}
-                    isUserBlocked={isUserBlocked}
-                    isUserReported={isUserReported}
-                    handleReport={handleReport}
-                    handleBlockToggle={handleBlockToggle}
-                    user={user}
-                    messageInputControls={{
-                      replyMessage,
-                      setReplyMessage,
-                      selectedImage,
-                      setSelectedImage,
-                      isImageLoading,
-                      setIsImageLoading,
-                      imageError,
-                      setImageError,
-                      showEmojiPicker,
-                      setShowEmojiPicker,
-                      recentEmojis,
-                      handleReply,
-                      handleEmojiClick,
-                      handleImageSelect,
-                    }}
-                    editRequestControls={{
-                      editRequestId,
-                      setEditRequestId,
-                      editPrice,
-                      setEditPrice,
-                      editTitle,
-                      setEditTitle,
-                      editMessage,
-                      setEditMessage,
-                      handleEditSubmit,
-                    }}
-                    handleAccept={handleAccept}
-                    handleDecline={handleDecline}
-                    handleEditRequest={handleEditRequest}
-                    handleMessageVisible={handleMessageVisible}
-                    setPreviewImage={setPreviewImage}
-                    isMobile={isMobile}
-                    onBack={handleMobileBack}
-                  />
-                ) : (
-                  <EmptyState />
-                )}
-              </section>
-            </div>
-          </main>
-
-          {/* Image Preview Modal */}
-          {previewImage && (
-            <ImagePreviewModal
-              imageUrl={previewImage}
-              isOpen={true}
-              onClose={() => setPreviewImage(null)}
-            />
-          )}
-        </div>
+        {previewImage && (
+          <ImagePreviewModal imageUrl={previewImage} isOpen onClose={() => setPreviewImage(null)} />
+        )}
       </RequireAuth>
     </BanCheck>
   );

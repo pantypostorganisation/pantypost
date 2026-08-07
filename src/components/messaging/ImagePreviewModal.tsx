@@ -1,8 +1,19 @@
 // src/components/messaging/ImagePreviewModal.tsx
 'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
+
+/* =====================================================================
+ * Full-size view of an image from a conversation.
+ *
+ * Restyled onto the tokens: the close control was a red-500 circle
+ * hanging off the corner — danger colour for a neutral action, on a
+ * surface colour from Tailwind's default palette rather than ours. It is
+ * now a quiet overlay button, and the backdrop matches every other modal.
+ *
+ * Props are unchanged, so existing call sites keep working.
+ * ===================================================================== */
 
 interface ImagePreviewModalProps {
   imageUrl: string;
@@ -10,68 +21,55 @@ interface ImagePreviewModalProps {
   onClose: () => void;
 }
 
-const ImagePreviewModal: React.FC<ImagePreviewModalProps> = ({
-  imageUrl,
-  isOpen,
-  onClose,
-}) => {
-  // Close on Escape
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    },
-    [onClose]
-  );
-
-  // Prevent background scroll while open + add key listener
+export default function ImagePreviewModal({ imageUrl, isOpen, onClose }: ImagePreviewModalProps) {
   useEffect(() => {
     if (!isOpen) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = '';
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', onKeyDown);
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="Image preview"
     >
-      <div
-        className="relative max-w-[90vw] max-h-[90vh] outline-none"
-        onClick={(e) => e.stopPropagation()}
-        tabIndex={-1}
-      >
+      <div className="pop-in relative" onClick={(event) => event.stopPropagation()}>
         <button
+          type="button"
           onClick={onClose}
-          className="absolute -top-4 -right-4 bg-red-500 text-white rounded-full p-2 shadow-lg"
+          className="absolute right-2 top-2 z-10 rounded-full border border-line-strong bg-surface-overlay/90 p-2 text-ink transition-colors hover:bg-surface-hover"
           aria-label="Close preview"
         >
-          <X size={20} />
+          <X className="h-4 w-4" aria-hidden="true" />
         </button>
-        {/* Guard against empty URL */}
+
         {imageUrl ? (
           <img
             src={imageUrl}
             alt="Full size preview"
-            className="max-w-full max-h-[90vh] object-contain rounded-lg"
+            className="max-h-[90vh] max-w-[90vw] rounded-lg border border-line-strong object-contain shadow-overlay"
             draggable={false}
           />
         ) : (
-          <div className="max-w-full max-h-[90vh] p-8 bg-[#1a1a1a] text-gray-400 rounded-lg">
+          <div className="rounded-lg border border-line bg-surface-raised p-8 text-ink-muted">
             Image unavailable
           </div>
         )}
       </div>
     </div>
   );
-};
-
-export default ImagePreviewModal;
+}

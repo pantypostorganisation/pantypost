@@ -79,8 +79,11 @@ export default function ConversationHeader({
     };
   }, [menuOpen]);
 
-  // Sellers browse buyers; buyers browse seller shops. Admin gets neither.
+  /* Buyers browse seller shops. A seller-side "view buyer profile" entry
+     is deliberately absent until the /buyers/[username] route is confirmed
+     to exist — a dead menu link is worse than no link. */
   const profileHref = role === 'buyer' ? `/sellers/${encodeURIComponent(username)}` : null;
+  const profileLabel = 'View shop';
 
   return (
     <header className="flex shrink-0 items-center gap-3 border-b border-line bg-surface px-3 py-2.5 sm:px-4">
@@ -93,20 +96,48 @@ export default function ConversationHeader({
         <ArrowLeft className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      <Avatar
-        username={username}
-        src={profilePic}
-        size="md"
-        isVerified={isVerified}
-        isOnline={isOnline}
-      />
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-ink">{username}</p>
-        {activity ? (
-          <p className={`truncate text-xs ${isOnline ? 'text-success' : 'text-ink-faint'}`}>{activity}</p>
-        ) : null}
-      </div>
+      {/* §5 of the brief: clicking the recipient's avatar/name opens their
+          profile. One link around both; text colours live on children so
+          the unlayered `a {}` rule in globals.css cannot repaint them. */}
+      {profileHref ? (
+        <Link
+          href={profileHref}
+          className="-mx-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-md px-1.5 py-0.5 no-underline transition-colors hover:bg-surface-hover"
+          aria-label={`Open ${username}'s profile`}
+        >
+          <Avatar
+            username={username}
+            src={profilePic}
+            size="md"
+            isVerified={isVerified}
+            isOnline={isOnline}
+          />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-ink">{username}</span>
+            {activity ? (
+              <span className={`block truncate text-xs ${isOnline ? 'text-success' : 'text-ink-faint'}`}>
+                {activity}
+              </span>
+            ) : null}
+          </span>
+        </Link>
+      ) : (
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <Avatar
+            username={username}
+            src={profilePic}
+            size="md"
+            isVerified={isVerified}
+            isOnline={isOnline}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-semibold text-ink">{username}</p>
+            {activity ? (
+              <p className={`truncate text-xs ${isOnline ? 'text-success' : 'text-ink-faint'}`}>{activity}</p>
+            ) : null}
+          </div>
+        </div>
+      )}
 
       <div className="relative">
         <button
@@ -125,7 +156,7 @@ export default function ConversationHeader({
           <div
             ref={menuRef}
             role="menu"
-            className="absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-md border border-line-strong bg-surface-overlay py-1 shadow-overlay"
+            className="pop-in absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-md border border-line-strong bg-surface-overlay py-1 shadow-overlay"
           >
             {profileHref && (
               <Link
@@ -135,7 +166,9 @@ export default function ConversationHeader({
                 className="flex items-center gap-2 px-3 py-2 text-sm no-underline hover:bg-surface-hover"
               >
                 <UserCircle className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-                <span className="text-ink">View shop</span>
+                {/* Span, not bare text: globals.css styles `a` unlayered,
+                    which beats utilities on the <a> itself. */}
+                <span className="text-ink">{profileLabel}</span>
               </Link>
             )}
 

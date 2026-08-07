@@ -20,10 +20,22 @@ import EmojiPicker from './EmojiPicker';
  *  - `relative` lives on this wrapper, so the emoji panel always has a
  *    positioned ancestor. On mobile the seller's did not, and the picker
  *    anchored to the viewport and rendered off the top of the screen.
+ *
+ * EMOJI has two modes. By default the composer inserts at the caret and
+ * reports usage via `onEmojiUsed`. If `onEmojiSelect` is provided instead,
+ * selection is delegated wholly to the caller — used by the pages, whose
+ * hooks both append the emoji AND persist the recents list in one
+ * callback. Wiring that hook to `onEmojiUsed` as well would insert every
+ * emoji twice, which is exactly the sort of bug this file exists to end.
  * ===================================================================== */
 
-const MAX_LENGTH = 1000;
-const COUNTER_FROM = 850;
+/* 250 is the cap both live composers enforced and the backend has only
+   ever been exercised against. Raising it is a backend-and-frontend
+   change together, not a UI-side default. The difference from before:
+   the counter is VISIBLE as you approach it, instead of silent
+   truncation at the limit. */
+const MAX_LENGTH = 250;
+const COUNTER_FROM = 180;
 
 interface ComposerProps {
   value: string;
@@ -34,7 +46,11 @@ interface ComposerProps {
   notice?: React.ReactNode;
   placeholder?: string;
   recentEmojis?: string[];
+  /** Caret-insert mode: called after the composer inserts, for recency. */
   onEmojiUsed?: (emoji: string) => void;
+  /** Delegated mode: the caller owns insertion AND recency. Wins over
+      onEmojiUsed. */
+  onEmojiSelect?: (emoji: string) => void;
   onImageSelected?: (file: File) => void;
   imagePreview?: string | null;
   onClearImage?: () => void;
@@ -54,6 +70,7 @@ export default function Composer({
   placeholder = 'Type a message',
   recentEmojis = [],
   onEmojiUsed,
+  onEmojiSelect,
   onImageSelected,
   imagePreview,
   onClearImage,
@@ -92,6 +109,13 @@ export default function Composer({
   };
 
   const insertEmoji = (emoji: string) => {
+    if (onEmojiSelect) {
+      // Delegated: the caller inserts and records. See the header note.
+      onEmojiSelect(emoji);
+      requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }));
+      return;
+    }
+
     const el = textareaRef.current;
     if (!el) {
       onChange((value + emoji).slice(0, MAX_LENGTH));
@@ -131,7 +155,7 @@ export default function Composer({
         />
 
         {imagePreview && (
-          <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-line bg-surface-raised p-2">
+          <div className="pop-in mb-2 inline-flex items-center gap-2 rounded-md border border-line bg-surface-raised p-2">
             <img src={imagePreview} alt="" className="h-14 w-14 rounded-sm object-cover" />
             <button
               type="button"
@@ -150,7 +174,7 @@ export default function Composer({
           </p>
         )}
 
-        <div className="flex items-end gap-2 rounded-lg border border-line bg-surface-overlay px-2 py-1.5 focus-within:border-primary">
+        <div className="flex items-end gap-2 rounded-lg border border-line bg-surface-overlay px-2 py-1.5 transition-colors focus-within:border-primary">
           {onImageSelected && (
             <>
               <input
@@ -210,7 +234,7 @@ export default function Composer({
             onClick={send}
             disabled={!canSend}
             aria-label="Send message"
-            className="rounded-full bg-primary p-2 transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-full bg-primary p-2 transition-colors hover:bg-primary-hover active:bg-primary-press disabled:cursor-not-allowed disabled:opacity-40"
           >
             {/* Label colour lives on a child: globals.css declares
                 `a { color: … }` unlayered, and an unlayered rule beats a
@@ -227,7 +251,7 @@ export default function Composer({
               type="button"
               onClick={onRequestCustom}
               disabled={disabled}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary-line bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-black active:bg-primary-press disabled:opacity-50"
             >
               <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
               Custom request
@@ -238,7 +262,7 @@ export default function Composer({
               type="button"
               onClick={onSendTip}
               disabled={disabled}
-              className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-xs font-medium text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-full border border-primary-line bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-black active:bg-primary-press disabled:opacity-50"
             >
               <Gift className="h-3.5 w-3.5" aria-hidden="true" />
               Send tip
