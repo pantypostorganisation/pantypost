@@ -132,8 +132,16 @@ export default function SellerMessagesPage() {
   return (
     <BanCheck>
       <RequireAuth role="seller">
-        <div className="min-h-[100dvh] overflow-hidden overscroll-contain bg-black">
-          <main className="flex h-[calc(100dvh-64px)] w-full overscroll-contain">
+        {/* h-full, not a viewport calculation.
+
+            This was `h-[calc(100dvh-64px)]`, subtracting an assumed header
+            height. The header is not reliably 64px, and ClientLayout removes
+            it entirely on mobile once a thread is open — which left a 64px
+            strip of dead black below the composer. ClientLayout now pins the
+            shell to the viewport for messaging routes, so the correct answer
+            here is simply "whatever is left". */}
+        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-black">
+          <main className="flex h-full min-h-0 w-full flex-1 overscroll-contain">
             <div className={innerWrap}>
               <aside className={sidebarWrap}>
                 <ThreadsSidebar

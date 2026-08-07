@@ -137,6 +137,12 @@ export default function ClientLayout({
   // Check if we're on a messages page on mobile
   const isMessagesPage = pathname === '/buyers/messages' || pathname === '/sellers/messages';
 
+  /* Separate from isMessagesPage on purpose: that flag also drives
+     header-hiding on mobile, and admin messaging shouldn't inherit that
+     behaviour. This one only decides whether the shell is pinned to the
+     viewport. */
+  const isFixedHeightMessaging = isMessagesPage || pathname === '/admin/messages';
+
   // Only hide header if on mobile messages page WITH an active thread
   const shouldHideHeader = hideHeaderRoutes.some(route => {
     return pathname === route || pathname.startsWith(route + '?') || pathname.startsWith(route + '#');
@@ -254,10 +260,36 @@ export default function ClientLayout({
             page sat blank for a beat. The animation gets us the same
             entrance without hiding anything from a crawler.
           */}
-          <div className="flex flex-col fullscreen md:min-h-screen bg-black text-white app-fade-in">
+          {/*
+            Messaging is a fixed-height app view: the thread list and the
+            transcript scroll independently and nothing below the composer
+            should ever scroll the document. Everything else is a normal
+            document that grows with its content.
+
+            Both message pages used to solve this themselves and got it
+            wrong in opposite directions — the buyer page set h-[100dvh]
+            *inside* this shell, which already renders a header, so the page
+            was taller than the viewport; the seller page subtracted a
+            hard-coded 64px for a header whose height isn't fixed and which
+            is removed entirely on mobile once a thread is open, leaving a
+            64px dead strip under the composer.
+
+            Pinning the shell here instead means the pages just say h-full
+            and inherit whatever is actually left over. No magic numbers.
+          */}
+          <div
+            className={`flex flex-col bg-black text-white app-fade-in ${
+              isFixedHeightMessaging
+                ? 'h-dvh overflow-hidden'
+                : 'fullscreen md:min-h-screen'
+            }`}
+          >
             <BanCheck>
               {!shouldHideHeader && <Header />}
-              <main className="flex-1">
+              {/* min-h-0 lets a flex child actually shrink; without it the
+                  transcript's overflow-y-auto never engages and the whole
+                  document scrolls instead. */}
+              <main className={`flex-1 ${isFixedHeightMessaging ? 'min-h-0' : ''}`}>
                 {/*
                   Gated routes render inside AgeGate, which shows the
                   verification prompt to signed-in users who have not

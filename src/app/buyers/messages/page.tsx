@@ -224,7 +224,11 @@ export default function BuyerMessagesPage() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <main className="flex h-[100dvh] min-h-0 w-full overflow-hidden overscroll-contain bg-black p-0">
+        {/* Was h-[100dvh] — a full viewport height declared *inside* a shell
+            that already renders a header, so the page was taller than the
+            window and the whole document scrolled behind a chat that was
+            supposed to be fixed. ClientLayout owns the viewport now. */}
+        <main className="flex h-full min-h-0 w-full flex-1 overflow-hidden overscroll-contain bg-black p-0">
           <div className={innerWrap}>
             <aside className={sidebarWrap}>
               <ThreadsSidebar

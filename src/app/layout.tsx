@@ -127,6 +127,19 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: 'cover',
+  /* The mobile keyboard problem.
+
+     By default a browser shrinks only the *visual* viewport when the
+     on-screen keyboard opens — the layout viewport, which is what dvh and
+     position:fixed measure against, stays full height. So a chat composer
+     pinned to the bottom of the screen ends up underneath the keyboard.
+
+     'resizes-content' shrinks the layout viewport too, so dvh recalculates
+     and the composer sits directly above the keyboard. Chrome 108+ and
+     Firefox 132+ honour it; Safari ignores it for now, which is why the
+     transcript is a normal flex child rather than position:fixed — Safari
+     then scrolls the focused input into view by itself. */
+  interactiveWidget: 'resizes-content',
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ff950e' },
     { media: '(prefers-color-scheme: dark)', color: '#000000' },
@@ -141,7 +154,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        {/* NOTE: no hand-written <meta name="viewport"> here.
+            Next generates it from the `viewport` export above; a manual tag
+            duplicates it and silently drops whatever the export sets —
+            including interactive-widget. */}
 
         {/* PWA tags */}
         <link rel="manifest" href="/manifest.json" />
