@@ -367,7 +367,7 @@ router.post('/', authMiddleware, async (req, res) => {
           const referrerNotification = new Notification({
             recipient: activeReferral.referrer,
             type: 'sale', // Use 'sale' type as 'referral_commission' might not be in enum
-            title: '💰 Referral Commission Earned!',
+            title: 'ðŸ’° Referral Commission Earned!',
             message: `You earned $${referralCommission.toFixed(2)} from ${seller}'s sale of "${order.title}"`,
             link: '/sellers/profile',
             priority: 'normal',
@@ -621,6 +621,584 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
+// =====================================================================
+// POST /api/orders/drop — claim one numbered unit of a drop listing
+//
+// SERVER-AUTHORITATIVE ON PURPOSE. The legacy POST / trusts the request
+// body for price, seller and title, and flips the listing sold without
+// checking it was still active — survivable at one-buyer-per-listing
+// pace, catastrophic under a creator-drop stampede. Here the client
+// sends a listingId and nothing that matters; every dollar amount is
+// computed from the listing on this side.
+//
+// CONCURRENCY: the unit claim is a single findOneAndUpdate whose filter
+// requires unitsRemaining > 0 and whose update $incs the counters.
+// MongoDB serialises those document updates, so N simultaneous buyers
+// each atomically receive a distinct unit number or a clean sold-out —
+// no read-then-write window, no oversell. Everything after the claim
+// uses the same compensating-action pattern as the rest of this file
+// (no replica set, so no multi-document transactions): any failure
+// restores the claimed unit and unwinds the wallets.
+// =====================================================================
+router.post('/drop', authMiddleware, async (req, res) => {
+  try {
+    const buyer = req.user.username;
+    const { listingId, deliveryAddress } = req.body || {};
+
+    if (req.user.role !== 'buyer') {
+      return res.status(403).json({
+        success: false,
+        error: 'Only buyers can purchase drop units'
+      });
+    }
+
+    if (!listingId) {
+      return res.status(400).json({
+        success: false,
+        error: 'listingId is required'
+      });
+    }
+
+    // ---- Pre-checks on a plain read (the atomic claim re-checks the
+    // ones that can race) ----
+    const listing = await Listing.findById(listingId);
+    if (!listing || listing.approvalStatus !== 'approved') {
+      // Unapproved content is invisible to buyers everywhere else;
+      // purchase must not confirm its existence either.
+      return res.status(404).json({
+        success: false,
+        error: 'Listing not found'
+      });
+    }
+
+    if (!listing.drop || !listing.drop.isDrop) {
+      return res.status(400).json({
+        success: false,
+        error: 'This is not a drop listing'
+      });
+    }
+
+    if (listing.seller === buyer) {
+      return res.status(400).json({
+        success: false,
+        error: 'You cannot purchase your own listing'
+      });
+    }
+
+    if (listing.drop.scheduledFor && new Date(listing.drop.scheduledFor).getTime() > Date.now()) {
+      return res.status(400).json({
+        success: false,
+        error: 'This drop has not opened yet',
+        opensAt: listing.drop.scheduledFor
+      });
+    }
+
+    if (listing.isPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(buyer, listing.seller);
+      if (!isSubscribed) {
+        return res.status(403).json({
+          success: false,
+          error: 'You must be subscribed to this seller to purchase premium content',
+          requiresSubscription: true,
+          seller: listing.seller
+        });
+      }
+    }
+
+    // ---- Money, computed HERE from the listing ----
+    const seller = listing.seller;
+    const actualPrice = Number(listing.price) || 0;
+    if (!(actualPrice > 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Listing has no valid price'
+      });
+    }
+    const actualMarkedUpPrice = Math.round(actualPrice * 1.1 * 100) / 100;
+
+    const sellerUser = await User.findOne({ username: seller });
+    if (!sellerUser) {
+      return res.status(404).json({
+        success: false,
+        error: 'Seller not found'
+      });
+    }
+    const sellerTier = sellerUser.tier || 'Tease';
+    const tierInfo = TIER_CONFIG.getTierByName(sellerTier);
+
+    const activeReferral = await Referral.findActiveReferral(seller);
+    const hasReferral = activeReferral && activeReferral.isActive;
+    const referralCommissionRate = hasReferral ? activeReferral.commissionRate : 0;
+
+    const basePlatformFee = Math.round((actualPrice * 0.10) * 100) / 100;
+    const tierBonus = Math.round((actualPrice * tierInfo.bonusPercentage) * 100) / 100;
+    const buyerMarkupFee = Math.round((actualMarkedUpPrice - actualPrice) * 100) / 100;
+    const totalPlatformRevenue = Math.round((basePlatformFee + buyerMarkupFee - tierBonus) * 100) / 100;
+    let referralCommission = 0;
+    if (hasReferral) {
+      referralCommission = Math.round(actualPrice * referralCommissionRate * 100) / 100;
+    }
+    const baseSellerEarnings = Math.round((actualPrice * 0.90) * 100) / 100;
+    const sellerEarnings = Math.round((baseSellerEarnings + tierBonus - referralCommission) * 100) / 100;
+
+    // ---- Wallets (balance checked before claiming, so the common
+    // failure never touches inventory) ----
+    const buyerWallet = await Wallet.findOne({ username: buyer });
+    if (!buyerWallet) {
+      return res.status(404).json({
+        success: false,
+        error: 'Buyer wallet not found. Please deposit funds first.'
+      });
+    }
+
+    const balanceInCents = Math.round(buyerWallet.balance * 100);
+    const priceInCents = Math.round(actualMarkedUpPrice * 100);
+    if (balanceInCents < priceInCents) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient balance. You need $${(priceInCents / 100).toFixed(2)} but only have $${(balanceInCents / 100).toFixed(2)}`
+      });
+    }
+
+    let sellerWallet = await Wallet.findOne({ username: seller });
+    if (!sellerWallet) {
+      sellerWallet = new Wallet({ username: seller, role: 'seller', balance: 0 });
+      await sellerWallet.save();
+    }
+
+    let platformWallet = await Wallet.findOne({ username: 'platform', role: 'admin' });
+    if (!platformWallet) {
+      platformWallet = new Wallet({ username: 'platform', role: 'admin', balance: 0 });
+      await platformWallet.save();
+    }
+
+    let referrerWallet = null;
+    if (hasReferral && referralCommission > 0) {
+      referrerWallet = await Wallet.findOne({ username: activeReferral.referrer });
+      if (!referrerWallet) {
+        const referrerUser = await User.findOne({ username: activeReferral.referrer });
+        if (referrerUser) {
+          referrerWallet = new Wallet({
+            username: activeReferral.referrer,
+            role: referrerUser.role,
+            balance: 0
+          });
+          await referrerWallet.save();
+        }
+      }
+    }
+
+    // ---- THE ATOMIC CLAIM ----
+    const claimed = await Listing.findOneAndUpdate(
+      {
+        _id: listing._id,
+        status: 'active',
+        approvalStatus: 'approved',
+        'drop.isDrop': true,
+        'drop.unitsRemaining': { $gt: 0 }
+      },
+      { $inc: { 'drop.unitsRemaining': -1, 'drop.unitsSold': 1 } },
+      { new: true }
+    );
+
+    if (!claimed) {
+      return res.status(409).json({
+        success: false,
+        error: 'Sold out',
+        soldOut: true
+      });
+    }
+
+    // The post-update snapshot IS this buyer's unit: concurrent $incs
+    // serialise, so each claimant sees a distinct unitsSold value.
+    const unitNumber = claimed.drop.unitsSold;
+    const unitsRemaining = claimed.drop.unitsRemaining;
+    const totalUnits = claimed.drop.totalUnits;
+    const soldOut = unitsRemaining === 0;
+
+    let markedSoldHere = false;
+    if (soldOut) {
+      const flip = await Listing.updateOne(
+        { _id: claimed._id, status: 'active', 'drop.unitsRemaining': 0 },
+        { $set: { status: 'sold', soldAt: new Date() } }
+      );
+      markedSoldHere = flip.modifiedCount > 0;
+    }
+
+    const previousBuyerBalance = buyerWallet.balance;
+    const previousSellerBalance = sellerWallet.balance;
+    const previousPlatformBalance = platformWallet.balance;
+    const previousReferrerBalance = referrerWallet ? referrerWallet.balance : 0;
+
+    try {
+      await buyerWallet.withdraw(actualMarkedUpPrice);
+      await sellerWallet.deposit(sellerEarnings);
+      if (hasReferral && referrerWallet && referralCommission > 0) {
+        await referrerWallet.deposit(referralCommission);
+      }
+      await platformWallet.deposit(totalPlatformRevenue);
+
+      const order = new Order({
+        title: listing.title,
+        description: listing.description,
+        price: actualPrice,
+        markedUpPrice: actualMarkedUpPrice,
+        imageUrl: (listing.imageUrls && listing.imageUrls[0]) || '',
+        date: new Date(),
+        seller,
+        buyer,
+        tags: listing.tags || [],
+        listingId: listing._id,
+        wasAuction: false,
+        deliveryAddress: formatDeliveryAddressForResponse(deliveryAddress),
+        shippingStatus: 'pending',
+        paymentStatus: 'completed',
+        paymentCompletedAt: new Date(),
+        platformFee: basePlatformFee,
+        buyerMarkupFee,
+        sellerPlatformFee: basePlatformFee,
+        sellerEarnings,
+        tierCreditAmount: tierBonus,
+        sellerTier,
+        referralCommission,
+        referrer: hasReferral ? activeReferral.referrer : undefined,
+        adjustedSellerEarnings: sellerEarnings,
+        dropUnitNumber: unitNumber,
+        dropTotalUnits: totalUnits
+      });
+      await order.save();
+
+      if (hasReferral && referralCommission > 0) {
+        try {
+          await activeReferral.recordCommission(referralCommission, order._id.toString());
+
+          const commissionTransaction = new Transaction({
+            type: 'sale',
+            amount: referralCommission,
+            from: seller,
+            to: activeReferral.referrer,
+            fromRole: 'seller',
+            toRole: 'seller',
+            description: `Referral commission (5%) for sale: ${order.title}`,
+            status: 'completed',
+            completedAt: new Date(),
+            metadata: {
+              orderId: order._id.toString(),
+              orderTitle: order.title,
+              referralId: activeReferral._id.toString(),
+              commissionRate: referralCommissionRate,
+              originalPrice: actualPrice,
+              adjustedSellerEarnings: sellerEarnings,
+              buyer,
+              seller,
+              isReferralCommission: true,
+              isDropOrder: true,
+              dropUnitNumber: unitNumber
+            }
+          });
+          await commissionTransaction.save();
+
+          await User.findOneAndUpdate(
+            { username: activeReferral.referrer },
+            { $inc: { referralEarnings: referralCommission } }
+          );
+
+          const referrerNotification = new Notification({
+            recipient: activeReferral.referrer,
+            type: 'sale',
+            title: '💰 Referral Commission Earned!',
+            message: `You earned $${referralCommission.toFixed(2)} from ${seller}'s sale of "${order.title}"`,
+            link: '/sellers/profile',
+            priority: 'normal',
+            metadata: {
+              amount: referralCommission,
+              seller,
+              orderId: order._id.toString(),
+              orderTitle: order.title,
+              isReferralCommission: true
+            }
+          });
+          await referrerNotification.save();
+
+          if (global.webSocketService) {
+            global.webSocketService.emitToUser(activeReferral.referrer, 'notification:new', {
+              id: referrerNotification._id,
+              type: referrerNotification.type,
+              title: referrerNotification.title,
+              message: referrerNotification.message,
+              link: referrerNotification.link,
+              createdAt: referrerNotification.createdAt
+            });
+            global.webSocketService.emitBalanceUpdate(
+              activeReferral.referrer,
+              'seller',
+              previousReferrerBalance,
+              referrerWallet.balance,
+              'referral_commission'
+            );
+            global.webSocketService.emitTransaction(commissionTransaction.toObject());
+          }
+        } catch (referralError) {
+          console.error('[DropOrder] Error recording referral commission:', referralError);
+          // Commission already transferred; do not fail the order.
+        }
+      }
+
+      await Notification.createSaleNotification(seller, buyer, {
+        _id: order._id,
+        title: `${order.title} — unit #${unitNumber} of ${totalUnits}`
+      }, actualMarkedUpPrice);
+
+      const purchaseTransaction = new Transaction({
+        type: 'purchase',
+        amount: actualMarkedUpPrice,
+        from: buyer,
+        to: seller,
+        fromRole: 'buyer',
+        toRole: 'seller',
+        description: `Drop purchase: ${listing.title} — unit #${unitNumber}/${totalUnits} (${sellerTier} tier)`,
+        status: 'completed',
+        completedAt: new Date(),
+        metadata: {
+          orderId: order._id.toString(),
+          listingId: listing._id.toString(),
+          listingTitle: listing.title,
+          originalPrice: actualPrice,
+          buyerPayment: actualMarkedUpPrice,
+          sellerEarnings,
+          seller,
+          buyer,
+          sellerTier,
+          tierBonus,
+          isPremium: Boolean(listing.isPremium),
+          hasReferral,
+          referralCommission,
+          isDropOrder: true,
+          dropUnitNumber: unitNumber,
+          dropTotalUnits: totalUnits
+        }
+      });
+      await purchaseTransaction.save();
+
+      const feeTransaction = new Transaction({
+        type: 'platform_fee',
+        amount: totalPlatformRevenue,
+        from: buyer,
+        to: 'platform',
+        fromRole: 'buyer',
+        toRole: 'admin',
+        description: `Platform fee for: ${listing.title} (drop unit #${unitNumber})`,
+        status: 'completed',
+        completedAt: new Date(),
+        metadata: {
+          orderId: order._id.toString(),
+          listingId: listing._id.toString(),
+          listingTitle: listing.title,
+          buyerFee: buyerMarkupFee,
+          sellerFee: basePlatformFee,
+          totalFee: totalPlatformRevenue,
+          originalPrice: actualPrice,
+          buyerPayment: actualMarkedUpPrice,
+          seller,
+          buyer,
+          sellerTier,
+          tierAdjustedFee: basePlatformFee,
+          tierBonus,
+          isDropOrder: true,
+          dropUnitNumber: unitNumber
+        }
+      });
+      await feeTransaction.save();
+
+      if (tierBonus > 0) {
+        const tierCreditTransaction = new Transaction({
+          type: 'tier_credit',
+          amount: tierBonus,
+          from: 'platform',
+          to: seller,
+          fromRole: 'admin',
+          toRole: 'seller',
+          description: `Tier bonus (${sellerTier}): +${(tierInfo.bonusPercentage * 100).toFixed(0)}%`,
+          status: 'completed',
+          completedAt: new Date(),
+          metadata: {
+            orderId: order._id.toString(),
+            listingTitle: listing.title,
+            tierBonus,
+            sellerTier,
+            bonusPercentage: tierInfo.bonusPercentage
+          }
+        });
+        await tierCreditTransaction.save();
+
+        const AdminAction = require('../models/AdminAction');
+        const tierCreditAction = new AdminAction({
+          type: 'debit',
+          amount: tierBonus,
+          reason: `Tier bonus paid to ${seller} (${sellerTier} tier - ${(tierInfo.bonusPercentage * 100).toFixed(0)}%)`,
+          date: new Date(),
+          metadata: {
+            orderId: order._id.toString(),
+            seller,
+            sellerTier,
+            bonusPercentage: tierInfo.bonusPercentage,
+            orderTitle: order.title
+          }
+        });
+        await tierCreditAction.save();
+      }
+
+      order.paymentTransactionId = purchaseTransaction._id;
+      order.feeTransactionId = feeTransaction._id;
+      await order.save();
+
+      const tierUpdateResult = await tierService.updateSellerTier(seller);
+
+      if (global.webSocketService) {
+        global.webSocketService.emitBalanceUpdate(buyer, 'buyer', previousBuyerBalance, buyerWallet.balance, 'purchase');
+        global.webSocketService.emitBalanceUpdate(seller, 'seller', previousSellerBalance, sellerWallet.balance, 'sale');
+        global.webSocketService.emitBalanceUpdate('platform', 'admin', previousPlatformBalance, platformWallet.balance, 'platform_fee');
+        if (global.webSocketService.emitPlatformBalanceUpdate) {
+          global.webSocketService.emitPlatformBalanceUpdate(platformWallet.balance);
+        }
+        global.webSocketService.emitTransaction(purchaseTransaction.toObject());
+        global.webSocketService.emitTransaction(feeTransaction.toObject());
+
+        if (global.webSocketService.emitOrderCreated) {
+          global.webSocketService.emitOrderCreated({
+            _id: order._id,
+            id: order._id.toString(),
+            title: order.title,
+            seller: order.seller,
+            buyer: order.buyer,
+            price: order.price,
+            markedUpPrice: order.markedUpPrice,
+            sellerTier,
+            tierBonus,
+            dropUnitNumber: unitNumber,
+            dropTotalUnits: totalUnits
+          });
+        }
+
+        // Live inventory for everyone watching the listing.
+        if (global.webSocketService.broadcast) {
+          global.webSocketService.broadcast('drop:update', {
+            listingId: claimed._id.toString(),
+            unitsRemaining,
+            unitsSold: claimed.drop.unitsSold,
+            totalUnits,
+            soldOut
+          });
+
+          if (markedSoldHere) {
+            global.webSocketService.broadcast('listing:sold', {
+              listingId: claimed._id.toString(),
+              id: claimed._id.toString(),
+              seller,
+              timestamp: new Date()
+            });
+          }
+        }
+
+        if (tierUpdateResult && tierUpdateResult.changed) {
+          global.webSocketService.emitUserUpdate(seller, {
+            tier: tierUpdateResult.newTier,
+            totalSales: tierUpdateResult.stats.totalSales
+          });
+        }
+      }
+
+      try {
+        await incrementPaymentStats(actualMarkedUpPrice);
+      } catch (statsError) {
+        console.error('[DropOrder] Failed to increment payment stats:', statsError);
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          order: {
+            _id: order._id.toString(),
+            id: order._id.toString(),
+            title: order.title,
+            description: order.description,
+            price: order.price,
+            markedUpPrice: order.markedUpPrice,
+            imageUrl: order.imageUrl,
+            date: order.date.toISOString(),
+            seller: order.seller,
+            buyer: order.buyer,
+            tags: order.tags,
+            listingId: order.listingId,
+            wasAuction: false,
+            deliveryAddress: formatDeliveryAddressForResponse(order.deliveryAddress),
+            shippingStatus: order.shippingStatus,
+            paymentStatus: order.paymentStatus,
+            platformFee: order.platformFee,
+            sellerEarnings: order.sellerEarnings,
+            tierCreditAmount: order.tierCreditAmount,
+            sellerTier,
+            referralCommission: order.referralCommission,
+            referrer: order.referrer,
+            dropUnitNumber: unitNumber,
+            dropTotalUnits: totalUnits
+          },
+          drop: {
+            unitNumber,
+            unitsRemaining,
+            unitsSold: claimed.drop.unitsSold,
+            totalUnits,
+            soldOut
+          }
+        }
+      });
+    } catch (error) {
+      console.error('[DropOrder] Transaction failed, unwinding:', error);
+
+      // Give the unit back FIRST — inventory truth beats wallet truth,
+      // because an unreturned unit is a sale the drop can never make.
+      try {
+        const restore = { $inc: { 'drop.unitsRemaining': 1, 'drop.unitsSold': -1 } };
+        if (markedSoldHere) {
+          restore.$set = { status: 'active' };
+          restore.$unset = { soldAt: 1 };
+        }
+        await Listing.updateOne({ _id: claimed._id }, restore);
+      } catch (restoreError) {
+        console.error('[DropOrder] CRITICAL: failed to restore claimed unit:', restoreError);
+      }
+
+      try {
+        if (buyerWallet.balance < previousBuyerBalance) {
+          buyerWallet.balance = previousBuyerBalance;
+          await buyerWallet.save();
+        }
+        if (sellerWallet.balance > previousSellerBalance) {
+          sellerWallet.balance = previousSellerBalance;
+          await sellerWallet.save();
+        }
+        if (platformWallet.balance > previousPlatformBalance) {
+          platformWallet.balance = previousPlatformBalance;
+          await platformWallet.save();
+        }
+        if (referrerWallet && referrerWallet.balance > previousReferrerBalance) {
+          referrerWallet.balance = previousReferrerBalance;
+          await referrerWallet.save();
+        }
+      } catch (rollbackError) {
+        console.error('[DropOrder] Rollback failed:', rollbackError);
+      }
+      throw error;
+    }
+  } catch (error) {
+    console.error('[DropOrder] Error purchasing drop unit:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to purchase drop unit'
+    });
+  }
+});
+
 // POST /api/orders/custom-request - Convert custom request to order (NEW ENDPOINT)
 router.post('/custom-request', authMiddleware, async (req, res) => {
   try {
@@ -846,7 +1424,7 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
           const referrerNotification = new Notification({
             recipient: activeReferral.referrer,
             type: 'sale',
-            title: '💰 Referral Commission Earned!',
+            title: 'ðŸ’° Referral Commission Earned!',
             message: `You earned $${referralCommission.toFixed(2)} from ${seller}'s custom request sale: "${order.title}"`,
             link: '/sellers/profile',
             priority: 'normal',
@@ -903,7 +1481,7 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         _id: uuidv4(),
         sender: buyer,
         receiver: seller,
-        content: `✅ Custom request "${title}" has been paid! ($${actualPrice.toFixed(2)})`,
+        content: `âœ… Custom request "${title}" has been paid! ($${actualPrice.toFixed(2)})`,
         type: 'normal',
         meta: {
           orderId: order._id.toString(),

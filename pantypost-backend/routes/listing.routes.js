@@ -53,7 +53,7 @@ async function isUserSubscribedToSeller(buyer, seller) {
  * Aggregate review ratings for a set of sellers in ONE query.
  *
  * User.rating and User.reviewCount exist on the schema but nothing
- * maintains them — there is no post-save hook on Review — so they are
+ * maintains them â€” there is no post-save hook on Review â€” so they are
  * zero for every seller and cannot be used. Ratings are therefore
  * computed from the Review collection directly.
  *
@@ -122,8 +122,8 @@ async function populateSellerProfile(listing, ratingsMap) {
         reviewCount: sellerRating?.reviewCount
       };
       listing.isSellerVerified = seller.isVerified || false;
-      // Order has no top-level `status` field — it has shippingStatus
-      // and paymentStatus — so the previous filter on `status` matched
+      // Order has no top-level `status` field â€” it has shippingStatus
+      // and paymentStatus â€” so the previous filter on `status` matched
       // nothing and every browse card showed 0 sales. Orders are created
       // with paymentStatus 'completed' and move to 'refunded' if
       // reversed, so this counts paid, unreversed orders. The seller
@@ -576,7 +576,7 @@ router.post('/', authMiddleware, async (req, res) => {
     // the listing, so an unverified seller could publish freely.
     //
     // Payment processor rules require uploads be restricted to verified
-    // creators, and it is trivially testable — someone can simply
+    // creators, and it is trivially testable â€” someone can simply
     // register and try.
     // =====================================================
     if (!isSellerVerified) {
@@ -612,7 +612,7 @@ router.post('/', authMiddleware, async (req, res) => {
     /* A listing with no images used to be given
        `https://via.placeholder.com/300`. That service is retired, so the
        "placeholder" rendered as a broken image on the browse grid and the
-       listing page — worse than showing nothing.
+       listing page â€” worse than showing nothing.
 
        Leave the array empty instead and let the client decide what an
        image-less listing looks like. */
@@ -641,7 +641,66 @@ router.post('/', authMiddleware, async (req, res) => {
       delete listingData.endTime;
       delete listingData.price;
     }
-    
+
+    // =====================================================
+    // DROP LISTINGS
+    //
+    // One listing, N numbered units. Validated here so a drop enters
+    // the SAME moderation queue as everything else — one admin
+    // approval covers the whole run, and there is no per-unit bypass
+    // to be tempted into.
+    // =====================================================
+    if (listingData.isDrop) {
+      if (listingData.auction && listingData.auction.isAuction) {
+        return res.status(400).json({
+          success: false,
+          error: 'A listing cannot be both an auction and a drop'
+        });
+      }
+
+      const totalUnits = parseInt(listingData.totalUnits, 10);
+      if (!Number.isInteger(totalUnits) || totalUnits < 2 || totalUnits > 2000) {
+        return res.status(400).json({
+          success: false,
+          error: 'Drop size must be a whole number between 2 and 2000 units'
+        });
+      }
+
+      const priceNumber = Number(listingData.price);
+      if (!(priceNumber > 0)) {
+        return res.status(400).json({
+          success: false,
+          error: 'A drop requires a per-unit price'
+        });
+      }
+
+      let scheduledFor;
+      if (listingData.dropScheduledFor) {
+        scheduledFor = new Date(listingData.dropScheduledFor);
+        const now = Date.now();
+        const maxAhead = 60 * 24 * 60 * 60 * 1000; // 60 days
+        if (Number.isNaN(scheduledFor.getTime()) || scheduledFor.getTime() <= now || scheduledFor.getTime() > now + maxAhead) {
+          return res.status(400).json({
+            success: false,
+            error: 'Drop open time must be in the future and within 60 days'
+          });
+        }
+      }
+
+      listingData.drop = {
+        isDrop: true,
+        totalUnits,
+        unitsRemaining: totalUnits,
+        unitsSold: 0,
+        scheduledFor,
+        wornOnCamera: true
+      };
+
+      delete listingData.isDrop;
+      delete listingData.totalUnits;
+      delete listingData.dropScheduledFor;
+    }
+
     const listing = new Listing(listingData);
     await listing.save();
     
@@ -813,6 +872,16 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: 'This is an auction listing. Please use the bid system.'
+      });
+    }
+
+    // Drops are multi-unit and settle money server-side; this legacy
+    // mark-sold path would flip a 500-unit drop to sold on the first
+    // click without touching inventory or a wallet.
+    if (listing.drop && listing.drop.isDrop) {
+      return res.status(400).json({
+        success: false,
+        error: 'This is a drop listing. Use the drop purchase flow.'
       });
     }
     

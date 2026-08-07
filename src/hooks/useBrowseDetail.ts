@@ -6,6 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useWebSocket } from '@/context/WebSocketContext';
+import { listingsService, type DropInfo } from '@/services/listings.service';
 import { useAuction } from '@/context/AuctionContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getUserProfileData } from '@/utils/profileUtils';
@@ -170,6 +171,37 @@ export const useBrowseDetail = () => {
       return { ...prev, ...newUpdates };
     });
   }, []);
+
+  // Live drop inventory: every claim anywhere broadcasts the new
+  // counters, so the "N remaining" figure moves in real time — the
+  // scarcity IS the product during a drop, and a stale number that
+  // jumps 40 units on refresh reads as fake.
+  useEffect(() => {
+    const isDropListing = Boolean((listing as { drop?: DropInfo } | undefined)?.drop?.isDrop);
+    if (!isConnected || !isDropListing || !listingId || !subscribe) return;
+
+    const unsubscribeDrop = subscribe('drop:update' as any, (data: any) => {
+      if (!data || data.listingId !== listingId) return;
+      setListing(prev => {
+        if (!prev) return prev;
+        const prevDrop = (prev as { drop?: DropInfo }).drop;
+        if (!prevDrop?.isDrop) return prev;
+        return {
+          ...prev,
+          status: data.soldOut ? 'sold' : (prev as any).status,
+          drop: {
+            ...prevDrop,
+            unitsRemaining: typeof data.unitsRemaining === 'number' ? data.unitsRemaining : prevDrop.unitsRemaining,
+            unitsSold: typeof data.unitsSold === 'number' ? data.unitsSold : prevDrop.unitsSold,
+          },
+        } as typeof prev;
+      });
+    });
+
+    return () => {
+      unsubscribeDrop();
+    };
+  }, [isConnected, listing, listingId, subscribe]);
 
   // WebSocket subscriptions for real-time updates
   useEffect(() => {
@@ -1032,6 +1064,80 @@ export const useBrowseDetail = () => {
         purchaseStatus: `Insufficient balance. You need ${amountNeeded.toFixed(2)} more.`,
         isProcessing: false 
       });
+      return;
+    }
+
+    // ---- DROP PURCHASE ----
+    // Drops settle through the server-authoritative claim endpoint:
+    // the server owns price, unit number and inventory, and answers
+    // with the post-claim counters. The legacy purchase path below
+    // must never touch a drop (it would mark 500 units sold at once).
+    const dropInfo = (listing as { drop?: DropInfo }).drop;
+    if (dropInfo?.isDrop) {
+      if (dropInfo.scheduledFor && new Date(dropInfo.scheduledFor).getTime() > Date.now()) {
+        updateState({
+          purchaseStatus: `This drop opens ${new Date(dropInfo.scheduledFor).toLocaleString()}.`,
+          isProcessing: false,
+        });
+        return;
+      }
+      if (dropInfo.unitsRemaining <= 0 || (listing as any).status === 'sold') {
+        updateState({ purchaseStatus: 'This drop is sold out.', isProcessing: false });
+        return;
+      }
+
+      isPurchasingRef.current = true;
+      hasPurchasedRef.current = false;
+      updateState({ isProcessing: true, purchaseStatus: 'Claiming your unit...' });
+
+      try {
+        const response = await listingsService.purchaseDropUnit(listing.id);
+
+        if (response.success && response.data) {
+          const { unitNumber, unitsRemaining, unitsSold, totalUnits, soldOut } = response.data.drop;
+          hasPurchasedRef.current = true;
+
+          setListing(prev => {
+            if (!prev) return prev;
+            const prevDrop = (prev as { drop?: DropInfo }).drop;
+            if (!prevDrop) return prev;
+            return {
+              ...prev,
+              status: soldOut ? 'sold' : (prev as any).status,
+              drop: { ...prevDrop, unitsRemaining, unitsSold },
+            } as typeof prev;
+          });
+
+          updateState({
+            showPurchaseSuccess: true,
+            purchaseStatus: `Unit #${unitNumber} of ${totalUnits} is yours!`,
+            isProcessing: false,
+          });
+
+          if (navigationTimeoutRef.current) {
+            clearTimeout(navigationTimeoutRef.current);
+          }
+          navigationTimeoutRef.current = setTimeout(() => {
+            if (mountedRef.current) {
+              router.push('/buyers/my-orders');
+            }
+          }, 3000);
+        } else {
+          isPurchasingRef.current = false;
+          const serverMessage = response.error?.message;
+          updateState({
+            purchaseStatus:
+              serverMessage === 'Sold out'
+                ? 'Sold out — the last unit went moments ago.'
+                : serverMessage || 'Purchase failed. Please try again.',
+            isProcessing: false,
+          });
+        }
+      } catch (dropError) {
+        console.error('Drop purchase error:', dropError);
+        isPurchasingRef.current = false;
+        updateState({ purchaseStatus: 'An error occurred. Please try again.', isProcessing: false });
+      }
       return;
     }
 

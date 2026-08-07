@@ -24,7 +24,7 @@ import { useAnalytics } from '@/hooks/useAnalytics';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
-import { listingsService } from '@/services/listings.service';
+import { listingsService, type DropInfo } from '@/services/listings.service';
 
 export default function ListingDetailPage() {
   const { trackEvent, trackPurchase } = useAnalytics();
@@ -550,6 +550,54 @@ export default function ListingDetailPage() {
                 />
               )}
 
+              {/* DROP STATUS — one listing, N numbered units. Counters
+                  arrive live over the `drop:update` websocket event, so
+                  this bar moves while people watch. */}
+              {(() => {
+                const drop = (listing as { drop?: DropInfo }).drop;
+                if (!drop?.isDrop) return null;
+                const soldOut = drop.unitsRemaining <= 0 || (listing as any).status === 'sold';
+                const opensAt = drop.scheduledFor ? new Date(drop.scheduledFor) : null;
+                const notOpenYet = !!opensAt && opensAt.getTime() > Date.now();
+                const pct = drop.totalUnits > 0
+                  ? Math.round((drop.unitsSold / drop.totalUnits) * 100)
+                  : 0;
+                return (
+                  <div className="rounded-lg border border-primary-line bg-surface-raised p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="rounded-full bg-primary px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-black">
+                        Drop
+                      </span>
+                      <span className="text-sm font-semibold tabular-nums text-ink">
+                        {soldOut
+                          ? 'Sold out'
+                          : `${drop.unitsRemaining} of ${drop.totalUnits} remaining`}
+                      </span>
+                    </div>
+                    <div
+                      className="mt-3 h-2 overflow-hidden rounded-full bg-surface-overlay"
+                      role="progressbar"
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Units claimed"
+                    >
+                      <div
+                        className="h-full rounded-full bg-primary transition-[width] duration-500"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-ink-muted">
+                      {notOpenYet
+                        ? `Opens ${opensAt!.toLocaleString()}`
+                        : soldOut
+                          ? `All ${drop.totalUnits} numbered units claimed.`
+                          : `Each purchase claims the next numbered unit — put on during the seller's filmed drop.`}
+                    </p>
+                  </div>
+                );
+              })()}
+
               {/* Price & Actions for Standard Listings - Show for non-auctions */}
               {!isActualAuction && (
                 <PurchaseSection
@@ -590,7 +638,7 @@ export default function ListingDetailPage() {
                   Previously gated behind user?.role === 'buyer', so
                   sellers, admins and signed-out visitors saw no seller
                   at all on a listing page. Who made this is the single
-                  most important thing on the page — it shows for
+                  most important thing on the page â€” it shows for
                   everyone. */}
               <SellerProfile
                 seller={listing.seller}

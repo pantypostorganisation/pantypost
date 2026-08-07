@@ -123,7 +123,7 @@ const orderSchema = new mongoose.Schema({
     }
   },
   
-  // 🔧 ENHANCED FINANCIAL FIELDS FOR DOUBLE 10% FEE MODEL (Regular) or 20% SELLER FEE (Auctions)
+  // ðŸ”§ ENHANCED FINANCIAL FIELDS FOR DOUBLE 10% FEE MODEL (Regular) or 20% SELLER FEE (Auctions)
   tierCreditAmount: {
     type: Number,
     default: function() {
@@ -148,7 +148,7 @@ const orderSchema = new mongoose.Schema({
     }
   },
   
-  // 🔧 NEW: Individual fee components
+  // ðŸ”§ NEW: Individual fee components
   buyerMarkupFee: {
     type: Number,
     default: function() {
@@ -213,6 +213,23 @@ const orderSchema = new mongoose.Schema({
   },
   paymentCompletedAt: Date,
   
+  // =====================================================
+  // DROP FIELDS
+  //
+  // Which numbered unit of a drop this order bought. "Unit #83 of
+  // 500" is the collectible provenance the listing sold, so it is
+  // copied onto the order at purchase time like every other listing
+  // detail — the order must still say it after the listing changes.
+  // =====================================================
+  dropUnitNumber: {
+    type: Number,
+    min: 1
+  },
+  dropTotalUnits: {
+    type: Number,
+    min: 2
+  },
+
   // Custom request fields
   isCustomRequest: {
     type: Boolean,
@@ -235,7 +252,7 @@ const orderSchema = new mongoose.Schema({
     min: 0
   },
   
-  // 🔧 ENHANCED TRANSACTION REFERENCES
+  // ðŸ”§ ENHANCED TRANSACTION REFERENCES
   paymentTransactionId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Transaction'
@@ -291,7 +308,7 @@ orderSchema.methods.calculateTierCredit = function() {
   return 0;
 };
 
-// 🔧 NEW: Calculate total platform profit for this order
+// ðŸ”§ NEW: Calculate total platform profit for this order
 orderSchema.methods.calculatePlatformProfit = function() {
   if (this.wasAuction) {
     // Auctions: 20% from seller only

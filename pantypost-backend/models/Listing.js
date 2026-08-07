@@ -125,7 +125,7 @@ const listingSchema = new mongoose.Schema({
   // Listing status
   status: {
     type: String,
-    // ✅ FIXED: Added 'deleted' to allow soft deletes
+    // âœ… FIXED: Added 'deleted' to allow soft deletes
     enum: ['active', 'sold', 'expired', 'cancelled', 'deleted'],
     default: 'active'
   },
@@ -145,6 +145,51 @@ const listingSchema = new mongoose.Schema({
   soldTo: String,
   soldPrice: Number,
   
+  // =====================================================
+  // DROP FIELDS
+  //
+  // A "drop" is one moderated listing sold as N numbered units — the
+  // creator-drop mechanic (e.g. 500 pairs worn on camera during a
+  // filmed drop day). One listing means ONE pass through the
+  // moderation queue regardless of unit count; the alternative (N
+  // listings) would either bury the admin queue or invite an
+  // auto-approve bypass, and the moderation pipeline is what makes
+  // this platform approvable by a payment processor.
+  //
+  // Inventory truth lives in unitsRemaining and is only ever moved by
+  // the atomic $inc claim in POST /api/orders/drop. Do not mutate it
+  // from anywhere else.
+  // =====================================================
+  drop: {
+    isDrop: {
+      type: Boolean,
+      default: false
+    },
+    totalUnits: {
+      type: Number,
+      min: 2,
+      max: 2000
+    },
+    unitsRemaining: {
+      type: Number,
+      min: 0
+    },
+    unitsSold: {
+      type: Number,
+      default: 0
+    },
+    // Optional countdown: purchases are refused until this time.
+    scheduledFor: Date,
+    // Provenance framing: units are put on during the filmed drop, and
+    // listings must say so. Selling drop units under the implied
+    // meaning "worn" is the chargeback pattern that kills adult
+    // merchant accounts.
+    wornOnCamera: {
+      type: Boolean,
+      default: true
+    }
+  },
+
   // AUCTION FIELDS
   auction: {
     isAuction: {
@@ -222,6 +267,30 @@ listingSchema.index({ 'auction.isAuction': 1, 'auction.status': 1 });
 // Supports the public browse query, which now always filters on
 // approvalStatus before anything else.
 listingSchema.index({ approvalStatus: 1, status: 1, createdAt: -1 });
+listingSchema.index({ 'drop.isDrop': 1, status: 1, approvalStatus: 1 });
+
+// =====================================================
+// DROP IMMUTABILITY GUARD
+//
+// Generic update paths (the edit controller uses findOneAndUpdate)
+// must never be able to rewrite a drop's identity or size: changing
+// totalUnits after sales corrupts every buyer's "unit #X of N", and
+// replacing the whole `drop` object would clobber the live counters.
+// The claim endpoint moves inventory exclusively via $inc, which this
+// guard deliberately leaves untouched.
+// =====================================================
+listingSchema.pre('findOneAndUpdate', function (next) {
+  const update = this.getUpdate() || {};
+  const strip = (obj) => {
+    if (!obj || typeof obj !== 'object') return;
+    delete obj['drop.isDrop'];
+    delete obj['drop.totalUnits'];
+    delete obj.drop;
+  };
+  strip(update.$set);
+  strip(update);
+  next();
+});
 
 // Virtual to check if auction is still active
 listingSchema.virtual('auction.isActive').get(function() {

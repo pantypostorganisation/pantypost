@@ -34,6 +34,27 @@ export interface CreateListingRequest {
     reservePrice?: number;
     endTime: string;
   };
+  /** Create as a drop of N units (mutually exclusive with auction). */
+  drop?: {
+    totalUnits: number;
+    /** ISO date in the future; omit to open immediately on approval. */
+    scheduledFor?: string;
+  };
+}
+
+/**
+ * A drop: one moderated listing sold as N numbered units. Counters are
+ * server-owned; the client only ever reads them (and receives live
+ * updates via the `drop:update` websocket event).
+ */
+export interface DropInfo {
+  isDrop: boolean;
+  totalUnits: number;
+  unitsRemaining: number;
+  unitsSold: number;
+  /** ISO date; purchases are refused before this time. */
+  scheduledFor?: string;
+  wornOnCamera?: boolean;
 }
 
 export interface UpdateListingRequest {
@@ -124,6 +145,14 @@ interface BackendListing {
       date: string;
     }>;
   };
+  drop?: {
+    isDrop: boolean;
+    totalUnits: number;
+    unitsRemaining: number;
+    unitsSold: number;
+    scheduledFor?: string;
+    wornOnCamera?: boolean;
+  };
 }
 
 // Cache configuration
@@ -208,6 +237,7 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
   sellerProfile?: any;
   isSellerVerified?: boolean;
   sellerSalesCount?: number;
+  drop?: DropInfo;
 } {
   // Handle both _id and id fields
   const listingId = backendListing._id || backendListing.id || uuidv4();
@@ -217,6 +247,7 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
     sellerProfile?: any;
     isSellerVerified?: boolean;
     sellerSalesCount?: number;
+    drop?: DropInfo;
   } = {
     id: listingId,
     title: backendListing.title,
@@ -244,6 +275,18 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
     isSellerVerified: backendListing.isSellerVerified || false,
     sellerSalesCount: backendListing.sellerSalesCount || 0,
   };
+
+  // Drop passthrough — counters are display-only on this side.
+  if (backendListing.drop?.isDrop) {
+    frontendListing.drop = {
+      isDrop: true,
+      totalUnits: backendListing.drop.totalUnits,
+      unitsRemaining: backendListing.drop.unitsRemaining,
+      unitsSold: backendListing.drop.unitsSold,
+      scheduledFor: backendListing.drop.scheduledFor,
+      wornOnCamera: backendListing.drop.wornOnCamera,
+    };
+  }
 
   // Convert auction data if present with reserve price support
   if (backendListing.auction?.isAuction) {
@@ -296,6 +339,14 @@ function convertFrontendToBackend(frontendListing: CreateListingRequest): any {
     backendListing.endTime = frontendListing.auction.endTime;
   } else {
     backendListing.price = frontendListing.price;
+  }
+
+  if (frontendListing.drop) {
+    backendListing.isDrop = true;
+    backendListing.totalUnits = frontendListing.drop.totalUnits;
+    if (frontendListing.drop.scheduledFor) {
+      backendListing.dropScheduledFor = frontendListing.drop.scheduledFor;
+    }
   }
 
   return backendListing;
@@ -770,6 +821,23 @@ export class ListingsService {
         }
       }
 
+      // Validate drop parameters (server re-validates; this is UX)
+      if (request.drop) {
+        if (request.auction) {
+          return {
+            success: false,
+            error: { message: 'A listing cannot be both an auction and a drop' },
+          };
+        }
+        const units = Math.floor(request.drop.totalUnits);
+        if (!Number.isInteger(units) || units < 2 || units > 2000) {
+          return {
+            success: false,
+            error: { message: 'Drop size must be between 2 and 2000 units' },
+          };
+        }
+      }
+
       // Validate reserve price if auction
       if (request.auction) {
         if (request.auction.reservePrice && request.auction.reservePrice < request.auction.startingPrice) {
@@ -789,6 +857,7 @@ export class ListingsService {
           isVerified: request.isVerified,
           isPremium: request.isPremium,
           auction: request.auction,
+          drop: request.drop,
         });
 
         const response = await apiCall<BackendListing>('/listings', {
@@ -1315,6 +1384,60 @@ export class ListingsService {
   /**
    * Cancel auction
    */
+  /**
+   * Claim one numbered unit of a drop. The server is authoritative for
+   * price, unit number and inventory; on success the response carries
+   * the order plus the drop's post-claim counters.
+   */
+  async purchaseDropUnit(
+    listingId: string,
+    deliveryAddress?: any
+  ): Promise<ApiResponse<{
+    order: any;
+    drop: {
+      unitNumber: number;
+      unitsRemaining: number;
+      unitsSold: number;
+      totalUnits: number;
+      soldOut: boolean;
+    };
+  }>> {
+    try {
+      const sanitizedId = sanitize.strict(listingId);
+      if (!sanitizedId) {
+        return { success: false, error: { message: 'Invalid listing ID' } };
+      }
+
+      const response = await apiCall<{
+        order: any;
+        drop: {
+          unitNumber: number;
+          unitsRemaining: number;
+          unitsSold: number;
+          totalUnits: number;
+          soldOut: boolean;
+        };
+      }>('/orders/drop', {
+        method: 'POST',
+        body: JSON.stringify({ listingId: sanitizedId, deliveryAddress }),
+      });
+
+      if (response.success) {
+        // Browse grids cache listings; a claimed unit changes counts
+        // (and possibly sold-out state) everywhere.
+        this.invalidateCache();
+      }
+
+      return response;
+    } catch (error) {
+      console.error('[ListingsService] Error purchasing drop unit:', error);
+      return {
+        success: false,
+        error: { message: 'Failed to purchase drop unit' },
+      };
+    }
+  }
+
   async cancelAuction(listingId: string): Promise<ApiResponse<Listing>> {
     try {
       // Sanitize ID
