@@ -9,6 +9,7 @@ import type { MessageThread as ServiceMessageThread } from '@/services/messages.
 import { messageSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
 import { useWebSocket } from '@/context/WebSocketContext';
+import { useAuth } from '@/context/AuthContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
 
@@ -112,6 +113,9 @@ const customRequestMetaSchema = z.object({
 const CLIP = (s: string, n: number) => (s.length > n ? s.slice(0, n) + '…' : s);
 
 export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { user: authUser } = useAuth();
+  const currentUsername = authUser?.username;
+
   const [messages, setMessages] = useState<{ [conversationKey: string]: Message[] }>({});
   const [sellerProfiles, setSellerProfiles] = useState<{ [username: string]: SellerProfile }>({});
   const [blockedUsers, setBlockedUsers] = useState<{ [user: string]: string[] }>({});
@@ -144,10 +148,21 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         return;
       }
 
-      // CRITICAL FIX: Don't try to load messages if user isn't authenticated
-      const authTokens = sessionStorage.getItem('auth_tokens');
-      if (!authTokens) {
-        console.log('[MessageContext] No auth tokens found, skipping message load');
+      /* Don't try to load messages if the user isn't authenticated.
+
+         This used to read sessionStorage directly in an effect with an
+         empty dep array. On a cold load the effect frequently ran before
+         AuthProvider had restored the session, found no tokens, bailed —
+         and never retried, because nothing in the dep array ever changed.
+
+         The visible symptom was the header's unread badge staying empty
+         until you actually opened a messages page, since that page calls
+         refreshMessages() itself. Keying the effect on the signed-in user
+         means it runs again the moment auth resolves, and clears on
+         sign-out. */
+      if (!currentUsername) {
+        setMessages({});
+        setSellerProfiles({});
         setIsLoading(false);
         setIsInitialized(true);
         return;
@@ -237,7 +252,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
     };
 
     loadData();
-  }, []);
+  }, [currentUsername]);
 
   // WebSocket subscriptions
   useEffect(() => {

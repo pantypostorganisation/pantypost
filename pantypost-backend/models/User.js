@@ -56,8 +56,16 @@ const userSchema = new mongoose.Schema({
     default: true
   },
   profilePic: {
+    // Was `https://via.placeholder.com/150`. That service is dead, so every
+    // account that never uploaded a picture held a URL that resolves to a
+    // broken image — which is what buyers appeared as in chat.
+    //
+    // null means "no picture"; the client renders an initial-based avatar
+    // instead. Existing rows still holding the dead URL are cleaned up by
+    // scripts/clear-dead-placeholder-avatars.js, and the client also treats
+    // any via.placeholder.com URL as absent.
     type: String,
-    default: 'https://via.placeholder.com/150' // Default avatar
+    default: null
   },
 
   // =====================================================

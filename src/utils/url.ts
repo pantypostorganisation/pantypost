@@ -22,6 +22,10 @@ const ensureHttpsForApiHost = (value: string): string => {
 
 const isAbsoluteHttpUrl = (value: string): boolean => HTTP_PREFIX_REGEX.test(value);
 
+/** True for URLs on the retired via.placeholder.com service. */
+export const isDeadPlaceholderUrl = (value?: string | null): boolean =>
+  !!value && value.startsWith(PLACEHOLDER_PREFIX);
+
 const hasUnsafeScheme = (value: string): boolean => UNSAFE_SCHEME_REGEX.test(value);
 
 /**
@@ -30,12 +34,19 @@ const hasUnsafeScheme = (value: string): boolean => UNSAFE_SCHEME_REGEX.test(val
 export const resolveApiUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
 
-  if (isAbsoluteHttpUrl(url)) {
-    return ensureHttpsForApiHost(url);
+  /* via.placeholder.com is dead — it stopped resolving, so every URL
+     pointing at it renders as a broken image. That is why accounts which
+     never uploaded a picture showed a broken-file icon in chat:
+     User.profilePic defaulted to `https://via.placeholder.com/150`.
+
+     This check has to come BEFORE the isAbsoluteHttpUrl branch below — a
+     placeholder URL is itself absolute, so testing it later never fires. */
+  if (url.startsWith(PLACEHOLDER_PREFIX)) {
+    return null;
   }
 
-  if (url.startsWith(PLACEHOLDER_PREFIX)) {
-    return url;
+  if (isAbsoluteHttpUrl(url)) {
+    return ensureHttpsForApiHost(url);
   }
 
   if (url.startsWith('/')) {
@@ -80,6 +91,9 @@ export function safeImageSrc(
 ): string {
   const placeholder = options?.placeholder ?? '/placeholder-image.png';
   if (!input) return placeholder;
+
+  // Dead host — see resolveApiUrl above.
+  if (input.startsWith(PLACEHOLDER_PREFIX)) return placeholder;
 
   // Already http(s) — accept but force HTTPS for api.pantypost.com
   if (isAbsoluteHttpUrl(input)) {

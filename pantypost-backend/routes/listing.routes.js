@@ -601,22 +601,6 @@ router.post('/', authMiddleware, async (req, res) => {
     // it says nothing about what they are about to upload, so it cannot
     // stand in for content review.
     // =====================================================
-    // =====================================================
-    // THIRD-PARTY CONSENT ATTESTATION
-    //
-    // Recorded from the seller's declaration at the point of listing.
-    // Only the two boolean outcomes and the timestamp are trusted from
-    // the client; attestedBy is taken from the authenticated session so
-    // it cannot be spoofed.
-    // =====================================================
-    const attestation = req.body.consentAttestation;
-    listingData.consentAttestation = {
-      noThirdPartyDepicted: attestation?.noThirdPartyDepicted === true,
-      holdsConsentRecords: attestation?.holdsConsentRecords === true,
-      attestedAt: new Date(),
-      attestedBy: req.user.username,
-    };
-
     markPending(listingData, 'Awaiting initial review');
 
     // Handle images
@@ -625,8 +609,15 @@ router.post('/', authMiddleware, async (req, res) => {
       delete listingData.imageUrl;
     }
     
-    if (!listingData.imageUrls || listingData.imageUrls.length === 0) {
-      listingData.imageUrls = ['https://via.placeholder.com/300'];
+    /* A listing with no images used to be given
+       `https://via.placeholder.com/300`. That service is retired, so the
+       "placeholder" rendered as a broken image on the browse grid and the
+       listing page — worse than showing nothing.
+
+       Leave the array empty instead and let the client decide what an
+       image-less listing looks like. */
+    if (!Array.isArray(listingData.imageUrls)) {
+      listingData.imageUrls = [];
     }
     
     // Handle auction data

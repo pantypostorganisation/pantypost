@@ -414,20 +414,40 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setError(null);
 
     try {
-      // Users (supports array or { users: [] })
+      /* Users.
+         
+         This used to handle only an array or a { users: [] } wrapper — but
+         usersService.getUsers() already reduces the response to a
+         Record<username, User> map (see users.service.ts, which builds
+         usersMap and returns it as `data`). Neither branch ever matched,
+         so usersMap stayed empty and setUsers({}) ran on every load.
+         
+         That is why the admin "browse users" directory was permanently
+         empty: useAdminMessages reads this same `users` map, so the
+         directory had nothing to list and always showed "No users found".
+         
+         The map shape is handled first now, with the array and wrapper
+         shapes kept as fallbacks in case the service changes again. */
       const usersResult = await usersService.getUsers();
       if (usersResult.success && usersResult.data) {
         const usersMap: { [username: string]: any } = {};
-        if (Array.isArray(usersResult.data)) {
-          usersResult.data.forEach((u: any) => (usersMap[u.username] = u));
-        } else if (
-          usersResult.data &&
-          typeof usersResult.data === 'object' &&
-          'users' in usersResult.data &&
-          Array.isArray((usersResult.data as any).users)
-        ) {
-          (usersResult.data as any).users.forEach((u: any) => (usersMap[u.username] = u));
+        const payload: any = usersResult.data;
+
+        if (Array.isArray(payload)) {
+          payload.forEach((u: any) => {
+            if (u?.username) usersMap[u.username] = u;
+          });
+        } else if (payload && typeof payload === 'object' && Array.isArray(payload.users)) {
+          payload.users.forEach((u: any) => {
+            if (u?.username) usersMap[u.username] = u;
+          });
+        } else if (payload && typeof payload === 'object') {
+          // The shape the service actually returns: keyed by username.
+          Object.entries(payload).forEach(([username, u]: [string, any]) => {
+            if (username && u) usersMap[username] = u;
+          });
         }
+
         setUsers(usersMap);
       }
 

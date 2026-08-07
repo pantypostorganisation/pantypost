@@ -457,7 +457,18 @@ export default function Header(): React.ReactElement | null {
         });
       let total = 0;
       Object.entries(threads).forEach(([otherUser, msgs]) => {
-        const count = msgs.filter((m) => !m.read && m.sender === otherUser && m.receiver === user.username).length;
+        /* Both flags have to be falsy.
+           
+           The API returns `isRead`; only the websocket path and the local
+           mark-as-read set `read`. Checking `read` alone — as this did —
+           counts every already-read message the server told us about,
+           because `read` is simply undefined on anything that arrived via
+           a normal fetch. MessageContext's own per-thread count already
+           tests both (see getAllThreadsInfo); this now agrees with it
+           instead of contradicting it. */
+        const count = msgs.filter(
+          (m) => !m.read && !m.isRead && m.sender === otherUser && m.receiver === user.username
+        ).length;
         total += count;
       });
       return total;

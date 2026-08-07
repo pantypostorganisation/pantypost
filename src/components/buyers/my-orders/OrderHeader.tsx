@@ -7,6 +7,10 @@ import { Order } from '@/context/WalletContext';
 import { OrderStyles } from '@/utils/orderUtils';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
+// Local asset. Replaces the generated via.placeholder.com URLs this file
+// used to build — that service is retired and returns nothing.
+const FALLBACK_IMAGE = '/placeholder-image.png';
+
 interface OrderHeaderProps {
   order: Order;
   type: 'auction' | 'direct' | 'custom';
@@ -49,10 +53,9 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
     setImageError(false);
 
     if (!order.imageUrl || order.imageUrl === 'undefined' || order.imageUrl === 'null') {
-      const placeholder = `https://via.placeholder.com/150/1a1a1a/ff950e?text=${encodeURIComponent(
-        (order.title || '').substring(0, 10)
-      )}`;
-      setImageSrc(placeholder);
+      // Was a generated via.placeholder.com URL. That service is dead, so
+      // the "placeholder" was itself a broken image. Use the local asset.
+      setImageSrc(FALLBACK_IMAGE);
       setImageLoaded(true);
       return;
     }
@@ -90,11 +93,8 @@ export default function OrderHeader({ order, type, styles }: OrderHeaderProps) {
 
   const handleImageError = () => {
     setImageError(true);
-    const fallbackUrl = `https://via.placeholder.com/150/1a1a1a/ff950e?text=${encodeURIComponent(
-      (order.title || '').substring(0, 10)
-    )}`;
-    if (imageSrc !== fallbackUrl) {
-      setImageSrc(fallbackUrl);
+    if (imageSrc !== FALLBACK_IMAGE) {
+      setImageSrc(FALLBACK_IMAGE);
       setImageLoaded(true);
     }
   };
