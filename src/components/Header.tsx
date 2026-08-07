@@ -124,6 +124,13 @@ export default function Header(): React.ReactElement | null {
     deleteAllCleared: ctxDeleteAllCleared,
   } = useNotifications();
 
+  /* Drives the body scroll-lock effect ONLY. Render must never branch
+     on this: it is `false` during SSR and on every fresh mount, so any
+     `isMobile ? … : …` in JSX paints one desktop frame first — which is
+     exactly the flash of desktop nav buttons iPhones showed when leaving
+     a chat (ClientLayout remounts this header when the thread closes).
+     Mobile/desktop visibility in the markup is pure CSS (md:hidden /
+     hidden md:flex), which is correct from the very first frame. */
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
@@ -308,20 +315,20 @@ export default function Header(): React.ReactElement | null {
     const addNotificationEmojis = (message: string): string => {
       const sanitizedMessage = sanitizeStrict(message);
       
-      if (sanitizedMessage.match(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]/)) {
+      if (sanitizedMessage.match(/^[ðŸŽ‰ðŸ’¸ðŸ’°ðŸ›’ðŸ”¨âš ï¸â„¹ï¸ðŸ›‘ðŸ†ðŸ›ï¸]/)) {
         return sanitizedMessage;
       }
       
-      if (sanitizedMessage.includes('subscribed to you')) return `🎉 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `💸 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('New custom order')) return `🛒 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('New bid')) return `💰 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('created a new auction')) return `🔨 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('cancelled your auction')) return `🛑 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Reserve price not met')) return `🔨 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('No bids were placed')) return `🔨 ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `⚠️ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Original highest bidder')) return `ℹ️ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('subscribed to you')) return `ðŸŽ‰ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `ðŸ’¸ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('New custom order')) return `ðŸ›’ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('New bid')) return `ðŸ’° ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('created a new auction')) return `ðŸ”¨ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('cancelled your auction')) return `ðŸ›‘ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Reserve price not met')) return `ðŸ”¨ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('No bids were placed')) return `ðŸ”¨ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `âš ï¸ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Original highest bidder')) return `â„¹ï¸ ${sanitizedMessage}`;
       
       return sanitizedMessage;
     };
@@ -331,7 +338,7 @@ export default function Header(): React.ReactElement | null {
       const deduped: UINotification[] = [];
 
       for (const n of notifications) {
-        const cleanMessage = (n.message || '').replace(/^[🎉💸💰🛒🔨⚠️ℹ️🛑🏆🛍️]\s*/, '').trim();
+        const cleanMessage = (n.message || '').replace(/^[ðŸŽ‰ðŸ’¸ðŸ’°ðŸ›’ðŸ”¨âš ï¸â„¹ï¸ðŸ›‘ðŸ†ðŸ›ï¸]\s*/, '').trim();
         const timestamp = new Date(n.timestamp || Date.now());
         const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000));
         const key = `${cleanMessage}_${timeWindow}`;
@@ -460,7 +467,7 @@ export default function Header(): React.ReactElement | null {
         /* Both flags have to be falsy.
            
            The API returns `isRead`; only the websocket path and the local
-           mark-as-read set `read`. Checking `read` alone — as this did —
+           mark-as-read set `read`. Checking `read` alone â€” as this did â€”
            counts every already-read message the server told us about,
            because `read` is simply undefined on anything that arrived via
            a normal fetch. MessageContext's own per-thread count already
@@ -515,7 +522,7 @@ export default function Header(): React.ReactElement | null {
   }, [isAdminUser]);
 
   // Pending-moderation badge. Exists because the queue is invisible
-  // unless an admin thinks to open /admin/approval — content sat
+  // unless an admin thinks to open /admin/approval â€” content sat
   // unreviewed for days purely for lack of a signal. Polling plus a
   // focus refresh is deliberately boring: a websocket event would be
   // fancier, but a 60s-stale count on a moderation badge is fine and
@@ -1020,17 +1027,15 @@ export default function Header(): React.ReactElement | null {
         )}
 
         <div className="flex items-center gap-2 ml-auto">
-          {isMobile && (
-            <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden flex items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-              aria-label="Open menu"
-            >
-              <Menu className="w-6 h-6" />
-            </button>
-          )}
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            className="flex md:hidden items-center justify-center w-10 h-10 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+            aria-label="Open menu"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
 
-          <nav className={`${isMobile ? 'hidden' : 'flex'} items-center gap-x-2`}>
+          <nav className="hidden md:flex items-center gap-x-2">
           <Link
             href="/browse"
             className="group flex items-center gap-1.5 whitespace-nowrap bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
@@ -1090,7 +1095,7 @@ export default function Header(): React.ReactElement | null {
                 <ClipboardCheck className="w-3.5 h-3.5 text-purple-300" />
                 <span>Approval</span>
                 {approvalCount > 0 && (
-                  /* Black on the accent — white here is 2.20:1 and fails. */
+                  /* Black on the accent â€” white here is 2.20:1 and fails. */
                   <span className="absolute -top-2 -right-2 min-w-[18px] rounded-full border-2 border-white bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold text-black">
                     {approvalCount > 99 ? '99+' : approvalCount}
                   </span>

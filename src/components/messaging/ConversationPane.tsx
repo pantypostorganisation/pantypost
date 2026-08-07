@@ -22,18 +22,47 @@ import type { MessagingRole, UICustomRequest, UIMessage } from './types';
  * composer existed, but the connective tissue — typing events, thread
  * focus/blur, presence, read-marking, the unread divider — still lived
  * only inside the two old ConversationViews, duplicated and diverging.
- * Both role pages now render THIS and pass their hook's state in; the
+ * Both role pages render THIS and pass their hook's state in; the
  * differences between buyer and seller are props, not parallel trees.
  *
- * Websocket details worth knowing:
+ * WEBSOCKET STABILITY — the lesson this file now embodies:
  *
- *  - The typing/focus conversation key is the server's form — sorted RAW
- *    usernames. The old buyer view sanitised one side of the comparison,
- *    which is why typing events were silently dropped for some usernames.
- *  - Typing emits are throttled to one per second while typing continues,
- *    and a 3-second quiet timer sends the stop. Incoming "typing" is
- *    auto-hidden after 5 seconds in case the stop event never arrives.
+ * The context value returned by useWebSocket() is NOT identity-stable
+ * across renders. The first version of this file put it (and callbacks
+ * derived from it) in effect dependency arrays, so every re-render of
+ * the pane re-ran cleanups. The sender's pane re-renders on every
+ * keystroke, and one of those cleanups emitted `isTyping: false` — so
+ * the other person watched the indicator strobe on and off for the
+ * entire time you typed. The same instability was re-firing thread
+ * focus/blur at the server per render.
+ *
+ * The rule now: the live context is read through a ref at call time.
+ * Effects key on the CONVERSATION (conversationKey / activeThread),
+ * never on the context object. The one exception is the subscription
+ * effect, which keeps wsContext in its deps so a rebuilt provider is
+ * re-subscribed — but it no longer touches any state in its body, so
+ * re-running it is invisible.
+ *
+ * Typing protocol details:
+ *  - Emits are throttled to ~1/second while typing continues (doubling
+ *    as a keepalive), with a 3-second quiet timer sending the stop.
+ *  - Incoming `false` is applied after a 500ms grace window, cancelled
+ *    by any `true` — jitter and out-of-order events cannot blink the
+ *    indicator. A 6-second failsafe hides it if events stop entirely.
+ *  - The conversation key is the server's form — sorted RAW usernames.
+ *    The old buyer view sanitised one side of the comparison, which is
+ *    why typing events were silently dropped for some usernames.
+ *
+ * PRESENCE: the activity line and the green dot render only once the
+ * lookup for THIS username has finished. Both old views ignored the
+ * hook's `loading` flag, so flicking between threads showed the
+ * previous person's "Active now" under the new person's name.
  * ===================================================================== */
+
+/** Grace before honouring an isTyping:false — cancelled by any true. */
+const TYPING_FALSE_GRACE_MS = 500;
+/** Hide if typing events stop arriving entirely (keepalive is ~1s). */
+const TYPING_FAILSAFE_MS = 6000;
 
 /** What the composer needs from the role hook. */
 export interface PaneComposerBindings {
@@ -104,15 +133,24 @@ export default function ConversationPane({
   onImagePreview,
 }: ConversationPaneProps) {
   const wsContext = useWebSocket();
-  const { activityStatus } = useUserActivityStatus(activeThread);
+
+  /* Live context behind a ref: senders read this at call time, so the
+     context's per-render identity churn cannot invalidate anything. */
+  const wsRef = useRef(wsContext);
+  wsRef.current = wsContext;
+
+  const { activityStatus, loading: activityLoading } = useUserActivityStatus(activeThread);
 
   const conversationKey = getConversationKey(currentUser, activeThread);
 
-  /* ---- Presence line under the name ---- */
-  const isOnline = Boolean(activityStatus?.isOnline) && !isBlocked;
+  /* ---- Presence line under the name ----
+     Nothing renders until the lookup for THIS username has finished;
+     otherwise thread-switching shows the previous person's status. */
+  const activityReady = !activityLoading && Boolean(activityStatus);
+  const isOnline = activityReady && Boolean(activityStatus?.isOnline) && !isBlocked;
   const activityLine = isBlocked
     ? 'Blocked'
-    : activityStatus
+    : activityReady && activityStatus
       ? formatActivityStatus(activityStatus.isOnline, activityStatus.lastActive)
       : null;
 
@@ -157,97 +195,131 @@ export default function ConversationPane({
     setFirstUnreadId(first ? first.id : null);
   }, [activeThread, uiMessages, currentUser]);
 
-  /* ---- Focus / blur so the server can suppress push for the open thread ---- */
+  /* ---- Focus / blur so the server can suppress push for the open thread.
+     Keyed on the conversation only; the context is read through the ref,
+     so provider churn cannot spam focus/blur pairs at the server. */
   useEffect(() => {
-    if (!wsContext?.sendMessage) return;
-    wsContext.sendMessage('thread:focus', { threadId: conversationKey, otherUser: activeThread });
+    wsRef.current?.sendMessage?.('thread:focus', {
+      threadId: conversationKey,
+      otherUser: activeThread,
+    });
     return () => {
-      wsContext.sendMessage?.('thread:blur', { threadId: conversationKey, otherUser: activeThread });
+      wsRef.current?.sendMessage?.('thread:blur', {
+        threadId: conversationKey,
+        otherUser: activeThread,
+      });
     };
-  }, [wsContext, conversationKey, activeThread]);
+  }, [conversationKey, activeThread]);
 
   /* ---- Incoming typing ---- */
   const [otherTyping, setOtherTyping] = useState(false);
-  const hideTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const clearHideTimer = () => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  };
+
+  /* Reset lives in its own thread-keyed effect. It must NOT live in the
+     subscription effect's body: that effect legitimately re-runs when
+     the provider rebuilds, and resetting there is what blanked the
+     indicator between keepalives in the first version. */
   useEffect(() => {
     setOtherTyping(false);
+    clearHideTimer();
+  }, [activeThread]);
+
+  useEffect(() => {
     if (!wsContext?.subscribe) return;
 
     const handle = (data: { conversationId?: string; username?: string; isTyping?: boolean }) => {
       if (data?.conversationId !== conversationKey) return;
       if (data?.username !== activeThread) return;
 
-      if (hideTypingTimeoutRef.current) {
-        clearTimeout(hideTypingTimeoutRef.current);
-        hideTypingTimeoutRef.current = null;
-      }
-      setOtherTyping(Boolean(data.isTyping));
       if (data.isTyping) {
-        hideTypingTimeoutRef.current = setTimeout(() => setOtherTyping(false), 5000);
+        clearHideTimer();
+        setOtherTyping(true);
+        // Failsafe: keepalives arrive ~1/s; silence means they're gone.
+        hideTimerRef.current = setTimeout(() => setOtherTyping(false), TYPING_FAILSAFE_MS);
+      } else {
+        // Grace window: a stray false between keepalives must not blink.
+        clearHideTimer();
+        hideTimerRef.current = setTimeout(() => setOtherTyping(false), TYPING_FALSE_GRACE_MS);
       }
     };
 
     const unsubscribe = wsContext.subscribe('message:typing', handle);
     return () => {
-      if (hideTypingTimeoutRef.current) {
-        clearTimeout(hideTypingTimeoutRef.current);
-        hideTypingTimeoutRef.current = null;
-      }
       unsubscribe?.();
     };
+    // wsContext stays in deps so a rebuilt provider is re-subscribed;
+    // with a state-free body, the re-run is invisible.
   }, [wsContext, conversationKey, activeThread]);
+
+  useEffect(() => clearHideTimer, []);
 
   /* ---- Outgoing typing ---- */
   const isTypingRef = useRef(false);
   const lastEmitRef = useRef(0);
-  const quietTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quietTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopTyping = useCallback(() => {
-    if (quietTimeoutRef.current) {
-      clearTimeout(quietTimeoutRef.current);
-      quietTimeoutRef.current = null;
+    if (quietTimerRef.current) {
+      clearTimeout(quietTimerRef.current);
+      quietTimerRef.current = null;
     }
-    if (isTypingRef.current && wsContext?.sendMessage) {
+    if (isTypingRef.current) {
       isTypingRef.current = false;
-      wsContext.sendMessage('message:typing', {
+      wsRef.current?.sendMessage?.('message:typing', {
         conversationId: conversationKey,
         isTyping: false,
       });
     }
-  }, [wsContext, conversationKey]);
+  }, [conversationKey]);
+
+  /* Leaving the conversation (or unmounting) must not strand a dangling
+     "is typing" — but ONLY those events may trigger it. The latest
+     stopTyping is reached through a ref precisely so that callback
+     identity can never join the dependency array: depending on it is
+     what fired a phantom stop on every keystroke's re-render. */
+  const stopTypingRef = useRef(stopTyping);
+  useEffect(() => {
+    stopTypingRef.current = stopTyping;
+  }, [stopTyping]);
+
+  useEffect(() => {
+    return () => stopTypingRef.current();
+  }, [activeThread]);
 
   const handleComposerChange = useCallback(
     (value: string) => {
       composer.onChange(value);
-      if (!wsContext?.sendMessage) return;
 
       if (value.trim()) {
         const now = Date.now();
         if (!isTypingRef.current || now - lastEmitRef.current > 1000) {
-          wsContext.sendMessage('message:typing', {
+          wsRef.current?.sendMessage?.('message:typing', {
             conversationId: conversationKey,
             isTyping: true,
           });
           lastEmitRef.current = now;
           isTypingRef.current = true;
         }
-        if (quietTimeoutRef.current) clearTimeout(quietTimeoutRef.current);
-        quietTimeoutRef.current = setTimeout(stopTyping, 3000);
+        if (quietTimerRef.current) clearTimeout(quietTimerRef.current);
+        quietTimerRef.current = setTimeout(() => stopTypingRef.current(), 3000);
       } else {
-        stopTyping();
+        stopTypingRef.current();
       }
     },
-    [composer, wsContext, conversationKey, stopTyping]
+    [composer, conversationKey]
   );
 
   const handleSend = useCallback(() => {
-    stopTyping();
+    stopTypingRef.current();
     composer.onSend();
-  }, [composer, stopTyping]);
-
-  // Leaving the conversation must not strand a dangling "is typing".
-  useEffect(() => stopTyping, [activeThread, stopTyping]);
+  }, [composer]);
 
   /* ---- Read marking: translate UI ids back to the hook's Message ---- */
   const handleVisible = useCallback(

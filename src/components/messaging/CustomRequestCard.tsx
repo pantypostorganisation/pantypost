@@ -138,7 +138,7 @@ export default function CustomRequestCard({
                     value={editState.title}
                     onChange={(event) => editState.setTitle(event.target.value)}
                     maxLength={100}
-                    className="search-field w-full px-3 py-2 text-sm text-ink placeholder:text-ink-faint"
+                    className="search-field w-full px-3 py-2 text-sm pointer-coarse:text-base text-ink placeholder:text-ink-faint"
                     placeholder="What you're offering"
                   />
                 </label>
@@ -152,7 +152,7 @@ export default function CustomRequestCard({
                     onChange={(event) =>
                       editState.setPrice(event.target.value.replace(/[^\d.]/g, ''))
                     }
-                    className="search-field w-full px-3 py-2 text-sm tabular-nums text-ink placeholder:text-ink-faint"
+                    className="search-field w-full px-3 py-2 text-sm pointer-coarse:text-base tabular-nums text-ink placeholder:text-ink-faint"
                     placeholder="0.00"
                   />
                 </label>
@@ -164,7 +164,7 @@ export default function CustomRequestCard({
                     onChange={(event) => editState.setMessage(event.target.value)}
                     rows={3}
                     maxLength={500}
-                    className="search-field w-full resize-none px-3 py-2 text-sm text-ink placeholder:text-ink-faint"
+                    className="search-field w-full resize-none px-3 py-2 text-sm pointer-coarse:text-base text-ink placeholder:text-ink-faint"
                     placeholder="Describe your counter-offer"
                   />
                 </label>

@@ -214,7 +214,11 @@ export default function Composer({
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             aria-label="Message"
-            className="max-h-40 flex-1 resize-none bg-transparent py-2 text-sm text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
+            /* pointer-coarse => 16px: iOS Safari auto-zooms any focused field
+                below 16px, and the pinch-out it forces after every send
+                was the complaint. Coarse-pointer targeting covers phones
+                in both orientations without touching desktop. */
+            className="max-h-40 flex-1 resize-none bg-transparent py-2 text-sm pointer-coarse:text-base text-ink placeholder:text-ink-faint focus:outline-none disabled:opacity-50"
           />
 
           <button
@@ -245,40 +249,46 @@ export default function Composer({
           </button>
         </div>
 
-        <div className="mt-1.5 flex items-center gap-2">
-          {onRequestCustom && (
-            <button
-              type="button"
-              onClick={onRequestCustom}
-              disabled={disabled}
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary-line bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-black active:bg-primary-press disabled:opacity-50"
-            >
-              <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
-              Custom request
-            </button>
-          )}
-          {onSendTip && (
-            <button
-              type="button"
-              onClick={onSendTip}
-              disabled={disabled}
-              className="inline-flex items-center gap-1.5 rounded-full border border-primary-line bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-primary hover:bg-primary hover:text-black active:bg-primary-press disabled:opacity-50"
-            >
-              <Gift className="h-3.5 w-3.5" aria-hidden="true" />
-              Send tip
-            </button>
-          )}
+        {value.length >= COUNTER_FROM && (
+          <p
+            className={`mt-1 text-right text-[11px] tabular-nums ${
+              value.length >= MAX_LENGTH ? 'text-danger' : 'text-ink-faint'
+            }`}
+          >
+            {value.length}/{MAX_LENGTH}
+          </p>
+        )}
 
-          {value.length >= COUNTER_FROM && (
-            <span
-              className={`ml-auto text-[11px] tabular-nums ${
-                value.length >= MAX_LENGTH ? 'text-danger' : 'text-ink-faint'
-              }`}
-            >
-              {value.length}/{MAX_LENGTH}
-            </span>
-          )}
-        </div>
+        {/* Buyer actions, matched to the send button: solid primary,
+            black label, rounded-full, same hover/press. On phones each
+            takes half the width as a proper touch target; from sm up
+            they collapse to compact pills. */}
+        {(onRequestCustom || onSendTip) && (
+          <div className="mt-2 flex gap-2 sm:mt-1.5">
+            {onRequestCustom && (
+              <button
+                type="button"
+                onClick={onRequestCustom}
+                disabled={disabled}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-3 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover active:bg-primary-press disabled:opacity-50 sm:flex-none sm:py-1.5 sm:text-xs"
+              >
+                <ClipboardList className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
+                Custom request
+              </button>
+            )}
+            {onSendTip && (
+              <button
+                type="button"
+                onClick={onSendTip}
+                disabled={disabled}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-3 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover active:bg-primary-press disabled:opacity-50 sm:flex-none sm:py-1.5 sm:text-xs"
+              >
+                <Gift className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
+                Send tip
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -46,7 +46,7 @@ export default function ThreadList({
     return threads.filter((thread) => {
       if (unreadOnly && !thread.unreadCount) return false;
       if (!needle) return true;
-      // Search names *and* the last message — searching usernames alone,
+      // Search names *and* the last message â€” searching usernames alone,
       // as before, is close to useless once you have more than a few.
       return (
         thread.username.toLowerCase().includes(needle) ||
@@ -76,7 +76,7 @@ export default function ThreadList({
             onChange={(event) => setQuery(event.target.value)}
             placeholder={`Search ${counterpartyLabel} and messages`}
             aria-label={`Search ${counterpartyLabel} and messages`}
-            className="search-field w-full py-2 pl-8 pr-8 text-sm text-ink placeholder:text-ink-faint"
+            className="search-field w-full py-2 pl-8 pr-8 text-sm pointer-coarse:text-base text-ink placeholder:text-ink-faint"
           />
           {query && (
             <button
