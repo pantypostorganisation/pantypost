@@ -228,7 +228,7 @@ export default function BuyerMessagesPage() {
             that already renders a header, so the page was taller than the
             window and the whole document scrolled behind a chat that was
             supposed to be fixed. ClientLayout owns the viewport now. */}
-        <main className="flex h-full min-h-0 w-full flex-1 overflow-hidden overscroll-contain bg-black p-0">
+        <main className="flex h-full min-h-0 w-full flex-1 overflow-hidden overscroll-contain bg-black pt-2 sm:pt-3">
           <div className={innerWrap}>
             <aside className={sidebarWrap}>
               <ThreadsSidebar

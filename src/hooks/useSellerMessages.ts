@@ -16,6 +16,7 @@ import { messageSchemas, financialSchemas } from '@/utils/validation/schemas';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 import { useSearchParams } from 'next/navigation';
+import { reconcileOptimistic } from '@/utils/optimisticMessages';
 
 // Helper function
 const getConversationKey = (userA: string, userB: string): string => {
@@ -426,8 +427,19 @@ export function useSellerMessages() {
       // Combine real messages with optimistic ones for this thread
       let combinedMessages = [...validMessages];
       
-      // Add optimistic messages for this thread
-      const threadOptimistic = optimisticMessages[conversationKey] || [];
+      /* Add optimistic messages for this thread — but only the ones the
+         real thread does not already contain.
+
+         This used to append unconditionally, so after the websocket echo
+         landed you saw the message twice until a 10-second sweeper removed
+         the optimistic copy. reconcileOptimistic matches one-to-one on
+         sender/receiver/content within a wide time window, so clock skew
+         between the browser and the VPS can no longer leave a duplicate on
+         screen. */
+      const threadOptimistic = reconcileOptimistic(
+        validMessages,
+        optimisticMessages[conversationKey] || []
+      );
       if (threadOptimistic.length > 0) {
         combinedMessages = [...combinedMessages, ...threadOptimistic];
       }

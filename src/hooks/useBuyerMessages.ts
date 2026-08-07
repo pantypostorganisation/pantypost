@@ -28,6 +28,7 @@ import {
 } from '@/utils/messageUtils';
 import { FREQUENT_EMOJIS } from '@/constants/emojis';
 import { v4 as uuidv4 } from 'uuid';
+import { reconcileOptimistic } from '@/utils/optimisticMessages';
 
 interface CustomRequestForm {
   title: string;
@@ -403,7 +404,16 @@ export const useBuyerMessages = () => {
         
         if (otherParty && otherParty !== user.username) {
           if (!result[otherParty]) result[otherParty] = [];
-          result[otherParty].push(...optMsgs);
+
+          /* Only the optimistic messages the real thread does not already
+             contain. The dedupe pass below relies on optimisticMessageIds,
+             which is populated by a content + 5-second-window matcher — and
+             that silently fails whenever the browser and server clocks are
+             more than five seconds apart, leaving the message on screen
+             twice until the 10-second sweeper ran. */
+          result[otherParty].push(
+            ...reconcileOptimistic(result[otherParty], optMsgs)
+          );
         }
       });
       

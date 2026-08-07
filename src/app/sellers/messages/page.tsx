@@ -140,7 +140,7 @@ export default function SellerMessagesPage() {
             strip of dead black below the composer. ClientLayout now pins the
             shell to the viewport for messaging routes, so the correct answer
             here is simply "whatever is left". */}
-        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-black">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden bg-black pt-2 sm:pt-3">
           <main className="flex h-full min-h-0 w-full flex-1 overscroll-contain">
             <div className={innerWrap}>
               <aside className={sidebarWrap}>
