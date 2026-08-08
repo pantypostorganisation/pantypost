@@ -1,41 +1,79 @@
 // src/components/AgeVerificationModal.tsx
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Key is versioned: changing the stated threshold or terms should
 // re-prompt everyone rather than silently inheriting an old acceptance.
 const AGE_VERIFIED_KEY = 'pantypost_age_verified_v2';
 
 export default function AgeVerificationModal(): React.ReactElement | null {
-  // Initialize state based on localStorage
-  const [isVerified, setIsVerified] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return localStorage.getItem(AGE_VERIFIED_KEY) === 'true';
-      } catch (error) {
-        console.error('Error reading age verification:', error);
-        return false;
-      }
+  /* =====================================================================
+   * Why this starts hidden and decides in an effect.
+   *
+   * The obvious version reads localStorage in useState's initializer.
+   * That looks correct but flashes: during server rendering there is no
+   * localStorage, so the server (and React's first client render, which
+   * must match it) always produces "not verified -> show the modal".
+   * Only afterwards does an effect read the flag and hide it — so a
+   * returning visitor sees the overlay for one frame every single load.
+   *
+   * Instead: render nothing until a client effect has actually decided.
+   *   - Already accepted        -> we never show a frame of the modal.
+   *   - Genuinely first visit   -> `decided` flips with show=true and it
+   *                                appears a beat later, which is fine —
+   *                                they have never seen it, so there is
+   *                                nothing to "flash".
+   *
+   * `decided` gates the first paint; `show` is the actual verified state.
+   * ===================================================================== */
+  const [decided, setDecided] = useState(false);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    let verified = false;
+    try {
+      verified = localStorage.getItem(AGE_VERIFIED_KEY) === 'true';
+    } catch (error) {
+      // Private mode / storage disabled: fail towards showing the gate
+      // rather than silently letting someone past it.
+      console.error('Error reading age verification:', error);
+      verified = false;
     }
-    return false;
-  });
+    setShow(!verified);
+    setDecided(true);
+  }, []);
+
+  // Keep tabs in sync: accept in one, and any other open tab that is
+  // still showing the overlay should drop it rather than stay stuck.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === AGE_VERIFIED_KEY && e.newValue === 'true') {
+        setShow(false);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const handleYes = () => {
     try {
       localStorage.setItem(AGE_VERIFIED_KEY, 'true');
-      setIsVerified(true);
     } catch (error) {
+      // If we cannot persist it, still let them in for this session —
+      // but it will re-prompt next load, which is the safe direction.
       console.error('Error saving age verification:', error);
-      setIsVerified(true);
     }
+    setShow(false);
   };
 
   const handleNo = () => {
     window.location.href = 'https://www.google.com';
   };
 
-  if (isVerified) return null;
+  // Nothing until the client has decided (prevents the SSR "show" frame),
+  // and nothing once verified.
+  if (!decided || !show) return null;
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
