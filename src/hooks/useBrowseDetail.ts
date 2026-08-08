@@ -6,12 +6,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useWebSocket } from '@/context/WebSocketContext';
-import { listingsService, type DropInfo } from '@/services/listings.service';
 import { useAuction } from '@/context/AuctionContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getUserProfileData } from '@/utils/profileUtils';
 import { getSellerTierMemoized } from '@/utils/sellerTiers';
 import { storageService, listingsService, reviewsService } from '@/services';
+import type { DropInfo } from '@/services/listings.service';
 import { 
   isAuctionActive, 
   calculateTotalPayable, 

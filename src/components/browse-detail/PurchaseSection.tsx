@@ -8,6 +8,7 @@ import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import { useToast } from '@/context/ToastContext';
 import { Listing } from '@/context/ListingContext';
+import { listingsService, type DropInfo } from '@/services/listings.service';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
 interface PurchaseSectionProps {
@@ -101,6 +102,16 @@ export default function PurchaseSection({
   const canAfford = buyerBalanceInCents >= purchasePriceInCents;
   const balanceNeeded = Math.max(0, (purchasePriceInCents - buyerBalanceInCents) / 100);
 
+  // ---- Drop state ----
+  const dropInfo = (listing as { drop?: DropInfo }).drop;
+  const isDropListing = Boolean(dropInfo?.isDrop);
+  const dropOpensAt =
+    dropInfo?.scheduledFor && new Date(dropInfo.scheduledFor).getTime() > Date.now()
+      ? new Date(dropInfo.scheduledFor)
+      : null;
+  const dropSoldOut = isDropListing && ((dropInfo?.unitsRemaining ?? 0) <= 0 || !isListingStillActive);
+  const nextUnitNumber = dropInfo ? dropInfo.unitsSold + 1 : 0;
+
   const shouldShowInsufficientBalance =
     !canAfford &&
     balanceNeeded > 0.01 &&
@@ -139,6 +150,52 @@ export default function PurchaseSection({
     if (!canAfford) {
       showToast({ type: 'error', title: 'Insufficient balance. Please add funds to your wallet.' });
       router.push('/wallet/buyer');
+      return;
+    }
+
+    if (isDropListing) {
+      if (dropOpensAt) {
+        showToast({ type: 'error', title: `This drop opens ${dropOpensAt.toLocaleString()}.` });
+        return;
+      }
+      if (dropSoldOut) {
+        showToast({ type: 'error', title: 'This drop is sold out.' });
+        return;
+      }
+
+      setIsPurchasing(true);
+      try {
+        // Server-authoritative claim: price, unit number and inventory
+        // are all decided on the other side. Never the legacy path —
+        // it would flip the whole run to sold in one click.
+        const response = await listingsService.purchaseDropUnit(listing.id);
+
+        if (response.success && response.data) {
+          const { unitNumber, totalUnits } = response.data.drop;
+          setPurchaseCompleted(true);
+          showToast({
+            type: 'success',
+            title: `Unit #${unitNumber} of ${totalUnits} is yours!`,
+          });
+
+          await reloadData();
+          await new Promise((r) => setTimeout(r, 500));
+          router.push('/buyers/my-orders');
+        } else {
+          setIsPurchasing(false);
+          const message = response.error?.message;
+          showToast({
+            type: 'error',
+            title:
+              message === 'Sold out'
+                ? 'Sold out — the last unit went moments ago.'
+                : message || 'Purchase failed. Please try again.',
+          });
+        }
+      } catch (dropError: any) {
+        setIsPurchasing(false);
+        showToast({ type: 'error', title: dropError?.message || 'Purchase failed. Please try again.' });
+      }
       return;
     }
 
@@ -197,7 +254,11 @@ export default function PurchaseSection({
   if (!isListingStillActive && !purchaseCompleted) {
     return (
       <div className="rounded-lg border border-line bg-surface-raised p-5">
-        <Notice tone="info" icon={ShoppingBag} title="This item has been sold" />
+        <Notice
+          tone="info"
+          icon={ShoppingBag}
+          title={(listing as { drop?: DropInfo }).drop?.isDrop ? 'This drop is sold out' : 'This item has been sold'}
+        />
       </div>
     );
   }
@@ -308,18 +369,25 @@ export default function PurchaseSection({
       ) : (
         <button
           onClick={handleRealPurchase}
-          disabled={isPurchasing || isProcessing || !canAfford}
+          disabled={isPurchasing || isProcessing || !canAfford || Boolean(dropOpensAt)}
           className={`${buttonBase} ${
-            canAfford && !isPurchasing && !isProcessing
-              ? 'bg-primary text-black hover:bg-primary-hover'
+            canAfford && !isPurchasing && !isProcessing && !dropOpensAt
+              ? 'bg-primary text-black hover:bg-primary-hover active:bg-primary-press'
               : 'cursor-not-allowed bg-surface-overlay text-ink-faint'
           }`}
-          aria-label="Purchase now"
+          aria-label={isDropListing ? 'Claim your unit' : 'Purchase now'}
         >
           {isPurchasing || isProcessing ? (
             <>
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
               Processing
+            </>
+          ) : dropOpensAt ? (
+            <>Opens {dropOpensAt.toLocaleString()}</>
+          ) : isDropListing ? (
+            <>
+              <ShoppingBag className="h-4 w-4" />
+              Claim unit #{nextUnitNumber} — ${(purchasePriceInCents / 100).toFixed(2)}
             </>
           ) : (
             <>

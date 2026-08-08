@@ -5,14 +5,15 @@ import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import {
   Crown, Clock, Lock, Gavel, Eye, Package, Heart,
-  ChevronLeft, ChevronRight, BadgeCheck, Star, Trash2, X
+  ChevronLeft, ChevronRight, BadgeCheck, Star, Trash2, X,
+  Layers
 } from 'lucide-react';
 import { ListingCardProps } from '@/types/browse';
 import { isAuctionListing } from '@/utils/browseUtils';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
 import { resolveApiUrl } from '@/utils/url';
-import { listingsService } from '@/services/listings.service';
+import { listingsService, type DropInfo } from '@/services/listings.service';
 
 interface ExtendedListingCardProps extends ListingCardProps {
   isGuest?: boolean;
@@ -43,6 +44,9 @@ export default function ListingCard({
 
   const isLockedPremium = listing.isLocked === true;
   const hasAuction = isAuctionListing(listing);
+  const drop = (listing as { drop?: DropInfo }).drop;
+  const isDrop = Boolean(drop?.isDrop);
+  const dropSoldOut = Boolean(isDrop && ((drop?.unitsRemaining ?? 0) <= 0 || (listing as { status?: string }).status === 'sold'));
   const hasMultipleImages = !!listing.imageUrls && listing.imageUrls.length > 1;
 
   const { isFavorited, toggleFavorite } = useFavorites();
@@ -135,7 +139,7 @@ export default function ListingCard({
   return (
     /* Marketplace-grid card, in the Etsy idiom: the image does the
        selling, and everything beneath it is compact scannable metadata.
-       No card border or background — the photo defines the tile, which
+       No card border or background â€” the photo defines the tile, which
        keeps a dense grid from looking like a wall of boxes. */
     <article
       className={`group flex flex-col ${isGuest ? '' : 'cursor-pointer'}`}
@@ -194,6 +198,10 @@ export default function ListingCard({
             <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/90 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur">
               <Gavel className="h-3 w-3" /> Auction
             </span>
+          ) : isDrop ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#ff950e] px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-black">
+              <Layers className="h-3 w-3" /> Drop
+            </span>
           ) : listing.isPremium ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-[#ff950e] px-2 py-1 text-[11px] font-semibold text-black">
               <Crown className="h-3 w-3" /> Premium
@@ -245,7 +253,7 @@ export default function ListingCard({
               <Trash2 className="h-4 w-4" />
               {confirmingRemove && (
                 <span className="text-xs font-semibold">
-                  {removing ? 'Removing…' : 'Confirm'}
+                  {removing ? 'Removingâ€¦' : 'Confirm'}
                 </span>
               )}
             </button>
@@ -264,6 +272,22 @@ export default function ListingCard({
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 backdrop-blur-sm">
             <Lock className="h-6 w-6 text-[#ff950e]" />
             <p className="px-4 text-center text-xs font-medium text-white">Subscribe to view</p>
+          </div>
+        )}
+
+        {/* Drop inventory — mirrors the auction countdown's slot */}
+        {isDrop && drop && (
+          <div className="absolute bottom-2 left-2 z-20">
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold backdrop-blur ${
+                dropSoldOut ? 'bg-black/80 text-gray-300' : 'bg-black/80 text-white'
+              }`}
+            >
+              <Layers className="h-3 w-3 text-[#ff950e]" />
+              {dropSoldOut
+                ? 'Sold out'
+                : `${drop.unitsRemaining} of ${drop.totalUnits} left`}
+            </span>
           </div>
         )}
 
@@ -326,7 +350,7 @@ export default function ListingCard({
               onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-300 hover:underline"
             >
-              {hasRating && <span className="text-gray-700">·</span>}
+              {hasRating && <span className="text-gray-700">Â·</span>}
               {resolvedSellerPic && !sellerPicFailed ? (
                 <img
                   src={resolvedSellerPic}

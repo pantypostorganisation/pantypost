@@ -83,8 +83,17 @@ export type Listing = {
   auction?: AuctionSettings;
 };
 
-export type NewListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'>;
-export type AddListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'>;
+/** Drop parameters accepted at creation; counters are server-owned. */
+export type DropCreateInput = {
+  totalUnits: number;
+  /** ISO date in the future; omit to open on approval. */
+  scheduledFor?: string;
+};
+
+export type NewListingInput = Omit<Listing, 'id' | 'date' | 'markedUpPrice'> & {
+  drop?: DropCreateInput;
+};
+export type AddListingInput = NewListingInput;
 
 export type AuctionInput = {
   startingPrice: number;
@@ -416,7 +425,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     try {
       /* Users.
          
-         This used to handle only an array or a { users: [] } wrapper — but
+         This used to handle only an array or a { users: [] } wrapper â€” but
          usersService.getUsers() already reduces the response to a
          Record<username, User> map (see users.service.ts, which builds
          usersMap and returns it as `data`). Neither branch ever matched,
@@ -739,7 +748,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
 
         addSellerNotification(
           user.username,
-          `🔨 You've created a new auction: "${sanitizedListing.title}" starting at $${auctionSettings.startingPrice.toFixed(
+          `ðŸ”¨ You've created a new auction: "${sanitizedListing.title}" starting at $${auctionSettings.startingPrice.toFixed(
             2
           )}`
         );
@@ -838,6 +847,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         nsfw: false,
       };
 
+      // Drops never travel this path: they settle through the
+      // server-authoritative /orders/drop claim. The surfaces all gate
+      // this already; the guard makes the invariant local.
+      if ((listing as { drop?: { isDrop?: boolean } }).drop?.isDrop) {
+        console.error('[ListingContext] Drop listings must be purchased via purchaseDropUnit');
+        return false;
+      }
+
       const success = await purchaseListing(listingForWallet as any, sanitizedBuyer);
       if (success) {
         soldListingDeduplicator.current.isDuplicate(listing.id);
@@ -909,7 +926,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           await refreshListings();
           addSellerNotification(
             listing.seller,
-            `💰 New bid! ${cleanBidder} bid $${amount.toFixed(2)} on "${listing.title}"`
+            `ðŸ’° New bid! ${cleanBidder} bid $${amount.toFixed(2)} on "${listing.title}"`
           );
         }
         return success;
@@ -967,14 +984,14 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
             const sellerEarnings = listing.auction.highestBid * 0.8;
             addSellerNotification(
               listing.seller,
-              `🏆 Auction ended: "${listing.title}" sold to ${listing.auction.highestBidder} for $${listing.auction.highestBid.toFixed(
+              `ðŸ† Auction ended: "${listing.title}" sold to ${listing.auction.highestBidder} for $${listing.auction.highestBid.toFixed(
                 2
               )}. You'll receive $${sellerEarnings.toFixed(2)} (after 20% platform fee)`
             );
           } else {
             addSellerNotification(
               listing.seller,
-              `🔨 Auction ended: No valid bids for "${listing.title}"`
+              `ðŸ”¨ Auction ended: No valid bids for "${listing.title}"`
             );
           }
         }
@@ -999,7 +1016,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         )
       );
 
-      addSellerNotification(listing.seller, `🛑 You cancelled your auction: "${listing.title}". All bidders have been refunded.`);
+      addSellerNotification(listing.seller, `ðŸ›‘ You cancelled your auction: "${listing.title}". All bidders have been refunded.`);
     }
 
     return success;
@@ -1122,7 +1139,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       subscriptionDetails[sanitizedBuyer] = filtered;
       await storageService.setItem('subscription_details', subscriptionDetails);
 
-      addSellerNotification(sanitizedSeller, `🎉 ${sanitizedBuyer} subscribed to you!`);
+      addSellerNotification(sanitizedSeller, `ðŸŽ‰ ${sanitizedBuyer} subscribed to you!`);
     }
     return success;
   };

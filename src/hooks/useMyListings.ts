@@ -466,7 +466,7 @@ export const useMyListings = () => {
       return;
     }
     
-    const { title, description, imageUrls, isAuction, startingPrice, reservePrice, auctionDuration, price, tags, hoursWorn, isPremium } = formState;
+    const { title, description, imageUrls, isAuction, startingPrice, reservePrice, auctionDuration, price, tags, hoursWorn, isPremium, isDrop, dropUnits, dropScheduledFor } = formState;
 
     // Timestamped attestation, recorded against this specific listing
     // so the seller's declaration is evidenced per item rather than
@@ -528,6 +528,63 @@ export const useMyListings = () => {
         }
         
         resetForm();
+      } else if (isDrop) {
+        // ---- DROP: one listing, N numbered units ----
+        if (!isVerified) {
+          setError('You must be a verified seller to create drops.');
+          return;
+        }
+        if (editingState.isEditing) {
+          // The server strips drop-size mutations anyway (a resized run
+          // corrupts every buyer's "unit #X of N"); refusing here keeps
+          // the seller's mental model honest.
+          setError('Drops cannot be edited after creation. Cancel it and create a new one.');
+          return;
+        }
+
+        const units = parseInt(dropUnits, 10);
+        if (!Number.isInteger(units) || units < 2 || units > 2000) {
+          setError('Drop size must be a whole number between 2 and 2000 units.');
+          return;
+        }
+
+        const numericPrice = sanitizeNumber(price, 0.01, 10000);
+
+        let scheduledForIso: string | undefined;
+        if (dropScheduledFor.trim() !== '') {
+          const when = new Date(dropScheduledFor);
+          const maxAhead = Date.now() + 60 * 24 * 60 * 60 * 1000;
+          if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now() || when.getTime() > maxAhead) {
+            setError('Drop open time must be in the future and within 60 days.');
+            return;
+          }
+          scheduledForIso = when.toISOString();
+        }
+
+        const listingData = {
+          title: sanitizedTitle,
+          description: sanitizedDescription,
+          price: numericPrice,
+          imageUrls,
+          seller: user?.username || 'unknown',
+          isPremium,
+          tags: tagsList,
+          hoursWorn: hoursWorn === '' ? undefined : sanitizeNumber(hoursWorn.toString(), 0, 168),
+          consentAttestation,
+          drop: { totalUnits: units, scheduledFor: scheduledForIso },
+        };
+
+        const createdListing = await addListing(listingData);
+        if (createdListing?.approvalStatus === 'pending') {
+          toast?.info('Pending approval', 'Your drop is pending approval by Admins. All units go live together.');
+        }
+
+        if (currentDraftId) {
+          await deleteListingDraft(currentDraftId);
+          setDrafts(prev => prev.filter(d => d.id !== currentDraftId));
+        }
+
+        resetForm();
       } else {
         const numericPrice = sanitizeNumber(price, 0.01, 10000);
 
@@ -584,7 +641,10 @@ export const useMyListings = () => {
       isAuction: !!listing.auction,
       startingPrice: listing.auction?.startingPrice.toString() || '',
       reservePrice: listing.auction?.reservePrice?.toString() || '',
-      auctionDuration: listing.auction ? '1' : '1'
+      auctionDuration: listing.auction ? '1' : '1',
+      isDrop: Boolean((listing as { drop?: { isDrop?: boolean } }).drop?.isDrop),
+      dropUnits: String((listing as { drop?: { totalUnits?: number } }).drop?.totalUnits ?? ''),
+      dropScheduledFor: ''
     });
     setSelectedFiles([]);
     setShowForm(true);

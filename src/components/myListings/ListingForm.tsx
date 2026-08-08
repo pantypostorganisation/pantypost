@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Crown,
   CheckCircle,
-  ShieldCheck
+  ShieldCheck,
+  Layers
 } from 'lucide-react';
 import Link from 'next/link';
 import { SecureInput, SecureTextarea } from '@/components/ui/SecureInput';
@@ -254,7 +255,18 @@ export default function ListingForm({
     try {
       // Validate form
       const formValidation = validateForm();
-      
+
+      // Drop-size bound. The shared validator predates drops; this is
+      // UX only — the hook and the server both enforce it again.
+      if (formState.isDrop) {
+        const units = parseInt(formState.dropUnits, 10);
+        if (!/^[0-9]+$/.test(formState.dropUnits) || units < 2 || units > 2000) {
+          setErrors({ submit: 'Drop size must be a whole number between 2 and 2000 units.' });
+          setTouched(prev => ({ ...prev, dropUnits: true }));
+          return;
+        }
+      }
+
       if (!formValidation.isValid) {
         setErrors(formValidation.errors);
         // Mark all invalid fields as touched
@@ -300,13 +312,13 @@ export default function ListingForm({
             <h3 className="font-semibold text-red-300">Please fix the following issues:</h3>
           </div>
           <ul className="text-sm text-red-200 space-y-1">
-            {!validation.title.isValid && touched.title && <li>• {validation.title.message}</li>}
-            {!validation.description.isValid && touched.description && <li>• {validation.description.message}</li>}
-            {!validation.price.isValid && touched.price && <li>• {validation.price.message}</li>}
-            {!validation.startingPrice.isValid && touched.startingPrice && <li>• {validation.startingPrice.message}</li>}
-            {!validation.reservePrice.isValid && touched.reservePrice && <li>• {validation.reservePrice.message}</li>}
-            {!validation.images.isValid && <li>• {validation.images.message}</li>}
-            {!validation.tags.isValid && touched.tags && <li>• {validation.tags.message}</li>}
+            {!validation.title.isValid && touched.title && <li>â€¢ {validation.title.message}</li>}
+            {!validation.description.isValid && touched.description && <li>â€¢ {validation.description.message}</li>}
+            {!validation.price.isValid && touched.price && <li>â€¢ {validation.price.message}</li>}
+            {!validation.startingPrice.isValid && touched.startingPrice && <li>â€¢ {validation.startingPrice.message}</li>}
+            {!validation.reservePrice.isValid && touched.reservePrice && <li>â€¢ {validation.reservePrice.message}</li>}
+            {!validation.images.isValid && <li>â€¢ {validation.images.message}</li>}
+            {!validation.tags.isValid && touched.tags && <li>â€¢ {validation.tags.message}</li>}
           </ul>
         </div>
       )}
@@ -391,7 +403,7 @@ export default function ListingForm({
               <input
                 type="radio"
                 checked={!formState.isAuction}
-                onChange={() => onFormChange({ isAuction: false })}
+                onChange={() => onFormChange({ isAuction: false, isDrop: false })}
                 className="sr-only"
               />
               <Sparkles className={`w-5 h-5 ${!formState.isAuction ? 'text-[#ff950e]' : 'text-gray-500'}`} />
@@ -418,7 +430,7 @@ export default function ListingForm({
                   checked={formState.isAuction}
                   onChange={() => {
                     if (isVerified) {
-                      onFormChange({ isAuction: true });
+                      onFormChange({ isAuction: true, isDrop: false });
                     }
                   }}
                   disabled={!isVerified}
@@ -445,8 +457,94 @@ export default function ListingForm({
                 </div>
               )}
             </div>
+
+            {/* DROP — one listing, N numbered units. Verified only, same
+                as auctions: a drop is a public event under the seller's
+                name, and identity verification is the platform's floor
+                for anything with that blast radius. */}
+            <div className="relative flex-1">
+              <label
+                className={`flex items-center gap-3 py-3 px-4 rounded-lg cursor-pointer border-2 transition ${
+                  formState.isDrop
+                    ? 'border-[#ff950e] bg-[#ff950e] bg-opacity-10'
+                    : 'border-gray-700 bg-black'
+                } ${!isVerified ? 'opacity-50 cursor-not-allowed' : 'hover:border-[#ff950e]'}`}
+              >
+                <input
+                  type="radio"
+                  checked={formState.isDrop}
+                  onChange={() => {
+                    if (isVerified) {
+                      onFormChange({ isDrop: true, isAuction: false });
+                    }
+                  }}
+                  disabled={!isVerified}
+                  className="sr-only"
+                />
+                <Layers className={`w-5 h-5 ${formState.isDrop ? 'text-[#ff950e]' : 'text-gray-500'}`} />
+                <div>
+                  <span className="font-medium">Drop</span>
+                  <p className="text-xs text-gray-400 mt-1">Numbered units, one price, filmed on camera</p>
+                </div>
+              </label>
+
+              {!isVerified && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-70 rounded-lg px-3 py-2">
+                  <LockIcon className="w-6 h-6 text-yellow-500 mb-1" />
+                  <span className="text-xs text-yellow-400 font-medium text-center">Verify your account to unlock drops</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* DROP SETTINGS */}
+        {formState.isDrop && (
+          <div className="bg-[#121212] p-4 rounded-lg border border-[#ff950e]/40">
+            <h3 className="text-lg font-medium mb-3 text-white">Drop Settings</h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Number of units <span className="text-[#ff950e]">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={2}
+                  max={2000}
+                  step={1}
+                  value={formState.dropUnits}
+                  onChange={(e) => onFormChange({ dropUnits: e.target.value.replace(/[^0-9]/g, '') })}
+                  placeholder="e.g. 200"
+                  className="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-600 focus:border-[#ff950e] focus:outline-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">2–2000. Each buyer claims the next numbered unit.</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Open time <span className="text-gray-500">(optional)</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  value={formState.dropScheduledFor}
+                  onChange={(e) => onFormChange({ dropScheduledFor: e.target.value })}
+                  className="w-full bg-black border border-gray-700 rounded-lg px-3 py-2 text-white focus:border-[#ff950e] focus:outline-none [color-scheme:dark]"
+                />
+                <p className="text-xs text-gray-500 mt-1">Leave empty to open as soon as it's approved. Max 60 days ahead.</p>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-lg border border-[#ff950e]/30 bg-[#ff950e]/5 p-3">
+              <p className="text-sm text-gray-300">
+                Drop units are sold as <span className="text-[#ff950e] font-medium">put on during your filmed drop</span> —
+                your listing description must say exactly that. Buyers pay your set price per unit and receive a
+                numbered unit ("#83 of 200"). Selling drop units as if they were long-worn is the fastest way to a
+                refund wave, and refund rate is what payment processors terminate accounts over.
+              </p>
+            </div>
+          </div>
+        )}
         
         {/* Show different price fields based on listing type */}
         {formState.isAuction ? (
@@ -785,11 +883,11 @@ export default function ListingForm({
                 <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
                 <ul className="text-sm text-gray-300 space-y-1">
                   <li>
-                    • Auctions run for {formState.auctionDuration === '0.000694' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing
+                    â€¢ Auctions run for {formState.auctionDuration === '0.000694' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing
                   </li>
-                  <li>• Bidders must have sufficient funds in their wallet to place a bid</li>
-                  <li>• If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
-                  <li>• You can cancel an auction at any time before it ends</li>
+                  <li>â€¢ Bidders must have sufficient funds in their wallet to place a bid</li>
+                  <li>â€¢ If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
+                  <li>â€¢ You can cancel an auction at any time before it ends</li>
                 </ul>
               </div>
             </div>

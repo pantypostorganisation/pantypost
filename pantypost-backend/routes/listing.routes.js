@@ -823,6 +823,21 @@ router.get('/:id', async (req, res) => {
 // POST /api/listings/:id/purchase - Direct purchase endpoint with premium check
 router.post('/:id/purchase', authMiddleware, async (req, res) => {
   try {
+    // =====================================================
+    // ADMIN-ONLY. This endpoint flips a listing to sold WITHOUT moving
+    // any money — it was reachable by any authenticated user, letting
+    // anyone mark anyone's listing sold for free. No frontend code
+    // calls it (verified: standard purchases go through POST
+    // /api/orders, which now claims the listing atomically itself).
+    // Kept, locked, for manual admin correction only.
+    // =====================================================
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'This endpoint is restricted to administrators'
+      });
+    }
+
     const { buyerId } = req.body;
     const listingId = req.params.id;
     

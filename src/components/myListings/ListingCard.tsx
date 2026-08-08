@@ -1,7 +1,7 @@
 // src/components/myListings/ListingCard.tsx
 'use client';
 
-import { Eye, Edit, Trash2, Gavel, Crown, Clock, Calendar, X } from 'lucide-react';
+import { Eye, Edit, Trash2, Gavel, Crown, Clock, Calendar, X, Layers } from 'lucide-react';
 import { ListingCardProps } from '@/types/myListings';
 import { timeSinceListed, formatTimeRemaining } from '@/utils/myListingsUtils';
 import { useConfirmation } from '@/components/ui/ConfirmationModal';
@@ -17,6 +17,15 @@ export default function ListingCard({
   const isAuctionListing = !!listing.auction;
   const isPendingApproval = listing.approvalStatus === 'pending';
   const isDenied = listing.approvalStatus === 'denied';
+
+  const drop = (listing as { drop?: { isDrop?: boolean; totalUnits?: number; unitsRemaining?: number; unitsSold?: number } }).drop;
+  const isDrop = Boolean(drop?.isDrop);
+  const dropUnitsSold = drop?.unitsSold ?? 0;
+  const dropTotalUnits = drop?.totalUnits ?? 0;
+  const dropPct = dropTotalUnits > 0 ? Math.round((dropUnitsSold / dropTotalUnits) * 100) : 0;
+  // Gross of platform fees — what buyers have paid for units so far, at
+  // the listed per-unit price. Net earnings live in the wallet.
+  const dropRevenue = dropUnitsSold * (listing.price || 0);
 
   const cover = listing.imageUrls?.[0] ?? '';
 
@@ -89,7 +98,15 @@ export default function ListingCard({
           </div>
         )}
 
-        {!isAuctionListing && listing.isPremium && (
+        {!isAuctionListing && isDrop && !isPendingApproval && !isDenied && (
+          <div className="absolute top-4 right-4 z-10">
+            <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
+              <Layers className="w-4 h-4 mr-1" /> Drop
+            </span>
+          </div>
+        )}
+
+        {!isAuctionListing && !isDrop && listing.isPremium && (
           <div className="absolute top-4 right-4 z-10">
             <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center">
               <Crown className="w-4 h-4 mr-1" /> Premium
@@ -121,13 +138,37 @@ export default function ListingCard({
 
           {isPendingApproval && (
             <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
-              Pending approval — Our admins will review this listing soon.
+              Pending approval â€” Our admins will review this listing soon.
             </div>
           )}
 
           {isDenied && (
             <div className="mb-3 rounded-lg border border-red-500/50 bg-red-600/10 px-3 py-2 text-xs font-semibold text-red-200">
-              Denied — Your listing did not meet our guidelines.
+              Denied â€” Your listing did not meet our guidelines.
+            </div>
+          )}
+
+          {isDrop && dropTotalUnits > 0 && (
+            <div className="mb-3 rounded-lg border border-[#ff950e]/40 bg-[#ff950e]/5 px-3 py-2.5">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span className="text-[#ff950e]">
+                  {dropUnitsSold} of {dropTotalUnits} units claimed
+                </span>
+                <span className="text-white tabular-nums">${dropRevenue.toFixed(2)} gross</span>
+              </div>
+              <div
+                className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/60"
+                role="progressbar"
+                aria-valuenow={dropPct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Units claimed"
+              >
+                <div
+                  className="h-full rounded-full bg-[#ff950e] transition-[width] duration-500"
+                  style={{ width: `${dropPct}%` }}
+                />
+              </div>
             </div>
           )}
 

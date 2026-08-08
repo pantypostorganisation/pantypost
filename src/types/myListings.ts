@@ -14,6 +14,12 @@ export interface ListingFormState {
   startingPrice: string;
   reservePrice: string;
   auctionDuration: string;
+  /** Drop mode: one listing sold as N numbered units. */
+  isDrop: boolean;
+  /** Kept as a string for the input; validated 2–2000 on save. */
+  dropUnits: string;
+  /** datetime-local value; empty = opens on approval. */
+  dropScheduledFor: string;
 }
 
 export interface EditingState {

@@ -1231,14 +1231,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           wasAuction: order.wasAuction || false,
           imageUrl: order.imageUrl,
           listingId: order.listingId,
-          deliveryAddress: order.deliveryAddress || {
-            fullName: "John Doe",
-            addressLine1: "123 Main St",
-            city: "New York",
-            state: "NY",
-            postalCode: "10001",
-            country: "US",
-          },
+          // Only a REAL address is ever sent; see the note in
+          // purchaseListing. The key is included only when present so
+          // the backend's optional-address handling stays clean.
+          ...(order.deliveryAddress ? { deliveryAddress: order.deliveryAddress } : {}),
         };
 
         const response = await apiClient.post<any>("/orders", orderPayload);
@@ -1334,7 +1330,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (addSellerNotification) {
             addSellerNotification(
               request.seller,
-              `💰 Custom request "${request.description}" has been paid! Check your orders to fulfill.`
+              `ðŸ’° Custom request "${request.description}" has been paid! Check your orders to fulfill.`
             );
           }
 
@@ -1449,14 +1445,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           shippingStatus: "pending",
           tags: listing.tags || [],
           listingId: listing.id,
-          deliveryAddress: {
-            fullName: "John Doe",
-            addressLine1: "123 Main St",
-            city: "New York",
-            state: "NY",
-            postalCode: "10001",
-            country: "US",
-          },
+          /* No fabricated address. The backend treats placeholder
+             addresses as absent anyway (isPlaceholderAddress), and a
+             marketplace of physical goods inventing "John Doe, 123
+             Main St" on every order is exactly the record a payment
+             processor's audit flags. The buyer supplies the real
+             address post-purchase via the order-address flow. */
+          deliveryAddress: undefined,
         });
 
         debugLog("Purchase successful");

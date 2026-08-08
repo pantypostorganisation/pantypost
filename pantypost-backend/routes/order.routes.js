@@ -118,8 +118,80 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
+    // =====================================================
+    // SERVER-AUTHORITATIVE LISTING PURCHASES
+    //
+    // This route used to trust the request body for price, seller and
+    // title — the client told the server what an item cost — and only
+    // flipped the listing to sold AFTER moving money, without checking
+    // it was still active. Any buyer could name their own price, and
+    // two buyers could buy the same one-off item. Both are the kind of
+    // platform-integrity failure a payment processor's review exists
+    // to find.
+    //
+    // Now: when a listingId is present (every real listing purchase),
+    // every material field is derived from the listing and the client's
+    // copies are ignored. The sold-flip is an atomic findOneAndUpdate
+    // on {status:'active'} BEFORE any money moves — first buyer claims
+    // it, the second gets a clean 409 — and a failed transaction
+    // restores the listing before unwinding wallets.
+    //
+    // Body-only orders (no listingId) remain for legacy compatibility;
+    // they cannot touch anyone's listing and only move the buyer's own
+    // funds to a named seller.
+    // =====================================================
+    let sourceListing = null;
+    if (listingId) {
+      sourceListing = await Listing.findById(listingId);
+
+      if (!sourceListing || sourceListing.approvalStatus !== 'approved') {
+        // Unapproved content is invisible elsewhere; purchase must not
+        // confirm its existence either.
+        return res.status(404).json({
+          success: false,
+          error: 'Listing not found'
+        });
+      }
+
+      if (sourceListing.drop && sourceListing.drop.isDrop) {
+        return res.status(400).json({
+          success: false,
+          error: 'This is a drop listing. Use the drop purchase flow.'
+        });
+      }
+
+      if (sourceListing.auction && sourceListing.auction.isAuction) {
+        return res.status(400).json({
+          success: false,
+          error: 'Auction listings settle through the bid system.'
+        });
+      }
+
+      if (sourceListing.seller === buyer) {
+        return res.status(400).json({
+          success: false,
+          error: 'You cannot purchase your own listing'
+        });
+      }
+
+      const clientPrice = Number(price);
+      if (Number.isFinite(clientPrice) && Math.abs(clientPrice - Number(sourceListing.price)) > 0.009) {
+        console.warn(`[Order] Client price $${clientPrice} ignored; listing ${listingId} is $${sourceListing.price} (buyer: ${buyer})`);
+      }
+    }
+
+    const effTitle = sourceListing ? sourceListing.title : title;
+    const effDescription = sourceListing ? sourceListing.description : description;
+    const effSeller = sourceListing ? sourceListing.seller : seller;
+    const effTags = sourceListing ? (sourceListing.tags || []) : (tags || []);
+    const effImageUrl = sourceListing
+      ? ((sourceListing.imageUrls && sourceListing.imageUrls[0]) || '')
+      : (imageUrl || '');
+    const effIsPremium = sourceListing ? Boolean(sourceListing.isPremium) : Boolean(isPremium);
+    const effWasAuction = sourceListing ? false : Boolean(wasAuction);
+
     // Validate required fields (deliveryAddress is NOW OPTIONAL)
-    if (!title || !description || !price || !seller || !buyer) {
+    if (!effTitle || !effDescription || !effSeller || !buyer || (!sourceListing && !price)) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields'
@@ -127,20 +199,20 @@ router.post('/', authMiddleware, async (req, res) => {
     }
 
     // PREMIUM CHECK
-    if (isPremium) {
-      const isSubscribed = await isUserSubscribedToSeller(buyer, seller);
+    if (effIsPremium) {
+      const isSubscribed = await isUserSubscribedToSeller(buyer, effSeller);
       if (!isSubscribed) {
         return res.status(403).json({
           success: false,
-          error: 'You must be subscribed to this seller to purchase premium content',
+          error: 'You must be subscribed to this effSeller to purchase premium content',
           requiresSubscription: true,
-          seller: seller
+          seller: effSeller
         });
       }
     }
 
     // Get seller's current tier
-    const sellerUser = await User.findOne({ username: seller });
+    const sellerUser = await User.findOne({ username: effSeller });
     if (!sellerUser) {
       return res.status(404).json({
         success: false,
@@ -151,11 +223,19 @@ router.post('/', authMiddleware, async (req, res) => {
     const sellerTier = sellerUser.tier || 'Tease';
     const tierInfo = TIER_CONFIG.getTierByName(sellerTier);
 
-    const actualPrice = Number(price) || 0;
-    const actualMarkedUpPrice = Number(markedUpPrice) || Math.round(actualPrice * 1.1 * 100) / 100;
+    const actualPrice = sourceListing ? (Number(sourceListing.price) || 0) : (Number(price) || 0);
+    // Marked-up price is ALWAYS derived: the client's copy is display-only.
+    const actualMarkedUpPrice = Math.round(actualPrice * 1.1 * 100) / 100;
+
+    if (!(actualPrice > 0)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid price'
+      });
+    }
 
     // CRITICAL FIX: Check for referral BEFORE calculating earnings
-    const activeReferral = await Referral.findActiveReferral(seller);
+    const activeReferral = await Referral.findActiveReferral(effSeller);
     const hasReferral = activeReferral && activeReferral.isActive;
     const referralCommissionRate = hasReferral ? activeReferral.commissionRate : 0;
 
@@ -182,7 +262,7 @@ router.post('/', authMiddleware, async (req, res) => {
       console.log(`[Order] Referral detected - Commission: $${referralCommission} (${(referralCommissionRate * 100)}% of $${actualPrice}) to ${activeReferral.referrer}`);
     }
 
-    // 7. Calculate seller earnings:
+    // 7. Calculate effSeller earnings:
     // Base 90% + tier bonus - referral commission
     const baseSellerEarnings = Math.round((actualPrice * 0.90) * 100) / 100; // Always 90%
     const sellerEarnings = Math.round((baseSellerEarnings + tierBonus - referralCommission) * 100) / 100;
@@ -214,9 +294,9 @@ router.post('/', authMiddleware, async (req, res) => {
       });
     }
 
-    let sellerWallet = await Wallet.findOne({ username: seller });
+    let sellerWallet = await Wallet.findOne({ username: effSeller });
     if (!sellerWallet) {
-      sellerWallet = new Wallet({ username: seller, role: 'seller', balance: 0 });
+      sellerWallet = new Wallet({ username: effSeller, role: 'seller', balance: 0 });
       await sellerWallet.save();
     }
 
@@ -243,6 +323,24 @@ router.post('/', authMiddleware, async (req, res) => {
       }
     }
 
+    // ---- THE ATOMIC CLAIM ----
+    // First writer wins; a concurrent buyer's update matches nothing and
+    // gets a clean "just sold" instead of a duplicate order.
+    let claimedListing = false;
+    if (sourceListing) {
+      const claimed = await Listing.findOneAndUpdate(
+        { _id: sourceListing._id, status: 'active' },
+        { $set: { status: 'sold', soldAt: new Date(), soldTo: buyer } }
+      );
+      if (!claimed) {
+        return res.status(409).json({
+          success: false,
+          error: 'This item has just been sold'
+        });
+      }
+      claimedListing = true;
+    }
+
     const previousBuyerBalance = buyerWallet.balance;
     const previousSellerBalance = sellerWallet.balance;
     const previousPlatformBalance = platformWallet.balance;
@@ -262,48 +360,39 @@ router.post('/', authMiddleware, async (req, res) => {
       // FIXED: Deposit the correct platform revenue (fees minus tier bonus)
       await platformWallet.deposit(totalPlatformRevenue);
 
-      if (listingId) {
-        const listing = await Listing.findById(listingId);
-        if (listing) {
-          listing.status = 'sold';
-          listing.soldAt = new Date();
-          listing.soldTo = buyer;
-          await listing.save();
-
-          if (global.webSocketService) {
-            if (global.webSocketService.emitListingSold) {
-              global.webSocketService.emitListingSold({
-                _id: listing._id,
-                id: listing._id.toString(),
-                title: listing.title,
-                seller: listing.seller,
-                buyer: buyer,
-                status: 'sold'
-              });
-            }
-            if (global.webSocketService.io && global.webSocketService.io.emit) {
-              global.webSocketService.io.emit('listing:sold', {
-                listingId: listing._id.toString(),
-                seller: listing.seller,
-                buyer: buyer
-              });
-            }
-          }
+      // The listing was already claimed atomically above; announce it.
+      if (claimedListing && sourceListing && global.webSocketService) {
+        if (global.webSocketService.emitListingSold) {
+          global.webSocketService.emitListingSold({
+            _id: sourceListing._id,
+            id: sourceListing._id.toString(),
+            title: effTitle,
+            seller: effSeller,
+            buyer: buyer,
+            status: 'sold'
+          });
+        }
+        if (global.webSocketService.io && global.webSocketService.io.emit) {
+          global.webSocketService.io.emit('listing:sold', {
+            listingId: sourceListing._id.toString(),
+            seller: effSeller,
+            buyer: buyer
+          });
         }
       }
 
       const order = new Order({
-        title,
-        description,
+        title: effTitle,
+        description: effDescription,
         price: actualPrice,
         markedUpPrice: actualMarkedUpPrice,
-        imageUrl: imageUrl || '',
+        imageUrl: effImageUrl,
         date: new Date(),
-        seller,
+        seller: effSeller,
         buyer,
-        tags: tags || [],
+        tags: effTags,
         listingId,
-        wasAuction: wasAuction || false,
+        wasAuction: effWasAuction,
         deliveryAddress: formatDeliveryAddressForResponse(deliveryAddress),
         shippingStatus: 'pending',
         paymentStatus: 'completed',
@@ -332,7 +421,7 @@ router.post('/', authMiddleware, async (req, res) => {
           const commissionTransaction = new Transaction({
             type: 'sale', // Use 'sale' type as 'referral_commission' might not be in enum
             amount: referralCommission,
-            from: seller,
+            from: effSeller,
             to: activeReferral.referrer,
             fromRole: 'seller',
             toRole: 'seller',
@@ -347,7 +436,7 @@ router.post('/', authMiddleware, async (req, res) => {
               originalPrice: actualPrice,
               adjustedSellerEarnings: sellerEarnings,
               buyer: buyer,
-              seller: seller,
+              seller: effSeller,
               isReferralCommission: true
             }
           });
@@ -368,12 +457,12 @@ router.post('/', authMiddleware, async (req, res) => {
             recipient: activeReferral.referrer,
             type: 'sale', // Use 'sale' type as 'referral_commission' might not be in enum
             title: 'ðŸ’° Referral Commission Earned!',
-            message: `You earned $${referralCommission.toFixed(2)} from ${seller}'s sale of "${order.title}"`,
+            message: `You earned $${referralCommission.toFixed(2)} from ${effSeller}'s sale of "${order.title}"`,
             link: '/sellers/profile',
             priority: 'normal',
             metadata: {
               amount: referralCommission,
-              seller: seller,
+              seller: effSeller,
               orderId: order._id.toString(),
               orderTitle: order.title,
               isReferralCommission: true
@@ -413,7 +502,7 @@ router.post('/', authMiddleware, async (req, res) => {
       }
 
       // CRITICAL: Create the sale notification ONCE using the standardized method
-      await Notification.createSaleNotification(seller, buyer, { 
+      await Notification.createSaleNotification(effSeller, buyer, { 
         _id: order._id, 
         title: order.title 
       }, actualMarkedUpPrice);
@@ -422,24 +511,24 @@ router.post('/', authMiddleware, async (req, res) => {
         type: 'purchase',
         amount: actualMarkedUpPrice,
         from: buyer,
-        to: seller,
+        to: effSeller,
         fromRole: 'buyer',
         toRole: 'seller',
-        description: `Purchase: ${title} (${sellerTier} tier)`,
+        description: `Purchase: ${effTitle} (${sellerTier} tier)`,
         status: 'completed',
         completedAt: new Date(),
         metadata: {
           orderId: order._id.toString(),
           listingId,
-          listingTitle: title,
+          listingTitle: effTitle,
           originalPrice: actualPrice,
           buyerPayment: actualMarkedUpPrice,
           sellerEarnings,
-          seller,
+          seller: effSeller,
           buyer,
           sellerTier,
           tierBonus,
-          isPremium,
+          isPremium: effIsPremium,
           hasReferral,
           referralCommission
         }
@@ -453,19 +542,19 @@ router.post('/', authMiddleware, async (req, res) => {
         to: 'platform',
         fromRole: 'buyer',
         toRole: 'admin',
-        description: `Platform fee for: ${title}`,
+        description: `Platform fee for: ${effTitle}`,
         status: 'completed',
         completedAt: new Date(),
         metadata: {
           orderId: order._id.toString(),
           listingId,
-          listingTitle: title,
+          listingTitle: effTitle,
           buyerFee: buyerMarkupFee,
           sellerFee: basePlatformFee,
           totalFee: totalPlatformRevenue,
           originalPrice: actualPrice,
           buyerPayment: actualMarkedUpPrice,
-          seller,
+          seller: effSeller,
           buyer,
           sellerTier,
           tierAdjustedFee: basePlatformFee,
@@ -479,7 +568,7 @@ router.post('/', authMiddleware, async (req, res) => {
           type: 'tier_credit',
           amount: tierBonus,
           from: 'platform',
-          to: seller,
+          to: effSeller,
           fromRole: 'admin',
           toRole: 'seller',
           description: `Tier bonus (${sellerTier}): +${(tierInfo.bonusPercentage * 100).toFixed(0)}%`,
@@ -487,7 +576,7 @@ router.post('/', authMiddleware, async (req, res) => {
           completedAt: new Date(),
           metadata: {
             orderId: order._id.toString(),
-            listingTitle: title,
+            listingTitle: effTitle,
             tierBonus,
             sellerTier,
             bonusPercentage: tierInfo.bonusPercentage
@@ -499,11 +588,11 @@ router.post('/', authMiddleware, async (req, res) => {
         const tierCreditAction = new AdminAction({
           type: 'debit',
           amount: tierBonus,
-          reason: `Tier bonus paid to ${seller} (${sellerTier} tier - ${(tierInfo.bonusPercentage * 100).toFixed(0)}%)`,
+          reason: `Tier bonus paid to ${effSeller} (${sellerTier} tier - ${(tierInfo.bonusPercentage * 100).toFixed(0)}%)`,
           date: new Date(),
           metadata: {
             orderId: order._id.toString(),
-            seller,
+            seller: effSeller,
             sellerTier,
             bonusPercentage: tierInfo.bonusPercentage,
             orderTitle: title
@@ -516,11 +605,11 @@ router.post('/', authMiddleware, async (req, res) => {
       order.feeTransactionId = feeTransaction._id;
       await order.save();
 
-      const tierUpdateResult = await tierService.updateSellerTier(seller);
+      const tierUpdateResult = await tierService.updateSellerTier(effSeller);
 
       if (global.webSocketService) {
         global.webSocketService.emitBalanceUpdate(buyer, 'buyer', previousBuyerBalance, buyerWallet.balance, 'purchase');
-        global.webSocketService.emitBalanceUpdate(seller, 'seller', previousSellerBalance, sellerWallet.balance, 'sale');
+        global.webSocketService.emitBalanceUpdate(effSeller, 'seller', previousSellerBalance, sellerWallet.balance, 'sale');
         global.webSocketService.emitBalanceUpdate('platform', 'admin', previousPlatformBalance, platformWallet.balance, 'platform_fee');
 
         if (global.webSocketService.emitPlatformBalanceUpdate) {
@@ -535,7 +624,7 @@ router.post('/', authMiddleware, async (req, res) => {
             _id: order._id,
             id: order._id.toString(),
             title: order.title,
-            seller: order.seller,
+            seller: order.effSeller,
             buyer: order.buyer,
             price: order.price,
             markedUpPrice: order.markedUpPrice,
@@ -545,7 +634,7 @@ router.post('/', authMiddleware, async (req, res) => {
         }
 
         if (tierUpdateResult && tierUpdateResult.changed) {
-          global.webSocketService.emitUserUpdate(seller, {
+          global.webSocketService.emitUserUpdate(effSeller, {
             tier: tierUpdateResult.newTier,
             totalSales: tierUpdateResult.stats.totalSales
           });
@@ -570,7 +659,7 @@ router.post('/', authMiddleware, async (req, res) => {
           markedUpPrice: order.markedUpPrice,
           imageUrl: order.imageUrl,
           date: order.date.toISOString(),
-          seller: order.seller,
+          seller: order.effSeller,
           buyer: order.buyer,
           tags: order.tags,
           listingId: order.listingId,
@@ -589,6 +678,20 @@ router.post('/', authMiddleware, async (req, res) => {
 
     } catch (error) {
       console.error('[Order] Transaction failed:', error);
+
+      // Give the listing back FIRST — a stranded 'sold' with no order is
+      // a sale the seller can never make and the buyer never received.
+      if (claimedListing && sourceListing) {
+        try {
+          await Listing.updateOne(
+            { _id: sourceListing._id },
+            { $set: { status: 'active' }, $unset: { soldAt: 1, soldTo: 1 } }
+          );
+        } catch (restoreError) {
+          console.error('[Order] CRITICAL: failed to restore listing after payment failure:', restoreError);
+        }
+      }
+
       try {
         if (buyerWallet.balance < previousBuyerBalance) {
           buyerWallet.balance = previousBuyerBalance;

@@ -13,7 +13,10 @@ export const INITIAL_FORM_STATE: ListingFormState = {
   isAuction: false,
   startingPrice: '',
   reservePrice: '',
-  auctionDuration: '3'
+  auctionDuration: '3',
+  isDrop: false,
+  dropUnits: '',
+  dropScheduledFor: ''
 };
 
 /**
