@@ -11,12 +11,22 @@ import { useAuth } from '@/context/AuthContext';
 
 // Enhanced loading skeleton component - matching browse page dimensions
 const ListingSkeleton = React.memo(() => (
-  <div className="bg-[#131313] rounded-lg sm:rounded-xl border border-white/10 overflow-hidden">
-    <div className="aspect-[4/5] sm:aspect-square bg-gray-800/50 animate-pulse"></div>
-    <div className="p-3 sm:p-4 md:p-5 space-y-2 sm:space-y-3">
-      <div className="h-4 sm:h-5 bg-gray-800/50 rounded animate-pulse"></div>
-      <div className="h-3 bg-gray-800/30 rounded w-2/3 animate-pulse"></div>
-      <div className="h-5 sm:h-6 bg-gray-800/50 rounded w-1/3 animate-pulse"></div>
+  /* Mirrors the real card exactly — square image, title, two-line
+     description slot, price, seller footer — so nothing shifts when the
+     data lands. */
+  <div className="overflow-hidden rounded-lg border border-line bg-surface-raised">
+    <div className="aspect-square animate-pulse bg-surface-overlay" />
+    <div className="p-3 sm:p-4">
+      <div className="h-4 w-3/4 animate-pulse rounded-sm bg-surface-overlay" />
+      <div className="mt-1 min-h-[2.5rem] space-y-1">
+        <div className="h-3 w-full animate-pulse rounded-sm bg-surface-overlay" />
+        <div className="h-3 w-2/3 animate-pulse rounded-sm bg-surface-overlay" />
+      </div>
+      <div className="mt-3 h-5 w-1/3 animate-pulse rounded-sm bg-surface-overlay" />
+      <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
+        <div className="h-6 w-6 animate-pulse rounded-full bg-surface-overlay" />
+        <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-overlay" />
+      </div>
     </div>
   </div>
 ));
@@ -77,42 +87,53 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
   const firstImage = useMemo(() => listing.imageUrls?.[0], [listing.imageUrls]);
 
   return (
-    <article className="group relative bg-gradient-to-br from-[#1a1a1a] to-[#111] border border-gray-800 rounded-lg sm:rounded-xl shadow-lg hover:shadow-2xl transition-all duration-300 hover:border-[#ff950e] cursor-pointer hover:transform hover:scale-[1.02] overflow-hidden">
+    /* ---- ONE STRUCTURE FOR EVERY CARD ----
+       Previously auctions and standard listings laid out differently:
+       auctions put price in a purple box ABOVE the seller, standard
+       listings put price on the SAME row as the seller, right-aligned.
+       Two cards side by side therefore agreed on nothing and the eye had
+       nowhere to settle.
+
+       Fixed order now, both variants:
+         image -> title -> description -> price line -> seller row
+
+       The content column is flex with the seller row on `mt-auto`, so it
+       pins to the bottom of every card regardless of how long the title
+       or description runs. That is what makes a row of cards line up. */
+    <article className="group relative flex h-full flex-col overflow-hidden rounded-lg border border-line bg-surface-raised transition-colors duration-200 hover:border-primary-line">
       <Link
         href={`/browse/${encodeURIComponent(listing.id)}`}
-        className="block focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded-lg sm:rounded-xl"
+        className="flex h-full flex-col rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         prefetch={false}
       >
-        {/* Type Badge - Matching browse page positioning */}
-        <div className="absolute top-2 sm:top-3 md:top-4 right-2 sm:right-3 md:right-4 z-10">
+        {/* Type badge */}
+        <div className="absolute right-2 top-2 z-10 sm:right-3 sm:top-3">
           {isAuction && (
-            <span className="bg-gradient-to-r from-purple-600 to-purple-500 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg font-bold flex items-center shadow-lg">
-              <Gavel className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-1.5" /> AUCTION
+            <span className="flex items-center rounded-sm bg-auction px-2 py-1 text-[10px] font-bold text-white sm:text-xs">
+              <Gavel className="mr-1 h-3 w-3" aria-hidden="true" /> AUCTION
             </span>
           )}
 
           {!isAuction && listing.isPremium && (
-            <span className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-black text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg font-bold flex items-center shadow-lg">
-              <Star className="w-3 h-3 sm:w-3.5 sm:h-3.5 mr-1 sm:mr-1.5" /> PREMIUM
+            <span className="flex items-center rounded-sm bg-primary px-2 py-1 text-[10px] font-bold text-black sm:text-xs">
+              <Star className="mr-1 h-3 w-3" aria-hidden="true" /> PREMIUM
             </span>
           )}
         </div>
 
-        {/* Image Container - REVERTED to regular img tag like before */}
-        <div className="relative aspect-[4/5] sm:aspect-square overflow-hidden bg-black">
+        {/* Image */}
+        <div className="relative aspect-square overflow-hidden bg-black">
           {firstImage ? (
             <>
-              {/* Loading skeleton */}
               {!imageLoaded && !imageError && (
-                <div className="absolute inset-0 bg-gradient-to-br from-gray-800 to-gray-900 animate-pulse" />
+                <div className="absolute inset-0 animate-pulse bg-surface-overlay" />
               )}
 
-              {/* Regular img tag - like it was working before */}
               {!imageError ? (
                 <img
                   src={firstImage}
                   alt={listing.title}
-                  className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
+                  className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 ${
                     isPremiumLocked ? 'blur-md' : ''
                   } ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                   onLoad={() => setImageLoaded(true)}
@@ -120,35 +141,33 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
                   loading="lazy"
                 />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                  <span className="text-gray-600 text-xs sm:text-sm">Image unavailable</span>
+                <div className="flex h-full w-full items-center justify-center bg-surface-overlay">
+                  <span className="text-xs text-ink-faint">Image unavailable</span>
                 </div>
               )}
             </>
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-              <span className="text-gray-600 text-xs sm:text-sm">No image</span>
+            <div className="flex h-full w-full items-center justify-center bg-surface-overlay">
+              <span className="text-xs text-ink-faint">No image</span>
             </div>
           )}
 
-          {/* Enhanced bottom gradient */}
-          <div className="absolute inset-x-0 bottom-0 h-24 sm:h-32 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
-
-          {/* Premium lock overlay */}
           {isPremiumLocked && (
-            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center backdrop-blur-sm">
-              <Lock className="w-8 h-8 sm:w-12 sm:h-12 text-[#ff950e] mb-2 sm:mb-4" />
-              <p className="text-xs sm:text-sm font-bold text-white text-center px-2 sm:px-4">
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm">
+              <Lock className="h-8 w-8 text-primary" aria-hidden="true" />
+              <p className="px-4 text-center text-xs font-semibold text-white">
                 Subscribe to view premium content
               </p>
             </div>
           )}
 
-          {/* Auction timer */}
+          {/* Auction countdown, bottom-left of the image — the one place
+              auction cards may differ, because it is time-critical and
+              belongs on the photo, not in the text column. */}
           {isAuction && listing.auction && formatTimeRemaining && (
-            <div className="absolute bottom-2 sm:bottom-3 md:bottom-4 left-2 sm:left-3 md:left-4 z-10">
-              <span className="bg-black/90 backdrop-blur-sm text-white text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-2 rounded-md sm:rounded-lg font-bold flex items-center shadow-lg border border-purple-500/30">
-                <Clock className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2 text-purple-400" />
+            <div className="absolute bottom-2 left-2 z-10">
+              <span className="flex items-center rounded-sm bg-black/80 px-2 py-1 text-[10px] font-semibold text-white backdrop-blur-sm sm:text-xs">
+                <Clock className="mr-1 h-3 w-3 text-auction" aria-hidden="true" />
                 {formatTimeRemaining(listing.auction.endTime)}
               </span>
             </div>
@@ -156,83 +175,81 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
         </div>
 
         {/* Content */}
-        <div className="p-3 sm:p-4 md:p-5 flex flex-col flex-grow">
-          <div>
-            <h3 className="text-sm sm:text-base md:text-xl font-bold text-white mb-1 sm:mb-2 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
-              {listing.title}
-            </h3>
-            <p className="text-xs sm:text-sm text-gray-400 mb-2 sm:mb-3 line-clamp-1 sm:line-clamp-2 leading-relaxed">
-              {listing.description}
-            </p>
-          </div>
+        <div className="flex flex-1 flex-col p-3 sm:p-4">
+          <h3 className="line-clamp-1 text-sm font-semibold text-white transition-colors group-hover:text-primary sm:text-base">
+            {listing.title}
+          </h3>
 
-          {/* Auction info */}
-          {isAuction && listing.auction && (
-            <div className="bg-gradient-to-r from-purple-900/30 to-purple-800/20 rounded-lg sm:rounded-xl p-2 sm:p-3 md:p-4 mb-2 sm:mb-4 border border-purple-700/30 backdrop-blur-sm">
-              <div className="flex justify-between items-center text-xs sm:text-sm mb-1 sm:mb-2">
-                <span className="text-purple-300 font-medium text-[10px] sm:text-xs">
-                  {listing.auction?.highestBid ? 'Current bid' : 'Starting at'}
-                </span>
-                <span className="font-bold text-white flex items-center text-sm sm:text-base md:text-lg">
-                  ${displayPrice.toFixed(2)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center text-[10px] sm:text-xs">
-                <span className="text-gray-400 flex items-center gap-0.5 sm:gap-1">
-                  <Gavel className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+          {/* Fixed two-line slot: reserving the height means cards with a
+              one-line description do not ride up relative to their
+              neighbours. */}
+          <p className="mt-1 line-clamp-2 min-h-[2.5rem] text-xs leading-snug text-ink-muted">
+            {listing.description}
+          </p>
+
+          {/* Price — same position and shape on both variants. Auctions
+              add a label and bid count instead of changing the layout. */}
+          <div className="mt-3">
+            <div className="flex items-baseline gap-2">
+              <span className="text-lg font-bold text-primary sm:text-xl">
+                ${displayPrice.toFixed(2)}
+              </span>
+              <span className="text-[11px] font-medium text-ink-faint">
+                {isAuction
+                  ? listing.auction?.highestBid
+                    ? 'Current bid'
+                    : 'Starting bid'
+                  : 'Buy now'}
+              </span>
+            </div>
+
+            {isAuction && listing.auction && (
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px]">
+                <span className="inline-flex items-center gap-1 text-ink-faint">
+                  <Gavel className="h-3 w-3" aria-hidden="true" />
                   {listing.auction.bids?.length || 0}{' '}
                   {(listing.auction.bids?.length || 0) === 1 ? 'bid' : 'bids'}
                 </span>
-                {listing.auction.reservePrice && (
+                {listing.auction.reservePrice ? (
                   <span
-                    className={`font-medium text-[10px] sm:text-xs ${
-                      !listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice
-                        ? 'text-yellow-400'
-                        : 'text-green-400'
-                    }`}
+                    className={
+                      !listing.auction.highestBid ||
+                      listing.auction.highestBid < listing.auction.reservePrice
+                        ? 'font-medium text-warning'
+                        : 'font-medium text-success'
+                    }
                   >
-                    {!listing.auction.highestBid || listing.auction.highestBid < listing.auction.reservePrice
-                      ? '⚠️ Reserve not met'
-                      : '✅ Reserve met'}
+                    {!listing.auction.highestBid ||
+                    listing.auction.highestBid < listing.auction.reservePrice
+                      ? 'Reserve not met'
+                      : 'Reserve met'}
                   </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Price & Seller */}
-          <div className="flex justify-between items-end mt-auto">
-            <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm md:text-base text-gray-400 hover:text-[#ff950e] transition-colors max-w-[60%]">
-              <span className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-gray-800 to-gray-700 flex items-center justify-center text-xs sm:text-sm md:text-lg font-bold text-[#ff950e] border-2 border-gray-700 flex-shrink-0">
-                {listing.seller.charAt(0).toUpperCase()}
-              </span>
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-xs sm:text-sm md:text-base flex items-center gap-1 sm:gap-2 truncate">
-                  <span className="truncate">{listing.seller}</span>
-                  {isSellerVerified && (
-                    <Image
-                      src="/verification_badge.png"
-                      alt="Verified"
-                      width={16}
-                      height={16}
-                      className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 flex-shrink-0"
-                    />
-                  )}
-                </span>
-              </div>
-            </div>
-
-            {/* FIXED: Display the calculated price with markup for non-auction listings */}
-            {!isAuction && (
-              <div className="text-right">
-                <p className="font-bold text-[#ff950e] text-base sm:text-xl md:text-2xl">
-                  ${displayPrice.toFixed(2)}
-                </p>
-                <p className="text-[10px] sm:text-xs text-gray-500 font-medium hidden sm:block">
-                  Buy Now
-                </p>
+                ) : null}
               </div>
             )}
+          </div>
+
+          {/* Seller — pinned to the bottom of every card by mt-auto, with
+              a hairline separator so it reads as the card's footer. */}
+          <div className="mt-auto flex items-center gap-2 border-t border-line pt-3">
+            <span
+              aria-hidden="true"
+              className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-overlay text-[11px] font-bold text-primary"
+            >
+              {listing.seller?.charAt(0)?.toUpperCase()}
+            </span>
+            <span className="flex min-w-0 items-center gap-1 text-xs font-medium text-ink-muted">
+              <span className="truncate">{listing.seller}</span>
+              {isSellerVerified && (
+                <Image
+                  src="/verification_badge.png"
+                  alt="Verified"
+                  width={14}
+                  height={14}
+                  className="h-3.5 w-3.5 shrink-0"
+                />
+              )}
+            </span>
           </div>
         </div>
       </Link>
@@ -318,7 +335,7 @@ export default function FeaturedRandom() {
         <h2 id="featured-random-title" className="text-2xl md:text-3xl font-bold text-white mb-2">
           Featured Picks
         </h2>
-        <p className="text-gray-400 text-sm">{error || 'No listings to feature yet. Check back soon!'}</p>
+        <p className="text-sm text-ink-muted">{error || 'No listings to feature yet. Check back soon!'}</p>
       </section>
     );
   }
@@ -331,19 +348,19 @@ export default function FeaturedRandom() {
           <h2 id="featured-random-title" className="text-2xl md:text-3xl lg:text-4xl font-bold text-white">
             Featured Picks
           </h2>
-          <p className="text-gray-400 mt-1 sm:mt-2 text-sm sm:text-base">Discover unique items from our marketplace</p>
+          <p className="mt-1 text-sm text-ink-muted sm:mt-2 sm:text-base">Discover unique items from our marketplace</p>
         </div>
         <Link
           href="/browse"
-          className="text-[#ff950e] hover:text-[#ffb347] text-xs sm:text-sm font-medium transition-colors hover:underline underline-offset-4"
+          className="text-xs font-medium text-primary transition-colors hover:text-primary-hover hover:underline underline-offset-4 sm:text-sm"
           prefetch={false}
         >
-          View all →
+          View all â†’
         </Link>
       </div>
 
       {/* Listings Grid - 2 columns on mobile matching browse page gap */}
-      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
+      <div className="grid grid-cols-2 items-stretch gap-3 sm:gap-4 md:grid-cols-3 md:gap-5 xl:grid-cols-4">
         {loading
           ? // Show skeletons while loading
             Array.from({ length: skeletonCount }).map((_, index) => <ListingSkeleton key={`skeleton-${index}`} />)
