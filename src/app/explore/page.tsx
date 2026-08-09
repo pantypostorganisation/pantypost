@@ -352,18 +352,27 @@ function PostCard({
           <Link href={`/sellers/${post.author}`} className="flex-shrink-0">
             <div className="w-14 h-14 rounded-full bg-primary-soft border border-primary-line overflow-hidden hover:border-primary transition-colors">
               {post.authorInfo?.profilePic ? (
-                /* object-cover must be on the IMAGE, not just passed as
-                   a prop: the wrapper is a fixed 56px circle with
-                   overflow-hidden, so a non-square photo rendered at its
-                   natural ratio and got clipped flat across the bottom
-                   of the circle. Cover + centre crops it to fill. */
-                <OptimizedImage
+                /* Plain <img>, NOT OptimizedImage.
+                   OptimizedImage applies className to its wrapper <div>,
+                   not to the underlying <img> — verified in the browser:
+                   the img reported className "" while the parent div had
+                   "w-full h-full object-cover". So the image was never
+                   stretched to fill the circle; it rendered at its own
+                   ratio (611x407 -> 56x37 in a 56px box), leaving a
+                   19px empty band at the bottom that read as a clipped
+                   avatar.
+
+                   object-fit could not save it either: object-fit only
+                   applies when the element's box differs from the
+                   content, and here the box WAS the content size.
+
+                   h-full w-full object-cover directly on the img is what
+                   the browse card does, and it fills the circle. */
+                <img
                   src={post.authorInfo.profilePic}
                   alt={`${post.author}'s profile picture`}
-                  width={56}
-                  height={56}
-                  className="w-full h-full object-cover object-center"
-                  objectFit="cover"
+                  loading="lazy"
+                  className="h-full w-full object-cover object-center"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-primary text-2xl font-bold">
@@ -381,15 +390,12 @@ function PostCard({
               >
                 {post.author}
               </Link>
-              {post.authorInfo?.isVerified && (
-                <OptimizedImage
-                  src="/verification_badge.png"
-                  alt="Verified"
-                  width={16}
-                  height={16}
-                  className="flex-shrink-0"
-                />
-              )}
+              {/* Verification badge removed: every seller must pass
+                  identity verification before they can list (enforced
+                  server-side in listing.routes.js), so badging it on each
+                  post marked a universal condition as if it were a
+                  distinction. It was also pointing at
+                  /verification_badge.png, which 404s. */}
               {post.authorInfo?.tier && (
                 <span className="text-[10px] px-2 py-0.5 bg-primary-soft text-primary rounded-sm font-semibold">
                   {post.authorInfo.tier}
