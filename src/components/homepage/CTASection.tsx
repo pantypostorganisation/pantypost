@@ -49,7 +49,15 @@ export default function CTASection() {
         >
           <Link
             href={CTA_CONTENT.primaryButton.href}
-            className="group relative inline-flex items-center justify-center gap-2.5 rounded-md px-7 py-3 bg-gradient-to-r from-[#ff950e] to-[#ffb347] text-black font-semibold text-base transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg hover:shadow-[#ff950e]/40 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            /* Primary: flat brand fill, matching the hero. Was a
+               gradient — gradients on surfaces are out per the design
+               rules, and a flat fill reads cleaner at this size.
+               The inline color below is NOT redundant: globals.css has
+               unlayered `a {}` rules that beat Tailwind utilities, so an
+               orange <Link> with text-black renders orange-on-orange
+               (invisible) without it. Do not remove until globals.css
+               moves its element selectors into @layer base. */
+            className="group relative inline-flex min-h-[3.25rem] items-center justify-center gap-2.5 rounded-md px-8 py-3.5 bg-[#ff950e] text-black font-semibold text-[1.0625rem] shadow-[0_6px_24px_rgba(255,149,14,0.28)] transition-all duration-300 ease-out hover:bg-[#ffa733] hover:shadow-[0_8px_30px_rgba(255,149,14,0.38)] active:bg-[#e0850d] active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             style={{ color: '#000' }}
           >
             <TrendingUp className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-[-2px]" />
@@ -58,7 +66,9 @@ export default function CTASection() {
           
           <Link
             href={CTA_CONTENT.secondaryButton.href}
-            className="group relative inline-flex items-center justify-center gap-2.5 rounded-md px-7 py-3 bg-black border border-[#ff950e]/60 text-[#ff950e] font-semibold text-base transition-all duration-300 ease-out hover:scale-105 hover:bg-[#111] hover:border-[#ff950e] hover:text-white active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            /* Secondary: ghost, matching the hero. Steps back so the
+               page has one obvious action. */
+            className="group relative inline-flex min-h-[3.25rem] items-center justify-center gap-2.5 rounded-md px-8 py-3.5 bg-transparent border border-white/[0.18] text-white font-semibold text-[1.0625rem] transition-all duration-300 ease-out hover:bg-white/[0.06] hover:border-[#ff950e]/75 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
             <ShoppingBag className="h-5 w-5 transition-transform duration-300 group-hover:translate-x-[-2px]" />
             {CTA_CONTENT.secondaryButton.text}

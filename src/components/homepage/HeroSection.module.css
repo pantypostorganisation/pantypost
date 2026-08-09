@@ -59,15 +59,14 @@
   --pp-accent: #ff950e;
   --pp-bg: #0b0b0b;
   --pp-text: #ffffff;
-  /* Matches --radius-md (0.75rem) from globals.css so every button on
-     the page sits on the same three-step radius scale. Was a one-off
-     14px. The 999px further down is the sheen overlay's own shape, not
-     the button's — leave it. */
+  /* Matches --radius-md (0.75rem) in globals.css so every button on the
+     page sits on the same three-step radius scale. Was a one-off 14px. */
   --pp-radius: 0.75rem;
-  --pp-border-w: 2px;
-  --pp-padding-y: 0.8rem;
-  --pp-padding-x: 1.2rem;
-  --pp-shadow: 0 4px 18px rgba(255, 149, 14, 0.15);
+  --pp-border-w: 1px;
+  /* Bigger targets: the old 0.8/1.2 read small against a 7xl headline. */
+  --pp-padding-y: 0.95rem;
+  --pp-padding-x: 1.75rem;
+  --pp-shadow: none;
   --track-start: 0;
   --track-length: 0.5;
   --normalized-length: max(var(--track-length, 0.5), 0.001);
@@ -93,13 +92,23 @@
   line-height: 1.2;
   transform: translateZ(0);
   box-shadow: var(--pp-shadow);
-  transition: transform 120ms ease, box-shadow 200ms ease, filter 200ms ease;
+  transition: transform 120ms ease, box-shadow 200ms ease,
+    background-color 200ms ease, border-color 200ms ease, filter 200ms ease;
   overflow: hidden;
-  min-height: 3rem;
+  min-height: 3.25rem;
+  font-size: 1.0625rem;
+  letter-spacing: -0.01em;
 }
 
+/* SECONDARY — ghost.
+   Two identically-styled buttons meant the page had no primary action,
+   while seller signup is the business priority. This one steps back:
+   no fill, a hairline border, and it only picks up the brand colour on
+   hover. All the visual weight goes to Start Selling. */
 .browseListingsBtn {
-  background: var(--pp-bg);
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .browseListingsBtn:focus { outline: none; }
@@ -107,8 +116,12 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Sheen overlay â€” OFF left -> cross -> OFF right */
-.browseListingsBtn::after,
+/* Sheen overlay - OFF left -> cross -> OFF right.
+   PRIMARY ONLY. The sweep used to run across both buttons, which made
+   it decoration; on the primary alone it is the one moving thing on the
+   page and it points at the action we want. The wrapper still measures
+   both buttons for the shared track, so the highlight crosses the
+   primary in its correct slice of the cycle. */
 .startSellingBtn::after {
   content: "";
   position: absolute;
@@ -139,9 +152,8 @@
 }
 
 .browseListingsBtn:hover {
-  box-shadow:
-    0 6px 22px rgba(255, 149, 14, 0.22),
-    0 0 0 1px rgba(255, 149, 14, 0.25);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 149, 14, 0.75);
 }
 .browseListingsBtn:active { transform: scale(0.98); }
 
@@ -163,14 +175,27 @@
 }
 
 
+/* PRIMARY — solid brand fill, the only filled orange element above the
+   fold, so the eye lands here first.
+   Black on #ff950e is 9.56:1; white would be 2.20:1 and fail WCAG AA.
+   Flat fill, not a gradient — gradients on surfaces are out per the
+   design rules. Hover/press use the primary-hover / primary-press
+   tokens (#ffa733 / #e0850d). */
 .startSellingBtn {
-  background: var(--pp-bg);
+  background: var(--pp-accent);
+  border-color: var(--pp-accent);
+  color: #000000;
+  box-shadow: 0 6px 24px rgba(255, 149, 14, 0.28);
 }
 
 .startSellingBtn:hover {
-  box-shadow:
-    0 6px 22px rgba(255, 149, 14, 0.22),
-    0 0 0 1px rgba(255, 149, 14, 0.25);
+  background: #ffa733;
+  border-color: #ffa733;
+  box-shadow: 0 8px 30px rgba(255, 149, 14, 0.38);
+}
+.startSellingBtn:active {
+  background: #e0850d;
+  border-color: #e0850d;
 }
 .startSellingBtn:active { transform: scale(0.98); }
 
@@ -192,7 +217,6 @@
   .ctaGroup {
     animation: none;
   }
-  .browseListingsBtn::after,
   .startSellingBtn::after {
     opacity: 0;
   }
