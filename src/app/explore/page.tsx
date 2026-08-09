@@ -187,10 +187,10 @@ function FollowButton({ username, initialIsFollowing = false, onFollowChange }: 
     <button
       onClick={handleFollow}
       disabled={isLoading}
-      className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 ${
+      className={`flex items-center gap-1 px-3 py-1 rounded-md text-xs font-semibold transition-all duration-200 ${
         isFollowing
-          ? 'bg-[#ff950e]/20 text-[#ff950e] border border-[#ff950e]/50 hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50'
-          : 'bg-[#ff950e] text-black hover:bg-[#ff6b00]'
+          ? 'bg-primary-soft text-primary border border-primary-line hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/50'
+          : 'bg-primary text-black hover:bg-primary-hover'
       }`}
     >
       {isLoading ? (
@@ -308,7 +308,7 @@ function PostCard({
           <button
             key={index}
             onClick={() => onTagClick(part.slice(1))}
-            className="text-[#ff950e] hover:text-[#ff6b00] hover:underline"
+            className="text-primary hover:text-primary-hover hover:underline"
           >
             {part}
           </button>
@@ -324,12 +324,12 @@ function PostCard({
   const isCurrentMediaVideo = currentMedia ? isVideoUrl(currentMedia) : false;
 
   return (
-    <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl border border-[#333] hover:border-[#ff950e]/30 transition-all duration-300 overflow-hidden shadow-xl">
+    <div className="bg-surface-raised rounded-lg border border-line hover:border-primary-line transition-colors duration-200 overflow-hidden">
       {/* Header */}
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <Link href={`/sellers/${post.author}`} className="flex-shrink-0">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#ff950e]/20 to-[#ff6b00]/10 border-2 border-[#ff950e]/30 overflow-hidden hover:border-[#ff950e] transition-colors">
+            <div className="w-12 h-12 rounded-full bg-primary-soft border border-primary-line overflow-hidden hover:border-primary transition-colors">
               {post.authorInfo?.profilePic ? (
                 <OptimizedImage
                   src={post.authorInfo.profilePic}
@@ -340,7 +340,7 @@ function PostCard({
                   objectFit="cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#ff950e] text-xl font-bold">
+                <div className="w-full h-full flex items-center justify-center text-primary text-xl font-bold">
                   {post.author.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -351,7 +351,7 @@ function PostCard({
             <div className="flex items-center gap-2 flex-wrap">
               <Link
                 href={`/sellers/${post.author}`}
-                className="font-bold text-white hover:text-[#ff950e] transition-colors truncate"
+                className="font-bold text-white hover:text-primary transition-colors truncate"
               >
                 {post.author}
               </Link>
@@ -365,12 +365,12 @@ function PostCard({
                 />
               )}
               {post.authorInfo?.tier && (
-                <span className="text-[10px] px-2 py-0.5 bg-[#ff950e]/20 text-[#ff950e] rounded-full font-semibold">
+                <span className="text-[10px] px-2 py-0.5 bg-primary-soft text-primary rounded-sm font-semibold">
                   {post.authorInfo.tier}
                 </span>
               )}
             </div>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-ink-faint">
               {formatRelativeTime(post.createdAt)}
             </span>
           </div>
@@ -382,13 +382,13 @@ function PostCard({
           <div className="relative ml-2" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
-              className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              className="p-2 text-ink-muted hover:text-white hover:bg-white/10 rounded-lg transition-colors"
             >
               <MoreHorizontal className="w-5 h-5" />
             </button>
 
             {showMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-[#222] border border-[#444] rounded-xl shadow-2xl z-20 min-w-[150px] overflow-hidden">
+              <div className="absolute right-0 top-full mt-1 bg-surface-overlay border border-line-strong rounded-lg shadow-2xl z-20 min-w-[150px] overflow-hidden">
                 <button
                   onClick={() => {
                     onDelete(post._id);
@@ -432,7 +432,7 @@ function PostCard({
 
           {/* Media type indicator */}
           {isCurrentMediaVideo && (
-            <div className="absolute top-3 left-3 bg-black/60 px-2 py-1 rounded-full flex items-center gap-1">
+            <div className="absolute top-3 left-3 bg-black/70 px-2 py-1 rounded-sm flex items-center gap-1">
               <Film className="w-3 h-3 text-white" />
               <span className="text-white text-xs">Video</span>
             </div>
@@ -466,7 +466,7 @@ function PostCard({
                     onClick={() => setCurrentMediaIndex(index)}
                     className={`w-2 h-2 rounded-full transition-all ${
                       index === currentMediaIndex
-                        ? 'bg-[#ff950e] w-4'
+                        ? 'bg-primary w-4'
                         : 'bg-white/50 hover:bg-white/70'
                     }`}
                   />
@@ -478,7 +478,7 @@ function PostCard({
       )}
 
       {/* Actions */}
-      <div className="px-4 py-3 flex items-center gap-6 border-t border-[#333]">
+      <div className="px-4 py-3 flex items-center gap-6 border-t border-line">
         <button
           onClick={handleLike}
           disabled={!currentUser}
@@ -486,8 +486,8 @@ function PostCard({
             currentUser
               ? isLiked
                 ? 'text-red-500'
-                : 'text-gray-400 hover:text-red-500'
-              : 'text-gray-600 cursor-not-allowed'
+                : 'text-ink-muted hover:text-red-500'
+              : 'text-ink-faint cursor-not-allowed'
           }`}
         >
           <Heart className={`w-6 h-6 ${isLiked ? 'fill-current' : ''}`} />
@@ -496,13 +496,13 @@ function PostCard({
 
         <button
           onClick={() => setShowComments(!showComments)}
-          className="flex items-center gap-2 text-gray-400 hover:text-[#ff950e] transition-colors"
+          className="flex items-center gap-2 text-ink-muted hover:text-primary transition-colors"
         >
           <MessageCircle className="w-6 h-6" />
           <span className="text-sm font-medium">{comments.length}</span>
         </button>
 
-        <div className="flex items-center gap-2 text-gray-500 ml-auto">
+        <div className="flex items-center gap-2 text-ink-faint ml-auto">
           <Eye className="w-5 h-5" />
           <span className="text-sm">{post.views}</span>
         </div>
@@ -510,11 +510,11 @@ function PostCard({
 
       {/* Comments Section */}
       {showComments && (
-        <div className="px-4 pb-4 border-t border-[#333]">
+        <div className="px-4 pb-4 border-t border-line">
           {/* Comment Input */}
           {currentUser ? (
             <div className="flex gap-3 mt-4">
-              <div className="w-8 h-8 rounded-full bg-[#ff950e]/20 flex items-center justify-center text-[#ff950e] text-sm font-bold flex-shrink-0">
+              <div className="w-8 h-8 rounded-full bg-primary-soft flex items-center justify-center text-primary text-sm font-bold flex-shrink-0">
                 {currentUser.username.charAt(0).toUpperCase()}
               </div>
               <div className="flex-1 flex gap-2">
@@ -525,20 +525,20 @@ function PostCard({
                   onKeyDown={(e) => e.key === 'Enter' && handleComment()}
                   placeholder="Write a comment..."
                   maxLength={500}
-                  className="flex-1 bg-[#222] border border-[#444] rounded-full px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#ff950e] transition-colors"
+                  className="flex-1 bg-surface-overlay border border-line-strong rounded-md px-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
                 />
                 <button
                   onClick={handleComment}
                   disabled={!commentText.trim()}
-                  className="p-2 bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-[#333] disabled:cursor-not-allowed rounded-full transition-colors"
+                  className="p-2 bg-primary hover:bg-primary-hover disabled:bg-surface-overlay disabled:cursor-not-allowed rounded-md transition-colors"
                 >
                   <Send className="w-4 h-4 text-black" />
                 </button>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-500 mt-4 text-center">
-              <Link href="/login" className="text-[#ff950e] hover:underline font-semibold">
+            <p className="text-sm text-ink-faint mt-4 text-center">
+              <Link href="/login" className="text-primary hover:underline font-semibold">
                 Log in
               </Link>{' '}
               to comment
@@ -550,28 +550,28 @@ function PostCard({
             <div className="mt-4 space-y-3">
               {comments.map((comment) => (
                 <div key={comment._id} className="flex gap-3 group">
-                  <div className="w-8 h-8 rounded-full bg-[#333] flex items-center justify-center text-gray-400 text-sm font-bold flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-surface-overlay flex items-center justify-center text-ink-muted text-sm font-bold flex-shrink-0">
                     {comment.author.charAt(0).toUpperCase()}
                   </div>
-                  <div className="flex-1 bg-[#222] rounded-2xl px-4 py-2">
+                  <div className="flex-1 bg-surface-overlay rounded-lg px-4 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <Link
                         href={`/sellers/${comment.author}`}
-                        className="text-sm font-semibold text-[#ff950e] hover:underline"
+                        className="text-sm font-semibold text-primary hover:underline"
                       >
                         {comment.author}
                       </Link>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-ink-faint">
                         {formatRelativeTime(comment.createdAt)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-300 mt-1">{comment.content}</p>
+                    <p className="text-sm text-ink-muted mt-1">{comment.content}</p>
                   </div>
 
                   {(currentUser?.username === comment.author || isOwner) && (
                     <button
                       onClick={() => handleDeleteComment(comment._id)}
-                      className="p-1 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all self-center"
+                      className="p-1 text-ink-faint hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all self-center"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -713,13 +713,13 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-gradient-to-br from-[#1a1a1a] to-[#111] rounded-2xl w-full max-w-lg border border-[#333] shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-surface-raised rounded-lg w-full max-w-lg border border-line shadow-raised max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#333] sticky top-0 bg-[#1a1a1a] z-10">
+        <div className="flex items-center justify-between p-4 border-b border-line sticky top-0 bg-surface-raised z-10">
           <h2 className="text-xl font-bold text-white">Create Post</h2>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+            className="p-2 text-ink-muted hover:text-white hover:bg-white/10 rounded-full transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -733,15 +733,15 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
             placeholder="What's happening? Use #hashtags to help people find your post..."
             maxLength={2000}
             rows={4}
-            className="w-full bg-[#222] border border-[#444] rounded-xl px-4 py-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-[#ff950e] transition-colors"
+            className="w-full bg-surface-overlay border border-line-strong rounded-lg px-4 py-3 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-primary transition-colors"
           />
           <div className="flex justify-between mt-2">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-ink-faint">
               Pro tip: Use hashtags like #lingerie #worn #custom
             </span>
             <span
               className={`text-xs ${
-                content.length > 1900 ? 'text-[#ff950e]' : 'text-gray-500'
+                content.length > 1900 ? 'text-primary' : 'text-ink-faint'
               }`}
             >
               {content.length}/2000
@@ -754,7 +754,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
               {mediaUrls.map((url, index) => (
                 <div
                   key={index}
-                  className="relative aspect-square rounded-xl overflow-hidden border border-[#444]"
+                  className="relative aspect-square rounded-lg overflow-hidden border border-line-strong"
                 >
                   {isVideoUrl(url) ? (
                     <video src={url} className="w-full h-full object-cover" muted />
@@ -775,7 +775,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
                     </button>
                   </div>
                   {isVideoUrl(url) && (
-                    <div className="absolute top-2 left-2 bg-black/60 px-2 py-1 rounded-full">
+                    <div className="absolute top-2 left-2 bg-black/70 px-2 py-1 rounded-sm">
                       <Film className="w-4 h-4 text-white" />
                     </div>
                   )}
@@ -797,7 +797,7 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading || mediaUrls.length >= 4}
-              className="flex items-center gap-2 px-4 py-3 bg-[#222] hover:bg-[#333] disabled:bg-[#1a1a1a] disabled:text-gray-600 rounded-xl text-gray-300 transition-colors w-full justify-center border border-[#444] hover:border-[#ff950e]/50"
+              className="flex items-center gap-2 px-4 py-3 bg-surface-overlay hover:bg-surface-hover disabled:bg-surface-raised disabled:text-ink-faint rounded-lg text-ink-muted transition-colors w-full justify-center border border-line-strong hover:border-primary-line"
             >
               {isUploading ? (
                 <>
@@ -811,30 +811,30 @@ function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps) {
                 </>
               )}
             </button>
-            <p className="text-xs text-gray-500 mt-2 text-center">
+            <p className="text-xs text-ink-faint mt-2 text-center">
               Images up to 10MB, Videos up to 50MB
             </p>
           </div>
 
           {error && (
-            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
               <p className="text-sm text-red-400">{error}</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-[#333] flex justify-end gap-3 sticky bottom-0 bg-[#1a1a1a]">
+        <div className="p-4 border-t border-line flex justify-end gap-3 sticky bottom-0 bg-surface-raised">
           <button
             onClick={onClose}
-            className="px-5 py-2.5 text-gray-400 hover:text-white transition-colors"
+            className="px-5 py-2.5 text-ink-muted hover:text-white transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={(!content.trim() && mediaUrls.length === 0) || isSubmitting}
-            className="px-6 py-2.5 bg-[#ff950e] hover:bg-[#ff6b00] disabled:bg-[#333] disabled:text-gray-500 disabled:cursor-not-allowed rounded-full text-black font-bold transition-all duration-200 flex items-center gap-2"
+            className="px-6 py-2.5 bg-primary hover:bg-primary-hover disabled:bg-surface-overlay disabled:text-ink-faint disabled:cursor-not-allowed rounded-md text-black font-bold transition-all duration-200 flex items-center gap-2"
           >
             {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
             Post
@@ -1003,19 +1003,19 @@ export default function ExplorePage() {
   const isSeller = user?.role === 'seller';
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-[#0a0a0a] to-black">
+    <div className="min-h-screen bg-surface">
       <main className="max-w-2xl mx-auto px-4 py-6">
         {/* Page Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-white">Explore</h1>
-            <p className="text-gray-500 text-sm mt-1">See what sellers are sharing</p>
+            <p className="text-ink-faint text-sm mt-1">See what sellers are sharing</p>
           </div>
 
           {isSeller && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#ff950e] hover:bg-[#ff6b00] rounded-full text-black font-bold transition-all duration-200 shadow-lg shadow-[#ff950e]/20 hover:shadow-[#ff950e]/40"
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-hover active:bg-primary-press rounded-md text-black font-bold transition-colors duration-200"
             >
               <Plus className="w-5 h-5" />
               <span className="hidden sm:inline">New Post</span>
@@ -1023,14 +1023,19 @@ export default function ExplorePage() {
           )}
         </div>
 
-        {/* Feed Type Tabs */}
-        <div className="flex gap-1 mb-6 p-1 bg-[#1a1a1a] rounded-full border border-[#333]">
+        {/* Feed type tabs.
+            Sticky so the filter controls stay reachable while scrolling a
+            long feed — the standard pattern for a discovery surface. The
+            backdrop blur keeps posts readable as they pass underneath.
+            top-16 clears the site header. */}
+        <div className="sticky top-16 z-20 -mx-4 mb-6 border-b border-line bg-surface/85 px-4 py-3 backdrop-blur">
+        <div className="flex gap-1 p-1 bg-surface-raised rounded-lg border border-line">
           <button
             onClick={() => setFeedType('latest')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-semibold transition-all duration-200 ${
               feedType === 'latest'
-                ? 'bg-[#ff950e] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-primary text-black'
+                : 'text-ink-muted hover:text-white hover:bg-white/5'
             }`}
           >
             <Clock className="w-4 h-4" />
@@ -1038,10 +1043,10 @@ export default function ExplorePage() {
           </button>
           <button
             onClick={() => setFeedType('trending')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-semibold transition-all duration-200 ${
               feedType === 'trending'
-                ? 'bg-[#ff950e] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-primary text-black'
+                : 'text-ink-muted hover:text-white hover:bg-white/5'
             }`}
           >
             <TrendingUp className="w-4 h-4" />
@@ -1055,24 +1060,25 @@ export default function ExplorePage() {
               }
               setFeedType('following');
             }}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full font-semibold transition-all duration-200 ${
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md font-semibold transition-all duration-200 ${
               feedType === 'following'
-                ? 'bg-[#ff950e] text-black'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-primary text-black'
+                : 'text-ink-muted hover:text-white hover:bg-white/5'
             }`}
           >
             <Users className="w-4 h-4" />
             <span className="text-sm">Following</span>
           </button>
         </div>
+        </div>
 
         {/* Selected Tag Indicator */}
         {selectedTag && (
-          <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-xl">
-            <span className="text-[#ff950e] font-bold">#{selectedTag}</span>
+          <div className="flex items-center gap-2 mb-4 px-4 py-3 bg-primary-soft border border-primary-line rounded-lg">
+            <span className="text-primary font-bold">#{selectedTag}</span>
             <button
               onClick={() => setSelectedTag(null)}
-              className="ml-auto p-1 text-[#ff950e] hover:text-white hover:bg-[#ff950e]/20 rounded-full transition-colors"
+              className="ml-auto p-1 text-primary hover:text-white hover:bg-primary-soft rounded-full transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1081,20 +1087,20 @@ export default function ExplorePage() {
 
         {/* Guest Banner */}
         {!isLoggedIn && (
-          <div className="mb-6 p-5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 border border-[#ff950e]/30 rounded-2xl">
+          <div className="mb-6 p-5 bg-primary-soft border border-primary-line rounded-lg">
             <p className="text-white font-semibold mb-3">
               Join PantyPost to like, comment, and follow your favorite sellers!
             </p>
             <div className="flex gap-3">
               <Link
                 href="/signup"
-                className="px-5 py-2.5 bg-[#ff950e] hover:bg-[#ff6b00] rounded-full text-black font-bold transition-colors"
+                className="px-5 py-2.5 bg-primary hover:bg-primary-hover rounded-md text-black font-bold transition-colors"
               >
                 Sign Up
               </Link>
               <Link
                 href="/login"
-                className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-full text-white font-semibold transition-colors border border-white/20"
+                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 rounded-md text-white font-semibold transition-colors border border-line-strong"
               >
                 Log In
               </Link>
@@ -1104,26 +1110,88 @@ export default function ExplorePage() {
 
         {/* Posts Feed */}
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-10 h-10 text-[#ff950e] animate-spin mb-4" />
-            <p className="text-gray-500">Loading posts...</p>
+          /* Skeletons, not a spinner: they occupy the same footprint the
+             real cards will, so nothing jumps when content lands, and a
+             sparse feed still looks deliberate while it loads. Hidden
+             from screen readers — the feed's aria-busy carries the state. */
+          <div className="space-y-6" aria-hidden="true">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="overflow-hidden rounded-lg border border-line bg-surface-raised">
+                <div className="flex items-center gap-3 p-4">
+                  <div className="h-12 w-12 flex-shrink-0 animate-pulse rounded-full bg-surface-overlay" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="h-3.5 w-32 animate-pulse rounded-sm bg-surface-overlay" />
+                    <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-overlay" />
+                  </div>
+                </div>
+                <div className="aspect-square w-full animate-pulse bg-surface-overlay" />
+                <div className="space-y-2 p-4">
+                  <div className="h-3 w-3/4 animate-pulse rounded-sm bg-surface-overlay" />
+                  <div className="h-3 w-1/2 animate-pulse rounded-sm bg-surface-overlay" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : posts.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="w-20 h-20 mx-auto mb-4 bg-[#1a1a1a] rounded-full flex items-center justify-center border border-[#333]">
-              <MessageCircle className="w-10 h-10 text-gray-600" />
+          /* A good empty state says why it is empty and gives exactly
+             one next action. The old one ended on a dead sentence, which
+             on a pre-launch feed reads as "this site is broken" rather
+             than "this is new". Every branch below now exits somewhere. */
+          <div className="rounded-lg border border-line bg-surface-raised px-6 py-16 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg border border-line bg-surface">
+              <MessageCircle className="h-8 w-8 text-ink-faint" aria-hidden="true" />
             </div>
-            <h3 className="text-xl font-semibold text-white mb-2">No posts yet</h3>
-            <p className="text-gray-500 max-w-sm mx-auto">
+            <h3 className="mb-2 text-lg font-semibold text-white">
               {feedType === 'following'
-                ? 'Posts from sellers you follow will appear here'
+                ? 'Nothing from your sellers yet'
                 : selectedTag
-                ? `No posts with #${selectedTag} yet`
-                : 'Be the first to post something!'}
+                ? `Nothing tagged #${selectedTag}`
+                : 'No posts yet'}
+            </h3>
+            <p className="mx-auto mb-6 max-w-sm text-sm text-ink-muted">
+              {feedType === 'following'
+                ? 'Follow a few sellers and their posts will show up here.'
+                : selectedTag
+                ? 'Try another tag, or see everything sellers are posting.'
+                : isSeller
+                ? 'Share a photo and it goes live once an admin approves it.'
+                : 'Sellers post here between drops. Browse the shop in the meantime.'}
             </p>
+            {feedType === 'following' || selectedTag ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedTag(null);
+                  setFeedType('latest');
+                }}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover active:bg-primary-press"
+              >
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                See latest posts
+              </button>
+            ) : isSeller ? (
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover active:bg-primary-press"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Create your first post
+              </button>
+            ) : (
+              <Link
+                href="/browse"
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-primary-hover active:bg-primary-press"
+                style={{ color: '#000' }}
+              >
+                <span className="text-black">Browse listings</span>
+              </Link>
+            )}
           </div>
         ) : (
-          <div className="space-y-6">
+          /* role="feed" with article children is the ARIA pattern for a
+             dynamically-appended stream; aria-busy announces the append. */
+          <div className="space-y-6" role="feed" aria-busy={isLoadingMore} aria-label="Seller posts">
             {posts.map((post) => (
               <div
                 key={post._id}
@@ -1131,6 +1199,8 @@ export default function ExplorePage() {
                   if (el) postRefs.current.set(post._id, el);
                 }}
                 data-post-id={post._id}
+                role="article"
+                aria-label={`Post by ${post.author}`}
               >
                 <PostCard
                   post={post}
@@ -1145,13 +1215,29 @@ export default function ExplorePage() {
               </div>
             ))}
 
-            {/* Load More Trigger */}
+            {/* Load more.
+                The observer still auto-loads, but an explicit control is
+                offered too: pure infinite scroll loses scroll position on
+                back-navigation and makes the footer unreachable, which is
+                worse for goal-directed browsing. */}
             <div ref={loadMoreRef} className="py-8">
-              {isLoadingMore && (
+              {isLoadingMore ? (
                 <div className="flex items-center justify-center gap-3">
-                  <Loader2 className="w-6 h-6 text-[#ff950e] animate-spin" />
-                  <span className="text-gray-500">Loading more...</span>
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+                  <span className="text-sm text-ink-faint">Loading more...</span>
                 </div>
+              ) : hasMore ? (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => loadPosts(false)}
+                    className="rounded-md border border-line-strong bg-surface-raised px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:border-primary-line hover:bg-surface-hover"
+                  >
+                    Load more posts
+                  </button>
+                </div>
+              ) : (
+                <p className="text-center text-sm text-ink-faint">You&rsquo;re all caught up.</p>
               )}
             </div>
           </div>
