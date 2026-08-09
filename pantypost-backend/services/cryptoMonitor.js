@@ -23,13 +23,13 @@ let currentRpcIndex = 0;
 function initializeWeb3() {
   try {
     web3 = new Web3(RPC_ENDPOINTS[currentRpcIndex]);
-    console.log(`🌐 Connected to Polygon RPC: ${RPC_ENDPOINTS[currentRpcIndex]}`);
+    console.log(`ðŸŒ Connected to Polygon RPC: ${RPC_ENDPOINTS[currentRpcIndex]}`);
     return true;
   } catch (error) {
     console.error(`Failed to connect to RPC ${currentRpcIndex}:`, error.message);
     currentRpcIndex = (currentRpcIndex + 1) % RPC_ENDPOINTS.length;
     if (currentRpcIndex === 0) {
-      console.error('❌ All RPC endpoints failed');
+      console.error('âŒ All RPC endpoints failed');
       return false;
     }
     return initializeWeb3(); // Try next endpoint
@@ -82,8 +82,19 @@ const processedTxs = new Set();
 // Auto-verify a deposit
 async function autoVerifyDeposit(deposit, actualAmount, txHash, fromAddress) {
   try {
-    console.log(`🔍 Auto-verifying deposit ${deposit.depositId}`);
+    console.log(`ðŸ” Auto-verifying deposit ${deposit.depositId}`);
     
+    // IDEMPOTENCY: never credit a deposit that is already completed.
+    // processedTxs (below) lives in memory and is wiped on every restart,
+    // so after a deploy a re-scan of recent blocks can re-enter here for
+    // an already-credited deposit. The persisted status is the durable
+    // guard. Re-read fresh in case this instance's copy is stale.
+    const freshDeposit = await CryptoDeposit.findById(deposit._id);
+    if (freshDeposit && freshDeposit.status === 'completed') {
+      console.warn(`Deposit ${deposit.depositId} already completed - skipping re-credit.`);
+      return false;
+    }
+
     // Mark deposit as complete
     await deposit.complete(actualAmount, 'auto-verified', `Auto-verified from ${fromAddress}`);
     
@@ -95,7 +106,12 @@ async function autoVerifyDeposit(deposit, actualAmount, txHash, fromAddress) {
     }
     
     const previousBalance = userWallet.balance;
-    await userWallet.deposit(deposit.amountUSD);
+    // Atomic credit (see Wallet model): avoids losing this credit if it
+    // races another balance change on the same wallet.
+    const creditedWallet = await Wallet.creditAtomic(deposit.username, deposit.amountUSD);
+    if (creditedWallet) {
+      userWallet.balance = creditedWallet.balance;
+    }
     
     // Create transaction record
     const transaction = new Transaction({
@@ -137,7 +153,7 @@ async function autoVerifyDeposit(deposit, actualAmount, txHash, fromAddress) {
       });
     }
     
-    console.log(`✅ Auto-verified deposit ${deposit.depositId}: $${deposit.amountUSD} credited to ${deposit.username}`);
+    console.log(`âœ… Auto-verified deposit ${deposit.depositId}: $${deposit.amountUSD} credited to ${deposit.username}`);
     return true;
     
   } catch (error) {
@@ -175,7 +191,7 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
       const decimals = tokenSymbol === 'USDT' ? 6 : 6; // Both USDT and USDC have 6 decimals on Polygon
       const amount = Number(BigInt(value)) / Math.pow(10, decimals);
       
-      console.log(`📥 Found ${tokenSymbol} deposit: ${amount} from ${from} (tx: ${txHash})`);
+      console.log(`ðŸ“¥ Found ${tokenSymbol} deposit: ${amount} from ${from} (tx: ${txHash})`);
       
       // Find matching pending deposit
       const deposits = await CryptoDeposit.find({
@@ -237,7 +253,7 @@ async function checkMaticDeposits() {
           const amount = Number(web3.utils.fromWei(valueInWei, 'ether'));
           
           if (amount > 0) {
-            console.log(`📥 Found MATIC deposit: ${amount} from ${tx.from} (tx: ${txHash})`);
+            console.log(`ðŸ“¥ Found MATIC deposit: ${amount} from ${tx.from} (tx: ${txHash})`);
             processedTxs.add(txHash);
             
             // For testing purposes - you can remove this in production
@@ -252,7 +268,7 @@ async function checkMaticDeposits() {
                 deposit.txHash = txHash;
                 await deposit.save();
                 
-                console.log(`🧪 TEST MODE: Treating MATIC deposit as ${deposit.cryptoCurrency}`);
+                console.log(`ðŸ§ª TEST MODE: Treating MATIC deposit as ${deposit.cryptoCurrency}`);
                 await autoVerifyDeposit(deposit, deposit.expectedCryptoAmount, txHash, tx.from);
                 break;
               }
@@ -295,7 +311,7 @@ function cleanupProcessedTxs() {
     // Keep only last 500 transactions
     processedTxs.clear();
     txArray.slice(-500).forEach(tx => processedTxs.add(tx));
-    console.log('🧹 Cleaned up processed transactions cache');
+    console.log('ðŸ§¹ Cleaned up processed transactions cache');
   }
 }
 
@@ -303,17 +319,17 @@ function cleanupProcessedTxs() {
 let monitoringInterval;
 
 function startMonitoring() {
-  console.log('🚀 Starting automated crypto deposit monitoring...');
+  console.log('ðŸš€ Starting automated crypto deposit monitoring...');
   
   if (!initializeWeb3()) {
-    console.error('❌ Failed to initialize Web3, monitoring disabled');
+    console.error('âŒ Failed to initialize Web3, monitoring disabled');
     return false;
   }
   
-  console.log(`📍 Monitoring wallet: ${YOUR_WALLET}`);
-  console.log('💰 Supported tokens: USDT, USDC, MATIC (for testing)');
-  console.log('⏱️  Check interval: Every 30 seconds');
-  console.log('🤖 Auto-verification: ENABLED');
+  console.log(`ðŸ“ Monitoring wallet: ${YOUR_WALLET}`);
+  console.log('ðŸ’° Supported tokens: USDT, USDC, MATIC (for testing)');
+  console.log('â±ï¸  Check interval: Every 30 seconds');
+  console.log('ðŸ¤– Auto-verification: ENABLED');
   
   // Initial check
   monitorDeposits();
@@ -332,7 +348,7 @@ function startMonitoring() {
 function stopMonitoring() {
   if (monitoringInterval) {
     clearInterval(monitoringInterval);
-    console.log('🛑 Stopped crypto monitoring');
+    console.log('ðŸ›‘ Stopped crypto monitoring');
   }
 }
 

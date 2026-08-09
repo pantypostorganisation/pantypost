@@ -110,6 +110,59 @@ walletSchema.methods.transferTo = async function(recipientWallet, amount) {
   return { sender: this, recipient: recipientWallet };
 };
 
+// =====================================================================
+// ATOMIC BALANCE OPERATIONS  (concurrency-safe)
+//
+// The instance methods above (deposit/withdraw/transferTo) are
+// read-modify-write on an in-memory document: they read this.balance
+// (loaded by some earlier findOne), check it in JS, then save() the
+// whole document. Two overlapping operations on the same wallet can
+// therefore both pass a balance check, or silently overwrite each
+// other's result (last save wins). That is the double-withdraw / lost-
+// update race from the wallet audit.
+//
+// These statics move the check and the mutation into a SINGLE database
+// operation. MongoDB serialises document updates, so the $gte filter and
+// the $inc happen atomically: a second concurrent debit either matches
+// (funds still there) or matches nothing and returns null. No stale read,
+// no overdraft, no lost update.
+//
+// Amounts are kept in clean 2-decimal dollars; $inc of clean cent values
+// does not drift within any realistic transaction count, and every
+// comparison in this codebase already rounds via cents. (The fully
+// drift-proof end state is to store balance as an integer number of
+// cents — a schema migration, deliberately out of scope for this batch.)
+//
+// The instance methods are retained for now because the order/drop
+// routes still call them; they should be migrated to these and then
+// removed.
+// =====================================================================
+
+// Credit a wallet atomically. Returns the updated wallet, or null if it
+// does not exist (callers that must create-on-first-credit should ensure
+// the wallet exists first).
+walletSchema.statics.creditAtomic = function(username, amount) {
+  const rounded = Math.round(Number(amount) * 100) / 100;
+  return this.findOneAndUpdate(
+    { username },
+    { $inc: { balance: rounded }, $set: { lastTransaction: new Date(), updatedAt: new Date() } },
+    { new: true }
+  );
+};
+
+// Debit a wallet atomically, but ONLY if it holds at least `amount`.
+// Returns the updated wallet on success, or null if funds were
+// insufficient (or the wallet does not exist) — the caller must treat
+// null as "declined / already spent" and make no money move.
+walletSchema.statics.debitIfFunds = function(username, amount) {
+  const rounded = Math.round(Number(amount) * 100) / 100;
+  return this.findOneAndUpdate(
+    { username, balance: { $gte: rounded } },
+    { $inc: { balance: -rounded }, $set: { lastTransaction: new Date(), updatedAt: new Date() } },
+    { new: true }
+  );
+};
+
 // Pre-save middleware to ensure balance is always rounded to 2 decimal places
 walletSchema.pre('save', function(next) {
   if (this.isModified('balance')) {

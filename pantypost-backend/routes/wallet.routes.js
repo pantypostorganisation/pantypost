@@ -9,6 +9,32 @@ const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
 const mongoose = require('mongoose');
 
+// =====================================================================
+// DIRECT WALLET DEPOSITS — LAUNCH SAFETY FLAG
+//
+// POST /deposit credits a buyer's balance directly with NO payment
+// processor charge. It exists ONLY so test accounts can be funded to
+// exercise the purchase and drop flows before the real SegPay charge
+// path is live. If it ever reaches real users switched on, anyone with
+// a buyer account can mint balance for free.
+//
+// It is therefore OFF unless ENABLE_DIRECT_DEPOSITS === 'true' is set
+// in the environment. On boot we announce the state loudly so it can
+// never be live in production without screaming in the logs on every
+// restart.
+// =====================================================================
+const DIRECT_DEPOSITS_ENABLED = process.env.ENABLE_DIRECT_DEPOSITS === 'true';
+if (DIRECT_DEPOSITS_ENABLED) {
+  console.warn('============================================================');
+  console.warn('[WALLET] ⚠  DIRECT DEPOSITS ENABLED — /api/wallet/deposit');
+  console.warn('[WALLET] ⚠  credits balances with NO real charge. This is');
+  console.warn('[WALLET] ⚠  a TESTING mode. NEVER run this in production.');
+  console.warn('[WALLET] ⚠  Unset ENABLE_DIRECT_DEPOSITS before launch.');
+  console.warn('============================================================');
+} else {
+  console.log('[WALLET] Direct deposits disabled (production-safe). Set ENABLE_DIRECT_DEPOSITS=true only for testing.');
+}
+
 // ============= HELPER FUNCTIONS FOR UNIFIED ADMIN WALLET =============
 
 // Helper function to get unified admin wallet
@@ -191,7 +217,17 @@ router.post('/deposit/system', async (req, res) => {
   try {
     // normalize both values to avoid sneaky spaces/newlines
     const systemKey = (req.headers['x-api-key'] || '').trim();
-    const expectedKey = (process.env.INTERNAL_API_KEY || 'pantypost-system-webhook-key').trim();
+    // No hardcoded fallback: if the key is not configured, this
+    // money-crediting webhook refuses rather than accepting a literal
+    // that lives in source. Fail closed.
+    const expectedKey = (process.env.INTERNAL_API_KEY || '').trim();
+    if (!expectedKey) {
+      console.error('[WALLET] /deposit/system called but INTERNAL_API_KEY is not set — refusing.');
+      return res.status(503).json({
+        success: false,
+        error: 'Deposit webhook not configured'
+      });
+    }
 
     if (!systemKey || systemKey !== expectedKey) {
       return res.status(401).json({
@@ -227,20 +263,46 @@ router.post('/deposit/system', async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    // Find or create wallet
+    // IDEMPOTENCY: refuse a deposit we've already credited. NOWPayments
+    // retries webhooks until it receives a 200, and this process
+    // restarts on every deploy, so duplicate delivery is expected, not
+    // exceptional. If a completed deposit transaction already exists for
+    // this txId (or orderId), acknowledge with 200 so the provider stops
+    // retrying — but do NOT credit again.
+    const dedupKey = txId || orderId;
+    if (dedupKey) {
+      const already = await Transaction.findOne({
+        type: 'deposit',
+        status: 'completed',
+        $or: [
+          { 'metadata.txId': dedupKey },
+          { 'metadata.orderId': dedupKey },
+        ],
+      });
+      if (already) {
+        console.warn(`[Wallet] Duplicate system deposit ignored for ${dedupKey} (already credited tx ${already._id}).`);
+        return res.json({
+          success: true,
+          duplicate: true,
+          data: { transactionId: already._id },
+        });
+      }
+    }
+
+    // Ensure the wallet exists (create empty first if needed), then
+    // credit ATOMICALLY.
     let wallet = await Wallet.findOne({ username });
     if (!wallet) {
-      wallet = new Wallet({
-        username,
-        role: user.role,
-        balance: 0,
-      });
+      wallet = await Wallet.create({ username, role: user.role, balance: 0 });
     }
 
     const previousBalance = wallet.balance;
 
-    // Credit wallet
-    await wallet.deposit(numericAmount);
+    const credited = await Wallet.creditAtomic(username, numericAmount);
+    if (!credited) {
+      return res.status(404).json({ success: false, error: 'Wallet not found' });
+    }
+    wallet = credited;
 
     // Record transaction
     const transaction = new Transaction({
@@ -292,6 +354,15 @@ router.post('/deposit/system', async (req, res) => {
 // POST /api/wallet/deposit - Add money to wallet (buyers only)
 router.post('/deposit', authMiddleware, async (req, res) => {
   try {
+    // Fail closed unless explicitly enabled for testing. See the boot
+    // warning above — this path moves no real money.
+    if (!DIRECT_DEPOSITS_ENABLED) {
+      return res.status(403).json({
+        success: false,
+        error: 'Direct deposits are disabled. Please fund your wallet through the payment flow.'
+      });
+    }
+
     const { amount, method, notes } = req.body;
     const username = req.user.username;
     
@@ -337,12 +408,20 @@ router.post('/deposit', authMiddleware, async (req, res) => {
       });
     }
     
-    // Store previous balance for WebSocket event
+    // Ensure the wallet row exists, then credit ATOMICALLY.
+    if (wallet.isNew) {
+      await wallet.save();
+    }
     const previousBalance = wallet.balance;
-    
-    // Add money to wallet
-    await wallet.deposit(amount);
-    
+    const credited = await Wallet.creditAtomic(username, amount);
+    if (!credited) {
+      return res.status(404).json({
+        success: false,
+        error: 'Wallet not found'
+      });
+    }
+    wallet = credited;
+
     // Create transaction record
     const transaction = new Transaction({
       type: 'deposit',
@@ -429,20 +508,23 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
       }
     }
     
-    // Check balance
-    if (!wallet.hasBalance(amount)) {
+    // Store previous balance for WebSocket event
+    const previousBalance = wallet.balance;
+
+    // Remove money from wallet ATOMICALLY. The check and the debit are a
+    // single DB op, so two concurrent withdrawals cannot both pass — the
+    // loser matches nothing and gets a clean decline instead of creating
+    // a second payout against the same funds.
+    const walletName = isAdminUser(req.user) ? wallet.username : username;
+    const debited = await Wallet.debitIfFunds(walletName, amount);
+    if (!debited) {
       return res.status(400).json({
         success: false,
         error: 'Insufficient balance'
       });
     }
-    
-    // Store previous balance for WebSocket event
-    const previousBalance = wallet.balance;
-    
-    // Remove money from wallet
-    await wallet.withdraw(amount);
-    
+    wallet = debited;
+
     // Create transaction record
     const transaction = new Transaction({
       type: 'withdrawal',
@@ -683,18 +765,28 @@ router.post('/admin-actions', authMiddleware, async (req, res) => {
     
     // Store previous balance for WebSocket event
     const previousBalance = wallet.balance;
-    
-    // Perform action
+
+    // Perform action ATOMICALLY (see the atomic statics on the Wallet
+    // model). Admin ops are low-concurrency, but an admin credit/debit
+    // racing a user's purchase would otherwise lose one update.
     if (action === 'credit') {
-      await wallet.deposit(amount);
+      const credited = await Wallet.creditAtomic(username, amount);
+      if (!credited) {
+        return res.status(404).json({
+          success: false,
+          error: 'Wallet not found'
+        });
+      }
+      wallet.balance = credited.balance;
     } else {
-      if (!wallet.hasBalance(amount)) {
+      const debited = await Wallet.debitIfFunds(username, amount);
+      if (!debited) {
         return res.status(400).json({
           success: false,
           error: 'Insufficient balance for debit'
         });
       }
-      await wallet.withdraw(amount);
+      wallet.balance = debited.balance;
     }
     
     // Create transaction - always use platform for admin
@@ -939,19 +1031,19 @@ router.post('/admin-withdraw', authMiddleware, async (req, res) => {
     // Get unified platform wallet
     const platformWallet = await getUnifiedAdminWallet();
     
-    // Check if platform wallet has sufficient balance
-    if (!platformWallet.hasBalance(amount)) {
+    // Store previous balance for WebSocket event
+    const previousBalance = platformWallet.balance;
+
+    // Process withdrawal ATOMICALLY (see /withdraw). Guards the platform
+    // wallet against concurrent admin withdrawals draining it twice.
+    const debitedPlatform = await Wallet.debitIfFunds(platformWallet.username, amount);
+    if (!debitedPlatform) {
       return res.status(400).json({
         success: false,
         error: `Insufficient balance. Platform wallet has $${platformWallet.balance.toFixed(2)}`
       });
     }
-    
-    // Store previous balance for WebSocket event
-    const previousBalance = platformWallet.balance;
-    
-    // Process withdrawal
-    await platformWallet.withdraw(amount);
+    platformWallet.balance = debitedPlatform.balance;
     
     // Create withdrawal transaction
     const withdrawalTransaction = new Transaction({
@@ -1300,7 +1392,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
       });
     });
 
-    // 13. Format deposit logs  ✅ include actor + role (buyer/admin)
+    // 13. Format deposit logs  âœ… include actor + role (buyer/admin)
     const depositLogs = deposits.map(deposit => {
       const role = deposit.toRole || (deposit.to === 'platform' ? 'admin' : 'buyer');
       return {
@@ -1313,7 +1405,7 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
         transactionId: deposit._id.toString(),
         notes: deposit.metadata?.notes,
         // NEW (non-breaking, fixes wrong "seller" label in UI)
-        role,                           // <— prefer this in UI
+        role,                           // <â€” prefer this in UI
         actor: deposit.to,              // explicit actor username
         actorRole: role                 // explicit actor role
       };
