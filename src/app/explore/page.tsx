@@ -352,12 +352,17 @@ function PostCard({
           <Link href={`/sellers/${post.author}`} className="flex-shrink-0">
             <div className="w-14 h-14 rounded-full bg-primary-soft border border-primary-line overflow-hidden hover:border-primary transition-colors">
               {post.authorInfo?.profilePic ? (
+                /* object-cover must be on the IMAGE, not just passed as
+                   a prop: the wrapper is a fixed 56px circle with
+                   overflow-hidden, so a non-square photo rendered at its
+                   natural ratio and got clipped flat across the bottom
+                   of the circle. Cover + centre crops it to fill. */
                 <OptimizedImage
                   src={post.authorInfo.profilePic}
                   alt={`${post.author}'s profile picture`}
                   width={56}
                   height={56}
-                  className="w-full h-full"
+                  className="w-full h-full object-cover object-center"
                   objectFit="cover"
                 />
               ) : (
@@ -1142,7 +1147,7 @@ export default function ExplorePage() {
             {[0, 1, 2].map((i) => (
               <div key={i} className="overflow-hidden rounded-lg border border-line bg-surface-raised">
                 <div className="flex items-center gap-3 p-4">
-                  <div className="h-12 w-12 flex-shrink-0 animate-pulse rounded-full bg-surface-overlay" />
+                  <div className="h-14 w-14 flex-shrink-0 animate-pulse rounded-full bg-surface-overlay" />
                   <div className="min-w-0 flex-1 space-y-2">
                     <div className="h-3.5 w-32 animate-pulse rounded-sm bg-surface-overlay" />
                     <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-overlay" />

@@ -8,6 +8,7 @@ import { Shield, Star, Lock, Clock, Gavel } from 'lucide-react';
 import { listingsService } from '@/services/listings.service';
 import type { Listing } from '@/context/ListingContext';
 import { useAuth } from '@/context/AuthContext';
+import { resolveApiUrl } from '@/utils/url';
 
 // Enhanced loading skeleton component - matching browse page dimensions
 const ListingSkeleton = React.memo(() => (
@@ -24,7 +25,7 @@ const ListingSkeleton = React.memo(() => (
       </div>
       <div className="mt-3 h-5 w-1/3 animate-pulse rounded-sm bg-surface-overlay" />
       <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-        <div className="h-6 w-6 animate-pulse rounded-full bg-surface-overlay" />
+        <div className="h-8 w-8 animate-pulse rounded-full bg-surface-overlay" />
         <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-overlay" />
       </div>
     </div>
@@ -36,6 +37,17 @@ ListingSkeleton.displayName = 'ListingSkeleton';
 const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [sellerPicFailed, setSellerPicFailed] = useState(false);
+
+  /* GET /api/listings populates sellerProfile.pic via
+     populateSellerProfile(), so the photo is already in the payload —
+     this card just never rendered it and always drew the initial.
+     resolveApiUrl turns a relative /uploads/... path into an absolute
+     one, the same way the browse card does. */
+  const resolvedSellerPic = useMemo(
+    () => resolveApiUrl((listing as any).sellerProfile?.pic),
+    [listing]
+  );
 
   // Memoize computed values
   const isSellerVerified = useMemo(
@@ -232,12 +244,22 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
           {/* Seller — pinned to the bottom of every card by mt-auto, with
               a hairline separator so it reads as the card's footer. */}
           <div className="mt-auto flex items-center gap-2 border-t border-line pt-3">
-            <span
-              aria-hidden="true"
-              className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-overlay text-[11px] font-bold text-primary"
-            >
-              {listing.seller?.charAt(0)?.toUpperCase()}
-            </span>
+            {resolvedSellerPic && !sellerPicFailed ? (
+              <img
+                src={resolvedSellerPic}
+                alt=""
+                loading="lazy"
+                onError={() => setSellerPicFailed(true)}
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-overlay text-xs font-bold text-primary"
+              >
+                {listing.seller?.charAt(0)?.toUpperCase()}
+              </span>
+            )}
             <span className="flex min-w-0 items-center gap-1 text-xs font-medium text-ink-muted">
               <span className="truncate">{listing.seller}</span>
               {isSellerVerified && (
