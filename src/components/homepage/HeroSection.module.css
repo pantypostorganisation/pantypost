@@ -59,7 +59,11 @@
   --pp-accent: #ff950e;
   --pp-bg: #0b0b0b;
   --pp-text: #ffffff;
-  --pp-radius: 14px;
+  /* Matches --radius-md (0.75rem) from globals.css so every button on
+     the page sits on the same three-step radius scale. Was a one-off
+     14px. The 999px further down is the sheen overlay's own shape, not
+     the button's — leave it. */
+  --pp-radius: 0.75rem;
   --pp-border-w: 2px;
   --pp-padding-y: 0.8rem;
   --pp-padding-x: 1.2rem;
@@ -103,7 +107,7 @@
   filter: drop-shadow(0 0 10px rgba(255, 149, 14, 0.65));
 }
 
-/* Sheen overlay — OFF left -> cross -> OFF right */
+/* Sheen overlay â€” OFF left -> cross -> OFF right */
 .browseListingsBtn::after,
 .startSellingBtn::after {
   content: "";

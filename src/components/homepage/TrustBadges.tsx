@@ -33,7 +33,7 @@ export default function TrustBadges() {
       {trustBadges.map((badge, index) => (
         <motion.span
           key={`trust-badge-${index}`}
-          className="flex items-center justify-center sm:justify-start gap-1.5 bg-white/5 backdrop-blur-lg text-gray-200 px-3 py-2 sm:py-1.5 rounded-full text-xs border border-white/10 shadow-sm transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-md hover:scale-105 group cursor-default"
+          className="flex items-center justify-center sm:justify-start gap-1.5 bg-white/5 backdrop-blur-lg text-gray-200 px-3 py-2 sm:py-1.5 rounded-md text-xs border border-white/10 shadow-sm transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-md hover:scale-105 group cursor-default"
           variants={itemVariants}
           whileHover={{ 
             scale: 1.05,
