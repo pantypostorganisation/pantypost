@@ -5,6 +5,7 @@ const router = express.Router();
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
+const Follow = require('../models/Follow');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const {
@@ -28,7 +29,7 @@ async function getAuthorInfo(username) {
 }
 
 // Helper: Enrich posts with author info
-async function enrichPostsWithAuthorInfo(posts) {
+async function enrichPostsWithAuthorInfo(posts, viewerUsername = null) {
   const authorUsernames = [...new Set(posts.map(p => p.author))];
   const authors = await User.find({ username: { $in: authorUsernames } })
     .select('username profilePic isVerified tier bio')
@@ -45,9 +46,18 @@ async function enrichPostsWithAuthorInfo(posts) {
     };
   });
   
+  // Follow state for the viewer, in ONE query for the whole page. The
+  // client previously had no way to know it already followed someone, so
+  // every card rendered "Follow" regardless — tapping it re-sent a
+  // follow for a relationship that already existed.
+  const followedSet = viewerUsername
+    ? await Follow.getFollowedSet(viewerUsername, authorUsernames)
+    : new Set();
+
   return posts.map(post => ({
     ...post,
-    authorInfo: authorMap[post.author] || null
+    authorInfo: authorMap[post.author] || null,
+    isFollowing: followedSet.has(post.author)
   }));
 }
 
@@ -72,22 +82,140 @@ async function sendNotification(userId, type, data) {
   }
 }
 
+// ==================== FOLLOW ====================
+//
+// A free, one-way follow. Deliberately separate from /api/subscriptions,
+// which is the PAID monthly relationship — the Explore button used to
+// call that one, so "Follow" was trying to charge the buyer's wallet.
+//
+// These live on the posts router because Explore is the only consumer
+// and mounting a new router would mean touching server.js. If follows
+// grow beyond the feed (profile pages, drop notifications), move them to
+// their own follow.routes.js.
+// ================================================================
+
+// POST /api/posts/follow/:username - follow a seller
+router.post('/follow/:username', authMiddleware, async (req, res) => {
+  try {
+    const follower = req.user.username;
+    const following = (req.params.username || '').trim();
+
+    if (!following) {
+      return res.status(400).json({ success: false, error: 'Username is required' });
+    }
+
+    if (follower === following) {
+      return res.status(400).json({ success: false, error: 'You cannot follow yourself' });
+    }
+
+    const target = await User.findOne({ username: following }).select('username role').lean();
+    if (!target) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    // Idempotent: following someone you already follow is a success, not
+    // an error — the client may retry, and a duplicate key would
+    // otherwise surface as a 500. The unique index is what actually
+    // prevents two rapid taps creating two rows.
+    try {
+      await Follow.create({ follower, following });
+    } catch (error) {
+      if (error && error.code === 11000) {
+        const followerCount = await Follow.countFollowers(following);
+        return res.json({
+          success: true,
+          data: { following: true, alreadyFollowing: true, followerCount }
+        });
+      }
+      throw error;
+    }
+
+    const followerCount = await Follow.countFollowers(following);
+
+    // Best-effort notification; never fail the follow because of it.
+    try {
+      await sendNotification(following, 'follow', {
+        message: `${follower} started following you`,
+        link: '/explore'
+      });
+    } catch (notifyError) {
+      console.error('[Post] Follow notification failed:', notifyError);
+    }
+
+    res.json({ success: true, data: { following: true, followerCount } });
+  } catch (error) {
+    console.error('[Post] Follow error:', error);
+    res.status(500).json({ success: false, error: 'Failed to follow user' });
+  }
+});
+
+// DELETE /api/posts/follow/:username - unfollow a seller
+router.delete('/follow/:username', authMiddleware, async (req, res) => {
+  try {
+    const follower = req.user.username;
+    const following = (req.params.username || '').trim();
+
+    // Also idempotent: unfollowing someone you don't follow is fine.
+    await Follow.deleteOne({ follower, following });
+    const followerCount = await Follow.countFollowers(following);
+
+    res.json({ success: true, data: { following: false, followerCount } });
+  } catch (error) {
+    console.error('[Post] Unfollow error:', error);
+    res.status(500).json({ success: false, error: 'Failed to unfollow user' });
+  }
+});
+
+// GET /api/posts/follow/:username/status - is the caller following, and how many followers
+router.get('/follow/:username/status', authMiddleware, async (req, res) => {
+  try {
+    const follower = req.user.username;
+    const following = (req.params.username || '').trim();
+
+    const [row, followerCount] = await Promise.all([
+      Follow.findOne({ follower, following }).lean(),
+      Follow.countFollowers(following)
+    ]);
+
+    res.json({ success: true, data: { following: Boolean(row), followerCount } });
+  } catch (error) {
+    console.error('[Post] Follow status error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch follow status' });
+  }
+});
+
 // ==================== PUBLIC ROUTES ====================
 
 // GET /api/posts/feed - Get public feed
 router.get('/feed', async (req, res) => {
   try {
     const { page = 1, limit = 10, type = 'latest', tag } = req.query;
-    
+
+    // Optionally identify the viewer so each card can render the correct
+    // follow state. This route stays public — an unauthenticated request
+    // simply gets isFollowing: false everywhere.
+    let viewerUsername = null;
+    const feedToken = req.headers.authorization?.replace('Bearer ', '');
+    if (feedToken) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(feedToken, process.env.JWT_SECRET);
+        viewerUsername = decoded.username;
+      } catch (error) {
+        // Anonymous viewer.
+      }
+    }
+
     const result = await Post.getFeed({
       page: parseInt(page),
       limit: Math.min(parseInt(limit), 50),
       type,
-      tag: tag || null
+      tag: tag || null,
+      viewerUsername
     });
     
     // Enrich with author info
-    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts);
+    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts, viewerUsername);
     
     res.json({
       success: true,
@@ -152,7 +280,7 @@ router.get('/user/:username', async (req, res) => {
     });
     
     // Enrich with author info
-    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts);
+    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts, viewerUsername);
     
     res.json({
       success: true,
@@ -176,13 +304,21 @@ router.get('/following/feed', authMiddleware, async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
     const userId = req.user._id;
     
-    // Get list of users this user follows
-    const subscriptions = await Subscription.find({
-      subscriberId: userId,
-      status: 'active'
-    }).select('sellerUsername').lean();
-    
-    const followedUsers = subscriptions.map(s => s.sellerUsername);
+    // Who this user follows = free follows UNION active paid
+    // subscriptions. Paying for someone obviously implies wanting their
+    // posts, so subscribers keep the behaviour they had before follows
+    // existed, and nobody's feed silently empties on deploy.
+    const [followRows, subscriptions] = await Promise.all([
+      Follow.find({ follower: req.user.username }).select('following').lean(),
+      Subscription.find({ subscriberId: userId, status: 'active' })
+        .select('sellerUsername')
+        .lean()
+    ]);
+
+    const followedUsers = [...new Set([
+      ...followRows.map(f => f.following),
+      ...subscriptions.map(s => s.sellerUsername)
+    ])];
     
     if (followedUsers.length === 0) {
       return res.json({
@@ -203,11 +339,12 @@ router.get('/following/feed', authMiddleware, async (req, res) => {
       page: parseInt(page),
       limit: Math.min(parseInt(limit), 50),
       type: 'latest',
-      followedUsers
+      followedUsers,
+      viewerUsername: req.user.username
     });
     
     // Enrich with author info
-    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts);
+    const enrichedPosts = await enrichPostsWithAuthorInfo(result.posts, req.user.username);
     
     res.json({
       success: true,
@@ -341,7 +478,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const authorInfo = await getAuthorInfo(req.user.username);
     
     // NOTE: Subscribers are deliberately NOT notified here.
-    // A notification is itself a form of publication — it would push
+    // A notification is itself a form of publication â€” it would push
     // the post's existence to users before a moderator has seen it.
     // Notifications are sent on approval instead.
     

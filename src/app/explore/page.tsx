@@ -152,6 +152,13 @@ function FollowButton({ username, initialIsFollowing = false, onFollowChange }: 
   const router = useRouter();
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // The API reports follow state per post, but a card can outlive a
+  // change made elsewhere in the feed; keep the button in step.
+  useEffect(() => {
+    setIsFollowing(initialIsFollowing);
+  }, [initialIsFollowing]);
 
   // Don't show follow button for own profile
   if (user?.username === username) return null;
@@ -165,19 +172,31 @@ function FollowButton({ username, initialIsFollowing = false, onFollowChange }: 
       return;
     }
 
+    /* This used to call /subscriptions/subscribe — the PAID monthly
+       subscription endpoint — so a button labelled "Follow" was
+       attempting to charge the buyer's wallet. Follows are free and now
+       have their own endpoints.
+
+       It also flipped the UI without checking the response: apiCall
+       resolves with { success: false } rather than throwing, so a failed
+       call still rendered "Following". The service now throws on
+       failure, and the state only changes on a real success. */
+    const nextFollowing = !isFollowing;
     setIsLoading(true);
+    setError(null);
     try {
-      if (isFollowing) {
-        await apiCall(`/subscriptions/unsubscribe/${username}`, { method: 'POST' });
-        setIsFollowing(false);
-        onFollowChange?.(false);
-      } else {
-        await apiCall(`/subscriptions/subscribe/${username}`, { method: 'POST' });
-        setIsFollowing(true);
-        onFollowChange?.(true);
-      }
-    } catch (error) {
-      console.error('Follow action failed:', error);
+      const result = nextFollowing
+        ? await exploreService.followUser(username)
+        : await exploreService.unfollowUser(username);
+
+      setIsFollowing(result.following);
+      onFollowChange?.(result.following);
+    } catch (err) {
+      console.error('Follow action failed:', err);
+      // Leave the button in its previous state and say so, rather than
+      // claiming a follow that did not happen.
+      setError(nextFollowing ? 'Could not follow' : 'Could not unfollow');
+      setTimeout(() => setError(null), 3000);
     } finally {
       setIsLoading(false);
     }
@@ -195,6 +214,8 @@ function FollowButton({ username, initialIsFollowing = false, onFollowChange }: 
     >
       {isLoading ? (
         <Loader2 className="w-3 h-3 animate-spin" />
+      ) : error ? (
+        <span>{error}</span>
       ) : isFollowing ? (
         <>
           <UserCheck className="w-3 h-3" />
@@ -329,18 +350,18 @@ function PostCard({
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <Link href={`/sellers/${post.author}`} className="flex-shrink-0">
-            <div className="w-12 h-12 rounded-full bg-primary-soft border border-primary-line overflow-hidden hover:border-primary transition-colors">
+            <div className="w-14 h-14 rounded-full bg-primary-soft border border-primary-line overflow-hidden hover:border-primary transition-colors">
               {post.authorInfo?.profilePic ? (
                 <OptimizedImage
                   src={post.authorInfo.profilePic}
-                  alt={post.author}
-                  width={48}
-                  height={48}
+                  alt={`${post.author}'s profile picture`}
+                  width={56}
+                  height={56}
                   className="w-full h-full"
                   objectFit="cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-primary text-xl font-bold">
+                <div className="w-full h-full flex items-center justify-center text-primary text-2xl font-bold">
                   {post.author.charAt(0).toUpperCase()}
                 </div>
               )}
@@ -375,7 +396,10 @@ function PostCard({
             </span>
           </div>
 
-          <FollowButton username={post.author} />
+          <FollowButton
+            username={post.author}
+            initialIsFollowing={Boolean(post.isFollowing)}
+          />
         </div>
 
         {isOwner && (

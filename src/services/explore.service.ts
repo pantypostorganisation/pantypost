@@ -36,6 +36,9 @@ export interface Post {
   linkedListing?: string;
   createdAt: string;
   updatedAt: string;
+  /** Whether the CURRENT viewer follows this post's author. Supplied by
+   *  the API per request; undefined for anonymous viewers. */
+  isFollowing?: boolean;
 }
 
 export interface TrendingTag {
@@ -351,6 +354,55 @@ class ExploreService {
       throw new Error(response.error?.message || 'Failed to add comment');
     }
     
+    return response.data;
+  }
+
+  /**
+   * Follow a seller. FREE — this is not the paid subscription flow
+   * (/subscriptions/*), which charges the buyer's wallet. Idempotent
+   * server-side: following someone you already follow succeeds.
+   */
+  async followUser(username: string): Promise<{ following: boolean; followerCount: number }> {
+    const response = await apiCall<{ following: boolean; followerCount: number }>(
+      `/posts/follow/${encodeURIComponent(username)}`,
+      { method: 'POST' }
+    );
+
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || 'Failed to follow user');
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Unfollow a seller. Idempotent.
+   */
+  async unfollowUser(username: string): Promise<{ following: boolean; followerCount: number }> {
+    const response = await apiCall<{ following: boolean; followerCount: number }>(
+      `/posts/follow/${encodeURIComponent(username)}`,
+      { method: 'DELETE' }
+    );
+
+    if (!response.success || !response.data) {
+      throw new Error(response.error?.message || 'Failed to unfollow user');
+    }
+
+    return response.data;
+  }
+
+  /**
+   * Whether the caller follows this seller, plus their follower count.
+   */
+  async getFollowStatus(username: string): Promise<{ following: boolean; followerCount: number }> {
+    const response = await apiCall<{ following: boolean; followerCount: number }>(
+      `/posts/follow/${encodeURIComponent(username)}/status`
+    );
+
+    if (!response.success || !response.data) {
+      return { following: false, followerCount: 0 };
+    }
+
     return response.data;
   }
 
