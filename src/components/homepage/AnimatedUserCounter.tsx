@@ -27,6 +27,10 @@ export default function AnimatedUserCounter({
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
   const [incrementAmount, setIncrementAmount] = useState(1);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
+  /* See PaymentsProcessedCounter: the refresh interval captures
+     fetchStats once, so the state variable reads false forever inside
+     it. The ref is always current. */
+  const hasInitialLoadRef = useRef(false);
   const [animationKey, setAnimationKey] = useState(0);
   
   const { user } = useAuth();
@@ -90,12 +94,28 @@ export default function AnimatedUserCounter({
     setTargetCount(newCount);
     springValue.set(newCount);
     
-    if (increment > 0 && animate && hasInitialLoad) {
+    if (increment > 0 && animate && hasInitialLoadRef.current) {
       triggerAnimation(increment);
     }
     
     previousCountRef.current = newCount;
-  }, [springValue, triggerAnimation, hasInitialLoad]);
+  }, [springValue, triggerAnimation]);
+
+  /* The subscription effect below used to depend on updateCount directly.
+     updateCount's identity changes whenever hasInitialLoad flips, and the
+     websocket context objects are NOT identity-stable across provider
+     re-renders — so the effect tore down and rebuilt the subscription
+     repeatedly, each time waiting 1s before re-subscribing. Any stats
+     event arriving in those gaps was silently dropped.
+
+     Same lesson as the messaging typing indicator: read the live
+     callback through a ref at call time, and key the effect on what
+     actually identifies the subscription. */
+  const fetchStatsRef = useRef<() => void>(() => {});
+  const updateCountRef = useRef(updateCount);
+  useEffect(() => {
+    updateCountRef.current = updateCount;
+  }, [updateCount]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -107,8 +127,9 @@ export default function AnimatedUserCounter({
         
         setNewUsersToday(response.data.newUsersToday || 0);
         
-        if (!hasInitialLoad) {
-          // Initial load - set without animation
+        if (!hasInitialLoadRef.current) {
+          // First paint only.
+          hasInitialLoadRef.current = true;
           springValue.set(response.data.totalUsers);
           previousCountRef.current = response.data.totalUsers;
           setTargetCount(response.data.totalUsers);
@@ -125,7 +146,7 @@ export default function AnimatedUserCounter({
       setIsLoading(false);
       
       // Retry after 2 seconds
-      if (!hasInitialLoad && mountedRef.current) {
+      if (!hasInitialLoadRef.current && mountedRef.current) {
         setTimeout(() => {
           if (mountedRef.current) {
             fetchStats();
@@ -133,7 +154,11 @@ export default function AnimatedUserCounter({
         }, 2000);
       }
     }
-  }, [springValue, hasInitialLoad, updateCount]);
+  }, [springValue, updateCount]);
+
+  useEffect(() => {
+    fetchStatsRef.current = fetchStats;
+  }, [fetchStats]);
 
   // Initial fetch
   useEffect(() => {
@@ -145,7 +170,7 @@ export default function AnimatedUserCounter({
     // Also set up periodic refresh every 60 seconds as backup
     const refreshInterval = setInterval(() => {
       if (mountedRef.current) {
-        fetchStats();
+        fetchStatsRef.current();
       }
     }, 60000);
 
@@ -296,7 +321,7 @@ export default function AnimatedUserCounter({
         </span>
         {process.env.NODE_ENV === 'development' && (
           <span className={`ml-1 text-[8px] ${publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
-            {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? '●' : '○'}
+            {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'â—' : 'â—‹'}
           </span>
         )}
       </motion.div>

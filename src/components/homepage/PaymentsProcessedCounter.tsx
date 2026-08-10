@@ -34,6 +34,12 @@ export default function PaymentsProcessedCounter({
   const [animationKey, setAnimationKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
+  /* Mirrors hasInitialLoad for use inside callbacks that outlive the
+     render they were created in. The 60s refresh interval captures
+     fetchStats once (its effect has an empty dep array), so reading the
+     state variable there returns false forever and the counter replays
+     from zero on every refresh. The ref is always current. */
+  const hasInitialLoadRef = useRef(false);
 
   const mountedRef = useRef(true);
   const animationFrameRef = useRef<number | null>(null);
@@ -125,14 +131,30 @@ export default function PaymentsProcessedCounter({
     if (Math.abs(increment) > 0.01) {
       animateValue(lastTargetRef.current, normalized, animate ? 1000 : 0);
       
-      if (increment > 0 && animate && hasInitialLoad) {
+      if (increment > 0 && animate && hasInitialLoadRef.current) {
         triggerAnimation(increment);
       }
       
       lastTargetRef.current = normalized;
       paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalized });
     }
-  }, [animateValue, triggerAnimation, hasInitialLoad]);
+  }, [animateValue, triggerAnimation]);
+
+  /* The subscription effect below used to depend on updateValue directly.
+     updateValue's identity changes whenever hasInitialLoad flips, and the
+     websocket context objects are NOT identity-stable across provider
+     re-renders — so the effect tore down and rebuilt the subscription
+     repeatedly, each time waiting 1s before re-subscribing. Any stats
+     event arriving in those gaps was silently dropped.
+
+     Same lesson as the messaging typing indicator: read the live
+     callback through a ref at call time, and key the effect on what
+     actually identifies the subscription. */
+  const fetchStatsRef = useRef<() => void>(() => {});
+  const updateValueRef = useRef(updateValue);
+  useEffect(() => {
+    updateValueRef.current = updateValue;
+  }, [updateValue]);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -143,8 +165,9 @@ export default function PaymentsProcessedCounter({
         const total = response.data.totalPaymentsProcessed ?? 0;
         console.log('[PaymentsProcessedCounter] Stats fetched:', total);
         
-        if (!hasInitialLoad) {
-          // Initial load - animate from 0
+        if (!hasInitialLoadRef.current) {
+          // First paint only: count up from zero.
+          hasInitialLoadRef.current = true;
           setDisplayValue(0);
           lastTargetRef.current = total;
           setTimeout(() => {
@@ -155,7 +178,7 @@ export default function PaymentsProcessedCounter({
           setHasInitialLoad(true);
         } else {
           // Update
-          updateValue(total, true);
+          updateValueRef.current(total, true);
         }
         
         setIsLoading(false);
@@ -165,7 +188,7 @@ export default function PaymentsProcessedCounter({
       setIsLoading(false);
       
       // Retry after 2 seconds
-      if (!hasInitialLoad && mountedRef.current) {
+      if (!hasInitialLoadRef.current && mountedRef.current) {
         setTimeout(() => {
           if (mountedRef.current) {
             fetchStats();
@@ -173,7 +196,11 @@ export default function PaymentsProcessedCounter({
         }, 2000);
       }
     }
-  }, [animateValue, hasInitialLoad, updateValue]);
+  }, [animateValue, updateValue]);
+
+  useEffect(() => {
+    fetchStatsRef.current = fetchStats;
+  }, [fetchStats]);
 
   // Initial fetch and periodic refresh
   useEffect(() => {
@@ -182,10 +209,11 @@ export default function PaymentsProcessedCounter({
     // Fetch immediately
     fetchStats();
     
-    // Set up periodic refresh every 60 seconds
+    // Periodic refresh. Calls through a ref so it always runs the
+    // CURRENT fetchStats rather than the one captured at mount.
     const refreshInterval = setInterval(() => {
       if (mountedRef.current) {
-        fetchStats();
+        fetchStatsRef.current();
       }
     }, 60000);
 
@@ -216,7 +244,7 @@ export default function PaymentsProcessedCounter({
       
       const total = Number(data?.totalPaymentsProcessed);
       if (Number.isFinite(total) && total >= 0) {
-        updateValue(total, true);
+        updateValueRef.current(total, true);
       }
     };
 
@@ -334,7 +362,7 @@ export default function PaymentsProcessedCounter({
       </span>
       {process.env.NODE_ENV === 'development' && compact && (
         <span className={`ml-1 text-[8px] ${publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
-          {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? '●' : '○'}
+          {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'â—' : 'â—‹'}
         </span>
       )}
     </motion.div>
