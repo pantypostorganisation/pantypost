@@ -13,13 +13,13 @@ import type { UIMessage } from './types';
  * What changed from the old MessageItem:
  *
  *  - Bubbles know their position in a run, so a burst of messages reads as
- *    one stack with a single timestamp instead of repeating "You • 14:32"
+ *    one stack with a single timestamp instead of repeating "You â€¢ 14:32"
  *    on every line.
  *  - Own bubbles are a low-alpha brand tint, not a saturated orange block.
  *    250 characters of black-on-#ff950e is a wall; the tint reads as
  *    "mine" without shouting, and keeps text at full contrast.
  *  - Delivery state is a glyph on the LAST own message only, which is
- *    where every mature messenger puts it — not the word "Read" on every
+ *    where every mature messenger puts it â€” not the word "Read" on every
  *    bubble, in the header, above the text.
  *  - Pending and failed states are visible, and failed sends can be
  *    retried. Previously an optimistic message was indistinguishable from
@@ -27,7 +27,7 @@ import type { UIMessage } from './types';
  * ===================================================================== */
 
 /** A message that is nothing but emoji renders large and unboxed. */
-const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|️|‍|\s){1,8}$/u;
+const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|ï¸|â€|\s){1,8}$/u;
 
 function isEmojiOnly(content: string): boolean {
   const trimmed = (content || '').trim();
@@ -62,8 +62,8 @@ export default function MessageBubble({
   /* Flatten the corner facing the previous/next message in the run, so a
      stack reads as one shape rather than a column of identical pills. */
   const corners = isOwn
-    ? `${isFirst ? 'rounded-tr-lg' : 'rounded-tr-sm'} ${isLast ? 'rounded-br-lg' : 'rounded-br-sm'} rounded-l-lg`
-    : `${isFirst ? 'rounded-tl-lg' : 'rounded-tl-sm'} ${isLast ? 'rounded-bl-lg' : 'rounded-bl-sm'} rounded-r-lg`;
+    ? `${isFirst ? 'rounded-tr-md' : 'rounded-tr-sm'} ${isLast ? 'rounded-br-md' : 'rounded-br-sm'} rounded-l-md`
+    : `${isFirst ? 'rounded-tl-md' : 'rounded-tl-sm'} ${isLast ? 'rounded-bl-md' : 'rounded-bl-sm'} rounded-r-md`;
 
   const surface = isOwn
     ? 'bg-primary-soft border border-primary-line text-ink'
@@ -83,7 +83,7 @@ export default function MessageBubble({
           >
             {/*
               Fixed aspect ratio. Without one, an image that decodes late
-              shoves everything above it downward mid-read — the single
+              shoves everything above it downward mid-read â€” the single
               worst thing a transcript can do.
             */}
             <span className="block aspect-[4/5] w-56 max-w-full sm:w-64">

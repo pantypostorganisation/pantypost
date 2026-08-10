@@ -8,7 +8,7 @@ import { timeLabel } from './transcript';
 import type { UICustomRequest, UIMessage, MessagingRole } from './types';
 
 /* =====================================================================
- * A custom request, rendered as a negotiation card — not as a form
+ * A custom request, rendered as a negotiation card â€” not as a form
  * stuffed inside a speech bubble.
  *
  * The old version put label/value paragraphs inside the ordinary orange
@@ -17,12 +17,12 @@ import type { UICustomRequest, UIMessage, MessagingRole } from './types';
  *
  * WHO CAN ACT: driven by `pendingWith` from the server. The server also
  * enforces it (see customRequest.routes.js) and answers 409 if you try to
- * act out of turn, so this only decides what to *show* — it is not the
+ * act out of turn, so this only decides what to *show* â€” it is not the
  * security boundary. Buttons disable while a response is in flight, since
  * accepting twice used to be possible with a double tap.
  *
  * COUNTER-OFFERS happen inline: `editState` (owned by the page hooks)
- * turns the body of the card into a small form. One card, two modes —
+ * turns the body of the card into a small form. One card, two modes â€”
  * not a second component and not a modal.
  * ===================================================================== */
 
@@ -96,7 +96,7 @@ export default function CustomRequestCard({
   const settled = status === 'accepted' || status === 'rejected' || status === 'paid';
   const canPay = role === 'buyer' && status === 'accepted' && !request?.paid;
 
-  /* Buyers pay listed price × 1.10 (order.routes.js). Showing the base
+  /* Buyers pay listed price Ã— 1.10 (order.routes.js). Showing the base
      price on the button and the real charge only in the modal is the kind
      of surprise that loses a payment-processor review. */
   const buyerTotal = Math.round(price * 1.1 * 100) / 100;
@@ -116,7 +116,7 @@ export default function CustomRequestCard({
   return (
     <div className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'}`}>
       <div className="w-full max-w-[92%] sm:max-w-[26rem]">
-        <div className="overflow-hidden rounded-lg border border-line bg-surface-raised">
+        <div className="overflow-hidden rounded-md border border-line bg-surface-raised">
           <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
             <ClipboardList className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             <span className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
@@ -175,7 +175,7 @@ export default function CustomRequestCard({
                   type="button"
                   onClick={editState.onSubmit}
                   disabled={!editState.title.trim() || !(parseFloat(editState.price) > 0)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 transition-colors hover:bg-primary-hover active:bg-primary-press disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 transition-colors hover:bg-primary-hover active:bg-primary-press disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Check className="h-3.5 w-3.5 text-black" aria-hidden="true" />
                   <span className="text-sm font-semibold text-black">Send counter-offer</span>
@@ -183,7 +183,7 @@ export default function CustomRequestCard({
                 <button
                   type="button"
                   onClick={editState.onCancel}
-                  className="rounded-md border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover"
+                  className="rounded-sm border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover"
                 >
                   Cancel
                 </button>
@@ -230,7 +230,7 @@ export default function CustomRequestCard({
                     type="button"
                     disabled={busy}
                     onClick={() => act(onAccept)}
-                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 transition-colors hover:bg-primary-hover active:bg-primary-press disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 transition-colors hover:bg-primary-hover active:bg-primary-press disabled:opacity-50"
                   >
                     <Check className="h-3.5 w-3.5 text-black" aria-hidden="true" />
                     <span className="text-sm font-semibold text-black">Accept</span>
@@ -239,7 +239,7 @@ export default function CustomRequestCard({
                     type="button"
                     disabled={busy}
                     onClick={() => act(onDecline)}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-sm border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover disabled:opacity-50"
                   >
                     <X className="h-3.5 w-3.5" aria-hidden="true" />
                     Decline
@@ -249,7 +249,7 @@ export default function CustomRequestCard({
                       type="button"
                       disabled={busy}
                       onClick={() => request && onCounter(request)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-sm border border-line-strong px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover disabled:opacity-50"
                     >
                       <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                       Counter
@@ -270,7 +270,7 @@ export default function CustomRequestCard({
               <button
                 type="button"
                 onClick={() => request && onPay?.(request)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 transition-colors hover:bg-primary-hover active:bg-primary-press"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-sm bg-primary px-3 py-2 transition-colors hover:bg-primary-hover active:bg-primary-press"
               >
                 <CreditCard className="h-4 w-4 text-black" aria-hidden="true" />
                 <span className="text-sm font-semibold text-black">

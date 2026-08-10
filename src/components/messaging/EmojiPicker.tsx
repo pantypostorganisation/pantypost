@@ -13,7 +13,7 @@ import { Clock, X } from 'lucide-react';
  * Two bugs are fixed here:
  *
  *  1. The toggle button could not close it. The old close-on-outside-click
- *     listened for `mousedown`, and the toggle sat outside the picker â€” so
+ *     listened for `mousedown`, and the toggle sat outside the picker Ã¢â‚¬â€ so
  *     mousedown set open=false, then the button's own click flipped the
  *     now-false value back to true. It reopened every time. The button is
  *     passed in as `anchorRef` and excluded from the outside test.
@@ -24,10 +24,10 @@ import { Clock, X } from 'lucide-react';
  * ===================================================================== */
 
 const CATEGORIES: { label: string; emojis: string[] }[] = [
-  { label: 'Smileys', emojis: ['ðŸ˜€','ðŸ˜ƒ','ðŸ˜„','ðŸ˜','ðŸ˜†','ðŸ˜…','ðŸ¤£','ðŸ˜‚','ðŸ™‚','ðŸ™ƒ','ðŸ˜‰','ðŸ˜Š','ðŸ˜‡','ðŸ¥°','ðŸ˜','ðŸ¤©','ðŸ˜˜','ðŸ˜—','ðŸ˜š','ðŸ˜™','ðŸ¥²','ðŸ˜‹','ðŸ˜›','ðŸ˜œ','ðŸ¤ª','ðŸ˜','ðŸ¤—','ðŸ¤­','ðŸ¤«','ðŸ¤”'] },
-  { label: 'Gestures', emojis: ['ðŸ‘‹','ðŸ¤š','âœ‹','ðŸ–ï¸','ðŸ‘Œ','ðŸ¤Œ','ðŸ¤','âœŒï¸','ðŸ¤ž','ðŸ«°','ðŸ¤Ÿ','ðŸ¤˜','ðŸ‘ˆ','ðŸ‘‰','ðŸ‘†','ðŸ‘‡','ðŸ‘','ðŸ‘Ž','ðŸ‘Š','ðŸ¤›','ðŸ¤œ','ðŸ‘','ðŸ™Œ','ðŸ«¶','ðŸ™','ðŸ’…','ðŸ’ª'] },
-  { label: 'Hearts', emojis: ['â¤ï¸','ðŸ©·','ðŸ§¡','ðŸ’›','ðŸ’š','ðŸ’™','ðŸ©µ','ðŸ’œ','ðŸ–¤','ðŸ©¶','ðŸ¤','ðŸ¤Ž','ðŸ’”','â£ï¸','ðŸ’•','ðŸ’ž','ðŸ’“','ðŸ’—','ðŸ’–','ðŸ’˜','ðŸ’'] },
-  { label: 'Objects', emojis: ['ðŸ”¥','âœ¨','â­','ðŸŒŸ','ðŸ’«','ðŸ’¯','ðŸŽ','ðŸŽ€','ðŸŒ¹','ðŸŒ¸','ðŸ’','ðŸ‘—','ðŸ‘™','ðŸ§¦','ðŸ‘ ','ðŸ’‹','ðŸ‘','ðŸ’','ðŸ¥‚','ðŸ¾','ðŸ’¸','ðŸ’°'] },
+  { label: 'Smileys', emojis: ['Ã°Å¸Ëœâ‚¬','Ã°Å¸ËœÆ’','Ã°Å¸Ëœâ€ž','Ã°Å¸ËœÂ','Ã°Å¸Ëœâ€ ','Ã°Å¸Ëœâ€¦','Ã°Å¸Â¤Â£','Ã°Å¸Ëœâ€š','Ã°Å¸â„¢â€š','Ã°Å¸â„¢Æ’','Ã°Å¸Ëœâ€°','Ã°Å¸ËœÅ ','Ã°Å¸Ëœâ€¡','Ã°Å¸Â¥Â°','Ã°Å¸ËœÂ','Ã°Å¸Â¤Â©','Ã°Å¸ËœËœ','Ã°Å¸Ëœâ€”','Ã°Å¸ËœÅ¡','Ã°Å¸Ëœâ„¢','Ã°Å¸Â¥Â²','Ã°Å¸Ëœâ€¹','Ã°Å¸Ëœâ€º','Ã°Å¸ËœÅ“','Ã°Å¸Â¤Âª','Ã°Å¸ËœÂ','Ã°Å¸Â¤â€”','Ã°Å¸Â¤Â­','Ã°Å¸Â¤Â«','Ã°Å¸Â¤â€'] },
+  { label: 'Gestures', emojis: ['Ã°Å¸â€˜â€¹','Ã°Å¸Â¤Å¡','Ã¢Å“â€¹','Ã°Å¸â€“ÂÃ¯Â¸Â','Ã°Å¸â€˜Å’','Ã°Å¸Â¤Å’','Ã°Å¸Â¤Â','Ã¢Å“Å’Ã¯Â¸Â','Ã°Å¸Â¤Å¾','Ã°Å¸Â«Â°','Ã°Å¸Â¤Å¸','Ã°Å¸Â¤Ëœ','Ã°Å¸â€˜Ë†','Ã°Å¸â€˜â€°','Ã°Å¸â€˜â€ ','Ã°Å¸â€˜â€¡','Ã°Å¸â€˜Â','Ã°Å¸â€˜Å½','Ã°Å¸â€˜Å ','Ã°Å¸Â¤â€º','Ã°Å¸Â¤Å“','Ã°Å¸â€˜Â','Ã°Å¸â„¢Å’','Ã°Å¸Â«Â¶','Ã°Å¸â„¢Â','Ã°Å¸â€™â€¦','Ã°Å¸â€™Âª'] },
+  { label: 'Hearts', emojis: ['Ã¢ÂÂ¤Ã¯Â¸Â','Ã°Å¸Â©Â·','Ã°Å¸Â§Â¡','Ã°Å¸â€™â€º','Ã°Å¸â€™Å¡','Ã°Å¸â€™â„¢','Ã°Å¸Â©Âµ','Ã°Å¸â€™Å“','Ã°Å¸â€“Â¤','Ã°Å¸Â©Â¶','Ã°Å¸Â¤Â','Ã°Å¸Â¤Å½','Ã°Å¸â€™â€','Ã¢ÂÂ£Ã¯Â¸Â','Ã°Å¸â€™â€¢','Ã°Å¸â€™Å¾','Ã°Å¸â€™â€œ','Ã°Å¸â€™â€”','Ã°Å¸â€™â€“','Ã°Å¸â€™Ëœ','Ã°Å¸â€™Â'] },
+  { label: 'Objects', emojis: ['Ã°Å¸â€Â¥','Ã¢Å“Â¨','Ã¢Â­Â','Ã°Å¸Å’Å¸','Ã°Å¸â€™Â«','Ã°Å¸â€™Â¯','Ã°Å¸Å½Â','Ã°Å¸Å½â‚¬','Ã°Å¸Å’Â¹','Ã°Å¸Å’Â¸','Ã°Å¸â€™Â','Ã°Å¸â€˜â€”','Ã°Å¸â€˜â„¢','Ã°Å¸Â§Â¦','Ã°Å¸â€˜Â ','Ã°Å¸â€™â€¹','Ã°Å¸Ââ€˜','Ã°Å¸Ââ€™','Ã°Å¸Â¥â€š','Ã°Å¸ÂÂ¾','Ã°Å¸â€™Â¸','Ã°Å¸â€™Â°'] },
 ];
 
 interface EmojiPickerProps {
@@ -48,7 +48,7 @@ export default function EmojiPicker({ open, recent, onSelect, onClose, anchorRef
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node;
       if (panelRef.current?.contains(target)) return;
-      // Excluding the toggle is the whole fix â€” see the note above.
+      // Excluding the toggle is the whole fix Ã¢â‚¬â€ see the note above.
       if (anchorRef?.current?.contains(target)) return;
       onClose();
     };
@@ -77,7 +77,7 @@ export default function EmojiPicker({ open, recent, onSelect, onClose, anchorRef
       ref={panelRef}
       role="dialog"
       aria-label="Choose an emoji"
-      className="pop-in custom-scrollbar absolute bottom-full left-0 right-0 z-30 mb-2 max-h-64 overflow-y-auto rounded-lg border border-line-strong bg-surface-overlay p-3 shadow-overlay sm:right-auto sm:w-80"
+      className="pop-in custom-scrollbar absolute bottom-full left-0 right-0 z-30 mb-2 max-h-64 overflow-y-auto rounded-md border border-line-strong bg-surface-overlay p-3 shadow-overlay sm:right-auto sm:w-80"
     >
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-faint">Emoji</span>

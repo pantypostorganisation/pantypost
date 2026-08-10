@@ -20,7 +20,7 @@ import type { MessagingRole } from './types';
  *
  * Profile links use next/link. Every live header used
  * `window.location.href`, a full document reload that throws away the
- * websocket, all context state and the message cache — to go one route
+ * websocket, all context state and the message cache â€” to go one route
  * across.
  * ===================================================================== */
 
@@ -81,7 +81,7 @@ export default function ConversationHeader({
 
   /* Buyers browse seller shops. A seller-side "view buyer profile" entry
      is deliberately absent until the /buyers/[username] route is confirmed
-     to exist — a dead menu link is worse than no link. */
+     to exist â€” a dead menu link is worse than no link. */
   const profileHref = role === 'buyer' ? `/sellers/${encodeURIComponent(username)}` : null;
   const profileLabel = 'View shop';
 
@@ -90,19 +90,19 @@ export default function ConversationHeader({
       <button
         type="button"
         onClick={onBack}
-        className="-ml-1 rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink md:hidden"
+        className="-ml-1 rounded-sm p-1.5 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink md:hidden"
         aria-label="Back to conversations"
       >
         <ArrowLeft className="h-5 w-5" aria-hidden="true" />
       </button>
 
-      {/* §5 of the brief: clicking the recipient's avatar/name opens their
+      {/* Â§5 of the brief: clicking the recipient's avatar/name opens their
           profile. One link around both; text colours live on children so
           the unlayered `a {}` rule in globals.css cannot repaint them. */}
       {profileHref ? (
         <Link
           href={profileHref}
-          className="-mx-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-md px-1.5 py-0.5 no-underline transition-colors hover:bg-surface-hover"
+          className="-mx-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-sm px-1.5 py-0.5 no-underline transition-colors hover:bg-surface-hover"
           aria-label={`Open ${username}'s profile`}
         >
           <Avatar
@@ -147,7 +147,7 @@ export default function ConversationHeader({
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           aria-label="Conversation options"
-          className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
+          className="rounded-sm p-1.5 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
         >
           <MoreVertical className="h-5 w-5" aria-hidden="true" />
         </button>
@@ -156,7 +156,7 @@ export default function ConversationHeader({
           <div
             ref={menuRef}
             role="menu"
-            className="pop-in absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-md border border-line-strong bg-surface-overlay py-1 shadow-overlay"
+            className="pop-in absolute right-0 top-full z-30 mt-1 w-52 overflow-hidden rounded-sm border border-line-strong bg-surface-overlay py-1 shadow-overlay"
           >
             {profileHref && (
               <Link
