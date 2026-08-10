@@ -48,9 +48,24 @@ export default function AnimatedUserCounter({
   const subscriptionRef = useRef<(() => void) | undefined>(undefined);
 
   // Spring animation for smooth counting
-  const springValue = useSpring(0, { 
-    stiffness: 65,
-    damping: 14,
+  /* Tuned to finish alongside PaymentsProcessedCounter, which runs a
+     fixed 2000ms eased count-up. This one is a spring, so it has no
+     duration to set — the settle time comes from the physics.
+
+     A spring's period scales with 1/sqrt(stiffness), so quartering
+     stiffness (65 -> 16) roughly doubles the time to rest, taking it
+     from ~1s to ~2s. Damping drops with it (14 -> 7) to hold the same
+     damping ratio (~0.87, just under critical) — otherwise the lower
+     stiffness would read as sluggish and over-damped rather than
+     slower. restDelta 0.5 stops it settling on fractions the display
+     rounds away anyway.
+
+     If you retime the payments counter, retune here too: they sit side
+     by side and finishing apart is what looked wrong. */
+  const springValue = useSpring(0, {
+    stiffness: 16,
+    damping: 7,
+    restDelta: 0.5,
     mass: 1 
   });
 
