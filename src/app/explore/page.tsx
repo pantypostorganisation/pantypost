@@ -1058,12 +1058,23 @@ export default function ExplorePage() {
           )}
         </div>
 
-        {/* Feed type tabs.
-            Sticky so the filter controls stay reachable while scrolling a
-            long feed — the standard pattern for a discovery surface. The
-            backdrop blur keeps posts readable as they pass underneath.
-            top-16 clears the site header. */}
-        <div className="sticky top-16 z-20 -mx-4 mb-6 border-b border-line bg-surface/85 px-4 py-3 backdrop-blur">
+        {/* Feed type tabs — sticky to the TOP OF THE VIEWPORT.
+
+            top-0, not top-16. The site header (ClientLayout -> Header) is
+            `relative`, not fixed, so it scrolls away with the page. An
+            offset of 64px therefore pinned this bar 64px BELOW the top of
+            the window and left a gap with post content scrolling through
+            it.
+
+            With top-0 the bar sits naturally under the header at the top
+            of the page, then pins flush to the top of the window once you
+            scroll past it — posts pass underneath. Same behaviour on
+            every device; no JS, no scroll listener, so nothing to get out
+            of sync and nothing that can fight the header.
+
+            -mx-4/px-4 lets it span the full container width when pinned
+            rather than floating as an inset island. */}
+        <div className="sticky top-0 z-30 -mx-4 mb-6 border-b border-line bg-surface/95 px-4 py-3 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-surface/80">
         <div className="flex gap-1 p-1 bg-surface-raised rounded-lg border border-line">
           <button
             onClick={() => setFeedType('latest')}
