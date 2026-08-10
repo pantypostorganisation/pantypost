@@ -55,10 +55,9 @@ const passwordResetSchema = new mongoose.Schema({
 passwordResetSchema.index({ email: 1, verificationCode: 1 });
 passwordResetSchema.index({ token: 1 });
 
-// Generate a 6-digit verification code
+// Generate a 6-digit verification code (CSPRNG — Math.random is predictable)
 passwordResetSchema.statics.generateVerificationCode = function() {
-  // Generate a random 6-digit number
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 };
 
 // Static method to generate a reset token

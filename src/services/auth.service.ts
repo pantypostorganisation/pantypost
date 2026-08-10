@@ -338,9 +338,10 @@ export class AuthService {
   /**
    * Verify email with token or code - FIXED with proper token storage
    */
-  async verifyEmail(tokenOrCode: string, isCode: boolean = false): Promise<ApiResponse<EmailVerificationResponse>> {
+  async verifyEmail(tokenOrCode: string, isCode: boolean = false, email?: string): Promise<ApiResponse<EmailVerificationResponse>> {
     try {
-      const payload = isCode ? { code: tokenOrCode } : { token: tokenOrCode };
+      // Code verification is scoped to an account server-side, so the email is required with a code
+      const payload = isCode ? { code: tokenOrCode, email } : { token: tokenOrCode };
       
       console.log('[AuthService] Verifying email with:', isCode ? 'code' : 'token');
       

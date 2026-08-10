@@ -6,6 +6,8 @@
 
 > Verified findings (spot-checked against source): committed production secrets, password-reset brute force, order IDOR, hardcoded JWT fallback, dependency CVEs.
 
+> **Remediation status (2026-08-10):** Fixed — C3 (MATIC backdoor removed), C4 + H1 + M7 (attempt counting on reset/verify, code lookups scoped to account, `crypto.randomInt` codes), H2 (PII excluded from public user list, regex escaped), H3 (order query ownership check), H4 + M8 (message threads/notifications ownership checks), H5 (subscription price now server-authoritative), H7 (rate limiting on all auth endpoints), L1 (server-side hardcoded admin username lists removed; client-side list in `WalletContext.tsx`/`wallet.service.ts` still pending), L2 (all `'your-secret-key'` fallbacks removed), L4 (storage key allow-list validation), L8 (buyer wallet deposit history now authenticated via `apiCall`). C1 partially done: env files untracked from git — **secrets still need rotation and history purge**. Still open: C2, M1–M6, H6, H8, H9, L3, L5–L7.
+
 ---
 
 ## Summary

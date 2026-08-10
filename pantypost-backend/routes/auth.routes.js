@@ -11,8 +11,43 @@ const { sendEmail, emailTemplates } = require('../config/email');
 const webSocketService = require('../config/websocket');
 const publicWebSocketService = require('../config/publicWebsocket');
 
-// Get JWT secret from environment
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// Get JWT secret from environment (server.js fail-fasts on boot if missing)
+const JWT_SECRET = process.env.JWT_SECRET;
+
+// ===== Rate limiters for auth-sensitive endpoints =====
+const rateLimit = require('express-rate-limit');
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many login attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many signup attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const codeVerifyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many verification attempts. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const emailSendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5,
+  message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many requests. Please try again later.' } },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ===== Helpers: sanitization & validation =====
 
@@ -49,7 +84,7 @@ function signToken(user) {
 // ============= AUTH ROUTES =============
 
 // POST /api/auth/signup - FIXED: Only emit stats:users to prevent double-counting
-router.post('/signup', async (req, res) => {
+router.post('/signup', signupLimiter, async (req, res) => {
   try {
     const raw = req.body || {};
     const username = cleanUsername(raw.username);
@@ -397,10 +432,10 @@ router.post('/signup', async (req, res) => {
 });
 
 // POST /api/auth/verify-email - UPDATED WITH STATS BROADCAST
-router.post('/verify-email', async (req, res) => {
+router.post('/verify-email', codeVerifyLimiter, async (req, res) => {
   try {
-    const { token, code } = req.body;
-    
+    const { token, code, email } = req.body;
+
     if (!token && !code) {
       return res.status(400).json({
         success: false,
@@ -410,24 +445,45 @@ router.post('/verify-email', async (req, res) => {
         }
       });
     }
-    
+
     let verification;
-    
+
     if (token) {
       const hashedToken = EmailVerification.hashToken(token);
-      verification = await EmailVerification.findOne({ 
+      verification = await EmailVerification.findOne({
         token: hashedToken,
         verified: false
       });
     }
-    
+
     if (!verification && code) {
-      verification = await EmailVerification.findOne({
-        verificationCode: code.trim(),
+      // SECURITY: code verification must be scoped to an account — an unscoped
+      // 6-digit code lookup lets an attacker guess any pending code and get a
+      // session for whichever account owns it.
+      if (!isValidEmail(email)) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.MISSING_REQUIRED_FIELD,
+            message: 'Please provide the email address you are verifying.'
+          }
+        });
+      }
+
+      const pending = await EmailVerification.findOne({
+        email: cleanEmail(email),
         verified: false
       }).sort({ createdAt: -1 });
+
+      if (pending) {
+        // Count every guess and lock out after too many (isValid() checks attempts < 5)
+        const maxedOut = await pending.incrementAttempts();
+        if (!maxedOut && pending.verificationCode === String(code).trim()) {
+          verification = pending;
+        }
+      }
     }
-    
+
     if (!verification) {
       return res.status(400).json({
         success: false,
@@ -529,7 +585,7 @@ router.post('/verify-email', async (req, res) => {
 });
 
 // POST /api/auth/resend-verification
-router.post('/resend-verification', async (req, res) => {
+router.post('/resend-verification', emailSendLimiter, async (req, res) => {
   try {
     const { email, username } = req.body;
     
@@ -611,7 +667,7 @@ router.post('/resend-verification', async (req, res) => {
 });
 
 // POST /api/auth/login - UPDATED WITH IMPROVED ERROR MESSAGES
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const raw = req.body || {};
     const username = cleanUsername(raw.username);
@@ -1076,7 +1132,7 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
 });
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', emailSendLimiter, async (req, res) => {
   try {
     const { emailOrUsername } = req.body || {};
     
@@ -1154,7 +1210,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // POST /api/auth/verify-reset-code
-router.post('/verify-reset-code', async (req, res) => {
+router.post('/verify-reset-code', codeVerifyLimiter, async (req, res) => {
   try {
     const { email, code } = req.body || {};
     
@@ -1229,7 +1285,7 @@ router.post('/verify-reset-code', async (req, res) => {
 });
 
 // POST /api/auth/reset-password
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', codeVerifyLimiter, async (req, res) => {
   try {
     const { email, code, newPassword } = req.body || {};
     
@@ -1253,20 +1309,34 @@ router.post('/reset-password', async (req, res) => {
       });
     }
     
-    const resetRequest = await PasswordReset.findOne({ 
-      email: cleanEmail(email), 
-      verificationCode: code.trim() 
-    });
-    
-    if (!resetRequest || !resetRequest.isValid()) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { 
-          code: ERROR_CODES.AUTH_TOKEN_INVALID, 
-          message: 'Your verification code has expired or isn\'t valid. Please request a new one.' 
+    // SECURITY: count every attempt against the pending reset request so the
+    // 6-digit code can't be brute-forced by hammering this endpoint directly.
+    const pendingReset = await PasswordReset.findOne({
+      email: cleanEmail(email)
+    }).sort({ createdAt: -1 });
+
+    if (!pendingReset || !pendingReset.isValid()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_TOKEN_INVALID,
+          message: 'Your verification code has expired or isn\'t valid. Please request a new one.'
         }
       });
     }
+
+    const maxedOut = await pendingReset.incrementAttempts();
+    if (maxedOut || pendingReset.verificationCode !== String(code).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_TOKEN_INVALID,
+          message: 'Your verification code has expired or isn\'t valid. Please request a new one.'
+        }
+      });
+    }
+
+    const resetRequest = pendingReset;
     
     const user = await User.findOne({ email: resetRequest.email });
     if (!user) {

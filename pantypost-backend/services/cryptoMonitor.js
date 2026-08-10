@@ -39,9 +39,7 @@ function initializeWeb3() {
 // Contract addresses on Polygon
 const CONTRACTS = {
   USDT: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
-  USDC: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
-  // Add MATIC support for testing
-  MATIC: 'NATIVE' // Special case for MATIC
+  USDC: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
 };
 
 // Your wallet address from environment
@@ -230,57 +228,11 @@ async function checkTokenDeposit(tokenSymbol, contractAddress) {
   }
 }
 
-// Check for native MATIC deposits (for testing)
-async function checkMaticDeposits() {
-  try {
-    const latestBlock = Number(await web3.eth.getBlockNumber()); // Convert BigInt to Number
-    const fromBlock = Math.max(0, latestBlock - 20); // Keep consistent
-    
-    // Get transactions to our wallet
-    for (let i = fromBlock; i <= latestBlock; i++) {
-      const block = await web3.eth.getBlock(i, true);
-      if (!block || !block.transactions) continue;
-      
-      for (const tx of block.transactions) {
-        if (tx.to && tx.to.toLowerCase() === YOUR_WALLET) {
-          const txHash = tx.hash;
-          
-          // Skip if already processed
-          if (processedTxs.has(txHash)) continue;
-          
-          // Convert BigInt to number properly
-          const valueInWei = BigInt(tx.value);
-          const amount = Number(web3.utils.fromWei(valueInWei, 'ether'));
-          
-          if (amount > 0) {
-            console.log(`ðŸ“¥ Found MATIC deposit: ${amount} from ${tx.from} (tx: ${txHash})`);
-            processedTxs.add(txHash);
-            
-            // For testing purposes - you can remove this in production
-            // Auto-credit any MATIC deposits as if they were USDT
-            const deposits = await CryptoDeposit.find({
-              status: { $in: ['pending', 'confirming'] }
-            });
-            
-            for (const deposit of deposits) {
-              // For testing: match any pending deposit
-              if (!deposit.txHash) {
-                deposit.txHash = txHash;
-                await deposit.save();
-                
-                console.log(`ðŸ§ª TEST MODE: Treating MATIC deposit as ${deposit.cryptoCurrency}`);
-                await autoVerifyDeposit(deposit, deposit.expectedCryptoAmount, txHash, tx.from);
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error checking MATIC deposits:', error.message);
-  }
-}
+// SECURITY: the old test-only checkMaticDeposits() helper was removed.
+// It credited the full requested USD amount of *any* pending deposit when
+// *any* native MATIC transfer (even dust) hit the platform wallet — an
+// auto-credit backdoor. Native MATIC is not an accepted deposit currency;
+// only exact-token USDT/USDC matching below is allowed.
 
 // Main monitoring function
 async function monitorDeposits() {
@@ -295,10 +247,7 @@ async function monitorDeposits() {
     
     // Check USDC deposits
     await checkTokenDeposit('USDC', CONTRACTS.USDC);
-    
-    // Check MATIC deposits (for testing)
-    await checkMaticDeposits();
-    
+
   } catch (error) {
     console.error('Error in monitoring cycle:', error);
   }
@@ -327,7 +276,7 @@ function startMonitoring() {
   }
   
   console.log(`ðŸ“ Monitoring wallet: ${YOUR_WALLET}`);
-  console.log('ðŸ’° Supported tokens: USDT, USDC, MATIC (for testing)');
+  console.log('ðŸ’° Supported tokens: USDT, USDC');
   console.log('â±ï¸  Check interval: Every 30 seconds');
   console.log('ðŸ¤– Auto-verification: ENABLED');
   

@@ -1795,7 +1795,25 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const { role, limit = 50, page = 1, status, buyer, seller } = req.query;
     const username = req.user.username;
-    
+    const isAdmin = req.user.role === 'admin';
+
+    // SECURITY (IDOR): non-admins may only query their own orders — a
+    // client-supplied ?buyer=/?seller= must match the authenticated user.
+    if (!isAdmin) {
+      if (buyer && buyer !== username) {
+        return res.status(403).json({
+          success: false,
+          error: 'You can only view your own orders'
+        });
+      }
+      if (seller && seller !== username) {
+        return res.status(403).json({
+          success: false,
+          error: 'You can only view your own orders'
+        });
+      }
+    }
+
     const query = {};
     if (buyer) {
       query.buyer = buyer;

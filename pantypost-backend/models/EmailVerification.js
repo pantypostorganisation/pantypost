@@ -76,9 +76,9 @@ emailVerificationSchema.index({ token: 1 });
 emailVerificationSchema.index({ userId: 1 });
 emailVerificationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-// Generate a 6-digit verification code
+// Generate a 6-digit verification code (CSPRNG — Math.random is predictable)
 emailVerificationSchema.statics.generateVerificationCode = function() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  return crypto.randomInt(100000, 1000000).toString();
 };
 
 // Generate a secure token for URL

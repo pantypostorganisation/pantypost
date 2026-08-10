@@ -56,17 +56,16 @@ async function getUnifiedAdminWallet() {
 }
 
 // Helper function to check if user is admin
+// SECURITY: role comes from the server-signed JWT — never from hardcoded username lists
 function isAdminUser(user) {
   if (!user) return false;
-  return user.role === 'admin' || 
-         user.username === 'oakley' || 
-         user.username === 'gerome' ||
-         user.username === 'platform';
+  return user.role === 'admin';
 }
 
 // Helper to check if a username belongs to an admin
+// 'platform' is the internal system account backing the unified platform wallet
 async function isAdminUsername(username) {
-  if (username === 'platform' || username === 'oakley' || username === 'gerome') {
+  if (username === 'platform') {
     return true;
   }
   const user = await User.findOne({ username });

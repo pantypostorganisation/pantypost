@@ -3,8 +3,8 @@
 
 const jwt = require('jsonwebtoken');
 
-// Get the secret key from environment or use default
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// Get the secret key from environment (server.js fail-fasts on boot if missing)
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Authentication middleware
 const authMiddleware = (req, res, next) => {

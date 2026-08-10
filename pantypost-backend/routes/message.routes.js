@@ -42,7 +42,15 @@ router.get('/user-status/:username', authMiddleware, async (req, res) => {
 // Get all threads for a user - ENHANCED WITH PROFILE DATA
 router.get('/threads', authMiddleware, async (req, res) => {
   try {
-    const username = req.query.username || req.user.username;
+    // SECURITY (IDOR): only admins may read another user's threads
+    const requested = req.query.username;
+    if (requested && requested !== req.user.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only view your own message threads'
+      });
+    }
+    const username = requested || req.user.username;
     console.log('[THREADS] Getting threads for user:', username);
     
     // Get all messages where user is sender or receiver
@@ -646,8 +654,16 @@ router.post('/report', authMiddleware, async (req, res) => {
 // Get message notifications for current user
 router.get('/notifications', authMiddleware, async (req, res) => {
   try {
-    const username = req.query.username || req.user.username;
-    
+    // SECURITY (IDOR): only admins may read another user's notifications
+    const requested = req.query.username;
+    if (requested && requested !== req.user.username && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: 'You can only view your own notifications'
+      });
+    }
+    const username = requested || req.user.username;
+
     // Get unread message counts grouped by sender
     const unreadMessages = await Message.aggregate([
       {

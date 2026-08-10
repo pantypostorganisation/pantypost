@@ -123,32 +123,38 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Escape user input before embedding it in a $regex (prevents ReDoS / regex injection)
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // GET /api/users - List all users with filters
+// SECURITY: public endpoint — never include PII (email, phone, verification data) here.
 router.get('/', async (req, res) => {
   try {
     const { role, verified, query, page = 1, limit = 50 } = req.query;
-    
+
     // Build filter
     let filter = {};
     if (role) filter.role = role;
     if (verified !== undefined) filter.isVerified = verified === 'true';
-    
-    // Search query
+
+    // Search query (username/bio only — searching by email would leak account existence)
     if (query) {
+      const safeQuery = escapeRegex(String(query).slice(0, 100));
       filter.$or = [
-        { username: { $regex: query, $options: 'i' } },
-        { email: { $regex: query, $options: 'i' } },
-        { bio: { $regex: query, $options: 'i' } }
+        { username: { $regex: safeQuery, $options: 'i' } },
+        { bio: { $regex: safeQuery, $options: 'i' } }
       ];
     }
-    
+
     // Pagination
     const skip = (page - 1) * limit;
     const users = await User.find(filter)
-      .select('-password -verificationData -pendingProfilePic -pendingGalleryImages')
+      .select('-password -verificationData -pendingProfilePic -pendingGalleryImages -email -phoneNumber')
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(parseInt(limit));
+      .limit(Math.min(parseInt(limit) || 50, 100));
     
     const total = await User.countDocuments(filter);
     

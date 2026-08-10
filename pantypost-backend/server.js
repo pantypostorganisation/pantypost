@@ -257,6 +257,12 @@ app.use('/api/profilebuyer', profileBuyerRoutes);
 app.use('/api/referral', referralRoutes);
 
 // ---------------------- Storage API Routes ----------------------
+// SECURITY: storage keys are embedded in Mongo update paths (`storage.<key>`),
+// so reject dots/$ to prevent path traversal into other document fields.
+function isValidStorageKey(key) {
+  return typeof key === 'string' && key.length > 0 && key.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(key);
+}
+
 app.get('/api/storage/get/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params;
@@ -287,8 +293,8 @@ app.post('/api/storage/set', authMiddleware, async (req, res) => {
   try {
     const { key, value } = req.body;
     const userId = req.user.id;
-    
-    if (!key || typeof key !== 'string') {
+
+    if (!isValidStorageKey(key)) {
       return res.status(400).json({ success: false, error: 'Invalid key' });
     }
     
@@ -321,7 +327,11 @@ app.delete('/api/storage/delete/:key', authMiddleware, async (req, res) => {
   try {
     const { key } = req.params;
     const userId = req.user.id;
-    
+
+    if (!isValidStorageKey(key)) {
+      return res.status(400).json({ success: false, error: 'Invalid key' });
+    }
+
     const result = await User.findByIdAndUpdate(
       userId,
       { 

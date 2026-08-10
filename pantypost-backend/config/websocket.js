@@ -28,7 +28,7 @@ class WebSocketService {
           return next(new Error('Authentication required'));
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const user = await User.findById(decoded.id).select('-password');
         
         if (!user) {

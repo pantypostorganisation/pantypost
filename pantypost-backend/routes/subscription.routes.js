@@ -11,7 +11,7 @@ const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
 const { incrementPaymentStats } = require('../utils/paymentStats');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const JWT_SECRET = process.env.JWT_SECRET; // server.js fail-fasts on boot if missing
 
 /**
  * ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ router.get('/:username', authMiddleware, async (req, res) => {
 // POST /api/subscriptions/subscribe - Subscribe to a creator
 router.post('/subscribe', authMiddleware, async (req, res) => {
   try {
-    const { seller, price } = req.body;
+    const { seller } = req.body;
     const buyer = req.user.username;
 
     if (req.user.role !== 'buyer' && req.user.role !== 'admin') {
@@ -107,9 +107,13 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'Seller not found' });
     }
 
-    // Final price: prefer body.price, else seller’s stored subscriptionPrice
-    let finalPrice = Number(price ?? sellerUser.subscriptionPrice ?? 0);
-    if (!Number.isFinite(finalPrice)) finalPrice = 0;
+    // SECURITY: the price is server-authoritative — always the seller's stored
+    // subscriptionPrice. Never trust a client-supplied amount (a buyer could
+    // subscribe for $0.01 otherwise).
+    let finalPrice = Number(sellerUser.subscriptionPrice ?? 0);
+    if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+      return res.status(400).json({ success: false, error: 'This seller has not set a subscription price' });
+    }
     finalPrice = Math.max(0.01, Math.min(999.99, finalPrice));
 
     const existingSubscription = await Subscription.findOne({

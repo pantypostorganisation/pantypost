@@ -246,7 +246,7 @@ export default function VerifyEmailPendingPage() {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ code: verificationCode })
+        body: JSON.stringify({ code: verificationCode, email })
       });
       
       const data = await response.json();

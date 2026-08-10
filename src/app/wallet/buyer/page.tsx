@@ -12,6 +12,7 @@ import AllDepositsSection from '@/components/wallet/buyer/AllDepositsSection';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
+import { apiCall } from '@/services/api.config';
 
 function BuyerWalletContent() {
   // old hook that powers the manual add-funds UI
@@ -52,19 +53,14 @@ function BuyerWalletContent() {
     }
   }, [user?.username, isInitialized, reloadData]);
 
-  // Load deposit history - FIXED to use correct endpoint
+  // Load deposit history via the API client so the request is authenticated
+  // (the old code read a nonexistent localStorage 'token' key and always sent
+  // the request unauthenticated)
   const loadDepositHistory = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.pantypost.com/api';
-      
-      const res = await fetch(`${API_URL}/wallet/deposits/history`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      
-      const data = await res.json();
-      if (data.success) {
-        setDepositHistory(data.data || []);
+      const response = await apiCall<unknown[]>('/wallet/deposits/history');
+      if (response.success) {
+        setDepositHistory(response.data || []);
       }
     } catch (err) {
       console.error('Failed to load deposit history:', err);

@@ -79,10 +79,9 @@ async function generateQRCode(data) {
 }
 
 // Helper to check if user is admin
+// SECURITY: role comes from the server-signed JWT — never from hardcoded username lists
 function isAdminUser(user) {
-  return user && (user.role === 'admin' || 
-         user.username === 'oakley' || 
-         user.username === 'gerome');
+  return user && user.role === 'admin';
 }
 
 // POST /api/crypto/create-deposit - Create a new crypto deposit request with UNIQUE AMOUNT
