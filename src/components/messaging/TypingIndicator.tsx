@@ -5,17 +5,17 @@ import { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
 
 /* =====================================================================
- * "{name} is typing" — a small incoming-style bubble in the same left
+ * "{name} is typing" â€” a small incoming-style bubble in the same left
  * gutter as incoming message groups, with the same-size avatar, so the
  * transcript never shifts sideways when the indicator swaps for the real
  * message.
  *
- * Per the motion brief (§12): it fades/slides in, and on stop it plays a
+ * Per the motion brief (Â§12): it fades/slides in, and on stop it plays a
  * slightly faster exit before unmounting rather than vanishing between
  * frames. The keyframes live in globals.css and are neutralised wholesale
  * by the prefers-reduced-motion block there.
  *
- * The previous version carried its own avatar renderer with a purple→pink
+ * The previous version carried its own avatar renderer with a purpleâ†’pink
  * gradient fallback, hard-coded hex surfaces and inline style objects for
  * every dot. Props are a superset of the old component's, so the legacy
  * ConversationViews keep compiling until they are deleted.
@@ -74,12 +74,16 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
       <div>
         <p className="mb-1 text-xs text-ink-faint">{username} is typing</p>
         <div
-          className="inline-flex items-center gap-1 rounded-tl-sm rounded-tr-lg rounded-b-lg border border-line bg-surface-raised px-3 py-2.5"
+          className="inline-flex items-center gap-1 rounded-tl-sm rounded-tr-md rounded-b-md border border-line bg-surface-raised px-3 py-2.5"
           aria-hidden="true"
         >
+          {/* Stagger lives in the scoped CSS below, not in utilities:
+              the `.typing-dot` rule sets the `animation` SHORTHAND, which
+              resets animation-delay to 0 and clobbered the per-dot
+              Tailwind delays — so all three bounced in unison. */}
           <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary" />
-          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary [animation-delay:200ms]" />
-          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary [animation-delay:400ms]" />
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary" />
+          <span className="typing-dot h-1.5 w-1.5 rounded-full bg-primary" />
         </div>
       </div>
 
@@ -88,6 +92,17 @@ export default function TypingIndicator({ username, isTyping, userPic }: TypingI
       <style jsx>{`
         .typing-dot {
           animation: typingBounce 1.4s infinite ease-in-out;
+        }
+        /* Left to right. Declared AFTER the shorthand above so the delay
+           is not reset by it. */
+        .typing-dot:nth-child(1) {
+          animation-delay: 0ms;
+        }
+        .typing-dot:nth-child(2) {
+          animation-delay: 180ms;
+        }
+        .typing-dot:nth-child(3) {
+          animation-delay: 360ms;
         }
         @keyframes typingBounce {
           0%,

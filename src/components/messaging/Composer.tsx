@@ -7,7 +7,7 @@ import EmojiPicker from './EmojiPicker';
 
 /* =====================================================================
  * One composer, replacing four (two of which were dead code, and the two
- * live ones ~95% identical — down to a Discord-blurple #4752e2 focus ring
+ * live ones ~95% identical â€” down to a Discord-blurple #4752e2 focus ring
  * that appears nowhere else in the product).
  *
  * Fixes carried over from the review:
@@ -23,7 +23,7 @@ import EmojiPicker from './EmojiPicker';
  *
  * EMOJI has two modes. By default the composer inserts at the caret and
  * reports usage via `onEmojiUsed`. If `onEmojiSelect` is provided instead,
- * selection is delegated wholly to the caller — used by the pages, whose
+ * selection is delegated wholly to the caller â€” used by the pages, whose
  * hooks both append the emoji AND persist the recents list in one
  * callback. Wiring that hook to `onEmojiUsed` as well would insert every
  * emoji twice, which is exactly the sort of bug this file exists to end.
@@ -155,7 +155,7 @@ export default function Composer({
         />
 
         {imagePreview && (
-          <div className="pop-in mb-2 inline-flex items-center gap-2 rounded-md border border-line bg-surface-raised p-2">
+          <div className="pop-in mb-2 inline-flex items-center gap-2 rounded-sm border border-line bg-surface-raised p-2">
             <img src={imagePreview} alt="" className="h-14 w-14 rounded-sm object-cover" />
             <button
               type="button"
@@ -174,7 +174,7 @@ export default function Composer({
           </p>
         )}
 
-        <div className="flex items-end gap-2 rounded-lg border border-line bg-surface-overlay px-2 py-1.5 transition-colors focus-within:border-primary">
+        <div className="flex items-end gap-2 rounded-md border border-line bg-surface-overlay px-2 py-1.5 transition-colors focus-within:border-primary">
           {onImageSelected && (
             <>
               <input
@@ -192,7 +192,7 @@ export default function Composer({
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={disabled || isUploading}
-                className="rounded-md p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50"
+                className="rounded-sm p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50"
                 aria-label="Attach an image"
               >
                 {isUploading ? (
@@ -228,7 +228,7 @@ export default function Composer({
             disabled={disabled}
             aria-expanded={emojiOpen}
             aria-label="Insert emoji"
-            className="rounded-md p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50"
+            className="rounded-sm p-2 text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink disabled:opacity-50"
           >
             <Smile className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -241,9 +241,9 @@ export default function Composer({
             className="rounded-full bg-primary p-2 transition-colors hover:bg-primary-hover active:bg-primary-press disabled:cursor-not-allowed disabled:opacity-40"
           >
             {/* Label colour lives on a child: globals.css declares
-                `a { color: … }` unlayered, and an unlayered rule beats a
+                `a { color: â€¦ }` unlayered, and an unlayered rule beats a
                 Tailwind utility. Icons here are inside a <button>, which
-                nothing unlayered targets — but keeping the pattern
+                nothing unlayered targets â€” but keeping the pattern
                 consistent avoids the trap when this becomes a link. */}
             <ArrowUp className="h-4 w-4 text-black" aria-hidden="true" />
           </button>

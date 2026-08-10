@@ -8,7 +8,7 @@ import { X } from 'lucide-react';
  * Full-size view of an image from a conversation.
  *
  * Restyled onto the tokens: the close control was a red-500 circle
- * hanging off the corner — danger colour for a neutral action, on a
+ * hanging off the corner â€” danger colour for a neutral action, on a
  * surface colour from Tailwind's default palette rather than ours. It is
  * now a quiet overlay button, and the backdrop matches every other modal.
  *
@@ -61,11 +61,11 @@ export default function ImagePreviewModal({ imageUrl, isOpen, onClose }: ImagePr
           <img
             src={imageUrl}
             alt="Full size preview"
-            className="max-h-[90vh] max-w-[90vw] rounded-lg border border-line-strong object-contain shadow-overlay"
+            className="max-h-[90vh] max-w-[90vw] rounded-md border border-line-strong object-contain shadow-overlay"
             draggable={false}
           />
         ) : (
-          <div className="rounded-lg border border-line bg-surface-raised p-8 text-ink-muted">
+          <div className="rounded-md border border-line bg-surface-raised p-8 text-ink-muted">
             Image unavailable
           </div>
         )}
