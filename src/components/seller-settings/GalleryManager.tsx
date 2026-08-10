@@ -10,7 +10,11 @@ const MAX_GALLERY_IMAGES = 20;
 
 const PropsSchema = z.object({
   galleryImages: z.array(z.string()).default([]),
-  selectedFiles: z.array(z.instanceof(File)).default([]),
+  // Guarded: `File` is not a Node.js global before v20, and this module-scope
+  // schema is evaluated during SSR/prerender (only ever parsed in the browser)
+  selectedFiles: z.array(
+    typeof File !== 'undefined' ? z.instanceof(File) : (z.any() as z.ZodType<File>)
+  ).default([]),
   isUploading: z.boolean().default(false),
   uploadProgress: z.number().min(0).max(100).default(0),
   multipleFileInputRef: z.custom<RefObject<HTMLInputElement | null>>(), // Fixed: Allow null

@@ -447,10 +447,21 @@ export const adminSchemas = {
 
 /**
  * File upload schemas
+ *
+ * NOTE: `File` is not a global in Node.js < 20, and this module is imported
+ * during SSR/prerender (via contexts in the root layout), so referencing
+ * `File` unguarded at module scope crashes `next build` on older Node
+ * ("ReferenceError: File is not defined"). These schemas are only ever
+ * parsed in the browser, where `File` always exists.
  */
+const fileInstance = (message: string): z.ZodType<File> =>
+  typeof File !== 'undefined'
+    ? z.instanceof(File, { message })
+    : (z.any() as z.ZodType<File>);
+
 export const fileSchemas = {
   imageUpload: z.object({
-    file: z.instanceof(File, { message: 'Please select a file' })
+    file: fileInstance('Please select a file')
       .refine((file) => file.size <= 5 * 1024 * 1024, 'File size must be less than 5MB')
       .refine(
         (file) => ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type),
@@ -459,7 +470,7 @@ export const fileSchemas = {
   }),
 
   documentUpload: z.object({
-    file: z.instanceof(File, { message: 'Please select a file' })
+    file: fileInstance('Please select a file')
       .refine((file) => file.size <= 10 * 1024 * 1024, 'File size must be less than 10MB')
       .refine(
         (file) => ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'].includes(file.type),
