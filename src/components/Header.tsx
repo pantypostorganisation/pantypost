@@ -126,7 +126,7 @@ export default function Header(): React.ReactElement | null {
 
   /* Drives the body scroll-lock effect ONLY. Render must never branch
      on this: it is `false` during SSR and on every fresh mount, so any
-     `isMobile ? … : …` in JSX paints one desktop frame first — which is
+     `isMobile ? â€¦ : â€¦` in JSX paints one desktop frame first â€” which is
      exactly the flash of desktop nav buttons iPhones showed when leaving
      a chat (ClientLayout remounts this header when the thread closes).
      Mobile/desktop visibility in the markup is pure CSS (md:hidden /
@@ -315,20 +315,20 @@ export default function Header(): React.ReactElement | null {
     const addNotificationEmojis = (message: string): string => {
       const sanitizedMessage = sanitizeStrict(message);
       
-      if (sanitizedMessage.match(/^[ðŸŽ‰ðŸ’¸ðŸ’°ðŸ›’ðŸ”¨âš ï¸â„¹ï¸ðŸ›‘ðŸ†ðŸ›ï¸]/)) {
+      if (sanitizedMessage.match(/^[Ã°Å¸Å½â€°Ã°Å¸â€™Â¸Ã°Å¸â€™Â°Ã°Å¸â€ºâ€™Ã°Å¸â€Â¨Ã¢Å¡Â Ã¯Â¸ÂÃ¢â€žÂ¹Ã¯Â¸ÂÃ°Å¸â€ºâ€˜Ã°Å¸Ââ€ Ã°Å¸â€ºÂÃ¯Â¸Â]/)) {
         return sanitizedMessage;
       }
       
-      if (sanitizedMessage.includes('subscribed to you')) return `ðŸŽ‰ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `ðŸ’¸ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('New custom order')) return `ðŸ›’ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('New bid')) return `ðŸ’° ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('created a new auction')) return `ðŸ”¨ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('cancelled your auction')) return `ðŸ›‘ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Reserve price not met')) return `ðŸ”¨ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('No bids were placed')) return `ðŸ”¨ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `âš ï¸ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Original highest bidder')) return `â„¹ï¸ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('subscribed to you')) return `Ã°Å¸Å½â€° ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `Ã°Å¸â€™Â¸ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('New custom order')) return `Ã°Å¸â€ºâ€™ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('New bid')) return `Ã°Å¸â€™Â° ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('created a new auction')) return `Ã°Å¸â€Â¨ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('cancelled your auction')) return `Ã°Å¸â€ºâ€˜ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Reserve price not met')) return `Ã°Å¸â€Â¨ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('No bids were placed')) return `Ã°Å¸â€Â¨ ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `Ã¢Å¡Â Ã¯Â¸Â ${sanitizedMessage}`;
+      if (sanitizedMessage.includes('Original highest bidder')) return `Ã¢â€žÂ¹Ã¯Â¸Â ${sanitizedMessage}`;
       
       return sanitizedMessage;
     };
@@ -338,7 +338,7 @@ export default function Header(): React.ReactElement | null {
       const deduped: UINotification[] = [];
 
       for (const n of notifications) {
-        const cleanMessage = (n.message || '').replace(/^[ðŸŽ‰ðŸ’¸ðŸ’°ðŸ›’ðŸ”¨âš ï¸â„¹ï¸ðŸ›‘ðŸ†ðŸ›ï¸]\s*/, '').trim();
+        const cleanMessage = (n.message || '').replace(/^[Ã°Å¸Å½â€°Ã°Å¸â€™Â¸Ã°Å¸â€™Â°Ã°Å¸â€ºâ€™Ã°Å¸â€Â¨Ã¢Å¡Â Ã¯Â¸ÂÃ¢â€žÂ¹Ã¯Â¸ÂÃ°Å¸â€ºâ€˜Ã°Å¸Ââ€ Ã°Å¸â€ºÂÃ¯Â¸Â]\s*/, '').trim();
         const timestamp = new Date(n.timestamp || Date.now());
         const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000));
         const key = `${cleanMessage}_${timeWindow}`;
@@ -467,7 +467,7 @@ export default function Header(): React.ReactElement | null {
         /* Both flags have to be falsy.
            
            The API returns `isRead`; only the websocket path and the local
-           mark-as-read set `read`. Checking `read` alone â€” as this did â€”
+           mark-as-read set `read`. Checking `read` alone Ã¢â‚¬â€ as this did Ã¢â‚¬â€
            counts every already-read message the server told us about,
            because `read` is simply undefined on anything that arrived via
            a normal fetch. MessageContext's own per-thread count already
@@ -522,7 +522,7 @@ export default function Header(): React.ReactElement | null {
   }, [isAdminUser]);
 
   // Pending-moderation badge. Exists because the queue is invisible
-  // unless an admin thinks to open /admin/approval â€” content sat
+  // unless an admin thinks to open /admin/approval Ã¢â‚¬â€ content sat
   // unreviewed for days purely for lack of a signal. Polling plus a
   // focus refresh is deliberately boring: a websocket event would be
   // fancier, but a 60s-stale count on a moderation badge is fine and
@@ -660,7 +660,7 @@ export default function Header(): React.ReactElement | null {
 
   const MobileNotificationsPanel = () => (
     <div className="absolute inset-0 bg-gradient-to-b from-[#1a1a1a] to-[#111] z-[110] flex flex-col">
-      <div className="flex items-center gap-2 p-4 border-b border-[#ff950e]/30">
+      <div className="flex items-center gap-2 p-4 border-b border-primary-line">
         <button
           onClick={() => setShowMobileNotifications(false)}
           className="text-[#ff950e] hover:text-white transition-colors"
@@ -673,7 +673,7 @@ export default function Header(): React.ReactElement | null {
           <button
             onClick={clearAllNotifications}
             disabled={clearingNotifications}
-            className="text-xs text-white hover:text-[#ff950e] px-2 py-1 rounded bg-black/20 hover:bg-[#ff950e]/10 border border-white/20 hover:border-[#ff950e]/30"
+            className="text-xs text-white hover:text-[#ff950e] px-2 py-1 rounded bg-black/20 hover:bg-[#ff950e]/10 border border-white/20 hover:border-primary-line"
           >
             Clear All
           </button>
@@ -707,14 +707,14 @@ export default function Header(): React.ReactElement | null {
             <div className="p-6 text-center text-gray-400">No active notifications</div>
           ) : (
             processedNotifications.active.map((notification, i) => (
-              <div key={notification.id || i} className="p-4 border-b border-gray-800 hover:bg-[#222]/50 transition-colors">
+              <div key={notification.id || i} className="p-4 border-b border-gray-800 hover:bg-surface-hover transition-colors">
                 <SecureMessageDisplay content={notification.message} className="text-gray-200 text-sm leading-relaxed" allowBasicFormatting={false} />
                 {notification.timestamp && (
                   <div className="text-xs text-gray-500 mt-2">{new Date(notification.timestamp).toLocaleString()}</div>
                 )}
                 <button
                   onClick={() => handleClearOne(notification)}
-                  className="text-xs text-[#ff950e] hover:text-[#ff6b00] font-bold mt-2"
+                  className="text-xs text-[#ff950e] hover:text-primary-hover font-bold mt-2"
                 >
                   Clear
                 </button>
@@ -725,7 +725,7 @@ export default function Header(): React.ReactElement | null {
           <div className="p-6 text-center text-gray-400">No cleared notifications</div>
         ) : (
           processedNotifications.cleared.map((notification, i) => (
-            <div key={notification.id || `cleared-${i}`} className="p-4 border-b border-gray-800 hover:bg-[#222]/50 transition-colors">
+            <div key={notification.id || `cleared-${i}`} className="p-4 border-b border-gray-800 hover:bg-surface-hover transition-colors">
               <SecureMessageDisplay content={notification.message} className="text-gray-400 text-sm leading-relaxed" allowBasicFormatting={false} />
               {notification.timestamp && (
                 <div className="text-xs text-gray-600 mt-2">{new Date(notification.timestamp).toLocaleString()}</div>
@@ -766,7 +766,7 @@ export default function Header(): React.ReactElement | null {
       {/* Increased z-index for menu content */}
       <div
         ref={mobileMenuRef}
-        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-[#ff950e]/30 z-[100] lg:hidden transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-primary-line z-[100] lg:hidden transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
         style={{ touchAction: 'pan-y' }}
@@ -775,7 +775,7 @@ export default function Header(): React.ReactElement | null {
           <MobileNotificationsPanel />
         ) : (
           <>
-            <div className="relative p-6 border-b border-[#ff950e]/30">
+            <div className="relative p-6 border-b border-primary-line">
               <button
                 onClick={handleMobileMenuClose}
                 className="absolute top-4 right-4 text-[#ff950e] hover:text-white transition-colors p-2 z-10"
@@ -802,13 +802,13 @@ export default function Header(): React.ReactElement | null {
                 <Link
                   href={profileHref}
                   onClick={handleMobileMenuClose}
-                  className="flex items-center gap-3 p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20 transition-colors duration-200 hover:bg-[#ff950e]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50"
+                  className="flex items-center gap-3 p-4 bg-[#ff950e]/5 border-b border-[#ff950e]/20 transition-colors duration-200 hover:bg-[#ff950e]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {showAvatarImage ? (
                     <SecureImage
                       src={profileAvatarSrc!}
                       alt={avatarAltText}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
+                      className="w-10 h-10 rounded-full object-cover border-2 border-primary-line shadow-sm flex-shrink-0"
                     />
                   ) : (
                     <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
@@ -831,7 +831,7 @@ export default function Header(): React.ReactElement | null {
                       <SecureImage
                         src={profileAvatarSrc!}
                         alt={avatarAltText}
-                        className="w-10 h-10 rounded-full object-cover border-2 border-[#ff950e]/40 shadow-sm flex-shrink-0"
+                        className="w-10 h-10 rounded-full object-cover border-2 border-primary-line shadow-sm flex-shrink-0"
                       />
                     ) : (
                       <div className="flex items-center justify-center w-10 h-10 bg-[#ff950e]/20 rounded-full">
@@ -1018,7 +1018,7 @@ export default function Header(): React.ReactElement | null {
         </Link>
 
         {canUseSearch && (
-          <div className="hidden md:flex flex-1 px-4 max-w-md">
+          <div className="hidden md:flex flex-1 px-2 max-w-[220px] xl:px-4 xl:max-w-md">
             <HeaderSearch 
               variant="desktop" 
               canUseSearch={canUseSearch} 
@@ -1035,21 +1035,21 @@ export default function Header(): React.ReactElement | null {
             <Menu className="w-6 h-6" />
           </button>
 
-          <nav className="hidden md:flex items-center gap-x-2">
+          <nav className="hidden md:flex items-center gap-x-1 xl:gap-x-2">
           <Link
             href="/browse"
-            className="group flex items-center gap-1.5 whitespace-nowrap bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+            className="group flex items-center gap-1.5 whitespace-nowrap bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs"
           >
-            <ShoppingBag className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-[#ff950e]" />
-            <span className="font-medium">Browse</span>
+            <ShoppingBag className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-primary" />
+            <span className="sr-only xl:not-sr-only xl:inline">Browse</span>
           </Link>
 
           <Link
             href="/explore"
-            className="group flex items-center gap-1.5 whitespace-nowrap bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs"
+            className="group flex items-center gap-1.5 whitespace-nowrap bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs"
           >
-            <Compass className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-[#ff950e]" />
-            <span className="font-medium">Explore</span>
+            <Compass className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-primary" />
+            <span className="sr-only xl:not-sr-only xl:inline">Explore</span>
           </Link>
 
           {isAdminUser && (
@@ -1057,12 +1057,12 @@ export default function Header(): React.ReactElement | null {
               <div className="relative flex items-center">
                 <Link
                   href="/admin/reports"
-                  className="group flex items-center gap-1.5 bg-gradient-to-r from-red-900/20 to-orange-900/20 hover:from-red-900/30 hover:to-orange-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-red-500/30 hover:border-red-500/50 shadow-lg text-xs"
+                  className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
                 >
                   <Shield className="w-3.5 h-3.5 text-red-400" />
-                  <span className="font-medium">Reports</span>
+                  <span className="sr-only xl:not-sr-only xl:inline">Reports</span>
                   {reportCount > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-gradient-to-r from-red-600 to-red-500 text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-pulse">
+                    <span className="absolute -top-2 -right-2 bg-surface-raised text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-pulse">
                       {reportCount}
                     </span>
                   )}
@@ -1073,29 +1073,29 @@ export default function Header(): React.ReactElement | null {
                   sits beside Reports rather than being buried in a submenu. */}
               <Link
                 href="/admin/complaints"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-900/20 to-red-900/20 hover:from-amber-900/30 hover:to-red-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-amber-500/30 hover:border-amber-500/50 shadow-lg text-xs"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
               >
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                <span>Complaints</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Complaints</span>
               </Link>
 
               {/* First-party site analytics. */}
               <Link
                 href="/admin/traffic"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-sky-900/20 to-blue-900/20 hover:from-sky-900/30 hover:to-blue-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-sky-500/30 hover:border-sky-500/50 shadow-lg text-xs"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
               >
                 <BarChart3 className="w-3.5 h-3.5 text-sky-400" />
-                <span>Traffic</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Traffic</span>
               </Link>
 
               <Link
                 href="/admin/approval"
-                className="relative flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-orange-900/20 hover:from-purple-900/30 hover:to-orange-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
+                className="relative flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
               >
                 <ClipboardCheck className="w-3.5 h-3.5 text-purple-300" />
-                <span>Approval</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Approval</span>
                 {approvalCount > 0 && (
-                  /* Black on the accent â€” white here is 2.20:1 and fails. */
+                  /* Black on the accent Ã¢â‚¬â€ white here is 2.20:1 and fails. */
                   <span className="absolute -top-2 -right-2 min-w-[18px] rounded-full border-2 border-white bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold text-black">
                     {approvalCount > 99 ? '99+' : approvalCount}
                   </span>
@@ -1104,18 +1104,18 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/admin/bans"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-red-900/20 hover:from-purple-900/30 hover:to-red-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs"
               >
                 <Ban className="w-3.5 h-3.5 text-purple-400" />
-                <span>Bans</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Bans</span>
               </Link>
 
               <Link
                 href="/admin/messages"
-                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs relative"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line-strong text-xs relative"
               >
                 <MessageSquare className="w-3.5 h-3.5 text-blue-400" />
-                <span>Messages</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Messages</span>
                 {unreadCount > 0 && (
                   <span className="absolute -top-2 -right-2 bg-primary text-black text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg">
                     {unreadCount}
@@ -1125,31 +1125,31 @@ export default function Header(): React.ReactElement | null {
 
               <Link
                 href="/admin/verification-requests"
-                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line-strong text-xs"
               >
                 <ClipboardCheck className="w-3.5 h-3.5 text-yellow-400" />
-                <span>Verify</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Verify</span>
               </Link>
 
               <Link
                 href="/admin/wallet-management"
-                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line-strong text-xs"
               >
                 <DollarSign className="w-3.5 h-3.5 text-green-400" />
-                <span>Wallets</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Wallets</span>
               </Link>
 
               <Link
                 href="/admin/withdrawals"
-                className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#444] text-xs"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line-strong text-xs"
               >
                 <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Withdrawals</span>
+                <span className="sr-only xl:not-sr-only xl:inline">Withdrawals</span>
               </Link>
 
               <Link
                 href="/wallet/admin"
-                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/20 to-pink-900/20 hover:from-purple-900/30 hover:to-pink-900/30 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/30 hover:border-purple-500/50 text-xs"
+                className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-white px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1165,43 +1165,43 @@ export default function Header(): React.ReactElement | null {
 
           {role === 'seller' && !isAdminUser && (
             <>
-              <Link href="/sellers/my-listings" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>My Listings</span>
+              <Link href="/sellers/my-listings" className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs">
+                <Package className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                <span className="sr-only xl:not-sr-only xl:inline">My Listings</span>
               </Link>
 
               <Link
                 href="/sellers/verify"
-                className="group flex items-center gap-1.5 bg-gradient-to-r from-green-900/20 to-emerald-900/20 hover:from-green-900/30 hover:to-emerald-900/30 text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-green-500/30 hover:border-green-500/50 shadow-lg text-xs"
+                className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
               >
                 <img
                   src="/verification_badge.png"
                   alt="Verification badge"
                   className="w-3.5 h-3.5 flex-shrink-0 group-hover:scale-110 transition-transform"
                 />
-                <span className="font-medium">{isSellerVerified ? 'Verified!' : 'Get Verified'}</span>
+                <span className="sr-only xl:not-sr-only xl:inline">{isSellerVerified ? 'Verified!' : 'Get Verified'}</span>
               </Link>
 
               <Link href="/sellers/messages" className="relative group">
-                <div className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                  <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                  <span>Messages</span>
+                <div className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs">
+                  <MessageSquare className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                  <span className="sr-only xl:not-sr-only xl:inline">Messages</span>
                 </div>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
+                  <span className="absolute -top-2 -right-2 bg-surface-raised text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                     {unreadCount}
                   </span>
                 )}
               </Link>
 
-              <Link href="/sellers/subscribers" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                <Users className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>Analytics</span>
+              <Link href="/sellers/subscribers" className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs">
+                <Users className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                <span className="sr-only xl:not-sr-only xl:inline">Analytics</span>
               </Link>
 
               <Link
                 href="/wallet/seller"
-                className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-purple-900/30 to-purple-700/30 hover:from-purple-800/40 hover:to-purple-600/40 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
+                className="group flex items-center gap-1.5 whitespace-nowrap bg-surface-raised hover:bg-surface-hover text-white px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1213,11 +1213,11 @@ export default function Header(): React.ReactElement | null {
                 <span className="font-bold text-purple-100">${Math.max(sellerBalance, 0).toFixed(2)}</span>
               </Link>
 
-              <Link href="/sellers/orders-to-fulfil" className="relative group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>Orders to Fulfil</span>
+              <Link href="/sellers/orders-to-fulfil" className="relative group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs">
+                <Package className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                <span className="sr-only xl:not-sr-only xl:inline">Orders to Fulfil</span>
                 {pendingOrdersCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-pulse">
+                  <span className="absolute -top-2 -right-2 bg-surface-raised text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-pulse">
                     {pendingOrdersCount}
                   </span>
                 )}
@@ -1227,28 +1227,28 @@ export default function Header(): React.ReactElement | null {
               <div className="relative flex items-center" ref={notifRef}>
                 <button
                   onClick={() => setShowNotifDropdown((prev) => !prev)}
-                  className="relative flex items-center justify-center w-10 h-10 bg-[#ff950e] border border-white rounded-full shadow hover:scale-105 transition hover:bg-[#ff6b00]"
+                  className="relative flex items-center justify-center w-10 h-10 bg-primary border border-white rounded-full shadow hover:scale-105 transition hover:bg-primary-hover"
                   aria-label="Notifications"
                   style={{ touchAction: 'manipulation' }}
                 >
                   <Bell className="w-6 h-6 text-black" />
                   {processedNotifications.active.length > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-white text-[#ff950e] text-[11px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-[#ff950e] font-bold shadow-lg">
+                    <span className="absolute -top-1.5 -right-1.5 bg-white text-primary text-[11px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-primary font-bold shadow-lg">
                       {processedNotifications.active.length}
                     </span>
                   )}
                 </button>
 
                 {showNotifDropdown && (
-                  <div className="absolute right-0 top-12 w-80 bg-gradient-to-b from-[#1a1a1a] to-[#111] text-white rounded-2xl shadow-2xl z-[100] border border-[#ff950e]/30 overflow-hidden backdrop-blur-md">
-                    <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 px-4 py-2 border-b border-[#ff950e]/30">
+                  <div className="absolute right-0 top-12 w-80 bg-surface-raised text-white rounded-lg shadow-raised z-[100] border border-line">
+                    <div className="bg-surface-raised px-3 py-1.5 xl:px-4 xl:py-2 border-b border-primary-line">
                       <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-bold text-[#ff950e]">Notifications</h3>
+                        <h3 className="text-sm font-bold text-primary">Notifications</h3>
                         {activeNotifTab === 'active' && processedNotifications.active.length > 0 && (
                           <button
                             onClick={clearAllNotifications}
                             disabled={clearingNotifications}
-                            className="text-xs text-white hover:text-[#ff950e] font-medium transition-colors px-2 py-1 rounded bg-black/20 hover:bg-[#ff950e]/10 border border-white/20 hover:border-[#ff950e]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="text-xs text-white hover:text-primary font-medium transition-colors px-2 py-1 rounded bg-black/20 hover:bg-primary/10 border border-white/20 hover:border-primary-line disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{ touchAction: 'manipulation' }}
                           >
                             {clearingNotifications ? 'Clearing...' : 'Clear All'}
@@ -1258,7 +1258,7 @@ export default function Header(): React.ReactElement | null {
                           <button
                             onClick={deleteAllClearedNotifications}
                             disabled={deletingNotifications}
-                            className="text-xs text-white hover:text-red-400 font-medium transition-colors px-2 py-1 rounded bg-red-900/20 hover:bg-red-900/30 border border-red-500/30 hover:border-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="text-xs text-white hover:text-red-400 font-medium transition-colors px-2 py-1 rounded bg-red-900/20 hover:bg-red-900/30 border border-line hover:border-primary-line disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{ touchAction: 'manipulation' }}
                           >
                             {deletingNotifications ? 'Deleting...' : 'Delete All'}
@@ -1270,23 +1270,23 @@ export default function Header(): React.ReactElement | null {
                     <div className="flex border-b border-gray-800">
                       <button
                         onClick={() => setActiveNotifTab('active')}
-                        className={`flex-1 px-4 py-2 text-xs font-medium transition-colors relative ${
-                          activeNotifTab === 'active' ? 'text-[#ff950e] bg-[#ff950e]/10' : 'text-gray-400 hover:text-gray-300 hover:bg-[#222]/50'
+                        className={`flex-1 px-3 py-1.5 xl:px-4 xl:py-2 text-xs font-medium transition-colors relative ${
+                          activeNotifTab === 'active' ? 'text-primary bg-primary/10' : 'text-gray-400 hover:text-gray-300 hover:bg-surface-hover'
                         }`}
                         style={{ touchAction: 'manipulation' }}
                       >
                         Active ({processedNotifications.active.length})
-                        {activeNotifTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]" />}
+                        {activeNotifTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
                       </button>
                       <button
                         onClick={() => setActiveNotifTab('cleared')}
-                        className={`flex-1 px-4 py-2 text-xs font-medium transition-colors relative ${
-                          activeNotifTab === 'cleared' ? 'text-[#ff950e] bg-[#ff950e]/10' : 'text-gray-400 hover:text-gray-300 hover:bg-[#222]/50'
+                        className={`flex-1 px-3 py-1.5 xl:px-4 xl:py-2 text-xs font-medium transition-colors relative ${
+                          activeNotifTab === 'cleared' ? 'text-primary bg-primary/10' : 'text-gray-400 hover:text-gray-300 hover:bg-surface-hover'
                         }`}
                         style={{ touchAction: 'manipulation' }}
                       >
                         Cleared ({processedNotifications.cleared.length})
-                        {activeNotifTab === 'cleared' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff950e]" />}
+                        {activeNotifTab === 'cleared' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
                       </button>
                     </div>
 
@@ -1296,7 +1296,7 @@ export default function Header(): React.ReactElement | null {
                           <li className="p-4 text-sm text-center text-gray-400">No active notifications</li>
                         ) : (
                           processedNotifications.active.map((notification, i) => (
-                            <li key={notification.id || i} className="flex justify-between items-start p-3 text-sm hover:bg-[#222]/50 transition-colors">
+                            <li key={notification.id || i} className="flex justify-between items-start p-3 text-sm hover:bg-surface-hover transition-colors">
                               <div className="flex-1 pr-2">
                                 <SecureMessageDisplay content={notification.message} className="text-gray-200 leading-snug" allowBasicFormatting={false} />
                                 {notification.timestamp && (
@@ -1305,7 +1305,7 @@ export default function Header(): React.ReactElement | null {
                               </div>
                               <button
                                 onClick={() => handleClearOne(notification)}
-                                className="text-xs text-[#ff950e] hover:text-[#ff6b00] font-bold transition-colors whitespace-nowrap"
+                                className="text-xs text-primary hover:text-primary-hover font-bold transition-colors whitespace-nowrap"
                                 style={{ touchAction: 'manipulation' }}
                               >
                                 Clear
@@ -1317,7 +1317,7 @@ export default function Header(): React.ReactElement | null {
                         <li className="p-4 text-sm text-center text-gray-400">No cleared notifications</li>
                       ) : (
                         processedNotifications.cleared.map((notification, i) => (
-                          <li key={notification.id || `cleared-${i}`} className="flex justify-between items-start p-3 text-sm hover:bg-[#222]/50 transition-colors">
+                          <li key={notification.id || `cleared-${i}`} className="flex justify-between items-start p-3 text-sm hover:bg-surface-hover transition-colors">
                             <div className="flex-1 pr-2">
                               <SecureMessageDisplay content={notification.message} className="text-gray-400 leading-snug" allowBasicFormatting={false} />
                               {notification.timestamp && <div className="text-xs text-gray-600 mt-1">{new Date(notification.timestamp).toLocaleString()}</div>}
@@ -1354,19 +1354,19 @@ export default function Header(): React.ReactElement | null {
 
           {role === 'buyer' && !isAdminUser && (
             <>
-              <Link href="/buyers/dashboard" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                <User className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>Dashboard</span>
+              <Link href="/buyers/dashboard" className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs">
+                <User className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                <span className="sr-only xl:not-sr-only xl:inline">Dashboard</span>
               </Link>
 
-              <Link href="/buyers/my-orders" className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                <Package className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>My Orders</span>
+              <Link href="/buyers/my-orders" className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs">
+                <Package className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                <span className="sr-only xl:not-sr-only xl:inline">My Orders</span>
               </Link>
 
               <Link
                 href="/wallet/buyer"
-                className="group flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-purple-900/30 to-purple-700/30 hover:from-purple-800/40 hover:to-purple-600/40 text-white px-3 py-1.5 rounded-lg transition-all duration-300 border border-purple-500/40 hover:border-purple-400/60 shadow-lg text-xs"
+                className="group flex items-center gap-1.5 whitespace-nowrap bg-surface-raised hover:bg-surface-hover text-white px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -1379,12 +1379,12 @@ export default function Header(): React.ReactElement | null {
               </Link>
 
               <Link href="/buyers/messages" className="relative group">
-                <div className="flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs">
-                  <MessageSquare className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                  <span>Messages</span>
+                <div className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs">
+                  <MessageSquare className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                  <span className="sr-only xl:not-sr-only xl:inline">Messages</span>
                 </div>
                 {unreadCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
+                  <span className="absolute -top-2 -right-2 bg-surface-raised text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center border-2 border-white font-bold shadow-lg animate-bounce">
                     {unreadCount}
                   </span>
                 )}
@@ -1396,13 +1396,19 @@ export default function Header(): React.ReactElement | null {
             <div className="flex items-center gap-2">
               <Link
                 href="/login"
-                className="bg-gradient-to-r from-[#1a1a1a] to-[#222] hover:from-[#222] hover:to-[#333] text-[#ff950e] text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 shadow-lg hover:shadow-[#ff950e]/20"
+                className="bg-transparent hover:bg-surface-hover text-ink text-xs font-bold px-3 py-1.5 xl:px-4 xl:py-2 rounded-md transition-colors duration-200 border border-line hover:border-primary-line"
               >
                 Log In
               </Link>
               <Link
                 href="/signup"
-                className="bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black text-xs font-bold px-4 py-2 rounded-lg transition-all duration-300 shadow-[0_0_30px_rgba(255,149,14,0.35)] hover:shadow-[0_0_45px_rgba(255,149,14,0.45)] transform hover:scale-105 border border-white/20"
+                /* Solid brand fill: this is the primary action in the
+                   header for a signed-out visitor, and the only filled
+                   orange element up here. Black label — white on #ff950e
+                   is 2.20:1 and fails AA. The inline colour is the guard
+                   against the unlayered `a {}` rule in globals.css that
+                   would otherwise render this orange-on-orange. */
+                className="bg-primary hover:bg-primary-hover active:bg-primary-press text-xs font-bold px-3 py-1.5 xl:px-4 xl:py-2 rounded-md transition-colors duration-200"
                 style={{ color: '#000' }}
               >
                 Sign Up
@@ -1415,54 +1421,54 @@ export default function Header(): React.ReactElement | null {
               {profileHref ? (
                 <Link
                   href={profileHref}
-                  className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30 transition-colors duration-200 hover:bg-[#ff950e]/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/50"
+                  className="flex items-center gap-1.5 bg-surface-raised px-2 py-1.5 xl:px-3 rounded-md border border-primary-line transition-colors duration-200 hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {showAvatarImage ? (
                     <SecureImage
                       src={profileAvatarSrc!}
                       alt={avatarAltText}
-                      className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                      className="w-6 h-6 rounded-full object-cover border border-primary-line flex-shrink-0"
                     />
                   ) : (
                     <>
                       {isAdminUser ? (
                         <Crown className="w-3.5 h-3.5 text-purple-400" />
                       ) : (
-                        <User className="w-3.5 h-3.5 text-[#ff950e]" />
+                        <User className="w-3.5 h-3.5 text-primary" />
                       )}
                     </>
                   )}
-                  <span className="text-[#ff950e] font-bold text-xs">{username}</span>
-                  <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
+                  <span className="text-primary font-bold text-xs">{username}</span>
+                  <span className="hidden xl:inline text-ink-faint text-[10px]">({isAdminUser ? 'admin' : role})</span>
                 </Link>
               ) : (
-                <div className="flex items-center gap-1.5 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 px-3 py-1.5 rounded-lg border border-[#ff950e]/30">
+                <div className="flex items-center gap-1.5 bg-surface-raised px-2 py-1.5 xl:px-3 rounded-md border border-primary-line">
                   {showAvatarImage ? (
                     <SecureImage
                       src={profileAvatarSrc!}
                       alt={avatarAltText}
-                      className="w-6 h-6 rounded-full object-cover border border-[#ff950e]/40 flex-shrink-0"
+                      className="w-6 h-6 rounded-full object-cover border border-primary-line flex-shrink-0"
                     />
                   ) : (
                     <>
                       {isAdminUser ? (
                         <Crown className="w-3.5 h-3.5 text-purple-400" />
                       ) : (
-                        <User className="w-3.5 h-3.5 text-[#ff950e]" />
+                        <User className="w-3.5 h-3.5 text-primary" />
                       )}
                     </>
                   )}
-                  <span className="text-[#ff950e] font-bold text-xs">{username}</span>
-                  <span className="text-gray-400 text-[10px]">({isAdminUser ? 'admin' : role})</span>
+                  <span className="text-primary font-bold text-xs">{username}</span>
+                  <span className="hidden xl:inline text-ink-faint text-[10px]">({isAdminUser ? 'admin' : role})</span>
                 </div>
               )}
               <button
                 onClick={logout}
-                className="group flex items-center gap-1.5 bg-[#1a1a1a] hover:bg-[#222] text-[#ff950e] px-3 py-1.5 rounded-lg transition-all duration-300 border border-[#333] hover:border-[#ff950e]/50 text-xs cursor-pointer"
+                className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-md transition-all duration-300 border border-line hover:border-primary-line text-xs cursor-pointer"
                 style={{ touchAction: 'manipulation' }}
               >
-                <LogOut className="w-3.5 h-3.5 group-hover:text-[#ff950e] transition-colors" />
-                <span>Log out</span>
+                <LogOut className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                <span className="sr-only xl:not-sr-only xl:inline">Log out</span>
               </button>
             </div>
           )}
