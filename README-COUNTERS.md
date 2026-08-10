@@ -74,6 +74,24 @@ which is what actually decides *which* socket to use.
 - **A remount still counts from 0** (e.g. navigating away and back).
   That is deliberate: it is a fresh page view.
 
+## Also: the two counters now finish together
+
+They sit side by side but animated by different mechanisms, so the user
+count landed about a second before the payments figure — which read as
+sloppy rather than deliberate.
+
+- `PaymentsProcessedCounter` runs a fixed **2000ms** eased count-up.
+- `AnimatedUserCounter` uses a framer-motion **spring**, which has no
+  duration to set. Its settle time comes from the physics: period scales
+  with `1/sqrt(stiffness)`, so stiffness went 65 -> 16 (roughly doubling
+  the time to rest, ~1s -> ~2s) and damping 14 -> 7 to preserve the
+  damping ratio at ~0.87. Dropping stiffness alone would have made it
+  feel sluggish and over-damped instead of simply slower.
+- `restDelta: 0.5` stops it settling on fractions the display rounds off.
+
+If you ever retime the payments counter, retune the spring to match —
+finishing apart is the thing that looked wrong.
+
 ## Verify
 
 ```powershell
@@ -87,6 +105,11 @@ at 60s, 120s and 180s. After it, they should sit perfectly still.
 The console makes it explicit: you should see `Fetching stats...` every
 60 seconds, but `Animating: {from: 0, ...}` only ONCE, at page load.
 Any later `from: 0` means a replay slipped through — tell me.
+
+While you are there, watch the two numbers on first load: they should
+now come to rest at the same moment. If the user count still lands
+early, drop `stiffness` further (12 or 10) and take `damping` down with
+it — roughly `damping = 1.75 * sqrt(stiffness)` keeps the same feel.
 
 ```powershell
 git add src/components/homepage/PaymentsProcessedCounter.tsx src/components/homepage/AnimatedUserCounter.tsx
