@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
+import WalletHeader from '@/components/wallet/buyer/WalletHeader';
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import AllDepositsSection from '@/components/wallet/buyer/AllDepositsSection';
 import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
@@ -88,7 +89,8 @@ function BuyerWalletContent() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-surface text-white">
       <div className="relative z-10 px-4 py-8 sm:px-6 lg:px-10">
-        <div className="mx-auto flex max-w-7xl flex-col gap-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-8">
+          <WalletHeader />
           {/* success banner after crypto redirect */}
           {showBanner && (
             <div className="flex items-center justify-center gap-2 rounded-md border border-success bg-success-soft p-4 text-center text-success">

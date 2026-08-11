@@ -1,81 +1,101 @@
-# Buyer pages: uniform styling + crypto removed
+# Buyer pages: actually simplified
 
-30 files, frontend only. Extract into the repo root; Replace all.
-Covers `/wallet/buyer`, `/buyers/dashboard`, `/buyers/my-orders` and the
-buyer profile pages.
+31 files, frontend only. Extract into the repo root; Replace all.
+Every file parsed as TS+JSX; the rebuilt dashboard was typechecked
+against stubs of the real hook contracts.
 
-Every file parsed as TS+JSX before packaging.
+The previous pass was a find-and-replace on colours and radii. That did
+not make anything simpler, and you were right to call it. This one
+deletes things.
 
-## Wallet: crypto is gone
+## Dashboard: 740 lines -> 306
 
-`/wallet/buyer` is now the card flow, full stop. The crypto column was
-three layers of choice deep -- a payment-method toggle, then six coins,
-each with its own green "CHEAPEST" badge -- sitting next to a single calm
-card form. It also carried a "NOWPayments (80% Fee)" label, which reads
-alarmingly whatever it means.
+It had FOUR collapsible sections -- Overview / Connections / Activity /
+Insights -- each with a row of "summary pills" restating its own contents
+while collapsed, and TWO MORE collapsibles nested inside one of them.
+Plus a six-box stats grid, a quick-actions grid, an activity feed, a
+subscriptions list, a favourites list and a spending panel.
 
-The second column now shows Recent Purchases, so the layout keeps its
-rhythm instead of leaving a hole.
+An accordion of accordions.
 
-**`CryptoDepositSection.tsx` and `DirectCryptoDepositSection.tsx` are NOT
-in this zip.** They stay on disk untouched and are simply no longer
-imported, so bringing crypto back later is a two-line change rather than
-a rebuild. Nothing else references them -- they are now dead code, and
-you can delete them whenever you are sure.
+**Now:** balance as the hero number, the two actions that matter (Add
+funds, Browse), one line of four figures, recent orders, and your sellers
+as a row of avatar chips.
 
-Also on that page: the success banner used a green tick EMOJI as an icon;
-it is now a lucide `Check`, and the orphaned `paymentMethod` state that
-the toggle used has been removed.
+Nothing was hidden behind a click. The sections that are gone were
+duplicating pages that already exist and are one tap away -- favourites
+and subscriptions belong on the profile, spending belongs in the wallet,
+orders belong in My Orders.
 
-## Everything else: made uniform
+**Now unused** (still on disk, no longer imported): `DashboardHeader`,
+`StatsGrid`, `QuickActions`, `RecentActivity`, `SubscribedSellers`,
+`FeaturedListings`.
 
-The four pages had drifted a long way from browse/messages/homepage,
-which is what you said you like. Fixed across all 30 files:
+## My Orders: one list instead of three
 
-- **Off-palette colours normalised.** Five rogue oranges were in use
-  (`#ffb347`, `#ffb469`, `#ff7a00`, `#ff7b1f`, `#ff5f1f`) plus a lone
-  purple avatar ring (`#a855f7`). The palette has exactly three oranges;
-  everything now maps to `primary` / `primary-hover` / `primary-press`.
-- **Off-palette darks** (`#0c0c0c`, `#0b0b0b`, `#181818`, `#161616`,
-  `#020202`, `#050505`) collapsed onto `surface` / `surface-raised` /
-  `surface-overlay`.
-- **All banned radii gone** -- 100+ instances of `rounded-xl`,
-  `rounded-2xl` and `rounded-3xl` stepped down to `rounded-lg` /
-  `rounded-md`.
-- **All gradients removed** from surfaces (13 of them) -- flat, per the
-  design rules.
-- **Pills to rounded rectangles**, with genuine circles left alone: the
-  sweep only converts a `rounded-full` when the element is NOT square
-  (matching `w-N`/`h-N`), so avatars, dots and spinners keep their shape.
+- **Orders were split into three sections** -- "Direct purchases",
+  "Custom requests", "Auction wins" -- each with its own heading, icon
+  tile, count and empty state. Three orders could produce three headings
+  with one card each, and the order you wanted was under whichever
+  heading matched how you happened to buy it. Now: ONE list, newest
+  first, which is how people actually look ("the one I bought Tuesday").
+  A filter row appears only when there are more than three orders AND
+  more than one kind.
+- **The page had TWO headings** -- its own `<header>` saying "My Orders",
+  then `<OrdersHeader />` saying it again -- each inside its own bordered
+  card with a shadow. Boxes inside boxes. Now one heading.
+- **`OrdersHeader`** was a 14x14 icon tile, a "BUYER HUB" pill, a
+  gradient-clipped headline, a marketing sentence, and three feature
+  cards advertising "Live Tracking / Real-time updates". That is
+  landing-page copy on a page you reach only after logging in. It is now
+  a title and an order count.
+- **`OrderStats`** was three `rounded-3xl` cards, each with a 56px icon
+  tile, an uppercase label, a number and a sentence of explanation, in
+  three colour families. It is now one line of three figures -- the same
+  treatment as the dashboard, so the two pages read as one product.
 
-## Deliberately unchanged
+## Wallet: crypto gone, and it finally has a title
 
-**`TierBadge.tsx` keeps its six tier colours.** Tease / Flirt / Obsession
-/ Desire / Goddess are a deliberate colour system, not drift -- flattening
-them to orange would destroy the tier hierarchy. Only its radii and
-surfaces were touched.
+- **Crypto removed.** It was three layers of choice deep -- a method
+  toggle, then six coins each with a green "CHEAPEST" badge -- beside one
+  calm card form, and labelled "NOWPayments (80% Fee)", which reads
+  alarmingly. Recent Purchases now fills that column.
+- `CryptoDepositSection` and `DirectCryptoDepositSection` are NOT in this
+  zip. They stay on disk, unimported, so restoring crypto is a two-line
+  change.
+- **The page had no heading at all** -- `WalletHeader` existed but was
+  never rendered, so the wallet opened straight into a card graphic. It
+  is rendered now, and rewritten: it was a 16x16 icon tile, a "BUYER HUB"
+  pill, a 5xl "Digital Wallet" headline, a line about the "premium
+  aesthetic", and a second card advertising "Sync with your dashboard".
+- The SegPay card graphic is untouched. It is the best thing on the page.
+- Success banner used a tick EMOJI as an icon; now a lucide `Check`.
+- Width `max-w-7xl` -> `max-w-6xl`, matching the other pages.
 
-`#ff950e` survives in a handful of places as an opacity-modified utility
-(`ring-[#ff950e]/10`, `shadow-[#ff950e]/30`) -- tokens cannot express
-those, so the raw value is correct there.
+## Plus the styling pass (still included)
+
+Five rogue oranges (`#ffb347`, `#ffb469`, `#ff7a00`, `#ff7b1f`,
+`#ff5f1f`) and a stray purple avatar ring normalised to the three-colour
+palette; six off-palette darks collapsed onto the surface scale; 100+
+banned radii stepped down; 13 gradients flattened; pills converted to
+rounded rectangles except genuine circles.
+
+`TierBadge` keeps its six tier colours -- that is a deliberate system,
+not drift.
 
 ## Verify + ship
 
 ```powershell
 npx tsc --noEmit
-git add src/app/wallet/buyer/page.tsx src/app/buyers src/components/wallet/buyer src/components/buyers src/components/TierBadge.tsx src/components/StarRating.tsx src/components/ui/Skeleton.tsx
-git commit -m "Buyer pages: uniform tokens/radii, remove crypto deposit column"
 ```
 
-Walk all four pages after deploying -- wallet, dashboard, my-orders,
-profile -- plus an order card expanded, since that is the densest thing
-in the set.
+Then walk the three pages. What you should notice: they now share one
+rhythm -- a plain heading, a single row of figures on a hairline border,
+then content. No page announces itself, and nothing is wrapped in a card
+inside a card.
 
-## Honest caveat
+## Not yet touched
 
-This was a systematic styling pass, not a redesign of each page's
-layout. It makes the four pages consistent with browse/messages/homepage
-and removes the drift. If a specific page still feels cluttered
-STRUCTURALLY -- too many boxes, wrong hierarchy, like the auction section
-was -- tell me which one and I will restructure it properly the way I did
-the auction card.
+`/buyers/[username]` and `/buyers/profile` got the styling pass but NOT
+the structural one -- I wanted you to see this approach on three pages
+before I cut into two more. Say the word.
