@@ -53,12 +53,12 @@ function SellerWalletContent() {
   const hasWithdrawals = sortedArray.length > 0;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+    <main className="relative min-h-screen overflow-hidden bg-surface text-white">
       <BackgroundPattern />
 
       <div className="relative z-10 px-4 py-12 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-10">
-          <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 sm:p-8 lg:p-10">
+          <section className="rounded-lg border border-gray-800 bg-surface p-6 sm:p-8 lg:p-10">
             <WalletHeader
               balance={balance}
               totalEarnings={totalEarnings}
@@ -129,15 +129,15 @@ function SellerWalletWrapper() {
 
   if (!isAuthReady || isChecking) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-surface flex items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"></div>
+          <div className="w-4 h-4 bg-primary rounded-full animate-pulse"></div>
           <div
-            className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"
+            className="w-4 h-4 bg-primary rounded-full animate-pulse"
             style={{ animationDelay: '0.2s' }}
           ></div>
           <div
-            className="w-4 h-4 bg-[#ff950e] rounded-full animate-pulse"
+            className="w-4 h-4 bg-primary rounded-full animate-pulse"
             style={{ animationDelay: '0.4s' }}
           ></div>
         </div>
