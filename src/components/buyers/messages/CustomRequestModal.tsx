@@ -1,10 +1,11 @@
 // src/components/buyers/messages/CustomRequestModal.tsx
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   X,
   AlertTriangle,
+  ClipboardList,
   DollarSign,
   Package
 } from 'lucide-react';
@@ -87,24 +88,48 @@ export default function CustomRequestModal({
     onSubmit();
   };
 
+  /* Escape closes the modal. Every other dismissable surface in the app
+     supports it, and a payment dialog that traps you until you find the
+     X is the kind of small friction that turns into a support message. */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4">
-      <div className="bg-[#1a1a1a] rounded-xl max-w-md w-full shadow-2xl border border-gray-800 max-h-[90vh] overflow-y-auto">
+    <div
+      role="presentation"
+      onClick={onClose}
+      className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-75 z-50 p-4"
+    >
+      <div className="pop-in bg-surface-raised rounded-lg max-w-md w-full shadow-2xl border border-line max-h-[90vh] overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        onClick={(event) => event.stopPropagation()}>
         {/* Modal Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-800">
+        <div className="flex justify-between items-center p-6 border-b border-line">
           <div className="flex items-center">
-            <div className="relative mr-2 flex items-center justify-center">
-              <div className="bg-white w-6 h-6 rounded-full absolute"></div>
-              <img src="/Custom_Request_Icon.png" alt="Custom Request" className="w-8 h-8 relative z-10" />
+            {/* Was an <img> pointing at /Custom_Request_Icon.png sitting on
+                a white circle — an asset that does not exist in public/
+                (same as the other missing PNGs), so it rendered as a
+                broken image on a white dot. Design rules are lucide only,
+                no emoji, so this is ClipboardList: the same icon the
+                composer's "Custom request" button uses, in a tinted tile
+                so all three modals share one header shape. */}
+            <div className="mr-3 flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-soft">
+              <ClipboardList className="h-5 w-5 text-primary" aria-hidden="true" />
             </div>
             <div>
               <h3 className="text-xl font-bold text-white">Custom Request</h3>
-              <p className="text-sm text-gray-400">Send to {sanitizeStrict(activeThread)}</p>
+              <p className="text-sm text-ink-muted">Send to {sanitizeStrict(activeThread)}</p>
             </div>
           </div>
           <button 
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors p-1"
+            className="text-ink-muted hover:text-white transition-colors p-1"
           >
             <X size={24} />
           </button>
@@ -125,7 +150,7 @@ export default function CustomRequestModal({
               value={customRequestForm.title}
               onChange={(value) => setCustomRequestForm((prev: CustomRequestForm) => ({ ...prev, title: value }))}
               placeholder="e.g., Custom worn panties with special requests"
-              className="w-full !bg-[#222] !text-white !border-gray-700 focus:!ring-[#ff950e]"
+              className="w-full !bg-surface-overlay !text-white !border-line focus:!ring-primary"
               error={customRequestErrors.title}
               touched={!!customRequestForm.title}
               sanitizer={titleSanitizer}
@@ -142,30 +167,30 @@ export default function CustomRequestModal({
                   value={customRequestForm.price}
                   onChange={(value) => setCustomRequestForm((prev: CustomRequestForm) => ({ ...prev, price: value }))}
                   placeholder="0.00"
-                  className="w-full pl-10 !bg-[#222] !text-white !border-gray-700 focus:!ring-[#ff950e]"
+                  className="w-full pl-10 !bg-surface-overlay !text-white !border-line focus:!ring-primary"
                   error={customRequestErrors.price}
                   touched={!!customRequestForm.price}
                   sanitizer={priceSanitizer}
                 />
                 <div className="absolute left-3 top-[38px] pointer-events-none">
-                  <DollarSign size={16} className="text-gray-400" />
+                  <DollarSign size={16} className="text-ink-muted" />
                 </div>
               </div>
               
               {/* Total cost display */}
               {customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
-                <div className="mt-2 p-3 bg-[#ff950e]/10 border border-[#ff950e]/30 rounded-lg">
+                <div className="mt-2 p-3 bg-primary/10 border border-primary/30 rounded-md">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-300">Base Price:</span>
+                    <span className="text-ink-muted">Base Price:</span>
                     <span className="text-white">${parseFloat(customRequestForm.price).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-300">Platform Fee (10%):</span>
+                    <span className="text-ink-muted">Platform Fee (10%):</span>
                     <span className="text-white">${(parseFloat(customRequestForm.price) * 0.1).toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between text-lg font-bold border-t border-[#ff950e]/30 pt-2 mt-2">
-                    <span className="text-[#ff950e]">Total You'll Pay:</span>
-                    <span className="text-[#ff950e]">${calculateTotalCost(customRequestForm.price).toFixed(2)}</span>
+                  <div className="flex justify-between text-lg font-bold border-t border-primary/30 pt-2 mt-2">
+                    <span className="text-primary">Total You'll Pay:</span>
+                    <span className="text-primary">${calculateTotalCost(customRequestForm.price).toFixed(2)}</span>
                   </div>
                 </div>
               )}
@@ -179,7 +204,7 @@ export default function CustomRequestModal({
                 onChange={(value) => setCustomRequestForm((prev: CustomRequestForm) => ({ ...prev, description: value }))}
                 placeholder="Describe exactly what you're looking for, including any special requests, wearing time, activities, etc."
                 rows={4}
-                className="w-full !bg-[#222] !text-white !border-gray-700 focus:!ring-[#ff950e]"
+                className="w-full !bg-surface-overlay !text-white !border-line focus:!ring-primary"
                 error={customRequestErrors.description}
                 touched={!!customRequestForm.description}
                 sanitizer={descriptionSanitizer}
@@ -190,9 +215,9 @@ export default function CustomRequestModal({
             
             {/* Balance Check */}
             {user && wallet && customRequestForm.price && !isNaN(parseFloat(customRequestForm.price)) && parseFloat(customRequestForm.price) > 0 && (
-              <div className="p-3 bg-[#222] rounded-lg border border-gray-700">
+              <div className="p-3 bg-surface-overlay rounded-md border border-line">
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-300">Your Wallet Balance:</span>
+                  <span className="text-ink-muted">Your Wallet Balance:</span>
                   <span className="text-white font-medium">${(wallet[user.username] || 0).toFixed(2)}</span>
                 </div>
                 {wallet[user.username] < calculateTotalCost(customRequestForm.price) && (
@@ -206,19 +231,19 @@ export default function CustomRequestModal({
           </div>
           
           {/* Modal Footer */}
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 p-6 border-t border-gray-800">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 p-6 border-t border-line">
             <button
               type="button"
               onClick={onClose}
               disabled={isSubmittingRequest}
-              className="px-6 py-2 bg-[#333] text-white rounded-lg hover:bg-[#444] transition-colors disabled:opacity-50"
+              className="px-6 py-2 bg-surface-overlay text-white rounded-md hover:bg-surface-hover transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmittingRequest || !customRequestForm.title.trim() || !customRequestForm.price.trim() || !customRequestForm.description.trim()}
-              className="px-6 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="px-6 py-2 bg-primary text-black font-bold rounded-md hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {isSubmittingRequest ? (
                 <>
