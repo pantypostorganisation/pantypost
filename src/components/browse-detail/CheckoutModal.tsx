@@ -118,7 +118,22 @@ export default function CheckoutModal({
   const addressComplete = isCompleteAddress(address);
   const ready = Boolean(item) && addressComplete && canAfford && !isProcessing && !saving;
 
-  const fee = useMemo(() => (item ? Math.max(0, item.total - item.price) : 0), [item]);
+  /* Naming what is missing beats "fill in your delivery address" when
+     five of six fields are already filled -- which is exactly how it
+     looked with only Country empty. */
+  const missingFields = useMemo(() => {
+    const required: Array<[keyof DeliveryAddress, string]> = [
+      ['fullName', 'Full name'],
+      ['addressLine1', 'Address line 1'],
+      ['city', 'City'],
+      ['state', 'State'],
+      ['postalCode', 'Postcode'],
+      ['country', 'Country'],
+    ];
+    return required
+      .filter(([field]) => !String(address[field] ?? '').trim())
+      .map(([, label]) => label);
+  }, [address]);
 
   const handleConfirm = async () => {
     if (!item || !addressComplete) return;
@@ -179,10 +194,10 @@ export default function CheckoutModal({
                 <img
                   src={item.imageUrl}
                   alt=""
-                  className="h-24 w-24 shrink-0 rounded-md border border-line object-cover"
+                  className="h-32 w-32 shrink-0 rounded-md border border-line object-cover sm:h-36 sm:w-36"
                 />
               ) : (
-                <div className="h-24 w-24 shrink-0 rounded-md border border-line bg-surface-overlay" />
+                <div className="h-32 w-32 shrink-0 rounded-md border border-line bg-surface-overlay sm:h-36 sm:w-36" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold leading-snug text-white">{item.title}</p>
@@ -196,24 +211,18 @@ export default function CheckoutModal({
             {/* Item price and the charge are different numbers. A buyer
                 meeting that difference on their statement instead of here
                 is how chargebacks start. */}
-            <div className="mt-4 space-y-2 border-t border-line pt-4 text-sm">
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Item</span>
-                <span className="tabular-nums text-ink">${item.price.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-ink-muted">Platform fee</span>
-                <span className="tabular-nums text-ink">${fee.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between border-t border-line pt-2">
-                <span className="font-semibold text-white">Total</span>
-                <span className="font-bold tabular-nums text-primary">
-                  ${item.total.toFixed(2)}
-                </span>
-              </div>
-              <p className="text-right text-xs text-ink-faint">
-                Wallet balance ${balance.toFixed(2)}
-              </p>
+            {/* Total only. The fee breakdown was itemised because the
+                listed price and the charge differ -- but the total is the
+                number the buyer agrees to and is charged, and it is on
+                the button as well, so the commitment is unambiguous
+                either way. Wallet balance moved down beside Confirm,
+                where it answers "can I afford this" instead of reading
+                like another line of the bill. */}
+            <div className="mt-4 flex items-baseline justify-between border-t border-line pt-4">
+              <span className="text-sm font-semibold text-white">Total</span>
+              <span className="text-xl font-bold tabular-nums text-primary">
+                ${item.total.toFixed(2)}
+              </span>
             </div>
           </div>
 
@@ -333,11 +342,16 @@ export default function CheckoutModal({
             )}
           </button>
 
-          {!addressComplete && !loadingAddress ? (
-            <p className="text-center text-xs text-ink-faint">
-              Fill in your delivery address to continue.
-            </p>
-          ) : null}
+          <div className="flex items-center justify-between text-xs text-ink-faint">
+            <span>Wallet balance ${balance.toFixed(2)}</span>
+            {!addressComplete && !loadingAddress ? (
+              <span>
+                {missingFields.length === 1
+                  ? `${missingFields[0]} is required`
+                  : `${missingFields.length} address fields still needed`}
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
