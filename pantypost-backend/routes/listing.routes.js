@@ -1009,6 +1009,21 @@ router.post('/:id/views', async (req, res) => {
     const now = Date.now();
     const lastSeen = recentViews.get(key);
 
+    /* RESERVE THE KEY SYNCHRONOUSLY -- this line is the whole fix.
+     *
+     * The first version set it AFTER the await. React StrictMode fires
+     * its two effects in the same tick, so both requests arrived within
+     * milliseconds, BOTH read an empty map, and BOTH incremented before
+     * either could write. A window only blocks a later request; it does
+     * nothing about a simultaneous one.
+     *
+     * Node is single-threaded, so everything between here and the next
+     * await runs without interruption. Claiming the key now means the
+     * second request sees it and bails, however close behind it is. */
+    if (!lastSeen || now - lastSeen >= VIEW_WINDOW_MS) {
+      recentViews.set(key, now);
+    }
+
     // Already counted recently: return the current figure without
     // incrementing, so the UI still shows the right number.
     if (lastSeen && now - lastSeen < VIEW_WINDOW_MS) {
@@ -1026,10 +1041,11 @@ router.post('/:id/views', async (req, res) => {
     );
 
     if (!listing) {
+      // Release the reservation: nothing was counted, so a later genuine
+      // view of a listing that does exist should not be suppressed.
+      recentViews.delete(key);
       return res.status(404).json({ success: false, error: 'Listing not found' });
     }
-
-    recentViews.set(key, now);
 
     res.json({ success: true, views: listing.views, counted: true });
   } catch (error) {
