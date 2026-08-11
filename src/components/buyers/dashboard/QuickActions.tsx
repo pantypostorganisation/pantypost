@@ -44,9 +44,9 @@ export default function QuickActions({}: QuickActionsProps) {
           <h2 id="quick-actions-heading" className="text-sm font-semibold text-white">
             Quick paths
           </h2>
-          <p className="text-xs text-gray-500">Go straight to the tools buyers use most.</p>
+          <p className="text-xs text-ink-faint">Go straight to the tools buyers use most.</p>
         </div>
-        <ArrowUpRight className="h-4 w-4 text-gray-600" />
+        <ArrowUpRight className="h-4 w-4 text-ink-faint" />
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -54,7 +54,7 @@ export default function QuickActions({}: QuickActionsProps) {
           <Link
             key={action.href}
             href={action.href}
-            className="group flex items-center justify-between gap-4 rounded-xl border border-white/5 bg-black/20 px-4 py-3 transition hover:border-[#ff950e]/40"
+            className="group flex items-center justify-between gap-4 rounded-md border border-white/5 bg-black/20 px-4 py-3 transition hover:border-primary/40"
           >
             <div className="flex items-start gap-3">
               <span className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${action.tone}`}>
@@ -62,10 +62,10 @@ export default function QuickActions({}: QuickActionsProps) {
               </span>
               <div>
                 <p className="text-sm font-semibold text-white">{action.title}</p>
-                <p className="text-xs text-gray-500">{action.description}</p>
+                <p className="text-xs text-ink-faint">{action.description}</p>
               </div>
             </div>
-            <ArrowUpRight className="h-3.5 w-3.5 text-[#ff950e] transition group-hover:text-[#ffb347]" />
+            <ArrowUpRight className="h-3.5 w-3.5 text-primary transition group-hover:text-primary-hover" />
           </Link>
         ))}
       </div>

@@ -105,7 +105,7 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
       case 'failed':
         return 'text-red-400 bg-red-500/10 border-red-500/30';
       default:
-        return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
+        return 'text-ink-muted bg-gray-500/10 border-gray-500/30';
     }
   };
 
@@ -126,9 +126,9 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
 
   const getTypeIcon = (type: string) => {
     return type === 'crypto' ? (
-      <Bitcoin className="h-4 w-4 text-[#ff950e]" />
+      <Bitcoin className="h-4 w-4 text-primary" />
     ) : (
-      <CreditCard className="h-4 w-4 text-[#ff950e]" />
+      <CreditCard className="h-4 w-4 text-primary" />
     );
   };
 
@@ -148,23 +148,23 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
   };
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
+    <section className="rounded-lg border border-line bg-surface p-6 transition-colors sm:p-8">
       <div className="flex flex-col gap-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-              <TrendingUp className="h-5 w-5 text-[#ff950e]" />
+            <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-primary/40 bg-primary/10">
+              <TrendingUp className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h2 className="text-2xl font-semibold text-white">All Deposits</h2>
-              <p className="text-sm text-gray-400">Complete history of your wallet funding</p>
+              <p className="text-sm text-ink-muted">Complete history of your wallet funding</p>
             </div>
           </div>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-2 rounded-full border border-gray-800 bg-[#0c0c0c] px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-[#ff950e] hover:text-white disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-primary hover:text-white disabled:opacity-50"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -173,20 +173,20 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="rounded-xl border border-gray-800 bg-[#0c0c0c] p-4">
-            <p className="text-xs text-gray-500 mb-1">Total Deposited</p>
+          <div className="rounded-md border border-line bg-surface p-4">
+            <p className="text-xs text-ink-faint mb-1">Total Deposited</p>
             <p className="text-xl font-bold text-white">${stats.total.toFixed(2)}</p>
           </div>
-          <div className="rounded-xl border border-gray-800 bg-[#0c0c0c] p-4">
-            <p className="text-xs text-gray-500 mb-1">Card Deposits</p>
+          <div className="rounded-md border border-line bg-surface p-4">
+            <p className="text-xs text-ink-faint mb-1">Card Deposits</p>
             <p className="text-xl font-bold text-white">${stats.cardDeposits.toFixed(2)}</p>
           </div>
-          <div className="rounded-xl border border-gray-800 bg-[#0c0c0c] p-4">
-            <p className="text-xs text-gray-500 mb-1">Crypto Deposits</p>
+          <div className="rounded-md border border-line bg-surface p-4">
+            <p className="text-xs text-ink-faint mb-1">Crypto Deposits</p>
             <p className="text-xl font-bold text-white">${stats.cryptoDeposits.toFixed(2)}</p>
           </div>
-          <div className="rounded-xl border border-gray-800 bg-[#0c0c0c] p-4">
-            <p className="text-xs text-gray-500 mb-1">Status</p>
+          <div className="rounded-md border border-line bg-surface p-4">
+            <p className="text-xs text-ink-faint mb-1">Status</p>
             <div className="flex items-center gap-2 text-xs">
               {stats.pending > 0 && (
                 <span className="text-yellow-400">{stats.pending} pending</span>
@@ -203,13 +203,13 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
 
         {/* Filters */}
         <div className="flex flex-wrap gap-2">
-          <div className="flex rounded-lg border border-gray-800 bg-[#0c0c0c] p-1">
+          <div className="flex rounded-lg border border-line bg-surface p-1">
             <button
               onClick={() => setFilter('all')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 filter === 'all' 
-                  ? 'bg-[#ff950e] text-black' 
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-primary text-black' 
+                  : 'text-ink-muted hover:text-white'
               }`}
             >
               All
@@ -218,8 +218,8 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
               onClick={() => setFilter('card')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 filter === 'card' 
-                  ? 'bg-[#ff950e] text-black' 
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-primary text-black' 
+                  : 'text-ink-muted hover:text-white'
               }`}
             >
               Card
@@ -228,20 +228,20 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
               onClick={() => setFilter('crypto')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 filter === 'crypto' 
-                  ? 'bg-[#ff950e] text-black' 
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-primary text-black' 
+                  : 'text-ink-muted hover:text-white'
               }`}
             >
               Crypto
             </button>
           </div>
-          <div className="flex rounded-lg border border-gray-800 bg-[#0c0c0c] p-1">
+          <div className="flex rounded-lg border border-line bg-surface p-1">
             <button
               onClick={() => setSortBy('date')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 sortBy === 'date' 
-                  ? 'bg-[#ff950e] text-black' 
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-primary text-black' 
+                  : 'text-ink-muted hover:text-white'
               }`}
             >
               By Date
@@ -250,8 +250,8 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
               onClick={() => setSortBy('amount')}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 sortBy === 'amount' 
-                  ? 'bg-[#ff950e] text-black' 
-                  : 'text-gray-400 hover:text-white'
+                  ? 'bg-primary text-black' 
+                  : 'text-ink-muted hover:text-white'
               }`}
             >
               By Amount
@@ -263,21 +263,21 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
         <div className="space-y-3">
           {filteredDeposits.length === 0 ? (
             <div className="text-center py-12">
-              <div className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-gray-800 bg-[#0c0c0c] mb-4">
-                <DollarSign className="h-8 w-8 text-gray-600" />
+              <div className="inline-flex h-16 w-16 items-center justify-center rounded-full border border-line bg-surface mb-4">
+                <DollarSign className="h-8 w-8 text-ink-faint" />
               </div>
-              <p className="text-gray-400 mb-2">No deposits yet</p>
-              <p className="text-sm text-gray-500">Your deposit history will appear here</p>
+              <p className="text-ink-muted mb-2">No deposits yet</p>
+              <p className="text-sm text-ink-faint">Your deposit history will appear here</p>
             </div>
           ) : (
             filteredDeposits.map((deposit) => (
               <div
                 key={deposit.id}
-                className="group/item rounded-xl border border-gray-800 bg-[#0c0c0c] p-4 transition-colors duration-200 hover:border-[#ff950e]/40"
+                className="group/item rounded-md border border-line bg-surface p-4 transition-colors duration-200 hover:border-primary/40"
               >
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#ff950e]/40 bg-[#ff950e]/10 flex-shrink-0">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-md border border-primary/40 bg-primary/10 flex-shrink-0">
                       {getTypeIcon(deposit.type)}
                     </div>
                     <div className="space-y-1 flex-1 min-w-0">
@@ -286,18 +286,18 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
                           ${deposit.amount.toFixed(2)}
                         </p>
                         {deposit.currency && (
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-ink-faint">
                             via {deposit.currency.replace('_', ' ')}
                           </span>
                         )}
-                        <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${getStatusColor(deposit.status)}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${getStatusColor(deposit.status)}`}>
                           {deposit.status === 'completed' && <CheckCircle2 className="h-3 w-3" />}
                           {(deposit.status === 'pending' || deposit.status === 'confirming') && <Clock className="h-3 w-3" />}
                           {deposit.status === 'failed' && <AlertCircle className="h-3 w-3" />}
                           {getStatusText(deposit.status)}
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-ink-faint">
                         <span className="flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
                           {formatDate(deposit.createdAt)}
@@ -313,7 +313,7 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
                         )}
                       </div>
                       {deposit.txHash && (
-                        <p className="text-xs text-gray-600 font-mono truncate">
+                        <p className="text-xs text-ink-faint font-mono truncate">
                           TX: {deposit.txHash}
                         </p>
                       )}
@@ -325,7 +325,7 @@ export default function AllDepositsSection({ deposits, onRefresh }: AllDepositsS
                         const url = getExplorerUrl(deposit.txHash!, deposit.currency);
                         if (url) window.open(url, '_blank');
                       }}
-                      className="inline-flex items-center gap-1 text-xs text-[#ff950e] hover:text-white transition-colors flex-shrink-0"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:text-white transition-colors flex-shrink-0"
                     >
                       View TX
                       <ExternalLink className="h-3 w-3" />

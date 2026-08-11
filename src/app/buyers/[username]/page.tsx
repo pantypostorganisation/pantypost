@@ -382,7 +382,7 @@ export default function BuyerProfilePage() {
   if (!usernameForRequest) {
     return (
       <BanCheck>
-        <div className="min-h-screen bg-neutral-950 text-white px-6">
+        <div className="min-h-screen bg-surface text-white px-6">
           <div className="mx-auto max-w-3xl pt-24 text-center">
             <h1 className="text-3xl font-semibold">Invalid username</h1>
             <p className="mt-3 text-neutral-400">Please provide a valid username in the URL.</p>
@@ -394,9 +394,9 @@ export default function BuyerProfilePage() {
 
   return (
     <BanCheck>
-      <div className="min-h-screen bg-neutral-950 text-white">
+      <div className="min-h-screen bg-surface text-white">
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-10">
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#111111]/85 shadow-[0_18px_60px_-30px_rgba(0,0,0,0.9)]">
+          <div className="relative overflow-hidden rounded-lg border border-white/10 bg-surface/85 shadow-[0_18px_60px_-30px_rgba(0,0,0,0.9)]">
             <div
               className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.18),rgba(255,255,255,0)_55%)]"
               aria-hidden="true"
@@ -405,20 +405,20 @@ export default function BuyerProfilePage() {
               {loading ? (
                 <div className="space-y-10 animate-pulse">
                   <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-                    <div className="h-28 w-28 rounded-2xl bg-neutral-800/80" />
+                    <div className="h-28 w-28 rounded-lg bg-neutral-800/80" />
                     <div className="flex-1 space-y-4">
                       <div className="h-6 w-48 rounded bg-neutral-800/80" />
                       <div className="h-4 w-72 rounded bg-neutral-800/80" />
                       <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="h-20 rounded-2xl bg-neutral-800/80" />
-                        <div className="h-20 rounded-2xl bg-neutral-800/80" />
+                        <div className="h-20 rounded-lg bg-neutral-800/80" />
+                        <div className="h-20 rounded-lg bg-neutral-800/80" />
                       </div>
                     </div>
                   </div>
                   <div className="h-11 w-40 rounded-full bg-neutral-800/80" />
                 </div>
               ) : error ? (
-                <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-200">
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-red-200">
                   <p className="text-lg font-semibold">Could not load buyer profile</p>
                   <p className="mt-2 text-sm text-red-100/80">{error}</p>
                   {httpStatus === 403 && (
@@ -432,7 +432,7 @@ export default function BuyerProfilePage() {
                   <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
                     <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
                       <div className="flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
-                        <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-[#a855f7] bg-neutral-950 shadow-[0_0_32px_-18px_rgba(168,85,247,0.8)]">
+                        <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-primary bg-surface shadow-[0_0_32px_-18px_rgba(168,85,247,0.8)]">
                           <SafeAvatar
                             src={profileData?.profile?.profilePic || null}
                             alt={`${usernameForDisplay}'s avatar`}
@@ -446,7 +446,7 @@ export default function BuyerProfilePage() {
                       <div className="space-y-4">
                         <div className="flex flex-wrap items-center gap-3">
                           <h1 className="text-3xl font-bold sm:text-4xl">{usernameForDisplay}</h1>
-                          <span className="rounded-full border border-neutral-700/60 bg-neutral-900/70 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-300">
+                          <span className="rounded-md border border-neutral-700/60 bg-neutral-900/70 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-300">
                             Buyer
                           </span>
                         </div>
@@ -461,7 +461,7 @@ export default function BuyerProfilePage() {
                       <div className="flex flex-wrap gap-3">
                         <Link
                           href={messageHref}
-                          className="inline-flex items-center gap-2 rounded-full bg-[#ff950e] px-5 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-[#ffb347] focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
+                          className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
                         >
                           <MessageCircle size={18} className="text-neutral-950" />
                           <span className="text-neutral-950">Message</span>
@@ -470,7 +470,7 @@ export default function BuyerProfilePage() {
                         {isOwner && (
                           <Link
                             href={`/buyers/profile`}
-                            className="inline-flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/50 focus:ring-offset-2 focus:ring-offset-black"
+                            className="inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/50 focus:ring-offset-2 focus:ring-offset-black"
                             title="Edit your buyer profile"
                           >
                             Edit profile
@@ -481,9 +481,9 @@ export default function BuyerProfilePage() {
                   </div>
 
                   <div className="mt-12 grid gap-5 sm:grid-cols-2">
-                    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+                    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
                       <div className="flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-800/80 text-[#ffb347]">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800/80 text-primary-hover">
                           <CalendarDays size={18} />
                         </span>
                         <div>
@@ -495,9 +495,9 @@ export default function BuyerProfilePage() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+                    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
                       <div className="flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-800/80 text-[#ffb347]">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800/80 text-primary-hover">
                           <MapPin size={18} />
                         </span>
                         <div>

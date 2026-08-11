@@ -10,10 +10,10 @@ export default function FeaturedListings({ listings }: FeaturedListingsProps) {
   if (!listings || listings.length === 0) return null;
 
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-6">
+    <div className="bg-surface-raised border border-line rounded-lg p-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-white">Recommended For You</h2>
-        <Link href="/browse" className="text-[#ff950e] hover:text-[#e88800] font-medium flex items-center gap-2 text-sm">
+        <Link href="/browse" className="text-primary hover:text-primary-hover font-medium flex items-center gap-2 text-sm">
           Browse All <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
@@ -27,7 +27,7 @@ export default function FeaturedListings({ listings }: FeaturedListingsProps) {
             <Link
               key={listing.id}
               href={`/browse/${listing.id}`}
-              className="bg-[#111111] rounded-lg overflow-hidden hover:ring-2 hover:ring-[#ff950e] transition-all group"
+              className="bg-surface rounded-lg overflow-hidden hover:ring-2 hover:ring-[#ff950e] transition-all group"
             >
               {listing.images && listing.images.length > 0 ? (
                 <div className="aspect-[4/3] overflow-hidden bg-gray-900">
@@ -45,16 +45,16 @@ export default function FeaturedListings({ listings }: FeaturedListingsProps) {
               )}
 
               <div className="p-4">
-                <h3 className="font-medium text-white mb-1 line-clamp-1 group-hover:text-[#ff950e] transition-colors">
+                <h3 className="font-medium text-white mb-1 line-clamp-1 group-hover:text-primary transition-colors">
                   <SecureMessageDisplay content={listing.title} allowBasicFormatting={false} className="inline" />
                 </h3>
-                <p className="text-sm text-gray-500 mb-2">
+                <p className="text-sm text-ink-faint mb-2">
                   by{' '}
                   <SecureMessageDisplay content={listing.seller} allowBasicFormatting={false} className="inline" />
                 </p>
                 <div className="flex items-center justify-between">
-                  <p className="text-lg font-bold text-[#ff950e]">${display}</p>
-                  <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-[#ff950e] transition-colors" />
+                  <p className="text-lg font-bold text-primary">${display}</p>
+                  <ChevronRight className="w-4 h-4 text-ink-faint group-hover:text-primary transition-colors" />
                 </div>
               </div>
             </Link>

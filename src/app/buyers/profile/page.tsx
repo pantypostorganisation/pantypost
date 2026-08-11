@@ -325,10 +325,10 @@ export default function BuyerSelfProfilePage() {
 
   return (
     <BanCheck>
-      <div className="relative min-h-screen overflow-hidden bg-gradient-to-b from-black via-neutral-950 to-black text-white">
+      <div className="relative min-h-screen overflow-hidden bg-surface-raised text-white">
 
         <div className="relative mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
-          <div className="relative overflow-hidden rounded-3xl border border-neutral-800/80 bg-neutral-950/70 shadow-[0_0_50px_rgba(255,149,14,0.08)]">
+          <div className="relative overflow-hidden rounded-lg border border-neutral-800/80 bg-neutral-950/70 shadow-[0_0_50px_rgba(255,149,14,0.08)]">
             <div className="relative grid gap-10 p-6 sm:p-10 lg:grid-cols-[280px_1fr]">
               {loading ? (
                 <>
@@ -336,23 +336,23 @@ export default function BuyerSelfProfilePage() {
                     <div className="mx-auto h-32 w-32 animate-pulse rounded-full bg-neutral-800/80 lg:mx-0" />
                     <div className="mx-auto h-4 w-40 animate-pulse rounded-full bg-neutral-800/80 lg:mx-0" />
                     <div className="space-y-3">
-                      <div className="h-16 animate-pulse rounded-2xl border border-neutral-800/70 bg-neutral-900/70" />
-                      <div className="h-16 animate-pulse rounded-2xl border border-neutral-800/70 bg-neutral-900/70" />
+                      <div className="h-16 animate-pulse rounded-lg border border-neutral-800/70 bg-neutral-900/70" />
+                      <div className="h-16 animate-pulse rounded-lg border border-neutral-800/70 bg-neutral-900/70" />
                     </div>
                   </div>
                   <div className="space-y-6">
                     <div className="h-6 w-48 animate-pulse rounded-full bg-neutral-800/80" />
                     <div className="space-y-4">
-                      <div className="h-12 animate-pulse rounded-xl border border-neutral-800/70 bg-neutral-900/70" />
-                      <div className="h-24 animate-pulse rounded-xl border border-neutral-800/70 bg-neutral-900/70" />
-                      <div className="h-20 animate-pulse rounded-xl border border-neutral-800/70 bg-neutral-900/70" />
+                      <div className="h-12 animate-pulse rounded-md border border-neutral-800/70 bg-neutral-900/70" />
+                      <div className="h-24 animate-pulse rounded-md border border-neutral-800/70 bg-neutral-900/70" />
+                      <div className="h-20 animate-pulse rounded-md border border-neutral-800/70 bg-neutral-900/70" />
                     </div>
                     <div className="h-11 w-40 animate-pulse rounded-full bg-neutral-800/80" />
                   </div>
                 </>
               ) : error ? (
                 <div className="lg:col-span-2">
-                  <div className="flex flex-col gap-4 rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-red-100">
+                  <div className="flex flex-col gap-4 rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-red-100">
                     <div className="flex items-start gap-3">
                       <span className="mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20 text-red-200">
                         <AlertTriangle size={18} />
@@ -366,7 +366,7 @@ export default function BuyerSelfProfilePage() {
                       <div>
                         <a
                           href="/login"
-                          className="inline-flex items-center justify-center rounded-full bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black transition hover:bg-[#ff7b1f]"
+                          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-black transition hover:bg-primary-hover"
                         >
                           Go to login
                         </a>
@@ -379,8 +379,8 @@ export default function BuyerSelfProfilePage() {
                   <aside className="space-y-6">
                     <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
                       <div className="relative">
-                        <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-[#ff950e]/35 to-transparent blur-2xl opacity-70" />
-                        <div className="relative h-32 w-32 overflow-hidden rounded-full border border-[#ff950e]/30 bg-neutral-950/90 p-[3px] sm:h-36 sm:w-36">
+                        <div className="absolute inset-0 rounded-full bg-surface-raised blur-2xl opacity-70" />
+                        <div className="relative h-32 w-32 overflow-hidden rounded-full border border-primary/30 bg-neutral-950/90 p-[3px] sm:h-36 sm:w-36">
                           <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-neutral-950">
                             {previewUrl ? (
                               <img src={previewUrl} alt="Profile preview" className="h-full w-full object-cover" />
@@ -391,7 +391,7 @@ export default function BuyerSelfProfilePage() {
                         </div>
                       </div>
                       <div className="space-y-3">
-                        <span className="inline-flex items-center justify-center rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#ffb347]">
+                        <span className="inline-flex items-center justify-center rounded-md border border-primary/30 bg-primary/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary-hover">
                           Buyer profile
                         </span>
                         <h1 className="text-3xl font-bold sm:text-4xl">{form.username || 'Your profile'}</h1>
@@ -401,10 +401,10 @@ export default function BuyerSelfProfilePage() {
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
-                        <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 -translate-y-1/3 translate-x-1/3 rounded-full bg-[#ff950e]/12 blur-2xl" />
+                      <div className="relative overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
+                        <div className="pointer-events-none absolute right-0 top-0 h-20 w-20 -translate-y-1/3 translate-x-1/3 rounded-full bg-primary/12 blur-2xl" />
                         <div className="relative flex items-start gap-3">
-                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/10 text-[#ffb347]">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary-hover">
                             <MapPin size={18} />
                           </span>
                           <div>
@@ -424,10 +424,10 @@ export default function BuyerSelfProfilePage() {
                           </div>
                         </div>
                       </div>
-                      <div className="relative overflow-hidden rounded-2xl border border-neutral-800 bg-neutral-900/60 p-5">
-                        <div className="pointer-events-none absolute bottom-0 right-0 h-20 w-20 translate-y-1/3 translate-x-1/4 rounded-full bg-[#ff5f1f]/10 blur-2xl" />
+                      <div className="relative overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900/60 p-5">
+                        <div className="pointer-events-none absolute bottom-0 right-0 h-20 w-20 translate-y-1/3 translate-x-1/4 rounded-full bg-primary-hover/10 blur-2xl" />
                         <div className="relative flex items-start gap-3">
-                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ff950e]/10 text-[#ffb347]">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary-hover">
                             <ShieldCheck size={18} />
                           </span>
                           <div>
@@ -453,7 +453,7 @@ export default function BuyerSelfProfilePage() {
                       </p>
                     </div>
                     {success && (
-                      <div className="flex items-center gap-2 rounded-full border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
+                      <div className="flex items-center gap-2 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
                         <ShieldCheck size={16} />
                         {success}
                       </div>
@@ -461,7 +461,7 @@ export default function BuyerSelfProfilePage() {
                     <div className="space-y-5">
                       <div className="space-y-2">
                         <label className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Username</label>
-                        <div className="rounded-2xl border border-neutral-800 bg-neutral-900/80 px-4 py-3 text-neutral-400">
+                        <div className="rounded-lg border border-neutral-800 bg-neutral-900/80 px-4 py-3 text-neutral-400">
                           {form.username || '—'}
                         </div>
                       </div>
@@ -474,7 +474,7 @@ export default function BuyerSelfProfilePage() {
                             id="country"
                             value={form.country}
                             onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
-                            className="w-full appearance-none rounded-2xl border border-neutral-800 bg-neutral-900/80 px-4 py-3 pr-12 text-sm text-neutral-100 focus:border-[#ff950e]/60 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
+                            className="w-full appearance-none rounded-lg border border-neutral-800 bg-neutral-900/80 px-4 py-3 pr-12 text-sm text-neutral-100 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
                             disabled={disabled}
                           >
                             <option value="">🌐 Select country</option>
@@ -497,7 +497,7 @@ export default function BuyerSelfProfilePage() {
                           onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value.slice(0, 500) }))}
                           placeholder="Tell people a little about you (max 500 characters)"
                           rows={5}
-                          className="min-h-[140px] w-full rounded-2xl border border-neutral-800 bg-neutral-900/80 px-4 py-3 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-[#ff950e]/60 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
+                          className="min-h-[140px] w-full rounded-lg border border-neutral-800 bg-neutral-900/80 px-4 py-3 text-sm text-neutral-100 placeholder:text-neutral-600 focus:border-primary/60 focus:outline-none focus:ring-2 focus:ring-[#ff950e]/40"
                           disabled={disabled}
                         />
                         <div className="text-right text-xs text-neutral-500">{form.bio.length}/500</div>
@@ -514,13 +514,13 @@ export default function BuyerSelfProfilePage() {
                           </div>
                           <div className="flex flex-1 flex-col gap-3">
                             <label
-                              className={`inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border border-neutral-700/70 bg-neutral-900/80 px-4 py-2 text-sm font-medium transition ${
+                              className={`inline-flex w-fit cursor-pointer items-center gap-2 rounded-md border border-neutral-700/70 bg-neutral-900/80 px-4 py-2 text-sm font-medium transition ${
                                 uploading || disabled
                                   ? 'cursor-not-allowed opacity-60'
-                                  : 'hover:border-[#ff950e]/60 hover:text-white'
+                                  : 'hover:border-primary/60 hover:text-white'
                               }`}
                             >
-                              <Upload size={16} className="text-[#ffb347]" />
+                              <Upload size={16} className="text-primary-hover" />
                               <span>Upload new photo</span>
                               <input
                                 type="file"
@@ -534,7 +534,7 @@ export default function BuyerSelfProfilePage() {
                               <button
                                 type="button"
                                 onClick={() => setForm((f) => ({ ...f, profilePic: '' }))}
-                                className="inline-flex w-fit items-center justify-center rounded-full border border-neutral-700/70 bg-transparent px-4 py-2 text-sm text-neutral-300 transition hover:border-red-400/60 hover:text-red-300"
+                                className="inline-flex w-fit items-center justify-center rounded-md border border-neutral-700/70 bg-transparent px-4 py-2 text-sm text-neutral-300 transition hover:border-red-400/60 hover:text-red-300"
                               >
                                 Remove photo
                               </button>
@@ -543,7 +543,7 @@ export default function BuyerSelfProfilePage() {
                         </div>
                         {uploading && <div className="text-xs text-neutral-400">Uploading…</div>}
                         {uploadErr && (
-                          <div className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                          <div className="flex items-center gap-2 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">
                             <AlertTriangle size={16} />
                             {uploadErr}
                           </div>
@@ -557,7 +557,7 @@ export default function BuyerSelfProfilePage() {
                       <button
                         type="submit"
                         disabled={disabled}
-                        className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#ffb347] via-[#ff950e] to-[#ff7b1f] px-6 py-2.5 text-sm font-semibold text-black shadow-lg shadow-[#ff950e]/25 transition hover:shadow-[#ff950e]/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex items-center justify-center gap-2 rounded-md bg-surface-raised px-6 py-2.5 text-sm font-semibold text-black shadow-lg shadow-[#ff950e]/25 transition hover:shadow-[#ff950e]/40 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                         {saving ? 'Saving…' : 'Save changes'}

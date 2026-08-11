@@ -1,4 +1,4 @@
-﻿// src/components/StarRating.tsx
+// src/components/StarRating.tsx
 'use client';
 
 import { Star } from 'lucide-react';
@@ -82,7 +82,7 @@ export default function StarRating({
           <div key={star} className="relative inline-block">
             {/* Base gray star - always visible */}
             <Star
-              className={`${sizeClasses[safeSize]} fill-gray-300 text-gray-300`}
+              className={`${sizeClasses[safeSize]} fill-gray-300 text-ink-muted`}
             />
             
             {/* Orange overlay - width based on fill amount */}
@@ -94,7 +94,7 @@ export default function StarRating({
                 }}
               >
                 <Star
-                  className={`${sizeClasses[safeSize]} fill-[#ff950e] text-[#ff950e]`}
+                  className={`${sizeClasses[safeSize]} fill-[#ff950e] text-primary`}
                 />
               </div>
             )}

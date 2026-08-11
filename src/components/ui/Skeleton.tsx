@@ -52,7 +52,7 @@ export function Skeleton({
 // Listing Card Skeleton
 export function ListingCardSkeleton() {
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg overflow-hidden">
+    <div className="bg-surface-raised border border-line rounded-lg overflow-hidden">
       {/* Image */}
       <Skeleton variant="rectangular" height={200} className="w-full" />
       
@@ -113,7 +113,7 @@ export function UserProfileSkeleton() {
 // Message Thread Skeleton
 export function MessageThreadSkeleton() {
   return (
-    <div className="p-4 border-b border-gray-800 hover:bg-[#1a1a1a] transition-colors">
+    <div className="p-4 border-b border-line hover:bg-surface-raised transition-colors">
       <div className="flex items-start gap-3">
         <Skeleton variant="circular" width={40} height={40} />
         <div className="flex-1 space-y-2">
@@ -132,7 +132,7 @@ export function MessageThreadSkeleton() {
 // Order Card Skeleton
 export function OrderCardSkeleton() {
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4 space-y-3">
+    <div className="bg-surface-raised border border-line rounded-lg p-4 space-y-3">
       <div className="flex justify-between items-start">
         <Skeleton variant="text" className="w-24 h-5" />
         <Skeleton variant="rectangular" className="w-20 h-6 rounded-full" />
@@ -146,7 +146,7 @@ export function OrderCardSkeleton() {
         </div>
       </div>
       
-      <div className="flex justify-between items-center pt-2 border-t border-gray-800">
+      <div className="flex justify-between items-center pt-2 border-t border-line">
         <Skeleton variant="text" className="w-20" />
         <Skeleton variant="text" className="w-24" />
       </div>
@@ -165,7 +165,7 @@ export function TableSkeleton({ rows = 5, columns = 4 }: { rows?: number; column
         ))}
       </div>
       
-      <div className="border-t border-gray-800 mt-2" />
+      <div className="border-t border-line mt-2" />
       
       {/* Rows */}
       {Array.from({ length: rows }).map((_, rowIndex) => (
@@ -206,7 +206,7 @@ export function FormSkeleton({ fields = 4 }: { fields?: number }) {
 // Stats Card Skeleton
 export function StatsCardSkeleton() {
   return (
-    <div className="bg-[#1a1a1a] border border-gray-800 rounded-lg p-4">
+    <div className="bg-surface-raised border border-line rounded-lg p-4">
       <Skeleton variant="text" className="w-20 h-4 mb-2" />
       <Skeleton variant="text" className="w-32 h-8 mb-1" />
       <Skeleton variant="text" className="w-24 h-3" />

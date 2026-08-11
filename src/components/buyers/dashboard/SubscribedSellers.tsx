@@ -12,7 +12,7 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
   const list = (Array.isArray(subscriptions) ? subscriptions : []) as SubscribedSellersProps['subscriptions'];
 
   return (
-    <section className="rounded-3xl border border-white/10 bg-[#111111]/85 p-6 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+    <section className="rounded-lg border border-white/10 bg-surface/85 p-6 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-500/15 text-amber-200">
@@ -20,18 +20,18 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
           </span>
           <h2 className="text-lg font-semibold text-white">Subscriptions</h2>
         </div>
-        <span className="rounded-full bg-orange-400/20 px-3 py-1 text-xs font-semibold text-orange-200">
+        <span className="rounded-md bg-orange-400/20 px-3 py-1 text-xs font-semibold text-orange-200">
           {list.length}
         </span>
       </div>
 
       {list.length === 0 ? (
-        <div className="mt-8 rounded-2xl border border-dashed border-white/10 bg-[#181818] p-10 text-center">
-          <Crown className="mx-auto mb-3 h-12 w-12 text-gray-600" />
-          <p className="text-sm text-gray-400">No active subscriptions yet.</p>
+        <div className="mt-8 rounded-lg border border-dashed border-white/10 bg-surface-raised p-10 text-center">
+          <Crown className="mx-auto mb-3 h-12 w-12 text-ink-faint" />
+          <p className="text-sm text-ink-muted">No active subscriptions yet.</p>
           <Link
             href="/browse"
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
+            className="mt-6 inline-flex items-center justify-center rounded-md bg-surface-raised px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
           >
             Browse sellers
           </Link>
@@ -60,7 +60,7 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
             return (
               <article
                 key={sub.seller}
-                className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-gradient-to-br from-[#181818] to-[#0f0f0f] p-4 transition hover:border-[#ff950e]/40 hover:bg-[#161616]"
+                className="flex flex-col gap-4 rounded-lg border border-white/5 bg-surface-raised p-4 transition hover:border-primary/40 hover:bg-surface-raised"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
@@ -81,7 +81,7 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           href={`/sellers/${sanitizedUsername}`}
-                          className="text-sm font-medium text-white transition hover:text-[#ff950e]"
+                          className="text-sm font-medium text-white transition hover:text-primary"
                         >
                           <SecureMessageDisplay content={sub.seller} allowBasicFormatting={false} className="inline" />
                         </Link>
@@ -97,7 +97,7 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
                         )}
                       </div>
 
-                      <div className="mt-2 text-xs text-gray-500 line-clamp-2">
+                      <div className="mt-2 text-xs text-ink-faint line-clamp-2">
                         <SecureMessageDisplay
                           content={sub.bio}
                           allowBasicFormatting={false}
@@ -110,14 +110,14 @@ export default function SubscribedSellers({ subscriptions }: SubscribedSellersPr
 
                   <Link
                     href={`/sellers/${sanitizedUsername}`}
-                    className="rounded-full border border-white/10 p-2 text-gray-500 transition hover:border-[#ff950e] hover:text-[#ff950e]"
+                    className="rounded-full border border-white/10 p-2 text-ink-faint transition hover:border-primary hover:text-primary"
                     title="View profile"
                   >
                     <ExternalLink className="h-4 w-4" />
                   </Link>
                 </div>
 
-                <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-wide text-gray-500">
+                <div className="flex flex-wrap gap-3 text-[11px] uppercase tracking-wide text-ink-faint">
                   <span>{newListings} new listings</span>
                   <span className="text-white/20">•</span>
                   <span>${priceDisplay}/month</span>

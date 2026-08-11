@@ -57,7 +57,7 @@ export default function ExpandedOrderContent({
     <div className="relative z-10 border-t border-white/10 bg-black/25 px-6 pb-8 pt-6 sm:px-8">
       <div className="space-y-8">
         {/* Seller Info */}
-        <div className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 rounded-lg border border-white/10 bg-white/[0.03] p-5 sm:flex-row sm:items-center sm:justify-between">
           <Link
             href={`/sellers/${sanitizedUsername}`}
             className="group flex items-center gap-4"
@@ -75,17 +75,17 @@ export default function ExpandedOrderContent({
               </div>
             )}
             <div>
-              <div className="flex items-center gap-2 text-base font-semibold text-white transition-colors duration-300 group-hover:text-[#ffb469]">
+              <div className="flex items-center gap-2 text-base font-semibold text-white transition-colors duration-300 group-hover:text-primary-hover">
                 <SecureMessageDisplay content={order.seller} allowBasicFormatting={false} as="span" />
                 {isSellerVerified && <img src="/verification_badge.png" alt="Verified" className="h-4 w-4" />}
               </div>
-              <p className="text-xs uppercase tracking-widest text-gray-500">View seller profile</p>
+              <p className="text-xs uppercase tracking-widest text-ink-faint">View seller profile</p>
             </div>
           </Link>
 
           <Link
             href={`/buyers/messages?thread=${sanitizedUsername}`}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-white/10"
           >
             <MessageCircle className="h-4 w-4" />
             Message seller
@@ -94,24 +94,24 @@ export default function ExpandedOrderContent({
 
         {/* Info Grid */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
-            <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+          <div className="rounded-lg border border-white/10 bg-black/30 p-5">
+            <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">
               <Package className="h-4 w-4" />
               Order details
             </h4>
             <div className="mt-4 space-y-3 text-sm">
-              <div className="flex items-center justify-between text-gray-400">
+              <div className="flex items-center justify-between text-ink-muted">
                 <span>Order ID</span>
-                <span className="font-mono text-xs text-gray-300">
+                <span className="font-mono text-xs text-ink-muted">
                   {order.id ? `${order.id.slice(0, 12)}...` : '—'}
                 </span>
               </div>
-              <div className="flex items-center justify-between text-gray-400">
+              <div className="flex items-center justify-between text-ink-muted">
                 <span>Type</span>
                 <span className="text-gray-200 capitalize">{type} purchase</span>
               </div>
               {trackingNumber && (
-                <div className="flex items-center justify-between text-gray-400">
+                <div className="flex items-center justify-between text-ink-muted">
                   <span>Tracking</span>
                   <span className="font-mono text-xs text-gray-200">{trackingNumber}</span>
                 </div>
@@ -119,17 +119,17 @@ export default function ExpandedOrderContent({
             </div>
           </div>
 
-          <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
-            <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+          <div className="rounded-lg border border-white/10 bg-black/30 p-5">
+            <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ink-muted">
               <CreditCard className="h-4 w-4" />
               Payment summary
             </h4>
             <div className="mt-4 space-y-3 text-sm">
-              <div className="flex items-center justify-between text-gray-400">
+              <div className="flex items-center justify-between text-ink-muted">
                 <span>Item price</span>
                 <span className="text-gray-200">${order.price.toFixed(2)}</span>
               </div>
-              <div className="flex items-center justify-between text-gray-400">
+              <div className="flex items-center justify-between text-ink-muted">
                 <span>Platform fee</span>
                 <span className="text-gray-200">
                   ${((order.markedUpPrice || order.price) - order.price).toFixed(2)}
@@ -143,7 +143,7 @@ export default function ExpandedOrderContent({
               )}
               <div className="flex items-center justify-between border-t border-white/10 pt-3 text-base font-semibold text-white">
                 <span>Total</span>
-                <span className="text-[#ffb469]">
+                <span className="text-primary-hover">
                   ${(order.markedUpPrice || order.price).toFixed(2)}
                 </span>
               </div>

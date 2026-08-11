@@ -38,7 +38,7 @@ export default function OrderSections({
 
   if (totalOrders === 0) {
     return (
-      <div className="rounded-xl border border-neutral-800 bg-[var(--color-card)] p-8 text-center text-neutral-400">
+      <div className="rounded-md border border-neutral-800 bg-[var(--color-card)] p-8 text-center text-neutral-400">
         <div className="mx-auto flex max-w-sm flex-col items-center gap-4">
           <span className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-neutral-800 bg-neutral-900/60">
             <Package className="h-5 w-5" />
@@ -75,7 +75,7 @@ export default function OrderSections({
               ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-neutral-800 bg-[var(--color-card)] p-6 text-neutral-400">
+            <div className="rounded-md border border-neutral-800 bg-[var(--color-card)] p-6 text-neutral-400">
               <div className="flex items-center gap-3">
                 <Package className="h-4 w-4" />
                 <span>No orders yet.</span>

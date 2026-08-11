@@ -122,7 +122,7 @@ const TierBadge = ({
         <div
           className={`absolute z-10 ${
             sizeClasses[validatedSize as keyof typeof sizeClasses]?.tooltip || 'w-60'
-          } bg-[#1a1a1a] rounded-md shadow-lg p-4 text-sm border border-gray-700 -translate-x-1/2 left-1/2 mt-1`}
+          } bg-surface-raised rounded-md shadow-lg p-4 text-sm border border-line -translate-x-1/2 left-1/2 mt-1`}
           role="tooltip"
         >
           <div className="font-bold text-center mb-2" style={{ color: getTierColor(validatedTier) }}>
@@ -135,10 +135,10 @@ const TierBadge = ({
           <div className="text-gray-200 space-y-2">
             <p>This seller is {getTierNumber(validatedTier)} out of 5 as they have:</p>
             <p>
-              • {sanitizedMinSales.toLocaleString()}+ sales <span className="text-gray-400">OR</span>
+              • {sanitizedMinSales.toLocaleString()}+ sales <span className="text-ink-muted">OR</span>
             </p>
             <p>• ${sanitizedMinAmount.toLocaleString()}+ in total sales</p>
-            <p className="pt-1 text-[#ff950e] font-medium">
+            <p className="pt-1 text-primary font-medium">
               This seller earns an extra {(sanitizedCredit * 100).toFixed(0)}% on all sales made
             </p>
           </div>

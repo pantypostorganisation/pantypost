@@ -54,12 +54,12 @@ function DashboardErrorFallback({ error, reset }: { error: Error; reset: () => v
       <div className="max-w-md mx-auto text-center">
         <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
         <h1 className="text-2xl font-bold mb-4">Dashboard Error</h1>
-        <p className="text-gray-400 mb-6">
+        <p className="text-ink-muted mb-6">
           {error.message || 'Something went wrong loading your dashboard.'}
         </p>
         <button
           onClick={reset}
-          className="px-6 py-3 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff7a00] transition-colors font-medium"
+          className="px-6 py-3 bg-primary text-black rounded-lg hover:bg-primary-hover transition-colors font-medium"
         >
           Try Again
         </button>
@@ -82,7 +82,7 @@ function CollapsibleSection({ id, title, description, summary, isOpen, onToggle,
   return (
     <section
       id={id}
-      className="rounded-3xl border border-white/10 bg-[#111111]/85 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.8)]"
+      className="rounded-lg border border-white/10 bg-surface/85 shadow-[0_12px_40px_-24px_rgba(0,0,0,0.8)]"
     >
       <div className="p-6">
         <button
@@ -94,10 +94,10 @@ function CollapsibleSection({ id, title, description, summary, isOpen, onToggle,
         >
           <div>
             <h2 className="text-lg font-semibold text-white">{title}</h2>
-            <p className="mt-1 text-sm text-gray-500">{description}</p>
+            <p className="mt-1 text-sm text-ink-faint">{description}</p>
           </div>
           <ChevronDown
-            className={`mt-1 h-5 w-5 flex-shrink-0 text-gray-500 transition-transform ${isOpen ? 'rotate-180 text-white' : ''}`}
+            className={`mt-1 h-5 w-5 flex-shrink-0 text-ink-faint transition-transform ${isOpen ? 'rotate-180 text-white' : ''}`}
           />
         </button>
         {summary ? <div className="mt-4 flex flex-wrap gap-2">{summary}</div> : null}
@@ -114,7 +114,7 @@ function CollapsibleSection({ id, title, description, summary, isOpen, onToggle,
 
 function SummaryPill({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-1 text-xs text-gray-400">
+    <span className="inline-flex items-center gap-2 rounded-md bg-black/40 px-3 py-1 text-xs text-ink-muted">
       <span className="font-semibold text-white">{value}</span>
       <span className="uppercase tracking-wide">{label}</span>
     </span>
@@ -232,7 +232,7 @@ function DashboardContent() {
       <BanCheck>
         <main className="min-h-screen bg-black text-white p-10 max-w-4xl mx-auto">
           <h1 className="text-2xl font-bold mb-4 text-red-400">🚫 Access Denied</h1>
-          <p className="text-gray-400">Only buyers can view this page.</p>
+          <p className="text-ink-muted">Only buyers can view this page.</p>
         </main>
       </BanCheck>
     );
@@ -287,7 +287,7 @@ function DashboardContent() {
       return (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[...Array(3)].map((_, index) => (
-            <Skeleton key={`favorite-skeleton-${index}`} className="h-24 rounded-2xl bg-[#181818]" />
+            <Skeleton key={`favorite-skeleton-${index}`} className="h-24 rounded-lg bg-surface-raised" />
           ))}
         </div>
       );
@@ -295,12 +295,12 @@ function DashboardContent() {
 
     if (favoriteCount === 0) {
       return (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-[#181818] p-8 text-center">
-          <Heart className="mx-auto mb-4 h-7 w-7 text-gray-600" />
-          <p className="text-sm text-gray-400">You haven&apos;t saved any sellers yet.</p>
+        <div className="rounded-lg border border-dashed border-white/10 bg-surface-raised p-8 text-center">
+          <Heart className="mx-auto mb-4 h-7 w-7 text-ink-faint" />
+          <p className="text-sm text-ink-muted">You haven&apos;t saved any sellers yet.</p>
           <button
             onClick={() => router.push('/browse')}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
+            className="mt-6 inline-flex items-center justify-center rounded-md bg-surface-raised px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
           >
             Explore marketplace
           </button>
@@ -316,7 +316,7 @@ function DashboardContent() {
           return (
             <div
               key={favorite.sellerId}
-              className="group rounded-2xl border border-white/5 bg-black/30 p-4 transition hover:border-[#ff950e]/40"
+              className="group rounded-lg border border-white/5 bg-black/30 p-4 transition hover:border-primary/40"
             >
               <div className="flex items-start justify-between gap-3">
                 <button
@@ -335,43 +335,43 @@ function DashboardContent() {
                         onLoad={() => handleImageLoad(favorite.sellerId)}
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-gray-600">
+                      <div className="flex h-full w-full items-center justify-center text-ink-faint">
                         <Heart className="h-4 w-4" />
                       </div>
                     )}
                   </div>
                   <div>
-                    <p className="font-medium text-white transition group-hover:text-[#ff950e]">
+                    <p className="font-medium text-white transition group-hover:text-primary">
                       {favorite.sellerUsername}
                     </p>
-                    <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                    <div className="mt-1 flex items-center gap-2 text-xs text-ink-faint">
                       {favorite.isVerified && (
                         <span className="flex items-center gap-1 text-blue-300">
                           <Star className="h-3 w-3" /> Verified
                         </span>
                       )}
                       {favorite.tier && (
-                        <span className="rounded-full bg-black/40 px-2 py-0.5 text-gray-400">{favorite.tier}</span>
+                        <span className="rounded-md bg-black/40 px-2 py-0.5 text-ink-muted">{favorite.tier}</span>
                       )}
                     </div>
                   </div>
                 </button>
                 <button
                   onClick={() => handleRemoveFavorite(favorite)}
-                  className="rounded-full border border-transparent p-1 text-gray-600 transition hover:border-[#ff950e]/40 hover:text-[#ff950e]"
+                  className="rounded-full border border-transparent p-1 text-ink-faint transition hover:border-primary/40 hover:text-primary"
                   aria-label="Remove from favorites"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <div className="mt-3 flex items-center justify-between text-[11px] uppercase tracking-wide text-gray-500">
+              <div className="mt-3 flex items-center justify-between text-[11px] uppercase tracking-wide text-ink-faint">
                 <button
                   onClick={() => handleViewSellerProfile(favorite.sellerUsername)}
-                  className="inline-flex items-center gap-1 font-semibold text-[#ff950e] transition hover:text-[#ffb347]"
+                  className="inline-flex items-center gap-1 font-semibold text-primary transition hover:text-primary-hover"
                 >
                   View profile
                 </button>
-                <span className="rounded-full bg-black/40 px-2 py-0.5 text-white/60">Favorite</span>
+                <span className="rounded-md bg-black/40 px-2 py-0.5 text-white/60">Favorite</span>
               </div>
             </div>
           );
@@ -385,7 +385,7 @@ function DashboardContent() {
       return (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {[...Array(3)].map((_, index) => (
-            <Skeleton key={`subscription-skeleton-${index}`} className="h-24 rounded-2xl bg-[#181818]" />
+            <Skeleton key={`subscription-skeleton-${index}`} className="h-24 rounded-lg bg-surface-raised" />
           ))}
         </div>
       );
@@ -393,12 +393,12 @@ function DashboardContent() {
 
     if (safeSubscriptions.length === 0) {
       return (
-        <div className="rounded-2xl border border-dashed border-white/10 bg-[#181818] p-8 text-center">
-          <Crown className="mx-auto mb-4 h-8 w-8 text-gray-600" />
-          <p className="text-sm text-gray-400">No active subscriptions yet.</p>
+        <div className="rounded-lg border border-dashed border-white/10 bg-surface-raised p-8 text-center">
+          <Crown className="mx-auto mb-4 h-8 w-8 text-ink-faint" />
+          <p className="text-sm text-ink-muted">No active subscriptions yet.</p>
           <button
             onClick={() => router.push('/browse')}
-            className="mt-6 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
+            className="mt-6 inline-flex items-center justify-center rounded-md bg-surface-raised px-5 py-2 text-sm font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
           >
             Browse sellers
           </button>
@@ -427,7 +427,7 @@ function DashboardContent() {
           return (
             <div
               key={`${sub.seller}-${sub.tier ?? 'tier'}`}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-black/30 p-4 transition hover:border-[#ff950e]/40"
+              className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-black/30 p-4 transition hover:border-primary/40"
             >
               <div className="flex items-center gap-3">
                 {sub.pic ? (
@@ -444,11 +444,11 @@ function DashboardContent() {
                 <div>
                   <button
                     onClick={() => router.push(`/sellers/${sanitizedUsername}`)}
-                    className="text-sm font-medium text-white transition hover:text-[#ff950e]"
+                    className="text-sm font-medium text-white transition hover:text-primary"
                   >
                     <SecureMessageDisplay content={sub.seller} allowBasicFormatting={false} className="inline" />
                   </button>
-                  <div className="mt-1 text-[11px] uppercase tracking-wide text-gray-500">
+                  <div className="mt-1 text-[11px] uppercase tracking-wide text-ink-faint">
                     ${priceDisplay}/month
                     <span className="mx-2 text-white/20">•</span>
                     {newListings} new listings
@@ -457,7 +457,7 @@ function DashboardContent() {
               </div>
               <button
                 onClick={() => router.push(`/sellers/${sanitizedUsername}`)}
-                className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-gray-300 transition hover:border-[#ff950e] hover:text-[#ff950e]"
+                className="rounded-md border border-white/10 px-3 py-1 text-xs font-semibold text-ink-muted transition hover:border-primary hover:text-primary"
               >
                 View
               </button>
@@ -471,10 +471,10 @@ function DashboardContent() {
   return (
     <BanCheck>
       <RequireAuth role="buyer">
-        <main className="min-h-screen bg-gradient-to-b from-black via-[#050505] to-[#080808] text-gray-100">
+        <main className="min-h-screen bg-surface-raised text-gray-100">
           <div className="mx-auto max-w-5xl px-4 pb-16 pt-12 sm:px-6 lg:px-8">
             {isLoading ? (
-              <Skeleton className="h-44 rounded-3xl bg-[#1a1a1a]" />
+              <Skeleton className="h-44 rounded-lg bg-surface-raised" />
             ) : (
               <DashboardHeader username={user?.username || authUser?.username || ''} />
             )}
@@ -498,14 +498,14 @@ function DashboardContent() {
                   {isLoading ? (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                       {[...Array(4)].map((_, index) => (
-                        <Skeleton key={`overview-stat-${index}`} className="h-28 rounded-2xl bg-[#181818]" />
+                        <Skeleton key={`overview-stat-${index}`} className="h-28 rounded-lg bg-surface-raised" />
                       ))}
                     </div>
                   ) : (
                     <StatsGrid stats={safeStats} />
                   )}
 
-                  <div className="rounded-2xl border border-white/5 bg-black/30 p-4">
+                  <div className="rounded-lg border border-white/5 bg-black/30 p-4">
                     <QuickActions />
                   </div>
                 </div>
@@ -525,7 +525,7 @@ function DashboardContent() {
                 onToggle={() => toggleSection('connections')}
               >
                 <div className="space-y-4">
-                  <div className="rounded-2xl border border-white/5 bg-black/20">
+                  <div className="rounded-lg border border-white/5 bg-black/20">
                     <button
                       type="button"
                       onClick={() => toggleCollection('favorites')}
@@ -534,14 +534,14 @@ function DashboardContent() {
                     >
                       <div>
                         <h3 className="text-sm font-semibold text-white">Favorites</h3>
-                        <p className="text-xs text-gray-500">Sellers you&apos;ve saved for quick access.</p>
+                        <p className="text-xs text-ink-faint">Sellers you&apos;ve saved for quick access.</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-gray-300">
+                        <span className="rounded-md bg-black/40 px-3 py-1 text-xs font-semibold text-ink-muted">
                           {formatNumber(favoriteCount)}
                         </span>
                         <ChevronDown
-                          className={`h-4 w-4 text-gray-500 transition-transform ${openCollections.favorites ? 'rotate-180 text-white' : ''}`}
+                          className={`h-4 w-4 text-ink-faint transition-transform ${openCollections.favorites ? 'rotate-180 text-white' : ''}`}
                         />
                       </div>
                     </button>
@@ -549,25 +549,25 @@ function DashboardContent() {
                       className={`space-y-4 border-t border-white/5 px-5 py-4 ${openCollections.favorites ? 'block' : 'hidden'}`}
                     >
                       {renderFavoritePreview()}
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
                         <span>Showing a curated preview</span>
                         <button
                           type="button"
                           onClick={() => router.push('/browse')}
-                          className="font-semibold text-[#ff950e] transition hover:text-[#ffb347]"
+                          className="font-semibold text-primary transition hover:text-primary-hover"
                         >
                           Discover more sellers
                         </button>
                       </div>
                       {favError ? (
-                        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
                           {favError}
                         </div>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-white/5 bg-black/20">
+                  <div className="rounded-lg border border-white/5 bg-black/20">
                     <button
                       type="button"
                       onClick={() => toggleCollection('subscriptions')}
@@ -576,14 +576,14 @@ function DashboardContent() {
                     >
                       <div>
                         <h3 className="text-sm font-semibold text-white">Subscriptions</h3>
-                        <p className="text-xs text-gray-500">Active memberships and recurring support.</p>
+                        <p className="text-xs text-ink-faint">Active memberships and recurring support.</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-semibold text-gray-300">
+                        <span className="rounded-md bg-black/40 px-3 py-1 text-xs font-semibold text-ink-muted">
                           {formatNumber(safeStats.activeSubscriptions)}
                         </span>
                         <ChevronDown
-                          className={`h-4 w-4 text-gray-500 transition-transform ${openCollections.subscriptions ? 'rotate-180 text-white' : ''}`}
+                          className={`h-4 w-4 text-ink-faint transition-transform ${openCollections.subscriptions ? 'rotate-180 text-white' : ''}`}
                         />
                       </div>
                     </button>
@@ -591,12 +591,12 @@ function DashboardContent() {
                       className={`space-y-4 border-t border-white/5 px-5 py-4 ${openCollections.subscriptions ? 'block' : 'hidden'}`}
                     >
                       {renderSubscriptionPreview()}
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
                         <span>Recent membership updates</span>
                         <button
                           type="button"
                           onClick={() => router.push('/buyers/profile')}
-                          className="font-semibold text-[#ff950e] transition hover:text-[#ffb347]"
+                          className="font-semibold text-primary transition hover:text-primary-hover"
                         >
                           Manage subscriptions
                         </button>
@@ -620,7 +620,7 @@ function DashboardContent() {
                 onToggle={() => toggleSection('activity')}
               >
                 {isLoading ? (
-                  <Skeleton className="h-[260px] rounded-2xl bg-[#1a1a1a]" />
+                  <Skeleton className="h-[260px] rounded-lg bg-surface-raised" />
                 ) : (
                   <RecentActivity activities={activityPreview} />
                 )}
@@ -640,14 +640,14 @@ function DashboardContent() {
                 onToggle={() => toggleSection('insights')}
               >
                 {isLoading ? (
-                  <Skeleton className="h-[260px] rounded-2xl bg-[#1a1a1a]" />
+                  <Skeleton className="h-[260px] rounded-lg bg-surface-raised" />
                 ) : (
                   <div className="grid gap-4 lg:grid-cols-3">
-                    <div className="rounded-2xl border border-white/5 bg-black/30 p-5">
-                      <p className="text-sm text-gray-500">Current balance</p>
+                    <div className="rounded-lg border border-white/5 bg-black/30 p-5">
+                      <p className="text-sm text-ink-faint">Current balance</p>
                       <p className="mt-3 text-3xl font-semibold text-white">{formatCurrency(safeBalance)}</p>
-                      <p className="mt-2 text-xs text-gray-500">Available wallet balance</p>
-                      <dl className="mt-5 space-y-3 text-sm text-gray-400">
+                      <p className="mt-2 text-xs text-ink-faint">Available wallet balance</p>
+                      <dl className="mt-5 space-y-3 text-sm text-ink-muted">
                         <div className="flex items-center justify-between">
                           <dt>Orders this month</dt>
                           <dd className="font-semibold text-white">{formatNumber(safeStats.thisMonthOrders)}</dd>
@@ -663,25 +663,25 @@ function DashboardContent() {
                       </dl>
                     </div>
 
-                    <div className="rounded-2xl border border-white/5 bg-black/30 p-5">
+                    <div className="rounded-lg border border-white/5 bg-black/30 p-5">
                       <div className="flex items-center gap-3">
                         <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-500/15 text-blue-200">
                           <Truck className="h-5 w-5" />
                         </span>
                         <div>
                           <h3 className="text-base font-semibold text-white">Order status</h3>
-                          <p className="text-xs text-gray-500">Snapshot of your active deliveries.</p>
+                          <p className="text-xs text-ink-faint">Snapshot of your active deliveries.</p>
                         </div>
                       </div>
-                      <div className="mt-6 space-y-3 text-sm text-gray-400">
-                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
+                      <div className="mt-6 space-y-3 text-sm text-ink-muted">
+                        <div className="flex items-center justify-between rounded-md bg-surface px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-yellow-300" />
                             Processing
                           </div>
                           <span className="font-semibold text-white">{formatNumber(safeStats.pendingShipments)}</span>
                         </div>
-                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
+                        <div className="flex items-center justify-between rounded-md bg-surface px-4 py-3">
                           <div className="flex items-center gap-2">
                             <CheckCircle className="h-4 w-4 text-emerald-300" />
                             Delivered
@@ -691,27 +691,27 @@ function DashboardContent() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/5 bg-black/30 p-5">
+                    <div className="rounded-lg border border-white/5 bg-black/30 p-5">
                       <h3 className="text-base font-semibold text-white">Spending insights</h3>
-                      <p className="mt-1 text-xs text-gray-500">Keep tabs on your purchasing habits.</p>
-                      <div className="mt-5 space-y-3 text-sm text-gray-400">
-                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
-                          <span className="text-gray-500">This week</span>
+                      <p className="mt-1 text-xs text-ink-faint">Keep tabs on your purchasing habits.</p>
+                      <div className="mt-5 space-y-3 text-sm text-ink-muted">
+                        <div className="flex items-center justify-between rounded-md bg-surface px-4 py-3">
+                          <span className="text-ink-faint">This week</span>
                           <span className="font-semibold text-white">{formatCurrency(safeStats.thisWeekSpent)}</span>
                         </div>
-                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
-                          <span className="text-gray-500">Average order</span>
+                        <div className="flex items-center justify-between rounded-md bg-surface px-4 py-3">
+                          <span className="text-ink-faint">Average order</span>
                           <span className="font-semibold text-white">{formatCurrency(safeStats.averageOrderValue)}</span>
                         </div>
-                        <div className="flex items-center justify-between rounded-xl bg-[#0b0b0b] px-4 py-3">
-                          <span className="text-gray-500">Favorite sellers</span>
+                        <div className="flex items-center justify-between rounded-md bg-surface px-4 py-3">
+                          <span className="text-ink-faint">Favorite sellers</span>
                           <span className="font-semibold text-white">{formatNumber(favoriteCount)}</span>
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => router.push('/wallet/buyer')}
-                        className="mt-5 inline-flex items-center justify-center rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-gray-300 transition hover:border-[#ff950e] hover:text-[#ff950e]"
+                        className="mt-5 inline-flex items-center justify-center rounded-md border border-white/10 px-4 py-2 text-xs font-semibold text-ink-muted transition hover:border-primary hover:text-primary"
                       >
                         Manage funds
                       </button>

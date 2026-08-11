@@ -25,7 +25,7 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
   const getStatusColor = (type: string) => {
     switch (type) {
       case 'order':
-        return 'text-[#ff950e]';
+        return 'text-primary';
       case 'message':
         return 'text-blue-400';
       case 'request':
@@ -33,19 +33,19 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
       case 'subscription':
         return 'text-green-400';
       default:
-        return 'text-gray-400';
+        return 'text-ink-muted';
     }
   };
 
   const safeActivities = Array.isArray(activities) ? activities : [];
 
   return (
-    <section className="rounded-2xl border border-white/5 bg-black/30 p-5">
+    <section className="rounded-lg border border-white/5 bg-black/30 p-5">
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold text-white">Recent activity</h2>
         <Link
           href="/buyers/my-orders"
-          className="text-xs font-medium text-[#ff950e] transition hover:text-[#ffb347]"
+          className="text-xs font-medium text-primary transition hover:text-primary-hover"
         >
           View all orders
         </Link>
@@ -64,7 +64,7 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
 
               <Link
                 href={activity.href || '#'}
-                className="flex flex-1 flex-col gap-2 rounded-2xl border border-white/5 bg-gradient-to-br from-[#181818] to-[#0f0f0f] p-4 transition hover:border-[#ff950e]/40 hover:bg-[#161616]"
+                className="flex flex-1 flex-col gap-2 rounded-lg border border-white/5 bg-surface-raised p-4 transition hover:border-primary/40 hover:bg-surface-raised"
               >
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <SecureMessageDisplay
@@ -73,16 +73,16 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
                     allowBasicFormatting={false}
                     maxLength={100}
                   />
-                  <p className="text-xs text-gray-500">{activity.time}</p>
+                  <p className="text-xs text-ink-faint">{activity.time}</p>
                 </div>
                 <SecureMessageDisplay
                   content={activity.subtitle}
-                  className="text-xs text-gray-500"
+                  className="text-xs text-ink-faint"
                   allowBasicFormatting={false}
                   maxLength={80}
                 />
 
-                <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center justify-between text-xs text-ink-faint">
                   {typeof activity.amount === 'number' && !Number.isNaN(activity.amount) ? (
                     <span className="font-semibold text-white">${activity.amount.toFixed(2)}</span>
                   ) : (
@@ -95,12 +95,12 @@ export default function RecentActivity({ activities }: RecentActivityProps) {
           ))}
         </div>
       ) : (
-        <div className="mt-8 rounded-2xl border border-dashed border-white/10 bg-[#181818] p-10 text-center">
-          <Clock className="mx-auto mb-3 h-10 w-10 text-gray-600" />
-          <p className="text-sm text-gray-400">You&apos;re all caught up. Activity will appear here once you place new orders.</p>
+        <div className="mt-8 rounded-lg border border-dashed border-white/10 bg-surface-raised p-10 text-center">
+          <Clock className="mx-auto mb-3 h-10 w-10 text-ink-faint" />
+          <p className="text-sm text-ink-muted">You&apos;re all caught up. Activity will appear here once you place new orders.</p>
           <Link
             href="/browse"
-            className="mt-4 inline-flex items-center justify-center rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] px-4 py-2 text-xs font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
+            className="mt-4 inline-flex items-center justify-center rounded-md bg-surface-raised px-4 py-2 text-xs font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
           >
             Discover new listings
           </Link>

@@ -129,8 +129,8 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
     // Order not eligible for review yet
     if (order.shippingStatus === 'pending' || order.shippingStatus === 'processing') {
       return (
-        <div className="mt-4 p-3 bg-gray-800/30 border border-gray-700/50 rounded-lg">
-          <div className="flex items-center gap-2 text-gray-500">
+        <div className="mt-4 p-3 bg-gray-800/30 border border-line/50 rounded-lg">
+          <div className="flex items-center gap-2 text-ink-faint">
             <AlertCircle className="w-4 h-4" />
             <span className="text-xs">You can review this order after it&apos;s shipped</span>
           </div>
@@ -164,7 +164,7 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
         </h3>
         <button
           onClick={() => setShowReviewForm(false)}
-          className="text-gray-400 hover:text-white transition p-1"
+          className="text-ink-muted hover:text-white transition p-1"
           aria-label="Close review form"
         >
           <ChevronUp className="w-4 h-4" />
@@ -174,14 +174,14 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
       <form onSubmit={handleSubmit} className="space-y-3">
         {/* Rating */}
         <div>
-          <label className="block text-xs font-medium text-gray-300 mb-1.5">
+          <label className="block text-xs font-medium text-ink-muted mb-1.5">
             Overall Rating
           </label>
           <div className="flex items-center gap-3">
             <select
               value={rating}
               onChange={(e) => setRating(Number(e.target.value))}
-              className="bg-black/50 border border-gray-700 rounded-lg px-2.5 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              className="bg-black/50 border border-line rounded-lg px-2.5 py-1.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               disabled={isSubmitting}
             >
               {[5, 4, 3, 2, 1].map((r) => (
@@ -222,7 +222,7 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
               disabled={isSubmitting}
               className="w-3.5 h-3.5 text-purple-600 bg-black border-gray-600 rounded focus:ring-purple-500"
             />
-            <span className="text-xs text-gray-300">As described</span>
+            <span className="text-xs text-ink-muted">As described</span>
           </label>
           
           <label className="flex items-center gap-1.5 cursor-pointer">
@@ -233,7 +233,7 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
               disabled={isSubmitting}
               className="w-3.5 h-3.5 text-purple-600 bg-black border-gray-600 rounded focus:ring-purple-500"
             />
-            <span className="text-xs text-gray-300">Fast shipping</span>
+            <span className="text-xs text-ink-muted">Fast shipping</span>
           </label>
           
           <label className="flex items-center gap-1.5 cursor-pointer">
@@ -244,7 +244,7 @@ export default function ReviewSection({ order }: ReviewSectionProps) {
               disabled={isSubmitting}
               className="w-3.5 h-3.5 text-purple-600 bg-black border-gray-600 rounded focus:ring-purple-500"
             />
-            <span className="text-xs text-gray-300">Would buy again</span>
+            <span className="text-xs text-ink-muted">Would buy again</span>
           </label>
         </div>
 

@@ -3,12 +3,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { Check } from 'lucide-react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
-import CryptoDepositSection from '@/components/wallet/buyer/CryptoDepositSection';
-import DirectCryptoDepositSection from '@/components/wallet/buyer/DirectCryptoDepositSection';
 import AllDepositsSection from '@/components/wallet/buyer/AllDepositsSection';
+import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
@@ -36,7 +36,6 @@ function BuyerWalletContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [showBanner, setShowBanner] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'nowpayments' | 'direct'>('direct'); // Default to direct!
   const [depositHistory, setDepositHistory] = useState<any[]>([]);
 
   // decide which balance to show: prefer context (backend) if available
@@ -87,13 +86,14 @@ function BuyerWalletContent() {
   }, [searchParams, router]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#050505] text-white">
+    <main className="relative min-h-screen overflow-hidden bg-surface text-white">
       <div className="relative z-10 px-4 py-8 sm:px-6 lg:px-10">
         <div className="mx-auto flex max-w-7xl flex-col gap-8">
           {/* success banner after crypto redirect */}
           {showBanner && (
-            <div className="rounded-lg border border-green-500 bg-green-900/30 p-4 text-center text-green-300">
-              ✅ Deposit received — your wallet has been updated.
+            <div className="flex items-center justify-center gap-2 rounded-md border border-success bg-success-soft p-4 text-center text-success">
+              <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+              Deposit received. Your wallet has been updated.
             </div>
           )}
 
@@ -118,41 +118,13 @@ function BuyerWalletContent() {
               onQuickAmountSelect={handleQuickAmountSelect}
             />
 
-            {/* Crypto Deposit Section */}
+            /* Crypto removed. Card via SegPay is the funding route now,
+               and the crypto column was three competing choices deep --
+               a method toggle, then six coin options, each with its own
+               green "CHEAPEST" badge -- next to a single, calm card form.
+               The components still exist on disk if it ever comes back. */
             <div className="flex flex-col gap-6">
-              {/* Payment Method Toggle */}
-              <div className="rounded-xl border border-gray-800 bg-[#111] p-4">
-                <h3 className="text-sm font-medium text-gray-400 mb-3">Crypto Payment Method</h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPaymentMethod('direct')}
-                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                      paymentMethod === 'direct'
-                        ? 'bg-[#ff950e] text-black'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >
-                    Direct Wallet (0% Fee) 🏆
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('nowpayments')}
-                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-                      paymentMethod === 'nowpayments'
-                        ? 'bg-[#ff950e] text-black'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-                    }`}
-                  >
-                    NOWPayments (80% Fee)
-                  </button>
-                </div>
-              </div>
-
-              {/* Crypto deposit component based on selection */}
-              {paymentMethod === 'direct' ? (
-                <DirectCryptoDepositSection />
-              ) : (
-                <CryptoDepositSection />
-              )}
+              <RecentPurchases purchases={recentPurchases} />
             </div>
           </div>
 
@@ -190,13 +162,13 @@ function BuyerWalletWrapper() {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 rounded-full bg-[#ff950e] animate-pulse"></div>
+          <div className="w-4 h-4 rounded-full bg-primary animate-pulse"></div>
           <div
-            className="w-4 h-4 rounded-full bg-[#ff950e] animate-pulse"
+            className="w-4 h-4 rounded-full bg-primary animate-pulse"
             style={{ animationDelay: '0.2s' }}
           ></div>
           <div
-            className="w-4 h-4 rounded-full bg-[#ff950e] animate-pulse"
+            className="w-4 h-4 rounded-full bg-primary animate-pulse"
             style={{ animationDelay: '0.4s' }}
           ></div>
         </div>

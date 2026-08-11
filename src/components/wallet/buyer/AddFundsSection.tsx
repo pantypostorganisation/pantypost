@@ -81,19 +81,19 @@ export default function AddFundsSection({
       ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
       : messageType === 'error'
       ? 'border-red-500/40 bg-red-500/10 text-red-200'
-      : 'border-gray-800 bg-[#0c0c0c] text-gray-300';
+      : 'border-line bg-surface text-ink-muted';
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
+    <section className="rounded-lg border border-line bg-surface p-6 transition-colors sm:p-8">
       <div className="flex flex-col gap-6">
         {/* Header row */}
         <div className="flex items-center gap-3">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-            <CreditCard className="h-5 w-5 text-[#ff950e]" />
+          <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-primary/40 bg-primary/10">
+            <CreditCard className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h2 className="text-xl font-semibold text-white sm:text-2xl">Card Deposit</h2>
-            <p className="text-sm text-gray-400">Secure payment powered by SegPay</p>
+            <p className="text-sm text-ink-muted">Secure payment powered by SegPay</p>
           </div>
         </div>
 
@@ -103,13 +103,13 @@ export default function AddFundsSection({
             {/* Animated Card with Brand Colors - Actual Credit Card Size Ratio */}
             <div className="relative">
               {/* Subtle glow effect */}
-              <div className="absolute inset-0 bg-[#ff950e]/10 blur-3xl animate-pulse" />
+              <div className="absolute inset-0 bg-primary/10 blur-3xl animate-pulse" />
               
               {/* Card - Actual credit card aspect ratio (1.586:1) */}
-              <div className="relative bg-gradient-to-br from-[#2a2a2a] via-[#1a1a1a] to-black rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] border border-gray-800" style={{ aspectRatio: '1.586' }}>
+              <div className="relative bg-surface-raised rounded-lg shadow-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] border border-line" style={{ aspectRatio: '1.586' }}>
                 {/* Subtle background pattern */}
                 <div className="absolute inset-0 opacity-[0.03]">
-                  <div className="absolute top-0 right-0 w-48 h-48 bg-[#ff950e] rounded-full blur-3xl -translate-y-24 translate-x-24" />
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-primary rounded-full blur-3xl -translate-y-24 translate-x-24" />
                 </div>
 
                 {/* Logos positioned at top of card */}
@@ -165,7 +165,7 @@ export default function AddFundsSection({
                   </div>
 
                   {/* Card Number (masked) - Back to text with responsive sizing */}
-                  <div className="font-mono font-semibold text-gray-300 whitespace-nowrap">
+                  <div className="font-mono font-semibold text-ink-muted whitespace-nowrap">
                     <span className="inline-block text-sm sm:text-base md:text-lg lg:text-xl">
                       •••• •••• •••• ••••
                     </span>
@@ -174,7 +174,7 @@ export default function AddFundsSection({
                   {/* Bottom Info */}
                   <div className="flex justify-between items-end">
                     <div className="flex-1">
-                      <p className="text-[9px] sm:text-[10px] md:text-xs uppercase text-gray-500 tracking-wider mb-0.5 sm:mb-1">
+                      <p className="text-[9px] sm:text-[10px] md:text-xs uppercase text-ink-faint tracking-wider mb-0.5 sm:mb-1">
                         Cardholder
                       </p>
                       <p className="text-xs sm:text-sm md:text-base font-semibold text-gray-200 truncate">
@@ -183,20 +183,20 @@ export default function AddFundsSection({
                     </div>
                     
                     <div className="text-right">
-                      <p className="text-[9px] sm:text-[10px] md:text-xs uppercase text-gray-500 tracking-wider mb-0.5 sm:mb-1">
+                      <p className="text-[9px] sm:text-[10px] md:text-xs uppercase text-ink-faint tracking-wider mb-0.5 sm:mb-1">
                         Balance
                       </p>
-                      <p className="text-base sm:text-lg md:text-xl font-bold text-[#ff950e]">
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-primary">
                         ${balance.toFixed(2)}
                       </p>
-                      <p className="text-[8px] sm:text-[9px] md:text-[10px] text-gray-500">Available</p>
+                      <p className="text-[8px] sm:text-[9px] md:text-[10px] text-ink-faint">Available</p>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Card shadow */}
-              <div className="absolute -bottom-2 left-4 right-4 h-4 bg-gradient-to-r from-transparent via-black/30 to-transparent blur-xl rounded-full" />
+              <div className="absolute -bottom-2 left-4 right-4 h-4 bg-surface-raised blur-xl rounded-full" />
             </div>
           </div>
         </div>
@@ -233,7 +233,7 @@ export default function AddFundsSection({
                 key={quickAmount}
                 type="button"
                 onClick={() => onQuickAmountSelect(quickAmount.toString())}
-                className="rounded-xl border border-gray-800 bg-[#0c0c0c] py-2.5 text-sm font-semibold text-gray-200 transition-colors duration-200 hover:border-[#ff950e] hover:text-white disabled:opacity-50"
+                className="rounded-md border border-line bg-surface py-2.5 text-sm font-semibold text-gray-200 transition-colors duration-200 hover:border-primary hover:text-white disabled:opacity-50"
                 disabled={isLoading}
               >
                 ${quickAmount}
@@ -255,42 +255,42 @@ export default function AddFundsSection({
           />
 
           {/* SegPay Iframe Placeholder */}
-          <div className="rounded-xl border-2 border-dashed border-gray-800 bg-[#0c0c0c] p-6">
+          <div className="rounded-md border-2 border-dashed border-line bg-surface p-6">
             <div className="text-center">
-              <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl border border-gray-700 bg-gray-800/50 mb-3">
-                <CreditCard className="h-7 w-7 text-gray-500" />
+              <div className="inline-flex h-14 w-14 items-center justify-center rounded-lg border border-line bg-gray-800/50 mb-3">
+                <CreditCard className="h-7 w-7 text-ink-faint" />
               </div>
-              <p className="text-sm font-medium text-gray-400 mb-2">
+              <p className="text-sm font-medium text-ink-muted mb-2">
                 Secure Card Entry
               </p>
-              <p className="text-xs text-gray-600 max-w-sm mx-auto">
+              <p className="text-xs text-ink-faint max-w-sm mx-auto">
                 SegPay's secure payment form will appear here. No card data touches our servers.
               </p>
             </div>
           </div>
 
           {/* Summary */}
-          <div className="rounded-xl border border-gray-800 bg-[#0c0c0c] p-4">
+          <div className="rounded-md border border-line bg-surface p-4">
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-400">Deposit amount</span>
+                <span className="text-ink-muted">Deposit amount</span>
                 <span className="text-white font-medium">${displayAmount}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">Processing fee</span>
+                <span className="text-ink-muted">Processing fee</span>
                 <span className="text-green-400 font-medium">$0.00</span>
               </div>
               <div className="h-px bg-gray-800 my-2" />
               <div className="flex justify-between">
                 <span className="text-white font-semibold">Total to pay</span>
-                <span className="text-[#ff950e] font-bold">${displayAmount}</span>
+                <span className="text-primary font-bold">${displayAmount}</span>
               </div>
             </div>
           </div>
 
           {/* Message */}
           {message && (
-            <div className={`mt-2 flex items-start gap-2 rounded-2xl border p-4 text-sm ${messageClasses}`}>
+            <div className={`mt-2 flex items-start gap-2 rounded-lg border p-4 text-sm ${messageClasses}`}>
               {messageType === 'success' ? (
                 <CheckCircle className="w-4 h-4 mr-2 flex-shrink-0 mt-0.5" />
               ) : messageType === 'error' ? (
@@ -304,7 +304,7 @@ export default function AddFundsSection({
           <div className="flex justify-center">
             <button
               type="submit"
-              className="flex items-center justify-center rounded-full bg-[#ff950e] px-10 py-3.5 font-semibold text-black transition-colors duration-200 hover:bg-[#e0850d] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center justify-center rounded-md bg-primary px-10 py-3.5 font-semibold text-black transition-colors duration-200 hover:bg-primary-press disabled:cursor-not-allowed disabled:opacity-50"
               disabled={
                 isLoading ||
                 !amountToAdd ||
@@ -330,15 +330,15 @@ export default function AddFundsSection({
 
         {/* Trust Badges */}
         <div className="flex flex-wrap gap-2 justify-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400">
+          <div className="inline-flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400">
             <Shield className="h-3 w-3" />
             PCI-DSS Compliant
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400">
+          <div className="inline-flex items-center gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400">
             <Shield className="h-3 w-3" />
             256-bit SSL
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400">
+          <div className="inline-flex items-center gap-2 rounded-md border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400">
             <CheckCircle className="h-3 w-3" />
             Instant Deposit
           </div>

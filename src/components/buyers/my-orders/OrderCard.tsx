@@ -173,7 +173,7 @@ export default function OrderCard({
 
   return (
     <article
-      className={`group rounded-2xl border border-neutral-800/80 bg-[var(--color-card)] p-4 shadow-[0_12px_30px_-16px_rgba(0,0,0,0.8)] transition-colors hover:border-neutral-700 ${styles.borderStyle}`}
+      className={`group rounded-lg border border-neutral-800/80 bg-[var(--color-card)] p-4 shadow-[0_12px_30px_-16px_rgba(0,0,0,0.8)] transition-colors hover:border-neutral-700 ${styles.borderStyle}`}
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
@@ -215,7 +215,7 @@ export default function OrderCard({
         )}
 
         {showConfirmAddress && (
-          <div className="rounded-xl border border-neutral-800/80 bg-neutral-900/70 p-3">
+          <div className="rounded-md border border-neutral-800/80 bg-neutral-900/70 p-3">
             <div className="flex flex-col gap-2 text-xs text-neutral-300">
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
@@ -250,7 +250,7 @@ export default function OrderCard({
         </div>
 
         {isExpanded && (
-          <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+          <div className="rounded-md border border-neutral-800 bg-neutral-900/60 p-4">
             <ExpandedOrderContent
               order={order}
               type={type}
