@@ -7,7 +7,7 @@ import EmojiPicker from './EmojiPicker';
 
 /* =====================================================================
  * One composer, replacing four (two of which were dead code, and the two
- * live ones ~95% identical â€” down to a Discord-blurple #4752e2 focus ring
+ * live ones ~95% identical Ã¢â‚¬â€ down to a Discord-blurple #4752e2 focus ring
  * that appears nowhere else in the product).
  *
  * Fixes carried over from the review:
@@ -23,7 +23,7 @@ import EmojiPicker from './EmojiPicker';
  *
  * EMOJI has two modes. By default the composer inserts at the caret and
  * reports usage via `onEmojiUsed`. If `onEmojiSelect` is provided instead,
- * selection is delegated wholly to the caller â€” used by the pages, whose
+ * selection is delegated wholly to the caller Ã¢â‚¬â€ used by the pages, whose
  * hooks both append the emoji AND persist the recents list in one
  * callback. Wiring that hook to `onEmojiUsed` as well would insert every
  * emoji twice, which is exactly the sort of bug this file exists to end.
@@ -135,7 +135,7 @@ export default function Composer({
 
   if (notice) {
     return (
-      <div className="shrink-0 border-t border-line bg-surface px-4 py-4 safe-bottom">
+      <div className="shrink-0 border-t border-line bg-surface px-4 py-4 safe-bottom sm:py-5">
         <div className="mx-auto max-w-3xl text-center text-sm text-ink-muted">{notice}</div>
       </div>
     );
@@ -144,7 +144,11 @@ export default function Composer({
   return (
     // `relative` is load-bearing: the emoji panel is absolutely positioned
     // against it. See the note at the top of this file.
-    <div className="relative shrink-0 border-t border-line bg-surface px-3 py-3 safe-bottom sm:px-4">
+    {/* py-3 on phones, where the keyboard and the safe-area inset
+        already take the space. From sm up the padding grows on BOTH
+        sides, so the gap under the input matches the one above it
+        instead of the composer sitting flush to the window edge. */}
+    <div className="relative shrink-0 border-t border-line bg-surface px-3 py-3 safe-bottom sm:px-4 sm:py-5">
       <div className="mx-auto w-full max-w-3xl">
         <EmojiPicker
           open={emojiOpen}
@@ -241,9 +245,9 @@ export default function Composer({
             className="rounded-full bg-primary p-2 transition-colors hover:bg-primary-hover active:bg-primary-press disabled:cursor-not-allowed disabled:opacity-40"
           >
             {/* Label colour lives on a child: globals.css declares
-                `a { color: â€¦ }` unlayered, and an unlayered rule beats a
+                `a { color: Ã¢â‚¬Â¦ }` unlayered, and an unlayered rule beats a
                 Tailwind utility. Icons here are inside a <button>, which
-                nothing unlayered targets â€” but keeping the pattern
+                nothing unlayered targets Ã¢â‚¬â€ but keeping the pattern
                 consistent avoids the trap when this becomes a link. */}
             <ArrowUp className="h-4 w-4 text-black" aria-hidden="true" />
           </button>
@@ -259,10 +263,11 @@ export default function Composer({
           </p>
         )}
 
-        {/* Buyer actions, matched to the send button: solid primary,
-            black label, rounded-full, same hover/press. On phones each
-            takes half the width as a proper touch target; from sm up
-            they collapse to compact pills. */}
+        {/* Buyer actions. Rounded rectangles on the same surface and
+            border as the message input, so the composer reads as one
+            control group rather than two solid orange buttons competing
+            with the send button for attention. Still half-width each on
+            phones as proper touch targets; compact from sm up. */}
         {(onRequestCustom || onSendTip) && (
           <div className="mt-2 flex gap-2 sm:mt-1.5">
             {onRequestCustom && (
@@ -270,7 +275,7 @@ export default function Composer({
                 type="button"
                 onClick={onRequestCustom}
                 disabled={disabled}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-3 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover active:bg-primary-press disabled:opacity-50 sm:flex-none sm:py-1.5 sm:text-xs"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line bg-surface-overlay px-3 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-primary-line hover:bg-surface-hover disabled:opacity-50 sm:flex-none sm:py-1.5 sm:text-xs"
               >
                 <ClipboardList className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
                 Custom request
@@ -281,7 +286,7 @@ export default function Composer({
                 type="button"
                 onClick={onSendTip}
                 disabled={disabled}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-3 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover active:bg-primary-press disabled:opacity-50 sm:flex-none sm:py-1.5 sm:text-xs"
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line bg-surface-overlay px-3 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-primary-line hover:bg-surface-hover disabled:opacity-50 sm:flex-none sm:py-1.5 sm:text-xs"
               >
                 <Gift className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
                 Send tip

@@ -13,13 +13,13 @@ import type { UIMessage } from './types';
  * What changed from the old MessageItem:
  *
  *  - Bubbles know their position in a run, so a burst of messages reads as
- *    one stack with a single timestamp instead of repeating "You â€¢ 14:32"
+ *    one stack with a single timestamp instead of repeating "You Ã¢â‚¬Â¢ 14:32"
  *    on every line.
  *  - Own bubbles are a low-alpha brand tint, not a saturated orange block.
  *    250 characters of black-on-#ff950e is a wall; the tint reads as
  *    "mine" without shouting, and keeps text at full contrast.
  *  - Delivery state is a glyph on the LAST own message only, which is
- *    where every mature messenger puts it â€” not the word "Read" on every
+ *    where every mature messenger puts it Ã¢â‚¬â€ not the word "Read" on every
  *    bubble, in the header, above the text.
  *  - Pending and failed states are visible, and failed sends can be
  *    retried. Previously an optimistic message was indistinguishable from
@@ -27,7 +27,7 @@ import type { UIMessage } from './types';
  * ===================================================================== */
 
 /** A message that is nothing but emoji renders large and unboxed. */
-const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|ï¸|â€|\s){1,8}$/u;
+const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|Ã¯Â¸Â|Ã¢â‚¬Â|\s){1,8}$/u;
 
 function isEmojiOnly(content: string): boolean {
   const trimmed = (content || '').trim();
@@ -71,7 +71,7 @@ export default function MessageBubble({
 
   return (
     <div className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'}`}>
-      <div className={`flex max-w-[85%] flex-col sm:max-w-[70%] ${isOwn ? 'items-end' : 'items-start'}`}>
+      <div className={`flex max-w-[85%] flex-col sm:max-w-[72%] ${isOwn ? 'items-end' : 'items-start'}`}>
         {emojiOnly ? (
           <p className="px-1 py-0.5 text-4xl leading-tight">{message.content}</p>
         ) : isImage ? (
@@ -83,7 +83,7 @@ export default function MessageBubble({
           >
             {/*
               Fixed aspect ratio. Without one, an image that decodes late
-              shoves everything above it downward mid-read â€” the single
+              shoves everything above it downward mid-read Ã¢â‚¬â€ the single
               worst thing a transcript can do.
             */}
             <span className="block aspect-[4/5] w-56 max-w-full sm:w-64">
@@ -96,12 +96,12 @@ export default function MessageBubble({
             </span>
           </button>
         ) : (
-          <div className={`${corners} ${surface} px-3 py-2`}>
+          <div className={`${corners} ${surface} px-3 py-2 sm:px-4 sm:py-2.5`}>
             <SecureMessageDisplay
               content={message.content}
               allowBasicFormatting={false}
               as="p"
-              className="whitespace-pre-wrap break-words text-sm leading-relaxed"
+              className="whitespace-pre-wrap break-words text-sm leading-relaxed sm:text-[0.9375rem]"
             />
           </div>
         )}
