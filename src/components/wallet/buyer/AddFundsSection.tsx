@@ -93,7 +93,6 @@ export default function AddFundsSection({
  {/* Header row */}
  <div>
                 <h2 className="text-base font-semibold text-white">Add funds</h2>
-                <p className="text-xs text-ink-faint">Secure payment powered by SegPay</p>
               </div>
 
  <SecureForm
@@ -331,21 +330,14 @@ export default function AddFundsSection({
         </div>
  </SecureForm>
 
- {/* Trust Badges */}
- <div className="flex flex-wrap gap-2 justify-center">
- <div className="inline-flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400">
- <Shield className="h-3 w-3" />
- PCI-DSS Compliant
- </div>
- <div className="inline-flex items-center gap-2 rounded-md border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-400">
- <Shield className="h-3 w-3" />
- 256-bit SSL
- </div>
- <div className="inline-flex items-center gap-2 rounded-md border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs font-medium text-purple-400">
- <CheckCircle className="h-3 w-3" />
- Instant Deposit
- </div>
- </div>
+          {/* One line instead of three chips.
+              They were bordered pills in green, blue and purple -- three
+              more colour families on a page that has one accent -- and
+              they said the same thing three ways. */}
+          <p className="flex items-center justify-center gap-1.5 text-xs text-ink-faint">
+            <Shield className="h-3 w-3" aria-hidden="true" />
+            Fast &amp; secure payments powered by SegPay
+          </p>
  </div>
  </section>
  );

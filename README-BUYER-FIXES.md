@@ -132,6 +132,20 @@ the card graphic itself, and the quick-amount buttons.
 Structure now comes from the two-column split, one hairline above the
 totals, and one above the transactions row. Nothing else.
 
+## 6b2. Trust badges and duplicate copy
+
+The three chips -- "PCI-DSS Compliant", "256-bit SSL", "Instant Deposit"
+-- were bordered pills in green, blue and purple. Three more colour
+families on a page with one accent, saying the same thing three ways.
+
+Replaced with one quiet line under the form:
+**"Fast & secure payments powered by SegPay"**.
+
+That made "Secure payment powered by SegPay" under the "Add funds"
+heading redundant, so it went too -- same duplication as the page
+subtitle. If you want it back under the heading instead of at the foot,
+it is one line to move.
+
 ## 6c. Deposit history: 341 lines -> 86
 
 Recent Purchases is gone from the wallet entirely -- purchases are not
