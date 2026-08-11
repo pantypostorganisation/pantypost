@@ -427,7 +427,7 @@ export function useSellerMessages() {
       // Combine real messages with optimistic ones for this thread
       let combinedMessages = [...validMessages];
       
-      /* Add optimistic messages for this thread — but only the ones the
+      /* Add optimistic messages for this thread â€” but only the ones the
          real thread does not already contain.
 
          This used to append unconditionally, so after the websocket echo
@@ -444,10 +444,24 @@ export function useSellerMessages() {
         combinedMessages = [...combinedMessages, ...threadOptimistic];
       }
       
-      // Sort messages by date
-      combinedMessages.sort((a, b) => 
-        new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
+      /* Sort by date, but ALWAYS keep optimistic messages last.
+
+         Sorting on date alone compares the browser's clock (optimistic)
+         against the server's (real). A browser running even a few
+         seconds behind the VPS put a just-sent message ABOVE ones sent
+         moments earlier; when the websocket echo arrived with the real
+         server timestamp it re-sorted to the end, which is the "appears
+         above, then drops to the bottom" jump.
+
+         An optimistic message is by definition the newest thing in the
+         thread, so its position does not need to be inferred from a
+         clock we do not control. */
+      combinedMessages.sort((a, b) => {
+        const aOptimistic = Boolean((a as OptimisticMessage)._optimistic);
+        const bOptimistic = Boolean((b as OptimisticMessage)._optimistic);
+        if (aOptimistic !== bOptimistic) return aOptimistic ? 1 : -1;
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
       
       // Add to threads
       threads[otherParty] = combinedMessages;
@@ -773,7 +787,7 @@ export function useSellerMessages() {
     // Check rate limit
     const rateLimitResult = checkRequestLimit();
     if (!rateLimitResult.allowed) {
-      addSellerNotification(user.username, `⚠️ Too many requests. Wait ${rateLimitResult.waitTime} seconds.`);
+      addSellerNotification(user.username, `âš ï¸ Too many requests. Wait ${rateLimitResult.waitTime} seconds.`);
       return;
     }
     
@@ -799,15 +813,15 @@ export function useSellerMessages() {
         markRequestAsPaid(request.id);
         
         // Notify seller (self)
-        addSellerNotification(user.username, `💰 Custom request "${sanitizeStrict(request.title)}" has been paid! Check your orders to fulfill.`);
+        addSellerNotification(user.username, `ðŸ’° Custom request "${sanitizeStrict(request.title)}" has been paid! Check your orders to fulfill.`);
         
         // Send confirmation message to buyer
-        await sendMessage(user.username, request.buyer, `✅ Your custom request "${sanitizeStrict(request.title)}" has been accepted and automatically paid!`, {
+        await sendMessage(user.username, request.buyer, `âœ… Your custom request "${sanitizeStrict(request.title)}" has been accepted and automatically paid!`, {
           type: 'normal'
         });
       } else {
         // Payment failed
-        await sendMessage(user.username, request.buyer, `⚠️ Custom request "${sanitizeStrict(request.title)}" accepted but payment failed. Please try paying manually.`, {
+        await sendMessage(user.username, request.buyer, `âš ï¸ Custom request "${sanitizeStrict(request.title)}" accepted but payment failed. Please try paying manually.`, {
           type: 'normal'
         });
         respondToRequest(customRequestId, 'accepted', undefined, undefined, user.username);
@@ -816,7 +830,7 @@ export function useSellerMessages() {
       // Insufficient balance - just accept without payment
       respondToRequest(customRequestId, 'accepted', undefined, undefined, user.username);
       
-      await sendMessage(user.username, request.buyer, `✅ Your custom request "${sanitizeStrict(request.title)}" has been accepted! Payment required - you have insufficient balance (need $${markupPrice.toFixed(2)}).`, {
+      await sendMessage(user.username, request.buyer, `âœ… Your custom request "${sanitizeStrict(request.title)}" has been accepted! Payment required - you have insufficient balance (need $${markupPrice.toFixed(2)}).`, {
         type: 'normal'
       });
     }
@@ -907,7 +921,7 @@ export function useSellerMessages() {
       sendMessage(
         user.username,
         request.buyer,
-        `📝 I've modified your custom request "${validatedData.title}"`,
+        `ðŸ“ I've modified your custom request "${validatedData.title}"`,
         {
           type: 'customRequest',
           meta: {

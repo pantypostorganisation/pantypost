@@ -14,8 +14,8 @@ import type { MessagingRole, UICustomRequest, UIMessage } from './types';
  * The transcript.
  *
  * Scroll behaviour is the part everyone gets wrong. The old code had six
- * competing implementations â€” effects on message count, on typing, on
- * Enter, a setTimeout after send, plus two more in the hooks â€” several of
+ * competing implementations Ã¢â‚¬â€ effects on message count, on typing, on
+ * Enter, a setTimeout after send, plus two more in the hooks Ã¢â‚¬â€ several of
  * them running `scrollTo` and `scrollIntoView` inside the same frame with
  * `behavior: 'smooth'` on a container that also had `scroll-smooth`.
  *
@@ -29,7 +29,7 @@ import type { MessagingRole, UICustomRequest, UIMessage } from './types';
  * MOTION (per the implementation brief): a new message fades in with a
  * few pixels of travel, and the existing stack GLIDES rather than snaps.
  * In a bottom-anchored chat the stack's apparent movement IS the scroll,
- * so the glide is a ~280ms eased scroll â€” no animation library, and the
+ * so the glide is a ~280ms eased scroll Ã¢â‚¬â€ no animation library, and the
  * whole system is disabled by the prefers-reduced-motion block in
  * globals.css plus a matchMedia check for the JS-driven part. History
  * loading and thread opening never animate: only messages that arrive
@@ -59,7 +59,7 @@ interface MessageListProps {
   messages: UIMessage[];
   currentUser: string;
   role: MessagingRole;
-  /** The other participant â€” drawn beside their message groups. */
+  /** The other participant Ã¢â‚¬â€ drawn beside their message groups. */
   peerUsername: string;
   peerPic?: string | null;
   requestsById?: Record<string, UICustomRequest>;
@@ -75,7 +75,7 @@ interface MessageListProps {
   onPayRequest?: (request: UICustomRequest) => void;
   /** Counter-offer form state, threaded through to the request card. */
   requestEditState?: RequestEditState;
-  /** Rendered under the last message â€” the typing indicator goes here. */
+  /** Rendered under the last message Ã¢â‚¬â€ the typing indicator goes here. */
   footer?: React.ReactNode;
   /** Change this when the footer appears/grows (e.g. typing starts) so a
       reader sitting at the bottom is nudged down with it. */
@@ -135,7 +135,7 @@ export default function MessageList({
     [messages, currentUser, firstUnreadId]
   );
 
-  /** id of the newest own message â€” the only one that shows a delivery glyph. */
+  /** id of the newest own message Ã¢â‚¬â€ the only one that shows a delivery glyph. */
   const lastOwnId = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].sender === currentUser) return messages[i].id;
@@ -146,7 +146,7 @@ export default function MessageList({
   /* ---- The glide ----
      A short eased scroll, recomputing the target each frame so content
      that grows mid-glide (a decoding image, the typing indicator) is
-     still landed on. Any user input cancels it immediately â€” the machine
+     still landed on. Any user input cancels it immediately Ã¢â‚¬â€ the machine
      never fights the person. */
   const glideCancelRef = useRef<(() => void) | null>(null);
 
@@ -184,10 +184,29 @@ export default function MessageList({
     const step = (now: number) => {
       if (cancelled) return;
       const t = Math.min(1, (now - startedAt) / duration);
-      const target = el.scrollHeight - el.clientHeight;
+      const target = Math.max(0, el.scrollHeight - el.clientHeight);
+
+      /* If the content shrank mid-glide — the typing indicator
+         unmounting is the common case — the target can end up ABOVE
+         where we already are. Easing towards it would animate the
+         transcript backwards, which is the rebound. Snap to the new
+         bottom and stop instead. */
+      if (target <= el.scrollTop) {
+        el.scrollTop = target;
+        cancel();
+        return;
+      }
+
       el.scrollTop = start + (target - start) * easeOutQuint(t);
-      if (t < 1) frame = requestAnimationFrame(step);
-      else cancel();
+
+      if (t < 1) {
+        frame = requestAnimationFrame(step);
+      } else {
+        // Land exactly on the bottom rather than wherever the easing
+        // finished against a target that moved during the animation.
+        el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+        cancel();
+      }
     };
     frame = requestAnimationFrame(step);
   }, []);
@@ -203,7 +222,7 @@ export default function MessageList({
   }, []);
 
   /* Opening a thread starts at the bottom. useLayoutEffect so it happens
-     before paint â€” the old code did this in a plain effect and you saw the
+     before paint Ã¢â‚¬â€ the old code did this in a plain effect and you saw the
      list flash at the top first. History present at open is snapshotted
      as seen, so nothing animates. */
   useLayoutEffect(() => {
@@ -255,7 +274,42 @@ export default function MessageList({
     return () => el.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
-  /* One observer for the whole list. Marks a message seen when â‰¥50% of it
+  /* Keep the view pinned when the content SHRINKS.
+
+     The typing indicator collapsing (~50px) is the usual trigger, and it
+     happens at exactly the moment the message it announced arrives — so
+     a glide is often already in flight, aimed at a bottom measured while
+     the indicator was still there. The browser then clamps scrollTop to
+     the smaller maximum, which reads as "jumped too far, sprang back".
+
+     Growth is deliberately ignored: that is what the message and footer
+     effects animate. Only shrink is corrected, and instantly, so there
+     is nothing to see. */
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+
+    const content = el.firstElementChild;
+    if (!content) return;
+
+    let lastHeight = content.getBoundingClientRect().height;
+
+    const observer = new ResizeObserver(() => {
+      const height = content.getBoundingClientRect().height;
+      const shrank = height < lastHeight - 0.5;
+      lastHeight = height;
+
+      if (!shrank || !atBottomRef.current) return;
+
+      glideCancelRef.current?.();
+      el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+    });
+
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, []);
+
+  /* One observer for the whole list. Marks a message seen when Ã¢â€°Â¥50% of it
      has been inside the scroller, then forgets it. */
   useEffect(() => {
     if (!onMessageVisible || !scrollerRef.current) return;
@@ -367,7 +421,7 @@ export default function MessageList({
         aria-label="Conversation"
         className="custom-scrollbar h-full overflow-y-auto overscroll-contain px-3 py-4 sm:px-4"
       >
-        {/* max-w-3xl (768px) left a 1920px screen mostly empty — the
+        {/* max-w-3xl (768px) left a 1920px screen mostly empty â€” the
               transcript read as a narrow strip down the middle. It now
               steps up with the viewport; MessageBubble still caps each
               bubble as a percentage, so line length stays readable. */}
@@ -400,7 +454,7 @@ export default function MessageList({
             const { group } = item;
             const count = group.messages.length;
 
-            /* Incoming groups get the sender's avatar, bottom-aligned â€”
+            /* Incoming groups get the sender's avatar, bottom-aligned Ã¢â‚¬â€
                once per group, never per line. Outgoing groups stay bare.
                The typing indicator uses the same-size avatar in the same
                gutter, so swapping one for the other never shifts the
@@ -434,7 +488,7 @@ export default function MessageList({
         </div>
       </div>
 
-      {/* Jump to latest. Only while scrolled away â€” the old UI had no
+      {/* Jump to latest. Only while scrolled away Ã¢â‚¬â€ the old UI had no
           affordance at all, so messages arriving while you read history
           were simply invisible. */}
       {!atBottom && (

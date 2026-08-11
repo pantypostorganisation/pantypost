@@ -424,7 +424,22 @@ export const useBuyerMessages = () => {
         const deduplicated: Message[] = [];
         
         // Sort by date first
-        result[otherParty].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+/* Sort by date, but ALWAYS keep optimistic messages last.
+
+           Sorting on date alone compares the browser's clock (optimistic)
+           against the server's (real). A browser running even a few seconds
+           behind the VPS put a just-sent message ABOVE ones sent moments
+           earlier; when the websocket echo arrived with the real server
+           timestamp it re-sorted to the end — the "appears above, then drops
+           to the bottom" jump. An optimistic message is by definition the
+           newest thing in the thread, so its position should not depend on a
+           clock we do not control. */
+        result[otherParty].sort((a, b) => {
+          const aOptimistic = Boolean((a as OptimisticMessage)._optimistic);
+          const bOptimistic = Boolean((b as OptimisticMessage)._optimistic);
+          if (aOptimistic !== bOptimistic) return aOptimistic ? 1 : -1;
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
         
         // Then deduplicate
         result[otherParty].forEach((msg) => {
