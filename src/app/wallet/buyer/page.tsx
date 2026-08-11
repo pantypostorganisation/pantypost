@@ -3,13 +3,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Check } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
 import AddFundsSection from '@/components/wallet/buyer/AddFundsSection';
 import AllDepositsSection from '@/components/wallet/buyer/AllDepositsSection';
-import RecentPurchases from '@/components/wallet/buyer/RecentPurchases';
 import { useBuyerWallet } from '@/hooks/useBuyerWallet';
 import { useWallet } from '@/context/WalletContext';
 import { useAuth } from '@/context/AuthContext';
@@ -24,7 +23,6 @@ function BuyerWalletContent() {
  messageType,
  isLoading,
  buyerPurchases,
- recentPurchases,
  handleAddFunds,
  handleAmountChange,
  handleKeyPress,
@@ -87,19 +85,19 @@ function BuyerWalletContent() {
  }, [searchParams, router]);
 
  return (
-    /* Sized to fit a laptop screen without scrolling.
-       Previously: page padding py-8, an 8-unit gap stack, a two-column
-       grid with another 8-unit gap, and a full-width deposits panel
-       below -- roughly 1400px of content for maybe 700px of viewport.
-       Now the deposit form and the two side panels share one row, and
-       the vertical rhythm is tighter throughout.
+    /* One thing on this page: the card. Everything else is either the
+       form attached to it or hidden behind a disclosure underneath.
 
-       NOTE: this block previously carried a /* ... *\/ comment sitting
-       directly in JSX children, which React renders as literal TEXT --
-       that paragraph about crypto was visible on the live page. Comments
-       inside JSX must be wrapped in braces, as this one is. */
+       Recent Purchases is gone entirely -- purchases are not deposits,
+       and /buyers/my-orders already owns them properly. Deposit history
+       lives behind "Show recent transactions" so the default view is a
+       balance, a card and an amount field.
+
+       (A /* *\/ comment placed directly in JSX children renders as
+       literal TEXT -- an earlier version of this page had exactly that
+       bug, visible on the live site. Comments must be brace-wrapped.) */
     <main className="min-h-screen bg-surface text-white">
-      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
         <div className="mb-5">
           <WalletHeader />
         </div>
@@ -111,32 +109,47 @@ function BuyerWalletContent() {
           </div>
         )}
 
-        {/* Deposit form takes the width it needs; the supporting panels
-            stack beside it instead of below. */}
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-          <AddFundsSection
-            balance={displayBalance}
-            amountToAdd={amountToAdd}
-            message={message}
-            messageType={messageType}
-            isLoading={isLoading}
-            onAmountChange={handleAmountChange}
-            onKeyPress={handleKeyPress}
-            onAddFunds={async () => {
-              await handleAddFunds();
-              if (user?.username) {
-                void reloadData();
-                void loadDepositHistory();
-              }
-            }}
-            onQuickAmountSelect={handleQuickAmountSelect}
-          />
+        <AddFundsSection
+          balance={displayBalance}
+          amountToAdd={amountToAdd}
+          message={message}
+          messageType={messageType}
+          isLoading={isLoading}
+          onAmountChange={handleAmountChange}
+          onKeyPress={handleKeyPress}
+          onAddFunds={async () => {
+            await handleAddFunds();
+            if (user?.username) {
+              void reloadData();
+              void loadDepositHistory();
+            }
+          }}
+          onQuickAmountSelect={handleQuickAmountSelect}
+        />
 
-          <div className="flex min-w-0 flex-col gap-5">
-            <RecentPurchases purchases={recentPurchases} />
+        {/* Transactions on demand. Native <details> so it works without
+            state, keyboard-accessible for free, and open-by-URL if we
+            ever want to deep-link it. */}
+        <details
+          className="group mt-4 overflow-hidden rounded-lg border border-line bg-surface-raised"
+          onToggle={(event) => {
+            if ((event.currentTarget as HTMLDetailsElement).open) {
+              void loadDepositHistory();
+            }
+          }}
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover">
+            Show recent transactions
+            <ChevronDown
+              className="h-4 w-4 text-ink-muted transition-transform duration-200 group-open:rotate-180"
+              aria-hidden="true"
+            />
+          </summary>
+
+          <div className="border-t border-line p-5">
             <AllDepositsSection deposits={depositHistory} onRefresh={loadDepositHistory} />
           </div>
-        </div>
+        </details>
       </div>
     </main>
   );

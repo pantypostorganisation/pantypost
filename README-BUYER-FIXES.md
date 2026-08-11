@@ -97,7 +97,25 @@ live page. Comments inside JSX must be wrapped: `{/* ... */}`.
 My mistake, and a genuine bug rather than clutter. Fixed, and I scanned
 every other file in this batch for the same pattern -- none found.
 
-## 6. Wallet fits on one screen
+## 6. Wallet: the card IS the page
+
+Recent Purchases is gone from the wallet entirely -- purchases are not
+deposits, and `/buyers/my-orders` already owns them properly. Showing
+them here meant the wallet was answering a question nobody asked it.
+
+Deposit history now sits behind **"Show recent transactions"** below the
+card, using a native `<details>` element: no state to manage, keyboard
+accessible for free, and it only fetches history when you actually open
+it.
+
+So the default view is exactly three things: your balance, the card, and
+the amount field. Page width dropped from `max-w-6xl` to `max-w-2xl`,
+because a single column of content has no business being 1152px wide.
+
+`RecentPurchases.tsx` is no longer imported by the wallet -- it is left
+on disk untouched.
+
+## 6b. Everything else that was making it tall
 
 It was roughly 1400px of content for about 700px of viewport: page
 padding `py-8`, an 8-unit gap stack, a two-column grid with another
