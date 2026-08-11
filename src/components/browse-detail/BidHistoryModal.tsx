@@ -1,9 +1,28 @@
 // src/components/browse-detail/BidHistoryModal.tsx
 'use client';
 
-import { History, X, Gavel, Trophy, TrendingUp } from 'lucide-react';
+import { useEffect } from 'react';
+import { Gavel, Trophy, X } from 'lucide-react';
 import { BidHistoryModalProps } from '@/types/browseDetail';
-import { motion, AnimatePresence } from 'framer-motion';
+
+/* =====================================================================
+ * Full bid history.
+ *
+ * Previously: a grey gradient panel with a purple border, four gradients
+ * inside it, a 40px avatar circle per row (green gradient ring for the
+ * leader, purple for you, grey otherwise), a "Highest" pill that
+ * scale-animated in, a per-row entrance stagger, and its own inline
+ * scrollbar CSS duplicating the `.custom-scrollbar` class that already
+ * exists in globals.css.
+ *
+ * A bid list needs three things per row: who, how much, when. Everything
+ * else was decoration competing with the numbers -- which is exactly
+ * what made the auction surface feel busy.
+ *
+ * Now: one flat panel, rows on a single surface, the leader marked by a
+ * small trophy and the success colour rather than by a gradient, and
+ * amounts in tabular figures so the column actually lines up.
+ * ===================================================================== */
 
 export default function BidHistoryModal({
   show,
@@ -11,133 +30,126 @@ export default function BidHistoryModal({
   bidsHistory,
   currentUsername,
   formatBidDate,
-  calculateTotalPayable
+  calculateTotalPayable,
 }: BidHistoryModalProps) {
+  // Declared before the early return so hook order is stable.
+  useEffect(() => {
+    if (!show) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [show, onClose]);
+
   if (!show) return null;
 
   return (
-    <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+    <div
+      role="presentation"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+    >
+      <div
         role="dialog"
         aria-modal="true"
         aria-label="Bid history"
+        onClick={(event) => event.stopPropagation()}
+        className="pop-in flex max-h-[70vh] w-full max-w-lg flex-col rounded-lg border border-line bg-surface-raised"
       >
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.9, opacity: 0, y: 20 }}
-          className="bg-gradient-to-b from-gray-900 to-gray-800 rounded-xl border border-purple-800 w-full max-w-2xl max-h-[70vh] p-6 relative shadow-2xl"
-        >
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-purple-400" />
-              Bid History
-              {bidsHistory.length > 0 && (
-                <span className="text-sm bg-purple-500/20 text-purple-400 px-2 py-1 rounded-full">
-                  {bidsHistory.length} {bidsHistory.length === 1 ? 'bid' : 'bids'}
-                </span>
-              )}
-            </h3>
-            <motion.button
-              onClick={onClose}
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className="text-gray-400 hover:text-white p-1 transition-colors"
-              aria-label="Close bid history"
-            >
-              <X className="w-5 h-5" />
-            </motion.button>
-          </div>
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h3 className="flex items-center gap-2 text-base font-bold text-white">
+            Bid history
+            {bidsHistory.length > 0 && (
+              <span className="rounded-sm bg-surface-overlay px-2 py-0.5 text-xs font-semibold text-ink-muted">
+                {bidsHistory.length}
+              </span>
+            )}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-sm p-1.5 text-ink-muted transition-colors hover:bg-surface-hover hover:text-white"
+            aria-label="Close bid history"
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
 
-          {bidsHistory.length === 0 ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
-              <Gavel className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-              <p className="text-gray-400">No bids placed yet</p>
-              <p className="text-gray-500 text-sm">Be the first to bid on this item!</p>
-            </motion.div>
-          ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto custom-scrollbar pr-2">
-              {bidsHistory.map((bid, index) => (
-                <motion.div
-                  key={`${bid.bidder}-${bid.amount}-${index}`}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className={`p-3 rounded-lg border transition-all ${
-                    index === 0
-                      ? 'bg-gradient-to-r from-green-900/30 to-green-800/20 border-green-700/50'
-                      : bid.bidder === currentUsername
-                      ? 'bg-purple-900/30 border-purple-700'
-                      : 'bg-gray-800/50 border-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                          index === 0
-                            ? 'bg-gradient-to-br from-green-500/30 to-green-600/20 text-green-400 ring-2 ring-green-500/30'
-                            : bid.bidder === currentUsername
-                            ? 'bg-purple-500/20 text-purple-400'
-                            : 'bg-gray-700 text-gray-300'
+        {/* Body */}
+        {bidsHistory.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-md border border-line bg-surface-overlay">
+              <Gavel className="h-6 w-6 text-ink-faint" aria-hidden="true" />
+            </div>
+            <p className="text-sm font-semibold text-white">No bids yet</p>
+            <p className="mt-1 text-xs text-ink-muted">Be the first to bid on this item.</p>
+          </div>
+        ) : (
+          <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-5 py-3">
+            <ul className="divide-y divide-line">
+              {bidsHistory.map((bid, index) => {
+                const isLeader = index === 0;
+                const isYou = bid.bidder === currentUsername;
+
+                return (
+                  <li
+                    key={`${bid.bidder}-${bid.amount}-${index}`}
+                    className="flex items-center justify-between gap-3 py-3"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      {isLeader ? (
+                        <Trophy className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
+                      ) : (
+                        <span className="w-4 shrink-0 text-center text-xs tabular-nums text-ink-faint">
+                          {index + 1}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p
+                          className={`truncate text-sm font-medium ${
+                            isYou ? 'text-primary' : 'text-white'
+                          }`}
+                        >
+                          {isYou ? 'You' : bid.bidder}
+                        </p>
+                        <p className="text-xs text-ink-faint">{formatBidDate(bid.date)}</p>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p
+                        className={`text-sm font-bold tabular-nums ${
+                          isLeader ? 'text-success' : 'text-white'
                         }`}
                       >
-                        {index === 0 ? <Trophy className="w-5 h-5" /> : bid.bidder === currentUsername ? 'You' : bid.bidder.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium text-white text-sm">{bid.bidder === currentUsername ? 'Your bid' : bid.bidder}</p>
-                        <p className="text-xs text-gray-400">{formatBidDate(bid.date)}</p>
-                      </div>
-                      {index === 0 && (
-                        <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded font-bold flex items-center gap-1">
-                          <TrendingUp className="w-3 h-3" />
-                          Highest
-                        </motion.span>
-                      )}
+                        ${bid.amount.toFixed(2)}
+                      </p>
+                      {/* The bid and the amount charged are different
+                          numbers; showing both here keeps it honest. */}
+                      <p className="text-xs tabular-nums text-ink-faint">
+                        ${calculateTotalPayable(bid.amount).toFixed(2)} total
+                      </p>
                     </div>
-                    <div className="text-right">
-                      <p className={`font-bold ${index === 0 ? 'text-green-400 text-lg' : 'text-white'}`}>${bid.amount.toFixed(2)}</p>
-                      <p className="text-xs text-gray-400">Total: ${calculateTotalPayable(bid.amount).toFixed(2)}</p>
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 pt-4 border-t border-gray-700">
-            <motion.button
-              onClick={onClose}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full bg-gradient-to-r from-purple-600 to-purple-500 text-white py-2.5 px-4 rounded-lg font-medium hover:from-purple-500 hover:to-purple-400 transition-all shadow-lg"
-            >
-              Close
-            </motion.button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
+        )}
 
-          <style jsx>{`
-            .custom-scrollbar::-webkit-scrollbar {
-              width: 6px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-track {
-              background: rgba(0, 0, 0, 0.2);
-              border-radius: 3px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-thumb {
-              background: rgba(139, 92, 246, 0.3);
-              border-radius: 3px;
-            }
-            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-              background: rgba(139, 92, 246, 0.5);
-            }
-          `}</style>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
+        {/* Footer */}
+        <div className="border-t border-line px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-md border border-line bg-surface-overlay px-4 py-2.5 text-sm font-semibold text-ink transition-colors hover:border-primary-line hover:bg-surface-hover"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

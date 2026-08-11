@@ -2,11 +2,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock, TrendingUp, Users, Shield, Trophy, AlertCircle, Target, Lock } from 'lucide-react';
+import { AlertCircle, Check, Gavel, Lock, Target, Trophy } from 'lucide-react';
 import { AuctionSectionProps, BidHistoryItem } from '@/types/browseDetail';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { sanitizeCurrency } from '@/utils/security/sanitization';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface ExtendedAuctionSectionProps extends AuctionSectionProps {
   realtimeBids?: BidHistoryItem[];
@@ -104,202 +103,210 @@ export default function AuctionSection({
     return start || 1;
   };
 
+  /* ---------------------------------------------------------------
+   * LAYOUT NOTE
+   *
+   * This card used to stack ten separate boxes: header, reserve badge,
+   * reserve progress bar, position, a 3-up stats grid, a time progress
+   * bar, "total payable", "seller earnings", the bid form and recent
+   * bids. Two progress bars sat three rows apart looking identical while
+   * meaning completely different things (money vs time), and the reserve
+   * status was stated in FOUR places.
+   *
+   * It also carried five colour families -- purple, red, green, yellow
+   * and grey -- in a product whose palette is black plus one orange with
+   * a single `auction` accent.
+   *
+   * Restructured around what a bidder actually decides on:
+   *   1. the two numbers that matter (current bid, time left)
+   *   2. one progress bar (time)
+   *   3. reserve status, stated ONCE
+   *   4. what you pay if you win
+   *   5. where you stand
+   *   6. the bid form
+   *   7. recent activity
+   *
+   * All logic, props and handlers are unchanged.
+   * --------------------------------------------------------------- */
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`rounded-xl border backdrop-blur-sm transition-all duration-300 ${
+    <div
+      className={`rounded-lg border p-4 ${
         isAuctionEnded
-          ? 'border-gray-700 bg-gray-900/30'
+          ? 'border-line bg-surface-raised'
           : isUrgent
-          ? 'border-red-600/50 bg-red-900/10'
-          : 'border-purple-600/50 bg-purple-900/20'
-      } p-4`}
+            ? 'border-danger bg-surface-raised'
+            : 'border-auction bg-surface-raised'
+      }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h3 className="text-base font-bold text-white">Auction</h3>
-          {!isAuctionEnded && (
-            <motion.span
-              animate={{ opacity: [1, 0.5, 1] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              className="flex items-center gap-1 bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full text-xs font-bold"
+          {isAuctionEnded ? (
+            <span className="rounded-sm bg-surface-overlay px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-ink-muted">
+              Ended
+            </span>
+          ) : (
+            /* Static. The old badge ran an infinite opacity pulse AND an
+               animate-pulse dot; the design rules rule out ambient
+               animation, and two of them on one chip is noise. */
+            <span
+              className={`rounded-sm px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                isUrgent ? 'bg-danger text-white' : 'bg-auction-soft text-auction'
+              }`}
             >
-              <span className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
-              LIVE
-            </motion.span>
+              {isUrgent ? 'Ending soon' : 'Live'}
+            </span>
           )}
         </div>
 
-        {!isAuctionEnded && (
-          <div className="flex items-center gap-3 text-xs text-gray-400">
-            <div className="flex items-center gap-1" aria-label="Total bids">
-              <Users className="w-3 h-3" />
-              <span>{bidsCount || 0}</span>
-            </div>
-          </div>
-        )}
+        <button
+          type="button"
+          onClick={onShowBidHistory}
+          className="inline-flex items-center gap-1.5 rounded-sm px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-hover hover:text-ink"
+          aria-label="View full bid history"
+        >
+          <Gavel className="h-3.5 w-3.5" aria-hidden="true" />
+          {bidsCount || 0} {(bidsCount || 0) === 1 ? 'bid' : 'bids'}
+        </button>
       </div>
 
-      {/* Reserve Price Indicator (New) */}
-      {hasReserve && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={`mb-3 p-2.5 rounded-lg border ${
-            reserveMet
-              ? 'bg-green-500/10 border-green-500/30'
-              : 'bg-yellow-500/10 border-yellow-500/30'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              {reserveMet ? (
-                <>
-                  <Target className="w-3.5 h-3.5 text-green-400" />
-                  <span className="text-xs font-semibold text-green-400">Reserve Met!</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="w-3.5 h-3.5 text-yellow-400" />
-                  <span className="text-xs font-semibold text-yellow-400">Reserve Not Met</span>
-                </>
-              )}
-            </div>
-            <span className="text-xs text-gray-400">
-              ${Math.floor(listing.auction.reservePrice!).toLocaleString()}
-            </span>
-          </div>
-          
-          {/* Reserve Progress Bar */}
-          {!reserveMet && (
-            <div className="w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
-              <motion.div
-                className="h-1.5 rounded-full bg-gradient-to-r from-yellow-600 to-yellow-500"
-                style={{ width: `${reservePercentage}%` }}
-                initial={{ width: 0 }}
-                animate={{ width: `${reservePercentage}%` }}
-                transition={{ duration: 0.5 }}
-              />
-            </div>
-          )}
-          
-          {!reserveMet && currentBid > 0 && (
-            <p className="text-xs text-gray-400 mt-1">
-              ${Math.floor((listing.auction.reservePrice || 0) - currentBid).toLocaleString()} more to meet reserve
+      {/* The two decision numbers, side by side and large. These were
+          previously two thirds of a 3-up grid of small boxes, with the
+          starting price given equal weight -- which almost nobody needs
+          once bidding has started. */}
+      <div className="mb-3 grid grid-cols-2 gap-3">
+        <div>
+          <p className="mb-1 text-xs text-ink-faint">
+            {listing.auction.highestBid ? 'Current bid' : 'Starting bid'}
+          </p>
+          <p className="text-2xl font-bold leading-none text-white">
+            ${Math.floor(listing.auction.highestBid || listing.auction.startingPrice)}
+          </p>
+          {listing.auction.highestBid ? (
+            <p className="mt-1 text-[11px] text-ink-faint">
+              opened at ${Math.floor(listing.auction.startingPrice)}
             </p>
-          )}
-        </motion.div>
+          ) : null}
+        </div>
+
+        <div>
+          <p className="mb-1 text-xs text-ink-faint">
+            {isAuctionEnded ? 'Closed' : 'Time left'}
+          </p>
+          <p
+            className={`text-2xl font-bold leading-none ${
+              isAuctionEnded ? 'text-ink-muted' : isUrgent ? 'text-danger' : 'text-white'
+            }`}
+          >
+            {isAuctionEnded
+              ? '--'
+              : formatTimeRemaining(listing.auction.endTime).split(' ').slice(0, 2).join(' ')}
+          </p>
+        </div>
+      </div>
+
+      {/* One progress bar, and it is time. The reserve had its own
+          identical-looking bar three rows away. */}
+      {!isAuctionEnded && (
+        <div
+          className="mb-3 h-1 w-full overflow-hidden rounded-full bg-surface-overlay"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(getTimerProgress())}
+          aria-label="Time elapsed"
+        >
+          <div
+            className={`h-full rounded-full transition-[width] duration-1000 ${
+              isUrgent ? 'bg-danger' : 'bg-auction'
+            }`}
+            style={{ width: `${getTimerProgress()}%` }}
+          />
+        </div>
       )}
 
-      {/* Position */}
-      {userBidPosition && !isAuctionEnded && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={`mb-3 p-2 rounded-lg flex items-center justify-center gap-2 ${
+      {/* Reserve, stated ONCE. It previously appeared as a badge, a
+          progress bar, a "$X more" line, a warning inside the payable
+          box and a note in the seller box. */}
+      {hasReserve && (
+        <div
+          className={`mb-3 flex items-center justify-between gap-2 rounded-sm border px-3 py-2 text-xs ${
+            reserveMet
+              ? 'border-success bg-success-soft text-success'
+              : 'border-warning bg-warning-soft text-warning'
+          }`}
+        >
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            {reserveMet ? (
+              <Target className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            {reserveMet ? 'Reserve met' : 'Reserve not met'}
+          </span>
+          {!reserveMet && currentBid > 0 ? (
+            <span className="tabular-nums">
+              ${Math.floor((listing.auction.reservePrice || 0) - currentBid).toLocaleString()} more
+            </span>
+          ) : null}
+        </div>
+      )}
+
+      {/* What you actually pay. Kept because the bid and the charge are
+          different numbers, and a buyer discovering that at checkout is
+          how chargebacks start. */}
+      <div className="mb-3 flex items-baseline justify-between border-t border-line pt-3">
+        <span className="text-xs text-ink-muted">You pay if you win</span>
+        <span className="text-base font-bold tabular-nums text-white">
+          ${currentTotalPayable.toFixed(2)}
+        </span>
+      </div>
+
+      {/* Seller's own view of the same auction. */}
+      {userRole === 'seller' && username === listing.seller && listing.auction.highestBid ? (
+        <div className="mb-3 flex items-baseline justify-between rounded-sm bg-surface-overlay px-3 py-2">
+          <span className="text-xs text-ink-muted">You receive (80%)</span>
+          <span className="text-sm font-bold tabular-nums text-success">
+            ${(listing.auction.highestBid * 0.8).toFixed(2)}
+          </span>
+        </div>
+      ) : null}
+
+      {/* Where you stand */}
+      {userBidPosition && !isAuctionEnded ? (
+        <div
+          className={`mb-3 flex items-center justify-center gap-2 rounded-sm border px-3 py-2 ${
             userBidPosition === 1
-              ? 'bg-gradient-to-r from-green-500/30 to-green-600/20 border border-green-500/50 shadow-lg shadow-green-500/20'
-              : 'bg-yellow-500/20 border border-yellow-500/30'
+              ? 'border-success bg-success-soft'
+              : 'border-warning bg-warning-soft'
           }`}
           role="status"
         >
           {userBidPosition === 1 ? (
             <>
-              <Trophy className="w-4 h-4 text-green-400" />
-              <span className="text-green-400 font-bold text-sm">
-                {reserveMet ? "You're winning!" : "You're highest (reserve not met)"}
+              <Trophy className="h-4 w-4 text-success" aria-hidden="true" />
+              <span className="text-sm font-bold text-success">
+                {reserveMet ? "You're winning" : "You're highest, reserve not met"}
               </span>
             </>
           ) : (
             <>
-              <AlertCircle className="w-3 h-3 text-yellow-400" />
-              <span className="text-yellow-400 font-medium text-xs">You're #{userBidPosition}</span>
+              <AlertCircle className="h-3.5 w-3.5 text-warning" aria-hidden="true" />
+              <span className="text-xs font-semibold text-warning">You&rsquo;re #{userBidPosition}</span>
             </>
           )}
-        </motion.div>
-      )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-2.5 mb-3">
-        <div className="bg-black/40 rounded-lg p-2.5 border border-gray-700/50">
-          <p className="text-gray-500 text-xs mb-0.5">Start</p>
-          <p className="text-sm font-bold text-white">${Math.floor(listing.auction.startingPrice)}</p>
         </div>
-
-        <div className="bg-black/40 rounded-lg p-2.5 border border-gray-700/50">
-          <p className="text-gray-500 text-xs mb-0.5 flex items-center gap-1">
-            Current {listing.auction.highestBid && <TrendingUp className="w-3 h-3 text-green-400" />}
-          </p>
-          {listing.auction.highestBid ? (
-            <motion.p key={listing.auction.highestBid} initial={{ scale: 1.1 }} animate={{ scale: 1 }} className="text-sm font-bold text-green-400">
-              ${Math.floor(listing.auction.highestBid)}
-            </motion.p>
-          ) : (
-            <p className="text-xs text-gray-500 italic">No bids</p>
-          )}
-        </div>
-
-        <div className="bg-black/40 rounded-lg p-2.5 border border-gray-700/50">
-          <p className="text-gray-500 text-xs mb-0.5">Time</p>
-          <p className={`text-sm font-bold ${getTimerColor()}`}>{formatTimeRemaining(listing.auction.endTime).split(' ').slice(0, 2).join(' ')}</p>
-        </div>
-      </div>
-
-      {/* Progress */}
-      {!isAuctionEnded && (
-        <div className="mb-3">
-          <div className="w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden" aria-hidden>
-            <motion.div
-              className={`h-1.5 rounded-full transition-all duration-1000 ${
-                isUrgent ? 'bg-gradient-to-r from-red-600 to-red-500' : 'bg-gradient-to-r from-purple-600 to-purple-500'
-              }`}
-              style={{ width: `${getTimerProgress()}%` }}
-              animate={isUrgent ? { opacity: [1, 0.7, 1] } : {}}
-              transition={isUrgent ? { duration: 1, repeat: Infinity } : {}}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Total payable */}
-      <div className="bg-purple-900/20 rounded-lg p-2.5 mb-3 border border-purple-700/30">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <Shield className="w-3.5 h-3.5 text-purple-400" />
-            <span className="text-purple-200 text-xs">You pay if win:</span>
-          </div>
-        </div>
-        <span className="text-base font-bold text-white">${currentTotalPayable.toFixed(2)}</span>
-        {hasReserve && !reserveMet && (
-          <p className="text-xs text-yellow-400 mt-1">
-            ⚠️ Reserve not met - auction may not complete
-          </p>
-        )}
-      </div>
-
-      {/* Seller earnings */}
-      {userRole === 'seller' && username === listing.seller && listing.auction.highestBid && (
-        <div className="bg-gray-800/50 rounded-lg p-2 mb-3 border border-gray-700">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400 text-xs">You'll receive (80%):</span>
-            <span className="text-sm font-bold text-green-400">${(listing.auction.highestBid * 0.8).toFixed(2)}</span>
-          </div>
-          {hasReserve && !reserveMet && (
-            <p className="text-xs text-yellow-400 mt-1">Only if reserve is met</p>
-          )}
-        </div>
-      )}
+      ) : null}
 
       {/* Bidding */}
       {canBid && (
-        <div className="space-y-3">
+        <div className="space-y-2">
           <div className="flex gap-2">
             <SecureInput
               ref={bidInputRef}
               type="number"
-              placeholder={`Min: $${getMinimumBid()}`}
+              placeholder={`Min $${getMinimumBid()}`}
               value={bidAmount}
               onChange={handleSecureBidChange}
               onKeyPress={onBidKeyPress}
@@ -307,115 +314,90 @@ export default function AuctionSection({
               step="1"
               inputMode="numeric"
               pattern="[0-9]*"
-              className="flex-1 px-2.5 py-1.5 rounded-lg bg-black/50 border border-purple-700 text-white placeholder-gray-500 focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm transition-all h-[34px]"
+              className="h-10 flex-1 rounded-sm border border-line bg-surface-overlay px-3 text-sm text-white placeholder-ink-faint transition-colors focus:border-auction focus:outline-none"
               sanitize={false}
               aria-label="Your bid amount"
             />
-            <motion.button
+            <button
               ref={bidButtonRef}
+              type="button"
               onClick={onBidSubmit}
               disabled={isBidding || !biddingEnabled}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="bg-gradient-to-r from-purple-600 to-purple-500 text-white px-3 py-1 rounded-lg font-medium hover:from-purple-500 hover:to-purple-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-xs shadow-lg h-[32px] flex items-center justify-center"
+              className="h-10 shrink-0 rounded-sm bg-auction px-4 text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               aria-label="Place bid"
             >
-              {isBidding ? 'Placing...' : 'Place Bid'}
-            </motion.button>
+              {isBidding ? 'Placing...' : 'Place bid'}
+            </button>
           </div>
 
-          <div className="flex gap-2">
-            <span className="text-xs text-gray-500 self-center">Quick:</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-ink-faint">Quick</span>
             {[1, 5, 10].map((amount) => (
-              <motion.button
+              <button
                 key={amount}
+                type="button"
                 onClick={() => handleQuickBid(amount)}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="flex-1 bg-purple-800/30 hover:bg-purple-700/40 text-purple-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border border-purple-700/50"
+                className="flex-1 rounded-sm border border-line bg-surface-overlay px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-auction hover:bg-surface-hover"
                 aria-label={`Increase bid by $${amount}`}
               >
                 +${amount}
-              </motion.button>
+              </button>
             ))}
           </div>
 
-          <AnimatePresence mode="wait">
-            {bidError && (
-              <motion.div
-                initial={{ opacity: 0, y: -5 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -5 }}
-                className="bg-red-900/30 border border-red-800 text-red-400 p-2 rounded-lg text-xs flex items-center gap-1.5"
-                role="alert"
-              >
-                <AlertCircle className="w-3 h-3" />
-                {bidError}
-              </motion.div>
-            )}
+          {bidError ? (
+            <div
+              className="flex items-center gap-1.5 rounded-sm border border-danger bg-danger-soft px-3 py-2 text-xs text-danger"
+              role="alert"
+            >
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {bidError}
+            </div>
+          ) : null}
 
-            {bidSuccess && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-green-900/30 border border-green-800 text-green-400 p-2 rounded-lg text-xs"
-                role="status"
-              >
-                ✓ {bidSuccess}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {bidSuccess ? (
+            <div
+              className="flex items-center gap-1.5 rounded-sm border border-success bg-success-soft px-3 py-2 text-xs text-success"
+              role="status"
+            >
+              <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              {bidSuccess}
+            </div>
+          ) : null}
         </div>
       )}
 
       {/* Recent bids */}
       {recentBids.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-purple-700/30">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-semibold text-gray-300">Recent Bids</p>
-            <button
-              onClick={onShowBidHistory}
-              className="text-xs text-purple-400 hover:text-purple-300 transition-colors font-medium"
-              aria-label="View full bid history"
-            >
-              View All ({bidsCount})
-            </button>
-          </div>
+        <div className="mt-3 border-t border-line pt-3">
+          <p className="mb-2 text-xs font-semibold text-ink-muted">Recent bids</p>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {recentBids.slice(0, 3).map((bid, index) => (
-              <motion.div
+              <div
                 key={`${bid.bidder}-${bid.amount}-${index}`}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.05 }}
-                className={`flex items-center justify-between p-2 rounded-lg text-xs ${
-                  index === 0
-                    ? 'bg-gradient-to-r from-green-900/30 to-green-800/20 border border-green-700/40'
-                    : 'bg-gray-800/40 border border-gray-700/40'
-                }`}
+                className="flex items-center justify-between rounded-sm bg-surface-overlay px-3 py-2 text-xs"
               >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`font-medium ${
-                      bid.bidder === username ? 'text-purple-400' : index === 0 ? 'text-green-400' : 'text-gray-300'
-                    }`}
-                  >
-                    {bid.bidder === username ? '👤 You' : index === 0 ? `👑 ${bid.bidder}` : bid.bidder}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-500 text-xs">{/* relative time handled by parent util if needed */}</span>
-                  <span className={`font-bold ${index === 0 ? 'text-green-400 text-sm' : 'text-white'}`}>
-                    ${Math.floor(bid.amount)}
-                  </span>
-                </div>
-              </motion.div>
+                <span
+                  className={`inline-flex items-center gap-1.5 font-medium ${
+                    bid.bidder === username ? 'text-auction' : 'text-ink'
+                  }`}
+                >
+                  {index === 0 ? (
+                    <Trophy className="h-3 w-3 text-success" aria-hidden="true" />
+                  ) : null}
+                  {bid.bidder === username ? 'You' : bid.bidder}
+                </span>
+                <span
+                  className={`font-bold tabular-nums ${index === 0 ? 'text-success' : 'text-ink'}`}
+                >
+                  ${Math.floor(bid.amount)}
+                </span>
+              </div>
             ))}
           </div>
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }

@@ -550,7 +550,7 @@ export default function ListingDetailPage() {
                 />
               )}
 
-              {/* DROP STATUS — one listing, N numbered units. Counters
+              {/* DROP STATUS  --  one listing, N numbered units. Counters
                   arrive live over the `drop:update` websocket event, so
                   this bar moves while people watch. */}
               {(() => {
@@ -592,7 +592,7 @@ export default function ListingDetailPage() {
                         ? `Opens ${opensAt!.toLocaleString()}`
                         : soldOut
                           ? `All ${drop.totalUnits} numbered units claimed.`
-                          : `Each purchase claims the next numbered unit — put on during the seller's filmed drop.`}
+                          : `Each purchase claims the next numbered unit  --  put on during the seller's filmed drop.`}
                     </p>
                   </div>
                 );
@@ -638,7 +638,7 @@ export default function ListingDetailPage() {
                   Previously gated behind user?.role === 'buyer', so
                   sellers, admins and signed-out visitors saw no seller
                   at all on a listing page. Who made this is the single
-                  most important thing on the page â€” it shows for
+                  most important thing on the page  --  it shows for
                   everyone. */}
               <SellerProfile
                 seller={listing.seller}
