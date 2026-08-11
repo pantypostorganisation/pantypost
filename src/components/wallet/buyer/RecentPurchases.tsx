@@ -23,7 +23,7 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
  }
 
  return (
- <section className="rounded-lg border border-line bg-surface p-6 transition-colors sm:p-8">
+ <section className="rounded-lg border border-line bg-surface-raised p-5 transition-colors">
  <div className="flex flex-col gap-8">
  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
  <div className="flex items-center gap-3">
@@ -49,7 +49,7 @@ export default function RecentPurchases({ purchases }: RecentPurchasesProps) {
  {purchases.map((purchase, index) => (
  <div
  key={index}
- className="group/item rounded-lg border border-line bg-surface p-5 transition-colors duration-200 hover:border-primary/60"
+ className="group/item rounded-lg border border-line bg-surface-raised p-5 transition-colors duration-200 hover:border-primary/60"
  >
  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
  <div className="flex flex-1 items-start gap-4">

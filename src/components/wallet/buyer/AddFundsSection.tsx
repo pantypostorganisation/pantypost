@@ -84,22 +84,17 @@ export default function AddFundsSection({
  : 'border-line bg-surface text-ink-muted';
 
  return (
- <section className="rounded-lg border border-line bg-surface p-6 transition-colors sm:p-8">
- <div className="flex flex-col gap-6">
+ <section className="rounded-lg border border-line bg-surface-raised p-5 transition-colors">
+ <div className="flex flex-col gap-4">
  {/* Header row */}
- <div className="flex items-center gap-3">
- <div className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-primary/40 bg-primary/10">
- <CreditCard className="h-5 w-5 text-primary" />
- </div>
  <div>
- <h2 className="text-xl font-semibold text-white sm:text-2xl">Card Deposit</h2>
- <p className="text-sm text-ink-muted">Secure payment powered by SegPay</p>
- </div>
- </div>
+                <h2 className="text-base font-semibold text-white">Add funds</h2>
+                <p className="text-xs text-ink-faint">Secure payment powered by SegPay</p>
+              </div>
 
  {/* Credit Card Preview - Now Larger and Centered */}
  <div className="flex justify-center">
- <div className="w-full max-w-md">
+ <div className="w-full max-w-[380px]">
  {/* Animated Card with Brand Colors - Actual Credit Card Size Ratio */}
  <div className="relative">
  {/* Subtle glow effect */}

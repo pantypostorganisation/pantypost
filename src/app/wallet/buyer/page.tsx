@@ -87,58 +87,59 @@ function BuyerWalletContent() {
  }, [searchParams, router]);
 
  return (
- <main className="relative min-h-screen overflow-hidden bg-surface text-white">
- <div className="relative z-10 px-4 py-8 sm:px-6 lg:px-10">
- <div className="mx-auto flex max-w-6xl flex-col gap-8">
- <WalletHeader />
- {/* success banner after crypto redirect */}
- {showBanner && (
- <div className="flex items-center justify-center gap-2 rounded-md border border-success bg-success-soft p-4 text-center text-success">
- <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
- Deposit received. Your wallet has been updated.
- </div>
- )}
+    /* Sized to fit a laptop screen without scrolling.
+       Previously: page padding py-8, an 8-unit gap stack, a two-column
+       grid with another 8-unit gap, and a full-width deposits panel
+       below -- roughly 1400px of content for maybe 700px of viewport.
+       Now the deposit form and the two side panels share one row, and
+       the vertical rhythm is tighter throughout.
 
- {/* Main Content Area - Now full width */}
- <div className="grid gap-8 lg:grid-cols-2">
- {/* Card Deposit Section */}
- <AddFundsSection
- balance={displayBalance}
- amountToAdd={amountToAdd}
- message={message}
- messageType={messageType}
- isLoading={isLoading}
- onAmountChange={handleAmountChange}
- onKeyPress={handleKeyPress}
- onAddFunds={async () => {
- await handleAddFunds();
- if (user?.username) {
- void reloadData();
- void loadDepositHistory();
- }
- }}
- onQuickAmountSelect={handleQuickAmountSelect}
- />
+       NOTE: this block previously carried a /* ... *\/ comment sitting
+       directly in JSX children, which React renders as literal TEXT --
+       that paragraph about crypto was visible on the live page. Comments
+       inside JSX must be wrapped in braces, as this one is. */
+    <main className="min-h-screen bg-surface text-white">
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+        <div className="mb-5">
+          <WalletHeader />
+        </div>
 
- /* Crypto removed. Card via SegPay is the funding route now,
- and the crypto column was three competing choices deep --
- a method toggle, then six coin options, each with its own
- green"CHEAPEST" badge -- next to a single, calm card form.
- The components still exist on disk if it ever comes back. */
- <div className="flex flex-col gap-6">
- <RecentPurchases purchases={recentPurchases} />
- </div>
- </div>
+        {showBanner && (
+          <div className="mb-5 flex items-center justify-center gap-2 rounded-md border border-success bg-success-soft px-4 py-3 text-sm text-success">
+            <Check className="h-4 w-4 shrink-0" aria-hidden="true" />
+            Deposit received. Your wallet has been updated.
+          </div>
+        )}
 
- {/* All Deposits Section */}
- <AllDepositsSection 
- deposits={depositHistory}
- onRefresh={loadDepositHistory}
- />
- </div>
- </div>
- </main>
- );
+        {/* Deposit form takes the width it needs; the supporting panels
+            stack beside it instead of below. */}
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+          <AddFundsSection
+            balance={displayBalance}
+            amountToAdd={amountToAdd}
+            message={message}
+            messageType={messageType}
+            isLoading={isLoading}
+            onAmountChange={handleAmountChange}
+            onKeyPress={handleKeyPress}
+            onAddFunds={async () => {
+              await handleAddFunds();
+              if (user?.username) {
+                void reloadData();
+                void loadDepositHistory();
+              }
+            }}
+            onQuickAmountSelect={handleQuickAmountSelect}
+          />
+
+          <div className="flex min-w-0 flex-col gap-5">
+            <RecentPurchases purchases={recentPurchases} />
+            <AllDepositsSection deposits={depositHistory} onRefresh={loadDepositHistory} />
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function BuyerWalletWrapper() {

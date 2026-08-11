@@ -82,6 +82,39 @@ If you want real flag artwork later, `CountrySelect.tsx` already uses
 flagcdn.com PNGs -- but that adds an external image dependency and needs
 the CSP `img-src` to allow it.
 
+## 5. A comment was rendering as text on the live page
+
+The wallet page carried this in its JSX children:
+
+```jsx
+/* Crypto removed. Card via SegPay is the funding route now... */
+```
+
+A `/* */` comment placed among JSX children is **not a comment** -- React
+treats it as literal text, so that whole paragraph was visible on the
+live page. Comments inside JSX must be wrapped: `{/* ... */}`.
+
+My mistake, and a genuine bug rather than clutter. Fixed, and I scanned
+every other file in this batch for the same pattern -- none found.
+
+## 6. Wallet fits on one screen
+
+It was roughly 1400px of content for about 700px of viewport: page
+padding `py-8`, an 8-unit gap stack, a two-column grid with another
+8-unit gap, then a full-width deposits panel below all of it.
+
+- The layout is now **one row**: the deposit form on the left (7 parts),
+  Recent Purchases and All Deposits stacked on the right (5 parts). The
+  deposits panel no longer sits below everything.
+- Page padding `py-8` -> `py-6`; gaps `8` -> `5`.
+- Panel padding `p-6/sm:p-8` -> `p-5` across all three.
+- The card graphic is capped at 380px (was 448px) -- it is the tallest
+  single element, and this keeps the amount field and quick-amount
+  buttons above the fold on a laptop without shrinking it on mobile.
+- The section header lost its 48px icon tile and dropped from `text-2xl`
+  to `text-base`: the icon sat directly above a picture of a credit card,
+  and "Card Deposit" as a 24px headline was competing with the balance.
+
 ## Verify + ship
 
 ```powershell
