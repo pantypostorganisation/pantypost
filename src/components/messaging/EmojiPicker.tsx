@@ -13,7 +13,7 @@ import { Clock, X } from 'lucide-react';
  * Two bugs are fixed here:
  *
  *  1. The toggle button could not close it. The old close-on-outside-click
- *     listened for `mousedown`, and the toggle sat outside the picker Ã¢â‚¬â€ so
+ *     listened for `mousedown`, and the toggle sat outside the picker -- so
  *     mousedown set open=false, then the button's own click flipped the
  *     now-false value back to true. It reopened every time. The button is
  *     passed in as `anchorRef` and excluded from the outside test.
@@ -24,10 +24,10 @@ import { Clock, X } from 'lucide-react';
  * ===================================================================== */
 
 const CATEGORIES: { label: string; emojis: string[] }[] = [
-  { label: 'Smileys', emojis: ['Ã°Å¸Ëœâ‚¬','Ã°Å¸ËœÆ’','Ã°Å¸Ëœâ€ž','Ã°Å¸ËœÂ','Ã°Å¸Ëœâ€ ','Ã°Å¸Ëœâ€¦','Ã°Å¸Â¤Â£','Ã°Å¸Ëœâ€š','Ã°Å¸â„¢â€š','Ã°Å¸â„¢Æ’','Ã°Å¸Ëœâ€°','Ã°Å¸ËœÅ ','Ã°Å¸Ëœâ€¡','Ã°Å¸Â¥Â°','Ã°Å¸ËœÂ','Ã°Å¸Â¤Â©','Ã°Å¸ËœËœ','Ã°Å¸Ëœâ€”','Ã°Å¸ËœÅ¡','Ã°Å¸Ëœâ„¢','Ã°Å¸Â¥Â²','Ã°Å¸Ëœâ€¹','Ã°Å¸Ëœâ€º','Ã°Å¸ËœÅ“','Ã°Å¸Â¤Âª','Ã°Å¸ËœÂ','Ã°Å¸Â¤â€”','Ã°Å¸Â¤Â­','Ã°Å¸Â¤Â«','Ã°Å¸Â¤â€'] },
-  { label: 'Gestures', emojis: ['Ã°Å¸â€˜â€¹','Ã°Å¸Â¤Å¡','Ã¢Å“â€¹','Ã°Å¸â€“ÂÃ¯Â¸Â','Ã°Å¸â€˜Å’','Ã°Å¸Â¤Å’','Ã°Å¸Â¤Â','Ã¢Å“Å’Ã¯Â¸Â','Ã°Å¸Â¤Å¾','Ã°Å¸Â«Â°','Ã°Å¸Â¤Å¸','Ã°Å¸Â¤Ëœ','Ã°Å¸â€˜Ë†','Ã°Å¸â€˜â€°','Ã°Å¸â€˜â€ ','Ã°Å¸â€˜â€¡','Ã°Å¸â€˜Â','Ã°Å¸â€˜Å½','Ã°Å¸â€˜Å ','Ã°Å¸Â¤â€º','Ã°Å¸Â¤Å“','Ã°Å¸â€˜Â','Ã°Å¸â„¢Å’','Ã°Å¸Â«Â¶','Ã°Å¸â„¢Â','Ã°Å¸â€™â€¦','Ã°Å¸â€™Âª'] },
-  { label: 'Hearts', emojis: ['Ã¢ÂÂ¤Ã¯Â¸Â','Ã°Å¸Â©Â·','Ã°Å¸Â§Â¡','Ã°Å¸â€™â€º','Ã°Å¸â€™Å¡','Ã°Å¸â€™â„¢','Ã°Å¸Â©Âµ','Ã°Å¸â€™Å“','Ã°Å¸â€“Â¤','Ã°Å¸Â©Â¶','Ã°Å¸Â¤Â','Ã°Å¸Â¤Å½','Ã°Å¸â€™â€','Ã¢ÂÂ£Ã¯Â¸Â','Ã°Å¸â€™â€¢','Ã°Å¸â€™Å¾','Ã°Å¸â€™â€œ','Ã°Å¸â€™â€”','Ã°Å¸â€™â€“','Ã°Å¸â€™Ëœ','Ã°Å¸â€™Â'] },
-  { label: 'Objects', emojis: ['Ã°Å¸â€Â¥','Ã¢Å“Â¨','Ã¢Â­Â','Ã°Å¸Å’Å¸','Ã°Å¸â€™Â«','Ã°Å¸â€™Â¯','Ã°Å¸Å½Â','Ã°Å¸Å½â‚¬','Ã°Å¸Å’Â¹','Ã°Å¸Å’Â¸','Ã°Å¸â€™Â','Ã°Å¸â€˜â€”','Ã°Å¸â€˜â„¢','Ã°Å¸Â§Â¦','Ã°Å¸â€˜Â ','Ã°Å¸â€™â€¹','Ã°Å¸Ââ€˜','Ã°Å¸Ââ€™','Ã°Å¸Â¥â€š','Ã°Å¸ÂÂ¾','Ã°Å¸â€™Â¸','Ã°Å¸â€™Â°'] },
+  { label: 'Smileys', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','🥲','😋','😛','😜','🤪','😝','🤗','🤭','🤫','🤔'] },
+  { label: 'Gestures', emojis: ['👋','🤚','✋','🖐️','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','👈','👉','👆','👇','👍','👎','👊','🤛','🤜','👏','🙌','🫶','🙏','💅','💪'] },
+  { label: 'Hearts', emojis: ['❤️','🩷','🧡','💛','💚','💙','🩵','💜','🖤','🩶','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝'] },
+  { label: 'Objects', emojis: ['🔥','✨','⭐','🌟','💫','💯','🎁','🎀','🌹','🌸','💐','👗','👙','🧦','👠','💋','🍑','🍒','🥂','🍾','💸','💰'] },
 ];
 
 interface EmojiPickerProps {
@@ -48,7 +48,7 @@ export default function EmojiPicker({ open, recent, onSelect, onClose, anchorRef
     const onPointerDown = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node;
       if (panelRef.current?.contains(target)) return;
-      // Excluding the toggle is the whole fix Ã¢â‚¬â€ see the note above.
+      // Excluding the toggle is the whole fix -- see the note above.
       if (anchorRef?.current?.contains(target)) return;
       onClose();
     };
