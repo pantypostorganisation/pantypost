@@ -1,4 +1,5 @@
 // pantypost-backend/routes/listing.routes.js
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 const Listing = require('../models/Listing');
@@ -946,40 +947,94 @@ router.post('/:id/purchase', authMiddleware, async (req, res) => {
   }
 });
 
-// POST /api/listings/:id/views - Track listing view (CRITICAL FIX: Always increment)
+/* =====================================================================
+ * POST /api/listings/:id/views -- track a listing view
+ *
+ * WHY THIS CHANGED
+ *
+ * The old handler incremented on EVERY request, unconditionally. Three
+ * consequences:
+ *
+ *   1. React StrictMode mounts effects twice in development, so a local
+ *      page load counted 2 views. That is the +2 that was noticed.
+ *   2. The client also force-tracks on bfcache restore and popstate, so
+ *      tabbing back to a listing counted again.
+ *   3. Nothing stopped anyone POSTing this endpoint in a loop and
+ *      inflating a listing's view count to whatever they liked. On a
+ *      marketplace where views are the seller's main signal of interest,
+ *      that number has to mean something.
+ *
+ * Fixed on the SERVER rather than the client, because the client can
+ * always be bypassed and because a future caller would reintroduce the
+ * bug for free.
+ *
+ * A view now counts at most once per viewer per listing per window. The
+ * viewer is the logged-in username where there is one, otherwise a hash
+ * of IP + user agent -- imperfect for guests behind a shared NAT, but
+ * far better than counting every request, and it stores no raw IP.
+ * ===================================================================== */
+
+// In-memory, because a view is a soft metric and this only needs to be
+// approximately right. It also means no schema change and no extra
+// collection. Trade-off: a PM2 restart clears the window, and a second
+// backend instance would keep its own -- both acceptable for view counts.
+const VIEW_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+const recentViews = new Map(); // key -> timestamp
+
+// Keep the map from growing without bound.
+setInterval(() => {
+  const cutoff = Date.now() - VIEW_WINDOW_MS;
+  for (const [key, seenAt] of recentViews.entries()) {
+    if (seenAt < cutoff) recentViews.delete(key);
+  }
+}, 10 * 60 * 1000).unref?.();
+
+function viewerFingerprint(req) {
+  if (req.user?.username) return `u:${req.user.username}`;
+
+  const ip =
+    (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+    req.socket?.remoteAddress ||
+    'unknown';
+  const agent = req.headers['user-agent'] || '';
+
+  // Hashed so no raw IP is retained.
+  return `a:${crypto.createHash('sha256').update(`${ip}|${agent}`).digest('hex').slice(0, 32)}`;
+}
+
 router.post('/:id/views', async (req, res) => {
   try {
     const listingId = req.params.id;
-    
-    console.log('[Views] Tracking view for listing:', listingId);
-    
-    // CRITICAL FIX: Use findByIdAndUpdate with $inc to atomically increment the view count
-    // This ensures the counter increments properly even with concurrent requests
+    const key = `${listingId}:${viewerFingerprint(req)}`;
+    const now = Date.now();
+    const lastSeen = recentViews.get(key);
+
+    // Already counted recently: return the current figure without
+    // incrementing, so the UI still shows the right number.
+    if (lastSeen && now - lastSeen < VIEW_WINDOW_MS) {
+      const listing = await Listing.findById(listingId).select('views').lean();
+      if (!listing) {
+        return res.status(404).json({ success: false, error: 'Listing not found' });
+      }
+      return res.json({ success: true, views: listing.views || 0, counted: false });
+    }
+
     const listing = await Listing.findByIdAndUpdate(
       listingId,
-      { $inc: { views: 1 } }, // Atomically increment views by 1
-      { new: true, upsert: false } // Return the updated document
+      { $inc: { views: 1 } },
+      { new: true, upsert: false }
     );
-    
+
     if (!listing) {
-      return res.status(404).json({
-        success: false,
-        error: 'Listing not found'
-      });
+      return res.status(404).json({ success: false, error: 'Listing not found' });
     }
-    
-    console.log('[Views] View count updated:', listing.views);
-    
-    res.json({
-      success: true,
-      views: listing.views
-    });
+
+    recentViews.set(key, now);
+
+    res.json({ success: true, views: listing.views, counted: true });
   } catch (error) {
     console.error('[Views] Error tracking view:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

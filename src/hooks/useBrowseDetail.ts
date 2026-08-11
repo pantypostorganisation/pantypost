@@ -703,30 +703,32 @@ export const useBrowseDetail = () => {
         previousListingId: currentListingIdRef.current
       });
 
-      if (isBackForwardNavigation || currentListingIdRef.current !== listingId) {
-        console.log('[BrowseDetail] Back/forward navigation detected or listing changed - forcing view track');
+      /* Only re-track when the LISTING actually changed.
+         Returning to the same listing via back/forward is the same
+         person looking at the same thing -- counting it again inflates
+         the number the seller relies on. The server now dedupes within a
+         30 minute window anyway, so a forced call here would be
+         discarded; not making it saves a pointless request. */
+      if (currentListingIdRef.current !== listingId) {
         viewTrackedRef.current = false;
         viewTrackingInProgressRef.current = false;
         currentListingIdRef.current = listingId;
-        
+
         setTimeout(() => {
           if (listingLoadedRef.current && mountedRef.current) {
-            trackView({ force: true });
+            trackView();
           }
         }, 100);
       }
     };
 
     const handlePopState = () => {
-      console.log('[BrowseDetail] Popstate event detected');
-      viewTrackedRef.current = false;
+      /* Popstate fires on back/forward within the app. If it landed on a
+         DIFFERENT listing the effect below re-runs and tracks it
+         normally; if it landed on the same one, this is the same view.
+         Previously this cleared the guard and forced a re-count either
+         way, so bouncing back and forth inflated the count freely. */
       viewTrackingInProgressRef.current = false;
-      
-      setTimeout(() => {
-        if (listingLoadedRef.current && mountedRef.current) {
-          trackView({ force: true });
-        }
-      }, 100);
     };
 
     window.addEventListener('pagehide', resetTracking);
