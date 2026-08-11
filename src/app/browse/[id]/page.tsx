@@ -383,7 +383,12 @@ export default function ListingDetailPage() {
     if (!listing) return;
 
     if (listingId) {
-      trackEvent('checkout_started', { listingId });
+      trackEvent({
+        action: 'begin_checkout',
+        category: 'ecommerce',
+        label: listingId,
+        value: listing.price || 0,
+      });
     }
 
     setCheckoutError(null);
@@ -417,7 +422,12 @@ export default function ListingDetailPage() {
 
       try {
         if (listingId) {
-          trackEvent('purchase_confirmed', { listingId, price: listing.price });
+          trackEvent({
+            action: 'purchase_confirmed',
+            category: 'ecommerce',
+            label: listingId,
+            value: listing.price || 0,
+          });
         }
         // One purchase path now, and it carries the address the buyer
         // just confirmed.

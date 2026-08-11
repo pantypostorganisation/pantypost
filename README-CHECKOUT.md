@@ -110,6 +110,25 @@ could have saved an address that later failed order-level validation --
 the sort of inconsistency that only surfaces at the worst moment. All
 four now use the same field set.
 
+## Two more caught by your tsc run
+
+**`trackEvent` takes one object, not two arguments.** I wrote
+`trackEvent('checkout_started', { listingId })`; the real signature is
+`trackEvent({ action, category, label, value })`, as used four other
+times in that same file. I should have read one of them instead of
+assuming. Now `begin_checkout` and `purchase_confirmed` events in the
+`ecommerce` category.
+
+**`DeliveryAddress` was never imported into `ListingContext`.** My patch
+script looked for `import { ... } from '@/types/order'` but the file uses
+`import type { Order } from '@/types/order'` -- so the replace matched
+nothing, silently, while still printing "imported". A no-op replace that
+reports success is worse than one that fails loudly; the type annotation
+went in with no type behind it.
+
+Both fixed. This is exactly why the repo-level `tsc` run matters -- my
+harnesses stub these modules, so neither error could surface there.
+
 ## Test
 
 1. **Buy now** on a normal listing -> modal shows item, address, fee,

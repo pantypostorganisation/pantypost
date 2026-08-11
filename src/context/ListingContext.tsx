@@ -16,7 +16,7 @@ import { useAuth } from './AuthContext';
 import { useAuction } from './AuctionContext';
 import { useWebSocket } from './WebSocketContext';
 import { WebSocketEvent } from '@/types/websocket';
-import type { Order } from '@/types/order';
+import type { Order, DeliveryAddress } from '@/types/order';
 import { v4 as uuidv4 } from 'uuid';
 import { listingsService, usersService, storageService } from '@/services';
 import { ListingDraft } from '@/types/myListings';
