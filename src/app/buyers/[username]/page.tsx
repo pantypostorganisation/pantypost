@@ -15,519 +15,527 @@ import { resolveApiUrl } from '@/utils/url';
 
 /* ==== Types ==== */
 type NormalizedBuyerProfile = {
-  user: {
-    username: string;
-    role: 'buyer' | 'seller' | 'admin';
-    joinedAt?: string;
-    createdAt?: string;
-    isBanned?: boolean;
-    banReason?: string;
-  };
-  profile: {
-    bio?: string;
-    profilePic?: string | null;
-    country?: string | null;
-  };
+ user: {
+ username: string;
+ role: 'buyer' | 'seller' | 'admin';
+ joinedAt?: string;
+ createdAt?: string;
+ isBanned?: boolean;
+ banReason?: string;
+ };
+ profile: {
+ bio?: string;
+ profilePic?: string | null;
+ country?: string | null;
+ };
 };
 
 type MeProfile = {
-  username: string;
-  role: 'buyer' | 'seller' | 'admin';
-  bio: string;
-  profilePic: string | null;
-  country: string;
+ username: string;
+ role: 'buyer' | 'seller' | 'admin';
+ bio: string;
+ profilePic: string | null;
+ country: string;
 };
 
 /* ==== Helpers ==== */
 function formatDate(dateLike?: string) {
-  if (!dateLike) return '—';
-  try {
-    const d = new Date(dateLike);
-    if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return '—';
-  }
+ if (!dateLike) return '—';
+ try {
+ const d = new Date(dateLike);
+ if (Number.isNaN(d.getTime())) return '—';
+ return d.toLocaleDateString('en-AU', { year: 'numeric', month: 'short', day: 'numeric' });
+ } catch {
+ return '—';
+ }
 }
 
 type BackendProfileData = {
-  username?: unknown;
-  role?: unknown;
-  joinedDate?: unknown;
-  createdAt?: unknown;
-  isBanned?: unknown;
-  banReason?: unknown;
-  bio?: unknown;
-  profilePic?: unknown;
-  country?: unknown;
+ username?: unknown;
+ role?: unknown;
+ joinedDate?: unknown;
+ createdAt?: unknown;
+ isBanned?: unknown;
+ banReason?: unknown;
+ bio?: unknown;
+ profilePic?: unknown;
+ country?: unknown;
 };
 
 type BackendProfileResponse = {
-  success?: boolean;
-  data?: BackendProfileData | null;
-  error?: { message?: string } | null;
+ success?: boolean;
+ data?: BackendProfileData | null;
+ error?: { message?: string } | null;
 };
 
 // Type guard for role validation
 function isValidRole(role: unknown): role is 'buyer' | 'seller' | 'admin' {
-  return typeof role === 'string' && ['buyer', 'seller', 'admin'].includes(role);
+ return typeof role === 'string' && ['buyer', 'seller', 'admin'].includes(role);
 }
 
 function normalizeProfileFromBackend(raw: unknown): NormalizedBuyerProfile | null {
-  if (!raw || typeof raw !== 'object') return null;
+ if (!raw || typeof raw !== 'object') return null;
 
-  const response = raw as BackendProfileResponse;
-  if (response.success === false) return null;
+ const response = raw as BackendProfileResponse;
+ if (response.success === false) return null;
 
-  const data = response.data;
-  if (!data || typeof data !== 'object') return null;
+ const data = response.data;
+ if (!data || typeof data !== 'object') return null;
 
-  const username = 'username' in data ? data.username : undefined;
-  const role = 'role' in data ? data.role : undefined;
+ const username = 'username' in data ? data.username : undefined;
+ const role = 'role' in data ? data.role : undefined;
 
-  if (typeof username !== 'string') return null;
-  if (!isValidRole(role)) return null;
+ if (typeof username !== 'string') return null;
+ if (!isValidRole(role)) return null;
 
-  const joinedAt =
-    typeof data.joinedDate === 'string'
-      ? data.joinedDate
-      : typeof data.createdAt === 'string'
-      ? data.createdAt
-      : undefined;
+ const joinedAt =
+ typeof data.joinedDate === 'string'
+ ? data.joinedDate
+ : typeof data.createdAt === 'string'
+ ? data.createdAt
+ : undefined;
 
-  const createdAt = typeof data.createdAt === 'string' ? data.createdAt : undefined;
-  const isBanned = typeof data.isBanned === 'boolean' ? data.isBanned : undefined;
-  const banReason = typeof data.banReason === 'string' ? data.banReason : undefined;
-  const bio = typeof data.bio === 'string' ? data.bio : '';
-  const profilePic =
-    typeof data.profilePic === 'string'
-      ? data.profilePic
-      : data.profilePic === null
-      ? null
-      : undefined;
-  const country =
-    typeof data.country === 'string'
-      ? data.country
-      : data.country === null
-      ? null
-      : undefined;
+ const createdAt = typeof data.createdAt === 'string' ? data.createdAt : undefined;
+ const isBanned = typeof data.isBanned === 'boolean' ? data.isBanned : undefined;
+ const banReason = typeof data.banReason === 'string' ? data.banReason : undefined;
+ const bio = typeof data.bio === 'string' ? data.bio : '';
+ const profilePic =
+ typeof data.profilePic === 'string'
+ ? data.profilePic
+ : data.profilePic === null
+ ? null
+ : undefined;
+ const country =
+ typeof data.country === 'string'
+ ? data.country
+ : data.country === null
+ ? null
+ : undefined;
 
-  return {
-    user: {
-      username,
-      role, // Now TypeScript knows this is the correct type
-      joinedAt,
-      createdAt,
-      isBanned,
-      banReason,
-    },
-    profile: {
-      bio,
-      profilePic: profilePic ?? null,
-      country: country ?? null,
-    },
-  };
+ return {
+ user: {
+ username,
+ role, // Now TypeScript knows this is the correct type
+ joinedAt,
+ createdAt,
+ isBanned,
+ banReason,
+ },
+ profile: {
+ bio,
+ profilePic: profilePic ?? null,
+ country: country ?? null,
+ },
+ };
 }
 
 const API_ORIGIN = (() => {
-  try {
-    const parsed = new URL(API_BASE_URL);
-    return parsed.origin;
-  } catch {
-    return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
-  }
+ try {
+ const parsed = new URL(API_BASE_URL);
+ return parsed.origin;
+ } catch {
+ return API_BASE_URL.replace(/\/api\/?$/, '').replace(/\/$/, '');
+ }
 })();
 
 function resolveAvatarUrl(raw?: string | null): string | null {
-  if (!raw) return null;
+ if (!raw) return null;
 
-  const src = String(raw).trim();
-  if (!src) return null;
+ const src = String(raw).trim();
+ if (!src) return null;
 
-  const lower = src.toLowerCase();
-  if (lower.includes('placeholder') || lower === '-' || lower === 'none') return null;
-  if (lower.startsWith('data:image/')) return src;
+ const lower = src.toLowerCase();
+ if (lower.includes('placeholder') || lower === '-' || lower === 'none') return null;
+ if (lower.startsWith('data:image/')) return src;
 
-  if (src.startsWith('http://') || src.startsWith('https://')) {
-    return lower.includes('api.pantypost.com') ? src.replace('http://', 'https://') : src;
-  }
+ if (src.startsWith('http://') || src.startsWith('https://')) {
+ return lower.includes('api.pantypost.com') ? src.replace('http://', 'https://') : src;
+ }
 
-  const ensureLeadingSlash = src.startsWith('/') ? src : `/${src}`;
-  const resolved = resolveApiUrl(ensureLeadingSlash);
-  if (resolved) {
-    return resolved;
-  }
+ const ensureLeadingSlash = src.startsWith('/') ? src : `/${src}`;
+ const resolved = resolveApiUrl(ensureLeadingSlash);
+ if (resolved) {
+ return resolved;
+ }
 
-  if (API_ORIGIN) {
-    return `${API_ORIGIN}${ensureLeadingSlash}`;
-  }
+ if (API_ORIGIN) {
+ return `${API_ORIGIN}${ensureLeadingSlash}`;
+ }
 
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin}${ensureLeadingSlash}`;
-  }
+ if (typeof window !== 'undefined') {
+ return `${window.location.origin}${ensureLeadingSlash}`;
+ }
 
-  return null;
+ return null;
 }
 
 function isRegionalIndicator(cp?: number | null): boolean {
-  if (typeof cp !== 'number') return false;
-  return cp >= 0x1f1e6 && cp <= 0x1f1ff;
+ if (typeof cp !== 'number') return false;
+ return cp >= 0x1f1e6 && cp <= 0x1f1ff;
 }
 
 function deriveCountryDisplay(raw?: string | null): { flag: string; name: string } {
-  if (!raw) {
-    return { flag: '🌐', name: '' };
-  }
+ if (!raw) {
+ return { flag: '🌐', name: '' };
+ }
 
-  const sanitized = sanitizeStrict(raw).trim();
-  if (!sanitized) {
-    return { flag: '🌐', name: '' };
-  }
+ const sanitized = sanitizeStrict(raw).trim();
+ if (!sanitized) {
+ return { flag: '🌐', name: '' };
+ }
 
-  const characters = Array.from(sanitized);
-  if (characters.length >= 2) {
-    const first = characters[0]?.codePointAt(0);
-    const second = characters[1]?.codePointAt(0);
+ const characters = Array.from(sanitized);
+ if (characters.length >= 2) {
+ const first = characters[0]?.codePointAt(0);
+ const second = characters[1]?.codePointAt(0);
 
-    if (isRegionalIndicator(first) && isRegionalIndicator(second)) {
-      const flag = `${characters[0]}${characters[1]}`;
-      const remaining = characters.slice(2).join('').trim();
+ if (isRegionalIndicator(first) && isRegionalIndicator(second)) {
+ const flag = `${characters[0]}${characters[1]}`;
+ const remaining = characters.slice(2).join('').trim();
 
-      return {
-        flag,
-        name: remaining || '',
-      };
-    }
-  }
+ return {
+ flag,
+ name: remaining || '',
+ };
+ }
+ }
 
-  return {
-    flag: flagFromCountryName(sanitized),
-    name: sanitized,
-  };
+ return {
+ flag: flagFromCountryName(sanitized),
+ name: sanitized,
+ };
 }
 
 /* ==== Safe avatar ==== */
 function SafeAvatar({
-  src,
-  alt,
-  letterFallback,
+ src,
+ alt,
+ letterFallback,
 }: {
-  src?: string | null;
-  alt: string;
-  letterFallback: string;
+ src?: string | null;
+ alt: string;
+ letterFallback: string;
 }) {
-  const url = resolveAvatarUrl(src);
-  const isCloudinary =
-    typeof url === 'string' &&
-    (url.startsWith('https://res.cloudinary.com') || url.startsWith('http://res.cloudinary.com'));
-  if (url && isCloudinary) {
-    return <Image src={url} alt={alt} fill sizes="112px" className="rounded-full object-cover" priority={false} />;
-  }
-  if (url) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={alt} className="h-full w-full rounded-full object-cover" />;
-  }
-  return (
-    <div className="flex h-full w-full items-center justify-center rounded-full bg-neutral-800 text-2xl">
-      {letterFallback}
-    </div>
-  );
+ const url = resolveAvatarUrl(src);
+ const isCloudinary =
+ typeof url === 'string' &&
+ (url.startsWith('https://res.cloudinary.com') || url.startsWith('http://res.cloudinary.com'));
+ if (url && isCloudinary) {
+ return <Image src={url} alt={alt} fill sizes="112px" className="rounded-full object-cover" priority={false} />;
+ }
+ if (url) {
+ // eslint-disable-next-line @next/next/no-img-element
+ return <img src={url} alt={alt} className="h-full w-full rounded-full object-cover" />;
+ }
+ return (
+ <div className="flex h-full w-full items-center justify-center rounded-full bg-neutral-800 text-2xl">
+ {letterFallback}
+ </div>
+ );
 }
 
 /* ==== Page ==== */
 export default function BuyerProfilePage() {
-  const params = useParams<{ username?: string }>();
-  const router = useRouter();
+ const params = useParams<{ username?: string }>();
+ const router = useRouter();
 
-  const rawParamUsername = (params?.username ?? '').toString().trim();
-  const usernameForRequest = rawParamUsername;
-  const usernameForDisplay = useMemo(() => (rawParamUsername || '').replace(/[<>]/g, ''), [rawParamUsername]);
+ const rawParamUsername = (params?.username ?? '').toString().trim();
+ const usernameForRequest = rawParamUsername;
+ const usernameForDisplay = useMemo(() => (rawParamUsername || '').replace(/[<>]/g, ''), [rawParamUsername]);
 
-  const [loading, setLoading] = useState(true);
-  const [profileData, setProfileData] = useState<NormalizedBuyerProfile | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [httpStatus, setHttpStatus] = useState<number | null>(null);
+ const [loading, setLoading] = useState(true);
+ const [profileData, setProfileData] = useState<NormalizedBuyerProfile | null>(null);
+ const [error, setError] = useState<string | null>(null);
+ const [httpStatus, setHttpStatus] = useState<number | null>(null);
 
-  // Owner detection
-  const [me, setMe] = useState<MeProfile | null>(null);
-  const token = useMemo(() => getGlobalAuthToken?.() || '', []);
+ // Owner detection
+ const [me, setMe] = useState<MeProfile | null>(null);
+ const token = useMemo(() => getGlobalAuthToken?.() || '', []);
 
-  // --- storage sync: listen for profile updates from /buyers/profile
-  useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key !== 'pp:profile-updated' || !e.newValue) return;
-      try {
-        const payload = JSON.parse(e.newValue) as Partial<MeProfile> & { username?: string };
-        if (!payload?.username || payload.username !== usernameForRequest) return;
-        setProfileData((prev) => {
-          if (!prev) return prev;
-          return {
-            user: { ...prev.user },
-            profile: {
-              ...prev.profile,
-              bio: typeof payload.bio === 'string' ? payload.bio : prev.profile.bio,
-              country:
-                typeof payload.country === 'string' ? payload.country : prev.profile.country,
-              profilePic:
-                typeof payload.profilePic === 'string' ? payload.profilePic : prev.profile.profilePic,
-            },
-          };
-        });
-      } catch {
-        /* ignore parse errors */
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [usernameForRequest]);
+ // --- storage sync: listen for profile updates from /buyers/profile
+ useEffect(() => {
+ const onStorage = (e: StorageEvent) => {
+ if (e.key !== 'pp:profile-updated' || !e.newValue) return;
+ try {
+ const payload = JSON.parse(e.newValue) as Partial<MeProfile> & { username?: string };
+ if (!payload?.username || payload.username !== usernameForRequest) return;
+ setProfileData((prev) => {
+ if (!prev) return prev;
+ return {
+ user: { ...prev.user },
+ profile: {
+ ...prev.profile,
+ bio: typeof payload.bio === 'string' ? payload.bio : prev.profile.bio,
+ country:
+ typeof payload.country === 'string' ? payload.country : prev.profile.country,
+ profilePic:
+ typeof payload.profilePic === 'string' ? payload.profilePic : prev.profile.profilePic,
+ },
+ };
+ });
+ } catch {
+ /* ignore parse errors */
+ }
+ };
+ window.addEventListener('storage', onStorage);
+ return () => window.removeEventListener('storage', onStorage);
+ }, [usernameForRequest]);
 
-  const fetchMe = useCallback(async () => {
-    if (!token) return;
-    try {
-      const resp = await fetch(`/users/me/profile`, {
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      });
-      const json = await resp.json().catch(() => null);
-      if (resp.ok && json?.success !== false) setMe(json.data as MeProfile);
-    } catch {}
-  }, [token]);
+ const fetchMe = useCallback(async () => {
+ if (!token) return;
+ try {
+ const resp = await fetch(`/users/me/profile`, {
+ headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+ });
+ const json = await resp.json().catch(() => null);
+ if (resp.ok && json?.success !== false) setMe(json.data as MeProfile);
+ } catch {}
+ }, [token]);
 
-  const loadProfile = useCallback(async () => {
-    if (!usernameForRequest) {
-      setError('No username provided.');
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    setHttpStatus(null);
+ const loadProfile = useCallback(async () => {
+ if (!usernameForRequest) {
+ setError('No username provided.');
+ setLoading(false);
+ return;
+ }
+ setLoading(true);
+ setError(null);
+ setHttpStatus(null);
 
-    try {
-      // IMPORTANT: call our same-origin proxy to avoid CORS
-      const url = `/users/${encodeURIComponent(usernameForRequest)}/profile`;
+ try {
+ // IMPORTANT: call our same-origin proxy to avoid CORS
+ const url = `/users/${encodeURIComponent(usernameForRequest)}/profile`;
 
-      const tk = getGlobalAuthToken?.();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (tk) headers.Authorization = `Bearer ${tk}`;
+ const tk = getGlobalAuthToken?.();
+ const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+ if (tk) headers.Authorization = `Bearer ${tk}`;
 
-      const resp = await fetch(url, { method: 'GET', headers });
-      setHttpStatus(resp.status);
-      const json = (await resp.json().catch(() => null)) as BackendProfileResponse | null;
+ const resp = await fetch(url, { method: 'GET', headers });
+ setHttpStatus(resp.status);
+ const json = (await resp.json().catch(() => null)) as BackendProfileResponse | null;
 
-      if (!resp.ok) {
-        const msg =
-          json?.error?.message ||
-          (resp.status === 404
-            ? 'Profile not found.'
-            : resp.status === 403
-            ? 'Authentication required or insufficient permissions to view this buyer profile.'
-            : 'Failed to load profile.');
-        setError(msg);
-        setLoading(false);
-        return;
-      }
+ if (!resp.ok) {
+ const msg =
+ json?.error?.message ||
+ (resp.status === 404
+ ? 'Profile not found.'
+ : resp.status === 403
+ ? 'Authentication required or insufficient permissions to view this buyer profile.'
+ : 'Failed to load profile.');
+ setError(msg);
+ setLoading(false);
+ return;
+ }
 
-      const normalized = normalizeProfileFromBackend(json);
-      if (!normalized) {
-        setError('Profile not found.');
-        setLoading(false);
-        return;
-      }
-      if (normalized.user.role === 'seller') {
-        router.replace(`/sellers/${usernameForRequest}`);
-        return;
-      }
-      setProfileData(normalized);
-    } catch (error) {
-      console.error('[BuyerProfilePage] loadProfile error:', error);
-      setError('Failed to load profile.');
-    } finally {
-      setLoading(false);
-    }
-  }, [usernameForRequest, router]);
+ const normalized = normalizeProfileFromBackend(json);
+ if (!normalized) {
+ setError('Profile not found.');
+ setLoading(false);
+ return;
+ }
+ if (normalized.user.role === 'seller') {
+ router.replace(`/sellers/${usernameForRequest}`);
+ return;
+ }
+ setProfileData(normalized);
+ } catch (error) {
+ console.error('[BuyerProfilePage] loadProfile error:', error);
+ setError('Failed to load profile.');
+ } finally {
+ setLoading(false);
+ }
+ }, [usernameForRequest, router]);
 
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+ useEffect(() => {
+ loadProfile();
+ }, [loadProfile]);
 
-  useEffect(() => {
-    fetchMe();
-  }, [fetchMe]);
+ useEffect(() => {
+ fetchMe();
+ }, [fetchMe]);
 
-  const isOwner = !!me && me.username === usernameForRequest;
+ const isOwner = !!me && me.username === usernameForRequest;
 
-  const sanitizedBio = useMemo(() => {
-    const rawBio = profileData?.profile?.bio;
-    if (!rawBio) return '';
-    return sanitizeStrict(rawBio);
-  }, [profileData?.profile?.bio]);
+ const sanitizedBio = useMemo(() => {
+ const rawBio = profileData?.profile?.bio;
+ if (!rawBio) return '';
+ return sanitizeStrict(rawBio);
+ }, [profileData?.profile?.bio]);
 
-  const countryDisplay = useMemo(() => deriveCountryDisplay(profileData?.profile?.country), [
-    profileData?.profile?.country,
-  ]);
+ const countryDisplay = useMemo(() => deriveCountryDisplay(profileData?.profile?.country), [
+ profileData?.profile?.country,
+ ]);
 
-  const messageHref = useMemo(() => {
-    if (me?.role === 'seller') {
-      const encodedUsername = usernameForRequest ? encodeURIComponent(usernameForRequest) : '';
-      return encodedUsername ? `/sellers/messages?thread=${encodedUsername}` : '/sellers/messages';
-    }
+ const messageHref = useMemo(() => {
+ if (me?.role === 'seller') {
+ const encodedUsername = usernameForRequest ? encodeURIComponent(usernameForRequest) : '';
+ return encodedUsername ? `/sellers/messages?thread=${encodedUsername}` : '/sellers/messages';
+ }
 
-    if (me?.role === 'buyer') {
-      return '/buyers/messages';
-    }
+ if (me?.role === 'buyer') {
+ return '/buyers/messages';
+ }
 
-    return '/buyers/messages';
-  }, [me?.role, usernameForRequest]);
+ return '/buyers/messages';
+ }, [me?.role, usernameForRequest]);
 
-  if (!usernameForRequest) {
-    return (
-      <BanCheck>
-        <div className="min-h-screen bg-surface text-white px-6">
-          <div className="mx-auto max-w-3xl pt-24 text-center">
-            <h1 className="text-3xl font-semibold">Invalid username</h1>
-            <p className="mt-3 text-neutral-400">Please provide a valid username in the URL.</p>
-          </div>
-        </div>
-      </BanCheck>
-    );
-  }
+ if (!usernameForRequest) {
+ return (
+ <BanCheck>
+ <div className="min-h-screen bg-surface text-white px-6">
+ <div className="mx-auto max-w-3xl pt-24 text-center">
+ <h1 className="text-3xl font-semibold">Invalid username</h1>
+ <p className="mt-3 text-neutral-400">Please provide a valid username in the URL.</p>
+ </div>
+ </div>
+ </BanCheck>
+ );
+ }
 
-  return (
-    <BanCheck>
-      <div className="min-h-screen bg-surface text-white">
-        <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-10">
-          <div className="relative overflow-hidden rounded-lg border border-white/10 bg-surface/85 shadow-[0_18px_60px_-30px_rgba(0,0,0,0.9)]">
-            <div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.18),rgba(255,255,255,0)_55%)]"
-              aria-hidden="true"
-            />
-            <div className="relative p-6 sm:p-10">
-              {loading ? (
-                <div className="space-y-10 animate-pulse">
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-                    <div className="h-28 w-28 rounded-lg bg-neutral-800/80" />
-                    <div className="flex-1 space-y-4">
-                      <div className="h-6 w-48 rounded bg-neutral-800/80" />
-                      <div className="h-4 w-72 rounded bg-neutral-800/80" />
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="h-20 rounded-lg bg-neutral-800/80" />
-                        <div className="h-20 rounded-lg bg-neutral-800/80" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="h-11 w-40 rounded-full bg-neutral-800/80" />
-                </div>
-              ) : error ? (
-                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-red-200">
-                  <p className="text-lg font-semibold">Could not load buyer profile</p>
-                  <p className="mt-2 text-sm text-red-100/80">{error}</p>
-                  {httpStatus === 403 && (
-                    <p className="mt-4 text-xs text-red-100/70">
-                      Tip: Buyer profiles are private. Log in to view.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
-                    <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
-                      <div className="flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
-                        <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-primary bg-surface shadow-[0_0_32px_-18px_rgba(168,85,247,0.8)]">
-                          <SafeAvatar
-                            src={profileData?.profile?.profilePic || null}
-                            alt={`${usernameForDisplay}'s avatar`}
-                            letterFallback={profileData?.user?.username?.[0]?.toUpperCase() ?? 'B'}
-                          />
-                        </div>
-                      </div>
-                    </div>
+ return (
+ <BanCheck>
+ <div className="min-h-screen bg-surface text-white">
+ <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-10">
+ <div className="relative overflow-hidden rounded-lg border border-white/10 bg-surface/85 shadow-[0_18px_60px_-30px_rgba(0,0,0,0.9)]">
+ <div
+ className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.18),rgba(255,255,255,0)_55%)]"
+ aria-hidden="true"
+ />
+ <div className="relative p-6 sm:p-10">
+ {loading ? (
+ <div className="space-y-10 animate-pulse">
+ <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+ <div className="h-28 w-28 rounded-lg bg-neutral-800/80" />
+ <div className="flex-1 space-y-4">
+ <div className="h-6 w-48 rounded bg-neutral-800/80" />
+ <div className="h-4 w-72 rounded bg-neutral-800/80" />
+ <div className="grid gap-3 sm:grid-cols-2">
+ <div className="h-20 rounded-lg bg-neutral-800/80" />
+ <div className="h-20 rounded-lg bg-neutral-800/80" />
+ </div>
+ </div>
+ </div>
+ <div className="h-11 w-40 rounded-full bg-neutral-800/80" />
+ </div>
+ ) : error ? (
+ <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-red-200">
+ <p className="text-lg font-semibold">Could not load buyer profile</p>
+ <p className="mt-2 text-sm text-red-100/80">{error}</p>
+ {httpStatus === 403 && (
+ <p className="mt-4 text-xs text-red-100/70">
+ Tip: Buyer profiles are private. Log in to view.
+ </p>
+ )}
+ </div>
+ ) : (
+ <>
+ <div className="flex flex-col gap-10 lg:flex-row lg:items-center">
+ <div className="flex flex-col items-center gap-5 text-center lg:items-start lg:text-left">
+ <div className="flex h-32 w-32 items-center justify-center sm:h-36 sm:w-36">
+ <div className="relative h-full w-full overflow-hidden rounded-full border-4 border-primary bg-surface shadow-[0_0_32px_-18px_rgba(168,85,247,0.8)]">
+ <SafeAvatar
+ src={profileData?.profile?.profilePic || null}
+ alt={`${usernameForDisplay}'s avatar`}
+ letterFallback={profileData?.user?.username?.[0]?.toUpperCase() ?? 'B'}
+ />
+ </div>
+ </div>
+ </div>
 
-                    <div className="flex-1 space-y-6">
-                      <div className="space-y-4">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <h1 className="text-3xl font-bold sm:text-4xl">{usernameForDisplay}</h1>
-                          <span className="rounded-md border border-neutral-700/60 bg-neutral-900/70 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-300">
-                            Buyer
+ <div className="flex-1 space-y-6">
+ <div className="space-y-4">
+ <div className="flex flex-wrap items-center gap-3">
+ <h1 className="text-3xl font-bold sm:text-4xl">{usernameForDisplay}</h1>
+ <span className="rounded-md border border-neutral-700/60 bg-neutral-900/70 px-3 py-1 text-xs font-medium uppercase tracking-wide text-neutral-300">
+ Buyer
+ </span>
+ </div>
+
+ {sanitizedBio && (
+ <p className="max-w-2xl text-base leading-relaxed text-neutral-300 sm:text-lg">
+ {sanitizedBio}
+ </p>
+ )}
+ </div>
+
+ <div className="flex flex-wrap gap-3">
+ <Link
+ href={messageHref}
+ className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
+ >
+ <MessageCircle size={18} className="text-neutral-950" />
+ <span className="text-neutral-950">Message</span>
+ </Link>
+
+ {isOwner && (
+ <Link
+ href={`/buyers/profile`}
+ className="inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/50 focus:ring-offset-2 focus:ring-offset-black"
+ title="Edit your buyer profile"
+ >
+ Edit profile
+ </Link>
+ )}
+ </div>
+ </div>
+ </div>
+
+ <div className="mt-12 grid gap-5 sm:grid-cols-2">
+ <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
+ <div className="flex items-start gap-4">
+ <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800/80 text-primary-hover">
+ <CalendarDays size={18} />
+ </span>
+ <div>
+ <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Member since</p>
+ <p className="mt-2 text-lg font-semibold text-white">
+ {formatDate(profileData?.user?.joinedAt || profileData?.user?.createdAt)}
+ </p>
+ </div>
+ </div>
+ </div>
+
+ <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
+ <div className="flex items-start gap-4">
+ <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800/80 text-primary-hover">
+ <MapPin size={18} />
+ </span>
+ <div>
+ <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Location</p>
+ <p className="mt-2 text-lg font-semibold text-white">
+ {profileData?.profile?.country ? (
+                      /* The ISO code as a small chip, not a flag emoji.
+                         Windows ships no flag glyphs, so the emoji fell
+                         back to drawing its two Regional Indicator
+                         letters and rendered as "AUAustralia". */
+                      <span className="inline-flex items-center gap-2">
+                        {countryDisplay.flag ? (
+                          <span className="rounded-sm border border-line bg-surface-overlay px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-ink-muted">
+                            {countryDisplay.flag}
                           </span>
-                        </div>
+                        ) : null}
+                        {countryDisplay.name ? <span>{countryDisplay.name}</span> : null}
+                      </span>
+ ) : (
+ 'Not shared yet'
+ )}
+ </p>
+ {isOwner && !profileData?.profile?.country && (
+ <p className="mt-1 text-sm text-neutral-400">
+ Add your country so sellers know where you are shopping from.
+ </p>
+ )}
+ </div>
+ </div>
+ </div>
 
-                        {sanitizedBio && (
-                          <p className="max-w-2xl text-base leading-relaxed text-neutral-300 sm:text-lg">
-                            {sanitizedBio}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap gap-3">
-                        <Link
-                          href={messageHref}
-                          className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-[#ff950e]/60 focus:ring-offset-2 focus:ring-offset-black"
-                        >
-                          <MessageCircle size={18} className="text-neutral-950" />
-                          <span className="text-neutral-950">Message</span>
-                        </Link>
-
-                        {isOwner && (
-                          <Link
-                            href={`/buyers/profile`}
-                            className="inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm font-medium text-neutral-200 transition hover:border-neutral-500 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]/50 focus:ring-offset-2 focus:ring-offset-black"
-                            title="Edit your buyer profile"
-                          >
-                            Edit profile
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-12 grid gap-5 sm:grid-cols-2">
-                    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-                      <div className="flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800/80 text-primary-hover">
-                          <CalendarDays size={18} />
-                        </span>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Member since</p>
-                          <p className="mt-2 text-lg font-semibold text-white">
-                            {formatDate(profileData?.user?.joinedAt || profileData?.user?.createdAt)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-5">
-                      <div className="flex items-start gap-4">
-                        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-neutral-800/80 text-primary-hover">
-                          <MapPin size={18} />
-                        </span>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-400">Location</p>
-                          <p className="mt-2 text-lg font-semibold text-white">
-                            {profileData?.profile?.country ? (
-                              <span>
-                                {countryDisplay.flag}
-                                {countryDisplay.name ? ` ${countryDisplay.name}` : ''}
-                              </span>
-                            ) : (
-                              'Not shared yet'
-                            )}
-                          </p>
-                          {isOwner && !profileData?.profile?.country && (
-                            <p className="mt-1 text-sm text-neutral-400">
-                              Add your country so sellers know where you are shopping from.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </BanCheck>
-  );
+ </div>
+ </>
+ )}
+ </div>
+ </div>
+ </div>
+ </div>
+ </BanCheck>
+ );
 }

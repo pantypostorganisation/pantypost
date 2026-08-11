@@ -18,10 +18,15 @@
      accumulated (#0a0a0a, #111, #121212, #131313, #171717, #1a1a1a,
      #0b0b0f, #101010). Each step is a clear stop, so depth reads as
      intentional rather than accidental. */
-  --color-surface: #0a0a0a;        /* page background */
-  --color-surface-raised: #141414; /* cards, panels */
-  --color-surface-overlay: #1c1c1c;/* inputs, modals, hover states */
-  --color-surface-hover: #222222;
+  /* Depth comes from small steps against a near-black page, not from
+     grey panels. Each step is ~4 points of lightness: enough to read as
+     a distinct layer, not enough to look like a grey box sitting on
+     black. Pure #000 is avoided for the page because it makes the steps
+     above it look muddy and causes halation against white text. */
+  --color-surface: #050505;        /* page background */
+  --color-surface-raised: #0e0e0e; /* cards, panels */
+  --color-surface-overlay: #161616;/* inputs, modals, hover states */
+  --color-surface-hover: #1e1e1e;
 
   /* ---- Borders ----
      Alpha rather than solid greys, so borders sit correctly on any

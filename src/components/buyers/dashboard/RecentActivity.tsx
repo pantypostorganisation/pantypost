@@ -7,105 +7,105 @@ import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { RecentActivityProps } from '@/types/dashboard';
 
 export default function RecentActivity({ activities }: RecentActivityProps) {
-  const getStatusIcon = (status?: string) => {
-    switch (status) {
-      case 'shipped':
-        return <CheckCircle className="w-3.5 h-3.5 text-green-400" />;
-      case 'processing':
-        return <Clock className="w-3.5 h-3.5 text-yellow-400" />;
-      case 'pending':
-        return <AlertCircle className="w-3.5 h-3.5 text-orange-400" />;
-      case 'delivered':
-        return <Truck className="w-3.5 h-3.5 text-blue-400" />;
-      default:
-        return null;
-    }
-  };
+ const getStatusIcon = (status?: string) => {
+ switch (status) {
+ case 'shipped':
+ return <CheckCircle className="w-3.5 h-3.5 text-green-400" />;
+ case 'processing':
+ return <Clock className="w-3.5 h-3.5 text-yellow-400" />;
+ case 'pending':
+ return <AlertCircle className="w-3.5 h-3.5 text-orange-400" />;
+ case 'delivered':
+ return <Truck className="w-3.5 h-3.5 text-blue-400" />;
+ default:
+ return null;
+ }
+ };
 
-  const getStatusColor = (type: string) => {
-    switch (type) {
-      case 'order':
-        return 'text-primary';
-      case 'message':
-        return 'text-blue-400';
-      case 'request':
-        return 'text-purple-400';
-      case 'subscription':
-        return 'text-green-400';
-      default:
-        return 'text-ink-muted';
-    }
-  };
+ const getStatusColor = (type: string) => {
+ switch (type) {
+ case 'order':
+ return 'text-primary';
+ case 'message':
+ return 'text-blue-400';
+ case 'request':
+ return 'text-purple-400';
+ case 'subscription':
+ return 'text-green-400';
+ default:
+ return 'text-ink-muted';
+ }
+ };
 
-  const safeActivities = Array.isArray(activities) ? activities : [];
+ const safeActivities = Array.isArray(activities) ? activities : [];
 
-  return (
-    <section className="rounded-lg border border-white/5 bg-black/30 p-5">
-      <div className="flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-white">Recent activity</h2>
-        <Link
-          href="/buyers/my-orders"
-          className="text-xs font-medium text-primary transition hover:text-primary-hover"
-        >
-          View all orders
-        </Link>
-      </div>
+ return (
+ <section className="rounded-lg border border-white/5 bg-black/30 p-5">
+ <div className="flex items-center justify-between gap-4">
+ <h2 className="text-lg font-semibold text-white">Recent activity</h2>
+ <Link
+ href="/buyers/my-orders"
+ className="text-xs font-medium text-primary transition hover:text-primary-hover"
+ >
+ View all orders
+ </Link>
+ </div>
 
-      {safeActivities.length > 0 ? (
-        <div className="mt-6 space-y-6">
-          {safeActivities.map((activity, index) => (
-            <div key={activity.id} className="flex gap-4">
-              <div className="flex flex-col items-center">
-                <span className={`flex h-10 w-10 items-center justify-center rounded-full bg-black/40 ${getStatusColor(activity.type)}`}>
-                  {activity.icon}
-                </span>
-                {index !== safeActivities.length - 1 && <span className="mt-1 h-full w-px bg-white/10" aria-hidden="true" />}
-              </div>
+ {safeActivities.length > 0 ? (
+ <div className="mt-6 space-y-6">
+ {safeActivities.map((activity, index) => (
+ <div key={activity.id} className="flex gap-4">
+ <div className="flex flex-col items-center">
+ <span className={`flex h-10 w-10 items-center justify-center rounded-full bg-black/40 ${getStatusColor(activity.type)}`}>
+ {activity.icon}
+ </span>
+ {index !== safeActivities.length - 1 && <span className="mt-1 h-full w-px bg-white/10" aria-hidden="true" />}
+ </div>
 
-              <Link
-                href={activity.href || '#'}
-                className="flex flex-1 flex-col gap-2 rounded-lg border border-white/5 bg-surface-raised p-4 transition hover:border-primary/40 hover:bg-surface-raised"
-              >
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <SecureMessageDisplay
-                    content={activity.title}
-                    className="text-sm font-medium text-white"
-                    allowBasicFormatting={false}
-                    maxLength={100}
-                  />
-                  <p className="text-xs text-ink-faint">{activity.time}</p>
-                </div>
-                <SecureMessageDisplay
-                  content={activity.subtitle}
-                  className="text-xs text-ink-faint"
-                  allowBasicFormatting={false}
-                  maxLength={80}
-                />
+ <Link
+ href={activity.href || '#'}
+ className="flex flex-1 flex-col gap-2 rounded-lg border border-white/5 bg-surface-raised p-4 transition hover:border-primary/40 hover:bg-surface-raised"
+ >
+ <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+ <SecureMessageDisplay
+ content={activity.title}
+ className="text-sm font-medium text-white"
+ allowBasicFormatting={false}
+ maxLength={100}
+ />
+ <p className="text-xs text-ink-faint">{activity.time}</p>
+ </div>
+ <SecureMessageDisplay
+ content={activity.subtitle}
+ className="text-xs text-ink-faint"
+ allowBasicFormatting={false}
+ maxLength={80}
+ />
 
-                <div className="flex items-center justify-between text-xs text-ink-faint">
-                  {typeof activity.amount === 'number' && !Number.isNaN(activity.amount) ? (
-                    <span className="font-semibold text-white">${activity.amount.toFixed(2)}</span>
-                  ) : (
-                    <span />
-                  )}
-                  {activity.status && getStatusIcon(activity.status)}
-                </div>
-              </Link>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-8 rounded-lg border border-dashed border-white/10 bg-surface-raised p-10 text-center">
-          <Clock className="mx-auto mb-3 h-10 w-10 text-ink-faint" />
-          <p className="text-sm text-ink-muted">You&apos;re all caught up. Activity will appear here once you place new orders.</p>
-          <Link
-            href="/browse"
-            className="mt-4 inline-flex items-center justify-center rounded-md bg-surface-raised px-4 py-2 text-xs font-semibold text-black shadow-lg transition hover:shadow-[#ff950e]/30"
-          >
-            Discover new listings
-          </Link>
-        </div>
-      )}
-    </section>
-  );
+ <div className="flex items-center justify-between text-xs text-ink-faint">
+ {typeof activity.amount === 'number' && !Number.isNaN(activity.amount) ? (
+ <span className="font-semibold text-white">${activity.amount.toFixed(2)}</span>
+ ) : (
+ <span />
+ )}
+ {activity.status && getStatusIcon(activity.status)}
+ </div>
+ </Link>
+ </div>
+ ))}
+ </div>
+ ) : (
+ <div className="mt-8 rounded-lg border border-dashed border-white/10 bg-surface-raised p-10 text-center">
+ <Clock className="mx-auto mb-3 h-10 w-10 text-ink-faint" />
+ <p className="text-sm text-ink-muted">You&apos;re all caught up. Activity will appear here once you place new orders.</p>
+ <Link
+ href="/browse"
+ className="mt-4 inline-flex items-center justify-center rounded-md bg-surface-raised px-4 py-2 text-xs font-semibold text-black transition"
+ >
+ Discover new listings
+ </Link>
+ </div>
+ )}
+ </section>
+ );
 }

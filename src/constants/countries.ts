@@ -51,19 +51,33 @@ export const COUNTRY_TO_CODE: Record<string, string> = {
   Russia: 'RU',
 };
 
+/* WHY THIS RETURNS A CODE, NOT AN EMOJI
+ *
+ * Flag emoji are built from Regional Indicator Symbols -- 'AU' becomes
+ * U+1F1E6 U+1F1FA. Rendering that as a flag requires the OS to ship flag
+ * glyphs, and WINDOWS DOES NOT. Chrome on Windows therefore falls back to
+ * drawing the two indicator letters, so a flag beside a country name
+ * renders as "AU" immediately followed by "Australia" -- the
+ * "AUAustralia" you saw. macOS, iOS and Android show the flag, so this
+ * looks fine on a phone and broken on the desktop most admins use.
+ *
+ * Rather than depend on the viewer's OS, this now returns the ISO code
+ * itself and callers render it as a small chip (see CountryTag below).
+ * Consistent everywhere, no font dependency, no network request.
+ *
+ * If real flag artwork is wanted later, CountrySelect.tsx already uses
+ * flagcdn.com PNGs -- but that adds an external image dependency and
+ * needs the CSP img-src to allow it.
+ */
 export function flagFromIso2(code?: string | null): string {
-  if (!code || code.length !== 2) return '🌐';
-  const base = 0x1f1e6;
-  const A = 'A'.charCodeAt(0);
-  const characters = code.toUpperCase().split('');
-  const cps = characters.map((c) => base + (c.charCodeAt(0) - A));
-  return String.fromCodePoint(...cps);
+  if (!code || code.length !== 2) return '';
+  return code.toUpperCase();
 }
 
 export function flagFromCountryName(name?: string | null): string {
-  if (!name) return '🌐';
+  if (!name) return '';
   const normalized = name.trim();
-  if (!normalized) return '🌐';
+  if (!normalized) return '';
 
   const direct = COUNTRY_TO_CODE[normalized];
   if (direct) {
@@ -76,5 +90,5 @@ export function flagFromCountryName(name?: string | null): string {
     return flagFromIso2(isoCandidate);
   }
 
-  return '🌐';
+  return '';
 }
