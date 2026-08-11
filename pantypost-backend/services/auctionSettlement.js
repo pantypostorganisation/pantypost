@@ -355,6 +355,46 @@ class AuctionSettlementService {
     console.log(`  - title: "${listing.title}"`);
     
     // CRITICAL FIX: Create order with proper date field
+    /* THE WINNER'S SHIPPING ADDRESS
+     *
+     * Auction orders were created with deliveryAddress: undefined, so a
+     * won auction produced an order nobody could actually post. The
+     * buyer was then chased for an address afterwards, from My Orders.
+     *
+     * Buyers now save an address right after their first bid (see
+     * PUT /api/profilebuyer/delivery-address), so by the time an auction
+     * settles it is already on record. It is COPIED onto the order
+     * rather than referenced, so the order keeps where it was actually
+     * sent even if the buyer later moves.
+     *
+     * Still tolerant of a missing address: an auction must settle and
+     * pay the seller regardless, and My Orders keeps its prompt for
+     * anything that slips through (including every order placed before
+     * this change).
+     */
+    let winnerAddress;
+    try {
+      const winnerUser = await User.findOne({ username: winner })
+        .select('deliveryAddress')
+        .lean();
+      const saved = winnerUser && winnerUser.deliveryAddress;
+      if (saved && saved.addressLine1 && saved.city && saved.postalCode && saved.country) {
+        winnerAddress = {
+          fullName: saved.fullName,
+          addressLine1: saved.addressLine1,
+          addressLine2: saved.addressLine2,
+          city: saved.city,
+          state: saved.state,
+          postalCode: saved.postalCode,
+          country: saved.country,
+        };
+      } else {
+        console.warn(`[AuctionSettlement] Winner ${winner} has no saved delivery address; order will need one.`);
+      }
+    } catch (addressError) {
+      console.error('[AuctionSettlement] Failed to read winner address:', addressError);
+    }
+
     const order = new Order({
       title: listing.title,
       description: listing.description,
@@ -377,7 +417,8 @@ class AuctionSettlementService {
       buyerMarkupFee: 0,
       sellerEarnings: sellerEarnings,
       tierCreditAmount: 0,
-      sellerTier: null
+      sellerTier: null,
+      deliveryAddress: winnerAddress
     });
     
     // DEBUG: Log the order object before saving
@@ -413,7 +454,7 @@ class AuctionSettlementService {
       paymentStatus: 'completed',
       sellerEarnings: sellerEarnings,
       platformFee: sellerPlatformFee,
-      deliveryAddress: undefined
+      deliveryAddress: winnerAddress
     };
     
     // Emit directly to winner FIRST

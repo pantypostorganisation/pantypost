@@ -55,6 +55,35 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+
+  // =====================================================================
+  // DELIVERY ADDRESS
+  //
+  // The buyer's shipping address, stored ON THE BUYER rather than per
+  // order. That choice does the work of three requirements at once:
+  //
+  //  1. Bidding: the address is captured once, after the first bid. Bid
+  //     again on the same or another auction and it is already here, so
+  //     the buyer is never asked twice.
+  //  2. Auction settlement can attach a real address to the winning
+  //     order. It previously created them with deliveryAddress:
+  //     undefined, so nobody knew where to ship.
+  //  3. Checkout prefills, so a repeat buyer confirms rather than retypes.
+  //
+  // Orders still keep their OWN copy at purchase time (Order.deliveryAddress).
+  // That is deliberate: an order must record where it was actually sent,
+  // and must not silently change if the buyer later moves house.
+  // =====================================================================
+  deliveryAddress: {
+    fullName: { type: String, maxlength: 100, trim: true },
+    addressLine1: { type: String, maxlength: 200, trim: true },
+    addressLine2: { type: String, maxlength: 200, trim: true },
+    city: { type: String, maxlength: 100, trim: true },
+    state: { type: String, maxlength: 100, trim: true },
+    postalCode: { type: String, maxlength: 20, trim: true },
+    country: { type: String, maxlength: 56, trim: true },
+    updatedAt: { type: Date }
+  },
   profilePic: {
     // Was `https://via.placeholder.com/150`. That service is dead, so every
     // account that never uploaded a picture held a URL that resolves to a
@@ -538,6 +567,18 @@ userSchema.methods.markEmailAsVerified = async function() {
 };
 
 // Create the model
+/**
+ * True when the stored address is complete by the platform's own
+ * definition -- the same field set AddressConfirmationModal validates and
+ * PUT /api/orders/:id/address requires. Line 2 is the only optional part.
+ */
+userSchema.methods.hasDeliveryAddress = function () {
+  const a = this.deliveryAddress;
+  return Boolean(
+    a && a.fullName && a.addressLine1 && a.city && a.state && a.postalCode && a.country
+  );
+};
+
 const User = mongoose.model('User', userSchema);
 
 module.exports = User;

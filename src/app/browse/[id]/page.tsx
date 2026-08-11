@@ -1,7 +1,7 @@
 // src/app/browse/[id]/page.tsx
 'use client';
 
-import React, { useEffect, useCallback, useRef, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import BanCheck from '@/components/BanCheck';
 import DetailHeader from '@/components/browse-detail/DetailHeader';
 import ImageGallery from '@/components/browse-detail/ImageGallery';
@@ -16,6 +16,11 @@ import BidHistoryModal from '@/components/browse-detail/BidHistoryModal';
 import AuctionEndedModal from '@/components/browse-detail/AuctionEndedModal';
 import PurchaseSuccessModal from '@/components/browse-detail/PurchaseSuccessModal';
 import StickyPurchaseBar from '@/components/browse-detail/StickyPurchaseBar';
+import CheckoutModal, { type CheckoutItem } from '@/components/browse-detail/CheckoutModal';
+import AddressConfirmationModal from '@/components/AddressConfirmationModal';
+import { deliveryAddressService } from '@/services/deliveryAddress.service';
+import { useWallet } from '@/context/WalletContext';
+import type { DeliveryAddress } from '@/types/order';
 import PremiumLockMessage from '@/components/browse-detail/PremiumLockMessage';
 import { useBrowseDetail } from '@/hooks/useBrowseDetail';
 import { useFavorites } from '@/context/FavoritesContext';
@@ -87,6 +92,8 @@ export default function ListingDetailPage() {
     
     // Handlers
     handlePurchase,
+    needsBidAddress,
+    dismissBidAddressPrompt,
     handleBidSubmit,
     handleImageNavigation,
     handleBidAmountChange,
@@ -350,22 +357,79 @@ export default function ListingDetailPage() {
     }
   }, [listing, trackEvent, router]);
 
-  const handlePurchaseWithAnalytics = useCallback(async () => {
-    if (listing && listingId && isMountedRef.current) {
-      try {
-        trackEvent({
-          action: 'begin_checkout',
-          category: 'ecommerce',
-          label: listingId,
-          value: listing.price || 0
-        });
-      } catch (error) {
-        console.error('Failed to track purchase attempt:', error);
-      }
+  /* CHECKOUT BEFORE PAYMENT
+   *
+   * This used to call handlePurchase() directly, charging the buyer
+   * immediately and collecting the shipping address afterwards from a
+   * panel in My Orders.
+   *
+   * It now opens a confirmation step instead. The modal lives HERE, at
+   * page level, on purpose: there are three ways to buy on this page --
+   * PurchaseSection's button, the sticky bar, and the drop claim -- and a
+   * modal owned by any one of them would leave the others charging with
+   * no address.
+   */
+  /* Checkout needs the buyer's balance to show "wallet balance" and to
+     disable Confirm when there are not enough funds. useBrowseDetail
+     computes a balance internally but does not expose it, so the page
+     reads the same source directly rather than duplicating the number. */
+  const { getBuyerBalance } = useWallet();
+  const buyerBalance = user?.username ? getBuyerBalance(user.username) : 0;
+
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const openCheckout = useCallback(() => {
+    if (!listing) return;
+
+    if (listingId) {
+      trackEvent('checkout_started', { listingId });
     }
-    
-    await handlePurchase();
-  }, [listing, listingId, trackEvent, handlePurchase]);
+
+    setCheckoutError(null);
+    setCheckoutOpen(true);
+  }, [listing, listingId, trackEvent]);
+
+  const checkoutItem: CheckoutItem | null = useMemo(() => {
+    if (!listing) return null;
+
+    const price = Number(listing.price) || 0;
+    const total = Number(listing.markedUpPrice) || Math.round(price * 1.1 * 100) / 100;
+    const drop = (listing as { drop?: { isDrop?: boolean; unitsSold?: number; totalUnits?: number } }).drop;
+
+    return {
+      title: listing.title,
+      imageUrl: listing.imageUrls?.[0] || null,
+      seller: listing.seller,
+      price,
+      total,
+      note: drop?.isDrop
+        ? `Unit #${(drop.unitsSold ?? 0) + 1} of ${drop.totalUnits ?? 0}`
+        : null,
+    };
+  }, [listing]);
+
+  const handleCheckoutConfirm = useCallback(
+    async (address: DeliveryAddress) => {
+      if (!listing) return;
+
+      setCheckoutError(null);
+
+      try {
+        if (listingId) {
+          trackEvent('purchase_confirmed', { listingId, price: listing.price });
+        }
+        // One purchase path now, and it carries the address the buyer
+        // just confirmed.
+        await handlePurchase(address);
+        setCheckoutOpen(false);
+      } catch (error) {
+        console.error('Checkout failed:', error);
+        setCheckoutError('Something went wrong. Your wallet has not been charged.');
+      }
+    },
+    [listing, listingId, trackEvent, handlePurchase]
+  );
 
   const handleBidSubmitWithAnalytics = useCallback(async () => {
     if (listing && bidAmount && listingId && isMountedRef.current) {
@@ -603,7 +667,8 @@ export default function ListingDetailPage() {
                 <PurchaseSection
                   listing={listing}
                   user={user}
-                  handlePurchase={handlePurchaseWithAnalytics}
+                  handlePurchase={openCheckout}
+                  onRequestCheckout={openCheckout}
                   isProcessing={isProcessing}
                   isFavorited={isFavorited}
                   toggleFavorite={toggleFavorite}
@@ -705,9 +770,35 @@ export default function ListingDetailPage() {
             needsSubscription={isLockedPremium}
             isAuctionListing={isActualAuction}
             userRole={user?.role}
-            onPurchase={handlePurchaseWithAnalytics}
+            onPurchase={openCheckout}
           />
         </div>
+
+        <CheckoutModal
+          open={checkoutOpen}
+          item={checkoutItem}
+          balance={typeof buyerBalance === 'number' ? buyerBalance : 0}
+          isProcessing={isProcessing}
+          error={checkoutError}
+          onCancel={() => setCheckoutOpen(false)}
+          onConfirm={handleCheckoutConfirm}
+        />
+
+        {/* Post-bid address prompt. Fires AFTER a bid succeeds, never
+            before -- auctions are won by seconds and a form in front of
+            the bid would cost people listings. Asked once: the address
+            saves to the account, so re-bidding stays silent and auction
+            settlement can ship the win. */}
+        <AddressConfirmationModal
+          isOpen={needsBidAddress}
+          onClose={dismissBidAddressPrompt}
+          onConfirm={async (address: DeliveryAddress) => {
+            await deliveryAddressService.save(address);
+            dismissBidAddressPrompt();
+          }}
+          existingAddress={null}
+          orderId="bid"
+        />
       </main>
     </BanCheck>
   );

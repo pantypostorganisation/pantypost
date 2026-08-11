@@ -165,7 +165,7 @@ type ListingContextType = {
     id: string,
     updatedListing: Partial<Omit<Listing, 'id' | 'date' | 'markedUpPrice'>>
   ) => Promise<void>;
-  purchaseListingAndRemove: (listing: Listing, buyerUsername: string) => Promise<boolean>;
+  purchaseListingAndRemove: (listing: Listing, buyerUsername: string, deliveryAddress?: DeliveryAddress) => Promise<boolean>;
 
   // Auction functions
   placeBid: (listingId: string, bidder: string, amount: number) => Promise<boolean>;
@@ -812,7 +812,8 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   // ---------- Purchase + remove ----------
   const purchaseListingAndRemove = async (
     listing: Listing,
-    buyerUsername: string
+    buyerUsername: string,
+    deliveryAddress?: DeliveryAddress
   ): Promise<boolean> => {
     try {
       const sanitizedBuyer = sanitize.username(buyerUsername);
@@ -855,7 +856,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         return false;
       }
 
-      const success = await purchaseListing(listingForWallet as any, sanitizedBuyer);
+      const success = await purchaseListing(listingForWallet as any, sanitizedBuyer, deliveryAddress);
       if (success) {
         soldListingDeduplicator.current.isDuplicate(listing.id);
         await removeListing(listing.id);

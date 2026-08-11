@@ -6,6 +6,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { useListings } from '@/context/ListingContext';
 import { useWebSocket } from '@/context/WebSocketContext';
+import { deliveryAddressService, isCompleteAddress } from '@/services/deliveryAddress.service';
+import type { DeliveryAddress } from '@/types/order';
 import { useAuction } from '@/context/AuctionContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getUserProfileData } from '@/utils/profileUtils';
@@ -1032,7 +1034,7 @@ export const useBrowseDetail = () => {
   }, [isAuction, isAuctionEnded, updateState]);
 
   // Action handlers
-  const handlePurchase = useCallback(async () => {
+  const handlePurchase = useCallback(async (deliveryAddress?: DeliveryAddress) => {
     if (!user || !listing || state.isProcessing) return;
     
     if (user.role !== 'buyer') {
@@ -1091,7 +1093,7 @@ export const useBrowseDetail = () => {
       updateState({ isProcessing: true, purchaseStatus: 'Claiming your unit...' });
 
       try {
-        const response = await listingsService.purchaseDropUnit(listing.id);
+        const response = await listingsService.purchaseDropUnit(listing.id, deliveryAddress);
 
         if (response.success && response.data) {
           const { unitNumber, unitsRemaining, unitsSold, totalUnits, soldOut } = response.data.drop;
@@ -1154,7 +1156,7 @@ export const useBrowseDetail = () => {
     });
 
     try {
-      const success = await purchaseListingAndRemove(listing, user.username);
+      const success = await purchaseListingAndRemove(listing, user.username, deliveryAddress);
       
       if (success) {
         hasPurchasedRef.current = true;
@@ -1191,6 +1193,15 @@ export const useBrowseDetail = () => {
       });
     }
   }, [user, listing, state.isProcessing, purchaseListingAndRemove, router, updateState, rateLimiter, getBuyerBalance]);
+
+  /* Drives the post-bid address prompt. Deliberately separate from
+     bidding state: the bid has already succeeded, so this must never be
+     able to make a placed bid look failed. */
+  const [needsBidAddress, setNeedsBidAddress] = useState(false);
+
+  const dismissBidAddressPrompt = useCallback(() => {
+    setNeedsBidAddress(false);
+  }, []);
 
   const handleBidSubmit = useCallback(async () => {
     if (!isAuction || !listing || state.isBidding || !user || user.role !== 'buyer') return;
@@ -1260,6 +1271,25 @@ export const useBrowseDetail = () => {
         if (result.success && result.data) {
           setListing(result.data as ListingWithDetails);
           setState(prev => ({ ...prev, viewCount: result.data?.views || prev.viewCount }));
+        }
+
+        /* ADDRESS AFTER THE BID, NEVER BEFORE.
+           The bid is already placed and confirmed by this point, which
+           matters: auctions are won by seconds, and making someone fill
+           in a form before their bid registers would lose them the
+           listing.
+
+           Asked once. The address is saved on the buyer, so re-bidding
+           here or on any other auction finds it already there and stays
+           silent. Auction settlement reads it when the auction closes. */
+        try {
+          const saved = await deliveryAddressService.get();
+          if (!isCompleteAddress(saved) && mountedRef.current) {
+            setNeedsBidAddress(true);
+          }
+        } catch (addressError) {
+          // Never let this interfere with a successful bid.
+          console.error('Address check failed after bid:', addressError);
         }
 
         setTimeout(() => {
@@ -1366,6 +1396,8 @@ export const useBrowseDetail = () => {
       bidButtonRef,
       handlePurchase: () => {},
       handleBidSubmit: () => {},
+      needsBidAddress: false,
+      dismissBidAddressPrompt: () => {},
       handleImageNavigation: () => {},
       handleBidAmountChange: () => {},
       updateState: () => {},
@@ -1426,6 +1458,8 @@ export const useBrowseDetail = () => {
     bidButtonRef,
     handlePurchase,
     handleBidSubmit,
+    needsBidAddress,
+    dismissBidAddressPrompt,
     handleImageNavigation,
     handleBidAmountChange,
     updateState,

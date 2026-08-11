@@ -15,6 +15,11 @@ interface PurchaseSectionProps {
   listing: Listing;
   user: any;
   handlePurchase: () => void; // kept for compatibility
+  /* Opens the page-level checkout. This component used to charge the
+     buyer itself, which meant the sticky bar and this button took two
+     different routes to the same purchase -- and only one of them could
+     ever be given an address. Both now open the same modal. */
+  onRequestCheckout?: () => void;
   isProcessing: boolean;
   isFavorited: boolean;
   toggleFavorite: () => void;
@@ -66,6 +71,7 @@ export default function PurchaseSection({
   listing,
   user,
   handlePurchase, // eslint-disable-line @typescript-eslint/no-unused-vars
+  onRequestCheckout,
   isProcessing,
   isFavorited,
   toggleFavorite,
@@ -144,6 +150,15 @@ export default function PurchaseSection({
         title: 'Premium content locked',
         message: 'You must be subscribed to this seller to purchase premium content',
       });
+      return;
+    }
+
+    /* Everything above is a reason NOT to reach checkout at all (admin,
+       own listing, premium lock). Past that point the purchase itself is
+       the page's job: it collects the delivery address and confirms the
+       total before anything is charged. */
+    if (onRequestCheckout) {
+      onRequestCheckout();
       return;
     }
 

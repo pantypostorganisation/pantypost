@@ -212,7 +212,7 @@ type WalletContextType = {
   getSellerBalance: (seller: string) => number;
 
   // Purchase operations
-  purchaseListing: (listing: Listing, buyerUsername: string) => Promise<boolean>;
+  purchaseListing: (listing: Listing, buyerUsername: string, deliveryAddress?: DeliveryAddress) => Promise<boolean>;
   purchaseCustomRequest: (customRequest: CustomRequestPurchase) => Promise<boolean>;
   subscribeToSellerWithPayment: (buyer: string, seller: string, amount: number) => Promise<boolean>;
   unsubscribeFromSeller: (buyer: string, seller: string) => Promise<boolean>;
@@ -1299,7 +1299,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           seller: request.seller,
           buyer: request.buyer,
           tags: request.metadata?.tags || [],
-          deliveryAddress: undefined,
         };
 
         const response = await apiClient.post<any>("/orders/custom-request", orderRequest);
@@ -1417,7 +1416,16 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   // Purchase listing
   const purchaseListing = useCallback(
-    async (listing: Listing, buyerUsername: string): Promise<boolean> => {
+    /* deliveryAddress is now supplied by checkout, which collects it
+       BEFORE taking payment. It used to be omitted entirely (and before
+       that, filled with a hardcoded "John Doe, 123 Main St"), so orders
+       arrived with nowhere to ship to and the buyer was chased for an
+       address afterwards from My Orders. */
+    async (
+      listing: Listing,
+      buyerUsername: string,
+      deliveryAddress?: DeliveryAddress
+    ): Promise<boolean> => {
       try {
         checkRateLimit("API_CALL", buyerUsername);
 
@@ -1451,7 +1459,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
              Main St" on every order is exactly the record a payment
              processor's audit flags. The buyer supplies the real
              address post-purchase via the order-address flow. */
-          deliveryAddress: undefined,
+          // Supplied by checkout, which collects it BEFORE payment.
+          deliveryAddress,
         });
 
         debugLog("Purchase successful");
