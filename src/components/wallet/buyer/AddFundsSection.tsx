@@ -83,8 +83,12 @@ export default function AddFundsSection({
  ? 'border-red-500/40 bg-red-500/10 text-red-200'
  : 'border-line bg-surface text-ink-muted';
 
- return (
- <section className="rounded-lg border border-line bg-surface-raised p-5 transition-colors">
+  return (
+    // No panel. The page background is the surface; wrapping this form in
+    // a bordered card only to place two more bordered cards inside it was
+    // boxes within a box. Structure now comes from the two-column split
+    // and the hairline above the totals.
+    <section>
  <div className="flex flex-col gap-4">
  {/* Header row */}
  <div>
@@ -92,9 +96,24 @@ export default function AddFundsSection({
                 <p className="text-xs text-ink-faint">Secure payment powered by SegPay</p>
               </div>
 
+ <SecureForm
+ onSubmit={handleSubmit}
+ rateLimitKey="deposit"
+ rateLimitConfig={RATE_LIMITS.DEPOSIT}
+ className="space-y-6"
+ >
+        {/* TWO COLUMNS.
+            Left: the card, the amount, the quick picks -- everything
+            about HOW MUCH. Right: cardholder, the SegPay entry point,
+            the totals and the submit -- everything about PAYING.
+
+            Stacked, this ran well past a laptop viewport. Side by side it
+            fits, and the split matches the two decisions being made. */}
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          <div className="space-y-5">
  {/* Credit Card Preview - Now Larger and Centered */}
- <div className="flex justify-center">
- <div className="w-full max-w-[380px]">
+ <div className="flex justify-center lg:justify-start">
+ <div className="w-full max-w-[400px]">
  {/* Animated Card with Brand Colors - Actual Credit Card Size Ratio */}
  <div className="relative">
  {/* Subtle glow effect */}
@@ -189,18 +208,11 @@ export default function AddFundsSection({
  </div>
 
  {/* Card shadow */}
- <div className="absolute -bottom-2 left-4 right-4 h-4 bg-surface-raised blur-xl rounded-full" />
  </div>
  </div>
  </div>
 
  {/* Form Section */}
- <SecureForm
- onSubmit={handleSubmit}
- rateLimitKey="deposit"
- rateLimitConfig={RATE_LIMITS.DEPOSIT}
- className="space-y-6"
- >
  <SecureInput
  id="amount"
  type="text"
@@ -226,7 +238,7 @@ export default function AddFundsSection({
  key={quickAmount}
  type="button"
  onClick={() => onQuickAmountSelect(quickAmount.toString())}
- className="rounded-md border border-line bg-surface py-2.5 text-sm font-semibold text-gray-200 transition-colors duration-200 hover:border-primary hover:text-white disabled:opacity-50"
+ className="rounded-md border border-line py-2.5 text-sm font-semibold text-ink-muted transition-colors duration-200 hover:border-primary hover:text-ink disabled:opacity-50"
  disabled={isLoading}
  >
  ${quickAmount}
@@ -234,6 +246,9 @@ export default function AddFundsSection({
  ))}
  </div>
 
+          </div>
+
+          <div className="space-y-5">
  {/* Cardholder Name */}
  <SecureInput
  id="cardholderName"
@@ -248,23 +263,16 @@ export default function AddFundsSection({
  />
 
  {/* SegPay Iframe Placeholder */}
- <div className="rounded-md border-2 border-dashed border-line bg-surface p-6">
- <div className="text-center">
- <div className="inline-flex h-14 w-14 items-center justify-center rounded-lg border border-line bg-gray-800/50 mb-3">
- <CreditCard className="h-7 w-7 text-ink-faint" />
- </div>
- <p className="text-sm font-medium text-ink-muted mb-2">
- Secure Card Entry
- </p>
- <p className="text-xs text-ink-faint max-w-sm mx-auto">
- SegPay's secure payment form will appear here. No card data touches our servers.
- </p>
- </div>
- </div>
+            <div className="rounded-md border border-dashed border-line px-4 py-6 text-center">
+              <p className="text-sm font-medium text-ink-muted">Secure card entry</p>
+              <p className="mx-auto mt-1 max-w-sm text-xs text-ink-faint">
+                SegPay&rsquo;s payment form appears here. No card data touches our servers.
+              </p>
+            </div>
 
  {/* Summary */}
- <div className="rounded-md border border-line bg-surface p-4">
- <div className="space-y-2 text-sm">
+            <div className="border-t border-line pt-4">
+              <div className="space-y-2 text-sm">
  <div className="flex justify-between">
  <span className="text-ink-muted">Deposit amount</span>
  <span className="text-white font-medium">${displayAmount}</span>
@@ -276,10 +284,10 @@ export default function AddFundsSection({
  <div className="h-px bg-gray-800 my-2" />
  <div className="flex justify-between">
  <span className="text-white font-semibold">Total to pay</span>
- <span className="text-primary font-bold">${displayAmount}</span>
- </div>
- </div>
- </div>
+                <span className="font-bold text-primary">${displayAmount}</span>
+                </div>
+              </div>
+            </div>
 
  {/* Message */}
  {message && (
@@ -294,7 +302,7 @@ export default function AddFundsSection({
  )}
 
  {/* Submit */}
- <div className="flex justify-center">
+ <div className="flex justify-center lg:justify-start">
  <button
  type="submit"
  className="flex items-center justify-center rounded-md bg-primary px-10 py-3.5 font-semibold text-black transition-colors duration-200 hover:bg-primary-press disabled:cursor-not-allowed disabled:opacity-50"
@@ -319,6 +327,8 @@ export default function AddFundsSection({
  )}
  </button>
  </div>
+          </div>
+        </div>
  </SecureForm>
 
  {/* Trust Badges */}

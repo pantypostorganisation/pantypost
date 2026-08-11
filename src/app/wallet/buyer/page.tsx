@@ -97,7 +97,7 @@ function BuyerWalletContent() {
        literal TEXT -- an earlier version of this page had exactly that
        bug, visible on the live site. Comments must be brace-wrapped.) */
     <main className="min-h-screen bg-surface text-white">
-      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
         <div className="mb-5">
           <WalletHeader />
         </div>
@@ -130,15 +130,16 @@ function BuyerWalletContent() {
         {/* Transactions on demand. Native <details> so it works without
             state, keyboard-accessible for free, and open-by-URL if we
             ever want to deep-link it. */}
+        {/* A hairline and a row, not another card. */}
         <details
-          className="group mt-4 overflow-hidden rounded-lg border border-line bg-surface-raised"
+          className="group mt-8 border-t border-line"
           onToggle={(event) => {
             if ((event.currentTarget as HTMLDetailsElement).open) {
               void loadDepositHistory();
             }
           }}
         >
-          <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4 text-sm font-semibold text-ink transition-colors hover:bg-surface-hover">
+          <summary className="flex cursor-pointer list-none items-center justify-between py-4 text-sm font-medium text-ink-muted transition-colors hover:text-ink">
             Show recent transactions
             <ChevronDown
               className="h-4 w-4 text-ink-muted transition-transform duration-200 group-open:rotate-180"
@@ -146,7 +147,7 @@ function BuyerWalletContent() {
             />
           </summary>
 
-          <div className="border-t border-line p-5">
+          <div className="pb-4">
             <AllDepositsSection deposits={depositHistory} onRefresh={loadDepositHistory} />
           </div>
         </details>

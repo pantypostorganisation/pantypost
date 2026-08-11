@@ -97,7 +97,62 @@ live page. Comments inside JSX must be wrapped: `{/* ... */}`.
 My mistake, and a genuine bug rather than clutter. Fixed, and I scanned
 every other file in this batch for the same pattern -- none found.
 
-## 6. Wallet: the card IS the page
+## 6. Wallet: two columns, one screen
+
+The deposit form is now split left/right, which is what finally kills the
+scrolling:
+
+**Left -- how much:** the card graphic, the amount field, the quick
+amounts ($25 / $50 / $100 / $200).
+
+**Right -- paying:** cardholder name, the SegPay secure entry panel, the
+deposit/fee/total breakdown, the Deposit button and the trust row
+(PCI-DSS, 256-bit SSL, Instant Deposit).
+
+Stacked, that ran well past a laptop viewport. Side by side it fits, and
+the split matches the two decisions actually being made. It collapses
+back to one column below `lg`, so phones are unaffected.
+
+Page width back to `max-w-5xl` to hold the two columns.
+
+## 6b. No containers
+
+The form no longer sits in a panel at all. It was a bordered card
+containing two more bordered cards (the SegPay placeholder and the totals
+box), inside a page that is already a surface -- boxes within a box.
+
+Removed: the outer `<section>` border and background, the dashed box and
+48px icon tile around the SegPay placeholder, and the panel around the
+deposit/fee/total summary (now just a hairline rule above it). The
+transactions disclosure is a hairline and a row rather than another card.
+
+The only two edges left on the page are the ones that should be there:
+the card graphic itself, and the quick-amount buttons.
+
+Structure now comes from the two-column split, one hairline above the
+totals, and one above the transactions row. Nothing else.
+
+## 6c. Deposit history: 341 lines -> 86
+
+Recent Purchases is gone from the wallet entirely -- purchases are not
+deposits, and `/buyers/my-orders` owns them properly.
+
+Deposit history sits behind **"Show recent transactions"**, collapsed by
+default, using a native `<details>`: no state, keyboard accessible, and
+it only fetches when opened.
+
+Inside it is now **amount and date, nothing else**. It previously had a
+48px icon tile, an "All Deposits" headline, a subtitle, a Refresh button,
+FOUR stat cards (total / card / crypto / status), type filters, sort
+controls, and rows carrying status pills, payment method, network, tx
+hash and an explorer link -- all inside a disclosure that already says
+what it contains. The crypto stats were doubly redundant now that crypto
+is gone from the page.
+
+The one thing kept beyond amount and date: a small Failed/Pending label,
+because "where is my money" is the question this list exists to answer.
+
+## 6d. Everything else that was making it tall
 
 Recent Purchases is gone from the wallet entirely -- purchases are not
 deposits, and `/buyers/my-orders` already owns them properly. Showing
@@ -115,7 +170,6 @@ because a single column of content has no business being 1152px wide.
 `RecentPurchases.tsx` is no longer imported by the wallet -- it is left
 on disk untouched.
 
-## 6b. Everything else that was making it tall
 
 It was roughly 1400px of content for about 700px of viewport: page
 padding `py-8`, an 8-unit gap stack, a two-column grid with another

@@ -9,13 +9,12 @@
  *
  * The balance and the deposit form are directly below this. A person who
  * has navigated to their wallet knows what a wallet is.
+ *
+ * The subtitle went the same way: it read "Add funds and review your
+ * deposits", sitting directly above a section headed "Add funds" and a
+ * row reading "Show recent transactions". Three lines, one meaning.
  * ===================================================================== */
 
 export default function WalletHeader() {
- return (
- <div>
- <h1 className="text-2xl font-bold text-white sm:text-3xl">Wallet</h1>
- <p className="mt-1 text-sm text-ink-muted">Add funds and review your deposits.</p>
- </div>
- );
+  return <h1 className="text-2xl font-bold text-white sm:text-3xl">Wallet</h1>;
 }
