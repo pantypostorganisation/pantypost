@@ -97,6 +97,22 @@ function resolveImageUrl(url?: string): string | undefined {
   return `${base}${path}`;
 }
 
+/* The header's approval badge polls every 60s and refreshes on window
+   focus. Neither helps the admin who just approved something in this
+   same window: focus never changes, so the number sits stale for up to a
+   minute and looks broken.
+   
+   Approving or denying now announces itself, and the header refetches
+   immediately. A DOM event rather than shared state because the two live
+   in completely different trees, and rather than a websocket because
+   this only ever needs to reach the tab the admin is already using. */
+export const APPROVAL_COUNT_CHANGED = 'pantypost:approval-count-changed';
+
+function announceApprovalChange() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(APPROVAL_COUNT_CHANGED));
+}
+
 export default function AdminApprovalPage() {
   const { user } = useAuth();
   const toast = useToast();
@@ -170,6 +186,7 @@ export default function AdminApprovalPage() {
         `${item.contentLabel} approved`,
         `The ${item.contentLabel.toLowerCase()} is now publicly visible.`
       );
+      announceApprovalChange();
       loadHistory();
     } else {
       toast.error('Action failed', 'Please try again.');
@@ -196,6 +213,7 @@ export default function AdminApprovalPage() {
       );
       setDenyingId(null);
       setDenyReason('');
+      announceApprovalChange();
       loadHistory();
     } else {
       toast.error('Action failed', 'Please try again.');

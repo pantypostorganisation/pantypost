@@ -548,10 +548,22 @@ export default function Header(): React.ReactElement | null {
     void refreshApprovalCount();
     const interval = setInterval(() => void refreshApprovalCount(), 60_000);
     const onFocus = () => void refreshApprovalCount();
+
+    /* Refresh the moment something is approved or denied.
+       Polling every 60s and on focus covered another admin acting, or
+       this tab being returned to -- but not the common case: the admin
+       approving something right here, in this window. Focus never
+       changes, so the badge stayed stale for up to a minute and read as
+       broken. The approval page fires this event; see
+       APPROVAL_COUNT_CHANGED in app/admin/approval/page.tsx. */
+    const onApprovalChange = () => void refreshApprovalCount();
+
     window.addEventListener('focus', onFocus);
+    window.addEventListener('pantypost:approval-count-changed', onApprovalChange);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pantypost:approval-count-changed', onApprovalChange);
     };
   }, [isAdminUser, refreshApprovalCount]);
 

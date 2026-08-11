@@ -799,8 +799,14 @@ export default function ListingDetailPage() {
             the bid would cost people listings. Asked once: the address
             saves to the account, so re-bidding stays silent and auction
             settlement can ship the win. */}
+        {/* Post-bid prompt only. Gated on !checkoutOpen so it can never
+            stack on top of checkout: both render fixed overlays at z-50,
+            and whichever mounts last wins -- which is how checkout ended
+            up flashing and then being replaced by this dialog. Checkout
+            now collects the address inline anyway, so the two never need
+            to be open together. */}
         <AddressConfirmationModal
-          isOpen={needsBidAddress}
+          isOpen={needsBidAddress && !checkoutOpen}
           onClose={dismissBidAddressPrompt}
           onConfirm={async (address: DeliveryAddress) => {
             await deliveryAddressService.save(address);
