@@ -44,6 +44,18 @@ Two causes, both fixed:
 Bubbles still cap at a percentage of the column (72%), so a wider
 transcript does not produce uncomfortably long lines.
 
+## Note on the previous build failure
+
+The first version of this file had a JSX comment `{/* ... */}` sitting
+beside the returned element in `Composer.tsx`. A `return` takes a single
+expression, so that produced two siblings and Vercel failed the build
+with `Expected ',', got 'className'`. It is now a plain `//` comment
+above the JSX, which is legal there.
+
+All three files in this zip were verified by actually parsing them with
+Babel (TypeScript + JSX), not just by counting brackets — which is what
+let the error through the first time.
+
 ## Verify + ship
 
 ```powershell

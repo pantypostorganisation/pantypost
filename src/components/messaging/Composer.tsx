@@ -144,10 +144,11 @@ export default function Composer({
   return (
     // `relative` is load-bearing: the emoji panel is absolutely positioned
     // against it. See the note at the top of this file.
-    {/* py-3 on phones, where the keyboard and the safe-area inset
-        already take the space. From sm up the padding grows on BOTH
-        sides, so the gap under the input matches the one above it
-        instead of the composer sitting flush to the window edge. */}
+    //
+    // py-3 on phones, where the keyboard and the safe-area inset already
+    // take the space. From sm up the padding grows on BOTH sides, so the
+    // gap under the input matches the one above it instead of the
+    // composer sitting flush to the window edge.
     <div className="relative shrink-0 border-t border-line bg-surface px-3 py-3 safe-bottom sm:px-4 sm:py-5">
       <div className="mx-auto w-full max-w-3xl">
         <EmojiPicker
