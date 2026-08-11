@@ -39,3 +39,6 @@ pnpm-debug.log*
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# TypeScript incremental build cache
+*.tsbuildinfo
