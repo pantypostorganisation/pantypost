@@ -135,8 +135,11 @@ export default function Composer({
 
   if (notice) {
     return (
-      <div className="shrink-0 border-t border-line bg-surface px-4 py-4 safe-bottom sm:py-5">
-        <div className="mx-auto max-w-3xl text-center text-sm text-ink-muted">{notice}</div>
+      // Same safe-bottom caveat as the main composer below: the bottom
+      // spacing lives on the inner element, because `.safe-bottom` is
+      // unlayered and overrides any pb-* utility on this one.
+      <div className="shrink-0 border-t border-line bg-surface px-4 pt-4 safe-bottom sm:pt-5">
+        <div className="mx-auto max-w-3xl pb-4 text-center text-sm text-ink-muted sm:pb-5">{notice}</div>
       </div>
     );
   }
@@ -145,12 +148,24 @@ export default function Composer({
     // `relative` is load-bearing: the emoji panel is absolutely positioned
     // against it. See the note at the top of this file.
     //
-    // py-3 on phones, where the keyboard and the safe-area inset already
-    // take the space. From sm up the padding grows on BOTH sides, so the
-    // gap under the input matches the one above it instead of the
-    // composer sitting flush to the window edge.
-    <div className="relative shrink-0 border-t border-line bg-surface px-3 py-3 safe-bottom sm:px-4 sm:py-5">
-      <div className="mx-auto w-full max-w-3xl">
+    // SPACING NOTE — why the bottom padding is on the INNER div.
+    //
+    // `.safe-bottom` in globals.css sets `padding-bottom:
+    // env(safe-area-inset-bottom)` and is declared OUTSIDE any cascade
+    // layer. Tailwind utilities live in `@layer utilities`, and unlayered
+    // rules beat layered ones regardless of specificity — so
+    // `.safe-bottom` wins over any `pb-*`/`py-*` utility on this element.
+    //
+    // On a phone that inset is real, so the composer looked right. On
+    // desktop it resolves to 0, which zeroed the bottom padding while the
+    // top kept its own — the mismatched gap.
+    //
+    // So: the outer div keeps `safe-bottom` (it still needs to clear the
+    // home indicator on iOS) and carries only the TOP padding. The
+    // matching bottom gap goes on the inner wrapper, which nothing
+    // unlayered targets.
+    <div className="relative shrink-0 border-t border-line bg-surface px-3 pt-3 safe-bottom sm:px-4 sm:pt-5">
+      <div className="mx-auto w-full max-w-3xl pb-3 sm:pb-5">
         <EmojiPicker
           open={emojiOpen}
           recent={recentEmojis}
