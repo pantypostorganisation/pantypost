@@ -50,7 +50,19 @@ const statsRoutes = require('./routes/stats.routes');
 // NEW
 const profileBuyerRoutes = require('./routes/profilebuyer.routes');
 const referralRoutes = require('./routes/referral.routes');
-const cryptoRoutes = require('./routes/crypto.routes'); // CRYPTO DIRECT DEPOSITS
+/* CRYPTO DEPOSITS REMOVED
+ *
+ * Card via SegPay is the funding route. The crypto UI was taken out of
+ * the wallet earlier, but the ENDPOINTS stayed live -- and an endpoint
+ * that credits a wallet is not made safe by hiding its button.
+ *
+ * The route file, the model and the monitor service are all still on
+ * disk. Nothing is deleted; the routes are simply not mounted, so
+ * /api/crypto/* now 404s. Restoring it is this one line plus the mount
+ * below.
+ *
+ * const cryptoRoutes = require('./routes/crypto.routes');
+ */
 const postRoutes = require('./routes/post.routes'); // EXPLORE/SOCIAL POSTS
 const trafficRoutes = require('./routes/traffic.routes'); // SITE TRAFFIC ANALYTICS
 const customRequestRoutes = require('./routes/customRequest.routes'); // CUSTOM REQUEST NEGOTIATION
@@ -212,8 +224,8 @@ app.get('/api/health', (req, res) => {
       storage: true,
       referrals: true,
       subscriptionRenewals: true,
-      cryptoDeposits: true,
-      cryptoAutoVerification: true,
+      cryptoDeposits: false,
+      cryptoAutoVerification: false,
       explorePosts: true
     },
   });
@@ -243,7 +255,7 @@ app.use('/api/age-verification', require('./routes/ageVerification.routes'));
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/traffic', trafficRoutes);
 app.use('/api/stats', statsRoutes);
-app.use('/api/crypto', cryptoRoutes); // CRYPTO DIRECT DEPOSIT ROUTES
+// app.use('/api/crypto', cryptoRoutes); // removed -- see note at the require above
 app.use('/api/posts', postRoutes); // EXPLORE/SOCIAL POST ROUTES
 
 // Custom request negotiation. Previously this state lived only in the
@@ -1434,14 +1446,10 @@ async function initializeCryptoDepositSystem() {
     console.log(`   - TRC-20 wallet: ${process.env.CRYPTO_WALLET_USDT_TRC20 ? '✓' : '✗ Not configured'}`);
     console.log(`   - Bitcoin wallet: ${process.env.CRYPTO_WALLET_BTC ? '✓' : '✗ Not configured'}`);
     
-    // Initialize automated crypto monitoring
-    const cryptoMonitor = require('./services/cryptoMonitor');
-    const monitoringStarted = cryptoMonitor.startMonitoring();
-    if (monitoringStarted) {
-      console.log('🤖 Automated crypto verification enabled!');
-    } else {
-      console.log('⚠️ Automated crypto monitoring disabled - manual verification required');
-    }
+    /* Monitor not started. It polls chains for incoming transfers and
+       credits wallets automatically -- pointless with deposits closed,
+       and it was throwing "Cannot find module 'web3'" on every boot
+       anyway, since web3 is not installed. */
     
     if (confirmingDeposits > 0 && global.webSocketService) {
       const admins = await User.find({ role: 'admin' }).select('username');
@@ -1532,7 +1540,8 @@ server.listen(PORT, HOST, async () => {
   await initializeSubscriptionRenewalSystem();
   console.log(`🔄 Subscription renewal system ready - daily checks at 2:00 AM`);
   
-  await initializeCryptoDepositSystem();
+  // Crypto deposits are closed; nothing to initialise.
+  // await initializeCryptoDepositSystem();
   console.log(`💰 Crypto deposit system ready - Direct wallet deposits enabled!`);
   
   await initializePostSystem();
@@ -1545,7 +1554,6 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Orders:        /api/orders/*');
   console.log('  - Messages:      /api/messages/*');
   console.log('  - Wallet:        /api/wallet/*');
-  console.log('  - Crypto:        /api/crypto/*         🆕 AUTO-VERIFIED!');
   console.log('  - Subscriptions: /api/subscriptions/*');
   console.log('  - Reviews:       /api/reviews/*');
   console.log('  - Upload:        /api/upload/*');
