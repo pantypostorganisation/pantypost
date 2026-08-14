@@ -18,18 +18,7 @@ import ShippingControls from '@/components/seller/orders/ShippingControls';
 
 import type { DeliveryAddress, Order } from '@/types/order';
 import { sanitizeStrict } from '@/utils/security/sanitization';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Gavel,
-  ListFilter,
-  Package,
-  RefreshCw,
-  Settings,
-  ShoppingBag,
-  Truck,
-} from 'lucide-react';
+import { AlertCircle, Clock, Package, RefreshCw, ShoppingBag, Truck } from 'lucide-react';
 
 export default function OrdersToFulfilPage() {
   const { user, apiClient } = useAuth();
@@ -134,8 +123,6 @@ export default function OrdersToFulfilPage() {
 
   // OrderStats in your repo expects these three counts
   const auctionCount = auctionOrders.length;
-  const customRequestCount = customRequestOrders.length;
-  const standardCount = directOrders.length;
 
   const statusCounts = useMemo(
     () =>
@@ -184,31 +171,31 @@ export default function OrdersToFulfilPage() {
     [userOrders]
   );
 
-  // Status badge renderer (OrdersSection requires this signature)
+  /* Status badge. Was three separate blocks in yellow, blue and green --
+     three colour families for what is one progression. Now the platform's
+     own status tokens: warning while it waits on the seller, primary while
+     in progress, success once gone. */
   const getShippingStatusBadge = useCallback((status?: string) => {
-    if (!status || status === 'pending') {
-      return (
-        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-          <Clock className="w-3 h-3 mr-1" />
-          Pending
-        </span>
-      );
-    } else if (status === 'processing') {
-      return (
-        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30">
-          <Package className="w-3 h-3 mr-1" />
-          Processing
-        </span>
-      );
-    } else if (status === 'shipped') {
-      return (
-        <span className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30">
-          <Truck className="w-3 h-3 mr-1" />
-          Shipped
-        </span>
-      );
-    }
-    return null;
+    const tone =
+      status === 'shipped'
+        ? 'bg-success-soft text-success'
+        : status === 'processing'
+          ? 'bg-primary-soft text-primary'
+          : 'bg-warning-soft text-warning';
+
+    const label =
+      status === 'shipped' ? 'Shipped' : status === 'processing' ? 'Processing' : 'Pending';
+
+    const Icon = status === 'shipped' ? Truck : status === 'processing' ? Package : Clock;
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tone}`}
+      >
+        <Icon className="h-3 w-3" aria-hidden="true" />
+        {label}
+      </span>
+    );
   }, []);
 
   const toggleExpand = useCallback((orderId: string) => {
@@ -408,6 +395,17 @@ export default function OrdersToFulfilPage() {
     },
   ];
 
+  /* One list instead of three sections. Merged and sorted newest first,
+     which is how a seller looks for an order ("the one that came in this
+     morning") rather than by how it happened to be bought. */
+  const allFilteredOrders = useMemo(
+    () =>
+      [...filteredDirectOrders, ...filteredAuctionOrders, ...filteredCustomOrders].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      ),
+    [filteredDirectOrders, filteredAuctionOrders, filteredCustomOrders]
+  );
+
   const formattedLastUpdated = lastUpdated
     ? new Date(lastUpdated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null;
@@ -415,280 +413,153 @@ export default function OrdersToFulfilPage() {
   return (
     <RequireAuth role="seller">
       <BanCheck>
-        <main className="min-h-screen bg-gradient-to-b from-black via-[#08080c] to-black text-white py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto space-y-10">
-            <header className="relative overflow-hidden rounded-3xl border border-white/10 bg-[#1a1a1a] p-8">
-              <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-                <div className="max-w-2xl space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/15 p-3">
-                      <ShoppingBag className="h-8 w-8 text-[#ffb347]" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.4em] text-white/50">Fulfilment hub</p>
-                      <h1 className="text-3xl font-bold text-white sm:text-4xl">Orders to fulfil</h1>
-                    </div>
-                  </div>
-                  <p className="text-base text-white/70">
-                    Manage every order in one place, keep buyers updated in real-time, and never miss a shipment deadline.
-                  </p>
-                </div>
+        {/* ---------------------------------------------------------------
+          * Was: a rounded-3xl header panel with a "FULFILMENT HUB" label in
+          * 0.4em tracking, a pulsing icon, a gradient refresh button and a
+          * backdrop-blurred status card; then a rounded-3xl filter panel
+          * with uppercase 0.3em labels; then THREE separate order sections
+          * (Direct / Auctions / Custom requests) each with its own gradient
+          * icon tile; then a green "Fulfilment health" panel restating the
+          * counts already shown at the top, beside an orange "Orders
+          * needing addresses" panel.
+          *
+          * Six colour families -- orange, yellow, blue, green, purple and
+          * emerald -- on the page a seller uses to get parcels out the door.
+          *
+          * Now: heading, one line of figures, status filter, one list.
+          * --------------------------------------------------------------- */}
+        <main className="min-h-screen bg-surface text-white">
+          <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-white sm:text-3xl">Orders to fulfil</h1>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {totalAwaitingShipment} awaiting shipment
+                  {formattedLastUpdated ? ` - synced ${formattedLastUpdated}` : ''}
+                </p>
+              </div>
 
-                <div className="flex flex-col items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-lg sm:flex-row sm:items-center">
-                  <div className="flex items-center gap-3 text-sm text-white/70">
-                    <Clock className="h-4 w-4" />
-                    <span>
-                      Auto-refreshing every <strong>30 seconds</strong>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-white/70">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                    {formattedLastUpdated ? (
-                      <span>Last synced at {formattedLastUpdated}</span>
-                    ) : (
-                      <span>Syncing orders...</span>
-                    )}
-                  </div>
+              <button
+                type="button"
+                onClick={() => void fetchSellerOrders({ silent: false })}
+                disabled={isRefreshing}
+                className="inline-flex items-center gap-2 rounded-md border border-line px-4 py-2 text-sm font-medium text-ink-muted transition-colors hover:border-primary-line hover:text-ink disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`}
+                  aria-hidden="true"
+                />
+                Refresh
+              </button>
+            </div>
+
+            {/* One line of figures. Was a stats component up top AND a
+                "Fulfilment health" panel lower down showing the same
+                numbers again. */}
+            <div className="mb-6 grid grid-cols-3 gap-4 border-y border-line py-5">
+              <div>
+                <p className="text-lg font-bold tabular-nums text-white sm:text-xl">
+                  {statusCounts.pending}
+                </p>
+                <p className="text-xs text-ink-faint">Pending</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold tabular-nums text-white sm:text-xl">
+                  {statusCounts.processing}
+                </p>
+                <p className="text-xs text-ink-faint">Processing</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold tabular-nums text-white sm:text-xl">
+                  {statusCounts.shipped}
+                </p>
+                <p className="text-xs text-ink-faint">Shipped</p>
+              </div>
+            </div>
+
+            {/* Orders missing an address: one line, not a gradient panel.
+                Checkout now collects the address before payment, so this
+                only ever applies to orders placed before that change. */}
+            {ordersNeedingAddress.length > 0 && (
+              <div className="mb-6 flex items-center gap-2 rounded-md border border-warning bg-warning-soft px-4 py-3 text-sm text-warning">
+                <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {ordersNeedingAddress.length}{' '}
+                {ordersNeedingAddress.length === 1 ? 'order needs' : 'orders need'} a delivery
+                address before you can ship.
+              </div>
+            )}
+
+            {/* Status filter */}
+            <div className="mb-5 flex flex-wrap gap-2">
+              {statusOptions.map(({ value, label }) => {
+                const count =
+                  value === 'all'
+                    ? userOrders.length
+                    : statusCounts[value as keyof typeof statusCounts] ?? 0;
+                const isActive = statusFilter === value;
+
+                return (
                   <button
+                    key={value}
                     type="button"
-                    onClick={() => fetchSellerOrders({})}
-                    disabled={isRefreshing || isLoading}
-                    className="inline-flex items-center gap-2 rounded-xl border border-[#ff950e]/60 bg-gradient-to-r from-[#ff950e]/90 to-[#ff6a00]/90 px-4 py-2 text-sm font-semibold text-black shadow-lg transition-all hover:from-[#ffb347] hover:to-[#ff950e] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => setStatusFilter(value as StatusFilter)}
+                    className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      isActive
+                        ? 'border-primary bg-primary text-black'
+                        : 'border-line bg-surface-raised text-ink-muted hover:border-primary-line hover:text-ink'
+                    }`}
                   >
-                    {isRefreshing ? (
-                      <>
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-black/40 border-t-black" />
-                        Refreshing
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4" />
-                        Refresh now
-                      </>
-                    )}
+                    {label} {count}
                   </button>
-                </div>
-              </div>
-            </header>
-
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/60">
-                  <ListFilter className="h-4 w-4" />
-                  Filter by status
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {statusOptions.map(({ value, label, description, icon: Icon }) => {
-                    const isActive = statusFilter === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setStatusFilter(value)}
-                        className={`group relative flex items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-all sm:text-base ${
-                          isActive
-                            ? 'border-white/60 bg-white/15 text-white shadow-lg shadow-black/30'
-                            : 'border-white/10 bg-white/5 text-white/70 hover:border-white/40 hover:bg-white/10 hover:text-white'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          {Icon ? <Icon className="h-4 w-4" /> : <span className="h-2.5 w-2.5 rounded-full bg-white/50" />}
-                          <span className="font-semibold">{label}</span>
-                        </span>
-                        <span className="text-xs text-white/60 sm:text-sm">{description}</span>
-                        {isActive && <span className="absolute inset-0 rounded-xl border border-white/40" aria-hidden />}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                );
+              })}
             </div>
 
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-              <div className="space-y-8">
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur-sm">
-                  <OrderStats auctionCount={auctionCount} customRequestCount={customRequestCount} standardCount={standardCount} />
-                </div>
-
-                {userOrders.length === 0 ? (
-                  <OrdersSection
-                    title="Direct purchases"
-                    icon={Package}
-                    iconColor="from-[#ff950e] to-[#e0850d]"
-                    orders={[]}
-                    type="direct"
-                    expandedOrder={expandedOrder}
-                    onToggleExpand={toggleExpand}
-                    renderAddressBlock={() => null}
-                    renderShippingControls={() => null}
-                    getShippingStatusBadge={getShippingStatusBadge}
-                    showEmptyState
-                    totalCount={0}
-                    filterActive={statusFilter !== 'all'}
-                  />
-                ) : (
-                  <>
-                    <OrdersSection
-                      title="Direct purchases"
-                      icon={Package}
-                      iconColor="from-[#ff950e] to-[#e0850d]"
-                      orders={filteredDirectOrders}
-                      totalCount={directOrders.length}
-                      filterActive={statusFilter !== 'all'}
-                      type="direct"
-                      expandedOrder={expandedOrder}
-                      onToggleExpand={toggleExpand}
-                      renderAddressBlock={(order) => (
-                        <AddressDisplay
-                          order={order}
-                          copiedText={copiedText}
-                          onCopyAddress={handleCopyAddress}
-                          getShippingLabel={getShippingLabel}
-                        />
-                      )}
-                      renderShippingControls={(order) => (
-                        <ShippingControls order={order} onStatusChange={handleShippingStatusChange} />
-                      )}
-                      getShippingStatusBadge={getShippingStatusBadge}
-                    />
-
-                    <OrdersSection
-                      title="Auctions"
-                      icon={Gavel}
-                      iconColor="from-purple-600 to-purple-400"
-                      orders={filteredAuctionOrders}
-                      totalCount={auctionOrders.length}
-                      filterActive={statusFilter !== 'all'}
-                      type="auction"
-                      expandedOrder={expandedOrder}
-                      onToggleExpand={toggleExpand}
-                      renderAddressBlock={(order) => (
-                        <AddressDisplay
-                          order={order}
-                          copiedText={copiedText}
-                          onCopyAddress={handleCopyAddress}
-                          getShippingLabel={getShippingLabel}
-                        />
-                      )}
-                      renderShippingControls={(order) => (
-                        <ShippingControls order={order} onStatusChange={handleShippingStatusChange} />
-                      )}
-                      getShippingStatusBadge={getShippingStatusBadge}
-                    />
-
-                    <OrdersSection
-                      title="Custom requests"
-                      icon={Settings}
-                      iconColor="from-blue-600 to-cyan-500"
-                      orders={filteredCustomOrders}
-                      totalCount={customRequestOrders.length}
-                      filterActive={statusFilter !== 'all'}
-                      type="custom"
-                      expandedOrder={expandedOrder}
-                      onToggleExpand={toggleExpand}
-                      renderAddressBlock={(order) => (
-                        <AddressDisplay
-                          order={order}
-                          copiedText={copiedText}
-                          onCopyAddress={handleCopyAddress}
-                          getShippingLabel={getShippingLabel}
-                        />
-                      )}
-                      renderShippingControls={(order) => (
-                        <ShippingControls order={order} onStatusChange={handleShippingStatusChange} />
-                      )}
-                      getShippingStatusBadge={getShippingStatusBadge}
-                    />
-                  </>
-                )}
-              </div>
-
-              <aside className="space-y-6">
-                <div className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 p-6 shadow-xl">
-                  <h3 className="text-lg font-semibold text-emerald-100">Fulfilment health</h3>
-                  <p className="mt-2 text-sm text-emerald-200/80">
-                    {totalAwaitingShipment > 0
-                      ? `You have ${totalAwaitingShipment} orders awaiting shipment updates.`
-                      : 'All orders are marked as shipped. Great work!'}
-                  </p>
-                  <div className="mt-5 grid grid-cols-1 gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <p className="text-xs uppercase tracking-[0.25em] text-white/50">Pending</p>
-                      <p className="mt-2 text-2xl font-bold text-white">{statusCounts.pending}</p>
-                      <p className="text-xs text-white/60">Waiting to be processed</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <p className="text-xs uppercase tracking-[0.25em] text-white/50">Processing</p>
-                      <p className="mt-2 text-2xl font-bold text-white">{statusCounts.processing}</p>
-                      <p className="text-xs text-white/60">Currently being prepared</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                      <p className="text-xs uppercase tracking-[0.25em] text-white/50">Shipped</p>
-                      <p className="mt-2 text-2xl font-bold text-white">{statusCounts.shipped}</p>
-                      <p className="text-xs text-white/60">Completed and notified</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-[#ff950e]/30 bg-gradient-to-br from-[#ff950e]/20 via-[#20140c]/60 to-[#ff6a00]/20 p-6 shadow-xl">
-                  <h3 className="text-lg font-semibold text-white">Orders needing addresses</h3>
-                  <p className="mt-2 text-sm text-white/70">
-                    Reach out to buyers or add the address manually to keep these orders moving.
-                  </p>
-                  {ordersNeedingAddress.length === 0 ? (
-                    <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-white/60">
-                      Every order has a delivery address. 🎉
-                    </div>
-                  ) : (
-                    <ul className="mt-5 space-y-3">
-                      {ordersNeedingAddress.map((order) => (
-                        <li key={order.id} className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                          <p className="text-sm font-semibold text-white">{sanitizeStrict(order.title)}</p>
-                          <p className="mt-1 text-xs text-white/60">
-                            Buyer: <span className="font-medium text-white/80">{sanitizeStrict(order.buyer)}</span>
-                          </p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Link
-                              href={`/sellers/messages?thread=${encodeURIComponent(order.buyer)}`}
-                              className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:border-white/40 hover:bg-white/20"
-                            >
-                              Message buyer
-                            </Link>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur-sm">
-                  <h3 className="text-lg font-semibold text-white">Fulfilment tips</h3>
-                  <ul className="mt-4 space-y-3 text-sm text-white/70">
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#ff950e]" />
-                      Update shipping status as soon as you move an order to keep buyers informed instantly.
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#ff950e]" />
-                      Use the copy address button when preparing shipping labels to avoid mistakes.
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[#ff950e]" />
-                      Message buyers directly from each order card if you need clarifications or updates.
-                    </li>
-                  </ul>
-                </div>
-              </aside>
-            </div>
-
-            <AddressConfirmationModal
-              isOpen={addressModalOpen}
-              onClose={() => setAddressModalOpen(false)}
-              onConfirm={handleConfirmAddress}
-              existingAddress={getSelectedOrderAddress() ?? undefined}
-              orderId={selectedOrder ?? ''}
+            {/* ONE list. Orders were split into Direct / Auctions / Custom
+                requests, each with its own heading, gradient icon tile and
+                empty state -- so three orders could produce three headings
+                with one row each, and a seller hunting for "the one I need
+                to post today" had to look in three places. How it was
+                bought is a detail on the row, not a filing system. */}
+            <OrdersSection
+              title="All orders"
+              icon={ShoppingBag}
+              iconColor=""
+              orders={allFilteredOrders}
+              totalCount={userOrders.length}
+              filterActive={statusFilter !== 'all'}
+              type="direct"
+              expandedOrder={expandedOrder}
+              onToggleExpand={toggleExpand}
+              renderAddressBlock={(order) => (
+                <AddressDisplay
+                  order={order}
+                  copiedText={copiedText}
+                  onCopyAddress={handleCopyAddress}
+                  getShippingLabel={getShippingLabel}
+                />
+              )}
+              renderShippingControls={(order) => (
+                <ShippingControls order={order} onStatusChange={handleShippingStatusChange} />
+              )}
+              getShippingStatusBadge={getShippingStatusBadge}
             />
           </div>
+
+          <AddressConfirmationModal
+            isOpen={addressModalOpen}
+            onClose={() => {
+              setAddressModalOpen(false);
+              setSelectedOrder(null);
+            }}
+            onConfirm={handleConfirmAddress}
+            existingAddress={
+              selectedOrder
+                ? userOrders.find((order) => order.id === selectedOrder)?.deliveryAddress ?? null
+                : null
+            }
+            orderId={selectedOrder ?? ''}
+          />
         </main>
       </BanCheck>
     </RequireAuth>
