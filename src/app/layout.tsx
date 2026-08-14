@@ -41,25 +41,35 @@ export const metadata: Metadata = {
   creator: 'PantyPost',
   publisher: 'PantyPost',
 
-  // FAVICON CONFIGURATION - favicon.ico as primary for Google Search
+  /* ICONS -- declared ONCE, here.
+   *
+   * This used to declare them twice: this block AND a set of
+   * hand-written <link rel="icon"> tags in <head> below. Next generates
+   * link tags from this metadata, so the manual ones were duplicates,
+   * and the two could disagree.
+   *
+   * It also pointed every entry at /favicon.ico while CLAIMING sizes of
+   * 256, 48, 32 and 16 -- one 32px file described four different ways.
+   * Google reads those size attributes: it looked for a 48 or a 256,
+   * found neither, and fell back to a 32px image scaled up. That is why
+   * the search result looked poor no matter what was in
+   * src/app/icon.png, which these declarations were overriding anyway.
+   *
+   * Now each entry points at a real file at its real size. PNG, because
+   * Google requires a square icon at least 48x48 (ideally a multiple of
+   * 48) and iOS will not reliably render .ico for a home-screen icon.
+   *
+   * favicon.ico is kept for older browsers only, where it is genuinely
+   * the right format. */
   icons: {
     icon: [
-      { url: '/favicon.ico', type: 'image/x-icon', sizes: '256x256' },
-      { url: '/favicon.ico', type: 'image/x-icon', sizes: '48x48' },
+      { url: '/icons/icon-512x512.png', type: 'image/png', sizes: '512x512' },
+      { url: '/icons/icon-192x192.png', type: 'image/png', sizes: '192x192' },
+      { url: '/icons/icon-96x96.png', type: 'image/png', sizes: '96x96' },
       { url: '/favicon.ico', type: 'image/x-icon', sizes: '32x32' },
-      { url: '/favicon.ico', type: 'image/x-icon', sizes: '16x16' },
     ],
     shortcut: ['/favicon.ico'],
-    apple: [
-      { url: '/favicon.ico', sizes: '180x180' },
-      { url: '/icons/icon-192x192.png', sizes: '192x192' },
-    ],
-    other: [
-      {
-        rel: 'icon',
-        url: '/favicon.ico',
-      },
-    ],
+    apple: [{ url: '/icons/icon-192x192.png', type: 'image/png', sizes: '180x180' }],
   },
 
   alternates: {
@@ -159,20 +169,18 @@ export default function RootLayout({
             duplicates it and silently drops whatever the export sets —
             including interactive-widget. */}
 
-        {/* PWA tags */}
+        {/* NOTE: no hand-written <link rel="icon"> tags here.
+            Next generates them from the `icons` block in the metadata
+            export above. Writing them by hand as well produced two sets
+            of declarations pointing at different files with different
+            claimed sizes -- which is what made the favicon unpredictable.
+            Change icons in ONE place: the metadata export. */}
+
         <link rel="manifest" href="/manifest.json" />
-        <link rel="apple-touch-icon" href="/favicon.ico" />
 
         {/* Preconnect to external domains for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-
-        {/* Favicon - favicon.ico as primary for Google Search and browsers */}
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="256x256" />
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="48x48" />
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="32x32" />
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" sizes="16x16" />
-        <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
 
         {/* Age restriction meta tags */}
         <meta name="rating" content="adult" />
@@ -203,7 +211,9 @@ export default function RootLayout({
                 '@type': 'Organization',
                 name: 'PantyPost',
                 url: BASE_URL,
-                logo: `${BASE_URL}/favicon.ico`,
+                // Google reads this for the knowledge panel; it wants a
+                // real image, not a 32px .ico.
+                logo: `${BASE_URL}/icons/icon-512x512.png`,
                 sameAs: ['https://twitter.com/pantypost', 'https://www.instagram.com/pantypost'],
               },
             }),
