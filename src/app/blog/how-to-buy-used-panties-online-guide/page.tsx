@@ -1,54 +1,45 @@
 // src/app/blog/how-to-buy-used-panties-online-guide/page.tsx
-'use client';
-
 import Link from 'next/link';
+
+import type { Metadata } from 'next';
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
+
+/* =====================================================================
+ * WHY THIS IS A SERVER COMPONENT NOW
+ *
+ * This page set its title and description inside a useEffect:
+ *
+ *   useEffect(() => { document.title = '...' }, []);
+ *
+ * Effects do not run for a crawler. Googlebot fetched this page, saw the
+ * GENERIC HOMEPAGE TITLE, and did the same on the other guide -- two
+ * pages with identical titles and descriptions, which is why Search
+ * Console lists both as "Crawled -- currently not indexed".
+ *
+ * The useEffect was also the only thing making this a client component.
+ * With it gone the page is static, server-renders in full, and exports
+ * metadata Next puts in the HTML before it is ever sent.
+ * ===================================================================== */
+
+export const metadata: Metadata = {
+  title: 'How to Buy Used Panties Online',
+  description:
+    'Everything you need to know about buying used panties safely and discreetly. How listings work, choosing a seller, payment safety, delivery and avoiding scams.',
+  alternates: { canonical: '/blog/how-to-buy-used-panties-online-guide' },
+  openGraph: {
+    title: 'How to Buy Used Panties Online - Complete Buyer Guide',
+    description:
+      'Complete guide to buying used panties safely and discreetly. Choosing sellers, payment safety, delivery and avoiding scams.',
+    url: `${BASE_URL}/blog/how-to-buy-used-panties-online-guide`,
+    type: 'article',
+    publishedTime: '2025-10-15',
+  },
+};
+
 import Head from 'next/head';
-import { useEffect } from 'react';
 
 export default function BuyingGuidePage() {
-  useEffect(() => {
-    // Set page title
-    document.title = 'How to Buy Used Panties Online Safely - Complete 2025 Guide';
-    
-    // Set meta description
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.setAttribute('content', 'Learn how to buy used panties online safely in 2025. Complete guide covering verified sellers, pricing, safety tips, and what to look for. Your trusted resource from Panty Post.');
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'description';
-      meta.content = 'Learn how to buy used panties online safely in 2025. Complete guide covering verified sellers, pricing, safety tips, and what to look for. Your trusted resource from Panty Post.';
-      document.head.appendChild(meta);
-    }
-
-    // Set meta keywords
-    const metaKeywords = document.querySelector('meta[name="keywords"]');
-    if (metaKeywords) {
-      metaKeywords.setAttribute('content', 'buy used panties, how to buy used panties, used panties online, buy worn panties, panty marketplace');
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'keywords';
-      meta.content = 'buy used panties, how to buy used panties, used panties online, buy worn panties, panty marketplace';
-      document.head.appendChild(meta);
-    }
-
-    // Set Open Graph tags
-    const updateOrCreateOgTag = (property: string, content: string) => {
-      let tag = document.querySelector(`meta[property="${property}"]`);
-      if (tag) {
-        tag.setAttribute('content', content);
-      } else {
-        const meta = document.createElement('meta');
-        meta.setAttribute('property', property);
-        meta.content = content;
-        document.head.appendChild(meta);
-      }
-    };
-
-    updateOrCreateOgTag('og:title', 'How to Buy Used Panties Online - Complete Safety Guide');
-    updateOrCreateOgTag('og:description', 'Complete guide to buying used panties safely online in 2025. Tips, pricing, and what to look for.');
-    updateOrCreateOgTag('og:type', 'article');
-  }, []);
 
   return (
     <article className="min-h-screen bg-black text-white">

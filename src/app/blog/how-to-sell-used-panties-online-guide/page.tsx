@@ -1,53 +1,44 @@
 // src/app/blog/how-to-sell-used-panties-online-guide/page.tsx
-'use client';
-
 import Link from 'next/link';
-import { useEffect } from 'react';
+
+import type { Metadata } from 'next';
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://pantypost.com';
+
+/* =====================================================================
+ * WHY THIS IS A SERVER COMPONENT NOW
+ *
+ * This page set its title and description inside a useEffect:
+ *
+ *   useEffect(() => { document.title = '...' }, []);
+ *
+ * Effects do not run for a crawler. Googlebot fetched this page, saw the
+ * GENERIC HOMEPAGE TITLE, and did the same on the other guide -- two
+ * pages with identical titles and descriptions, which is why Search
+ * Console lists both as "Crawled -- currently not indexed".
+ *
+ * The useEffect was also the only thing making this a client component.
+ * With it gone the page is static, server-renders in full, and exports
+ * metadata Next puts in the HTML before it is ever sent.
+ * ===================================================================== */
+
+export const metadata: Metadata = {
+  title: 'How to Sell Used Panties Online',
+  description:
+    'Learn how to start selling used panties online safely. Complete guide covering verification, pricing, discreet shipping, staying anonymous and growing your income on PantyPost.',
+  alternates: { canonical: '/blog/how-to-sell-used-panties-online-guide' },
+  openGraph: {
+    title: 'How to Sell Used Panties Online - Complete Seller Guide',
+    description:
+      'Complete guide to selling used panties safely online. Verification, pricing strategies, discreet shipping and income tips.',
+    url: `${BASE_URL}/blog/how-to-sell-used-panties-online-guide`,
+    type: 'article',
+    publishedTime: '2025-01-15',
+  },
+};
+
 
 export default function SellingGuidePage() {
-  useEffect(() => {
-    // Set page title
-    document.title = 'How to Sell Used Panties Online - Complete 2025 Seller Guide';
-    
-    // Set meta description
-    const metaDescription = document.querySelector('meta[name="description"]');
-    if (metaDescription) {
-      metaDescription.setAttribute('content', 'Learn how to start selling used panties online safely in 2025. Complete guide covering verification, pricing, shipping, and growing your income on PantyPost.');
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'description';
-      meta.content = 'Learn how to start selling used panties online safely in 2025. Complete guide covering verification, pricing, shipping, and growing your income on PantyPost.';
-      document.head.appendChild(meta);
-    }
-
-    // Set meta keywords
-    const metaKeywords = document.querySelector('meta[name="keywords"]');
-    if (metaKeywords) {
-      metaKeywords.setAttribute('content', 'sell used panties, how to sell used panties, selling panties online, panty seller guide, make money selling panties');
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'keywords';
-      meta.content = 'sell used panties, how to sell used panties, selling panties online, panty seller guide, make money selling panties';
-      document.head.appendChild(meta);
-    }
-
-    // Set Open Graph tags
-    const updateOrCreateOgTag = (property: string, content: string) => {
-      let tag = document.querySelector(`meta[property="${property}"]`);
-      if (tag) {
-        tag.setAttribute('content', content);
-      } else {
-        const meta = document.createElement('meta');
-        meta.setAttribute('property', property);
-        meta.content = content;
-        document.head.appendChild(meta);
-      }
-    };
-
-    updateOrCreateOgTag('og:title', 'How to Sell Used Panties Online - Complete Safety Guide');
-    updateOrCreateOgTag('og:description', 'Complete guide to selling used panties safely online in 2025. Verification, pricing strategies, and income tips.');
-    updateOrCreateOgTag('og:type', 'article');
-  }, []);
 
   return (
     <article className="min-h-screen bg-black text-white">

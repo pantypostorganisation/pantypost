@@ -115,6 +115,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     // Content. These are the only pages that can rank before we have
     // inventory, so they are not an afterthought in this list.
+    //
+    // /blog itself was missing from here because the page did not exist
+    // -- it 404'd. That also left the two guides orphaned: nothing on the
+    // site linked to them, which is part of why Google crawled both and
+    // declined to index either.
+    { url: `${BASE_URL}/blog`, lastModified: now, changeFrequency: 'weekly', priority: 0.8 },
     {
       url: `${BASE_URL}/blog/how-to-sell-used-panties-online-guide`,
       lastModified: now,
