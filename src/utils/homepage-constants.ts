@@ -11,11 +11,26 @@ import {
 } from 'lucide-react';
 
 // Trust badges displayed in the hero section - verified structure
+/* "Secure & Private / Verified Sellers / Safe Payments / Encrypted" is
+   what every site in every category says, so it read as decoration
+   rather than evidence. Each of these is specific, true today, and
+   checkable by anyone -- including a payment processor:
+
+     - pre-publication moderation runs on all user content
+     - seller identity verification is enforced server-side before a
+       listing can be created
+     - the 90% split is in order.routes.js / pricing.ts
+     - the five-business-day complaints SLA is published
+
+   "Encrypted" was dropped deliberately: design-system-notes.md flags it
+   as an unverified claim that should be checked against how messages are
+   actually stored BEFORE a processor asks. Do not restore it without
+   that check. */
 export const TRUST_BADGES = [
-  { icon: Shield, text: 'Secure & Private' },
-  { icon: Star, text: 'Verified Sellers' },
-  { icon: CreditCard, text: 'Safe Payments' },
-  { icon: Lock, text: 'Encrypted' },
+  { icon: Shield, text: 'Every listing reviewed' },
+  { icon: Star, text: 'ID-verified sellers' },
+  { icon: CreditCard, text: 'Sellers keep 90%' },
+  { icon: Lock, text: 'Complaints answered in 5 days' },
 ];
 
 /* NOTE: this constant is not currently rendered anywhere — the live copy
@@ -66,8 +81,21 @@ export const HERO_CONTENT = {
   badge: 'Every listing reviewed before it goes live',
   title: 'The',
   titleHighlight: 'Ultimate',
-  titleEnd: 'Marketplace',
-  description: 'Connect discreetly with verified sellers offering premium personal items. The safe, anonymous way to buy and sell worn undergarments online.',
+  /* The <h1> is the strongest on-page ranking signal there is, and
+     organic is the ONLY acquisition channel available -- adult
+     marketplaces are banned from Google, Meta and TikTok ads. "The
+     Ultimate Marketplace" contained no keyword and could have described
+     any site on the internet. It also contradicted the page's own title
+     tag ("Buy & Sell Used Panties Safely"); the two strongest signals on
+     the page now agree instead of competing.
+
+     Same three-part structure, same orange highlight, no layout change. */
+  titleEnd: 'Marketplace for Used Panties',
+  /* Leads with the buyer promise, then states the seller economics.
+     Sellers are the priority -- fastest route to revenue, and the drops
+     strategy depends on recruiting them -- but their case was buried at
+     the very bottom of the page. Both halves are true and checkable. */
+  description: 'Buy and sell worn underwear discreetly, with verified sellers and anonymous delivery. Sellers keep 90% of every sale and can list the same day.',
   ctaPrimary: {
     text: 'Browse Listings',
     href: '/browse',
@@ -107,6 +135,11 @@ export const CTA_CONTENT = {
    (see next.config.ts) so any external link still resolves, but there is
    no reason to send our own users through a redirect. */
 export const FOOTER_LINKS = [
+  /* /blog needs a link from somewhere or it is orphaned exactly as its
+     two guides were: nothing on the site pointed at them, Google crawled
+     both and declined to index either. A footer link appears on every
+     page, which is the cheapest possible fix. */
+  { href: '/blog', label: 'Guides' },
   { href: '/terms', label: 'Terms' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/help', label: 'Help & Contact' },
