@@ -62,13 +62,26 @@ export const metadata: Metadata = {
    * favicon.ico is kept for older browsers only, where it is genuinely
    * the right format. */
   icons: {
+    /* PNG only, and favicon.ico deliberately NOT listed here.
+     *
+     * Chrome prefers .ico when it is offered, and .ico cannot carry
+     * transparency reliably -- so that file is square, and listing it
+     * meant the browser tab showed a square icon while every other
+     * surface got the rounded one.
+     *
+     * Every browser still in use handles PNG favicons. The .ico file
+     * stays in public/ and browsers old enough to need it will still
+     * find it at the conventional /favicon.ico path without being told.
+     *
+     * 32 and 16 are listed so the tab has a purpose-built small size
+     * rather than downscaling the 512 on the fly, which softens the
+     * rounded corners. */
     icon: [
       { url: '/icons/icon-512x512.png', type: 'image/png', sizes: '512x512' },
       { url: '/icons/icon-192x192.png', type: 'image/png', sizes: '192x192' },
       { url: '/icons/icon-96x96.png', type: 'image/png', sizes: '96x96' },
-      { url: '/favicon.ico', type: 'image/x-icon', sizes: '32x32' },
+      { url: '/icons/icon-32x32.png', type: 'image/png', sizes: '32x32' },
     ],
-    shortcut: ['/favicon.ico'],
     apple: [{ url: '/icons/icon-192x192.png', type: 'image/png', sizes: '180x180' }],
   },
 
