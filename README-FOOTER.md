@@ -1,92 +1,86 @@
-# Footer rebuild
+# Footer rebuild + one surface for the whole shell
 
-One file: `src/components/homepage/Footer.tsx`. Frontend only. Parses and
-typechecks clean.
+3 files. Frontend only. Parses and typechecks clean.
 
-It renders on **every page** (via `ClientLayout`), not just the homepage,
-which is why it is worth structuring properly.
+The footer renders on **every page** (via `ClientLayout`), not just the
+homepage -- which is why it is worth structuring properly.
 
-## What was wrong
+## The background question
 
-**Terms and Privacy appeared twice.** Once in the top row as "Terms" and
-"Privacy", again in the row below as "Terms of Service" and "Privacy
-Policy". Same destinations, different labels, a few pixels apart.
+You asked whether the footer should be darker, black, or match the page.
+It was rendering **lighter than the page above it**, which reads as more
+important than it is -- a footer should recede.
 
-**Fifteen links, all the same orange.** Nothing read as more or less
-important than anything else, and it was a lot of accent for one region
-of the page.
+"Match the page it is on" cannot be done directly: the footer is a
+**sibling of `<main>`**, so a page's own background stops above it. CSS
+has no way to ask what the page behind it is using.
 
-**A rotating blurred orange blob** behind everything --
-`animate-spin-medium` on a 96px radial gradient, running on every page.
-Ambient background animation is out per the design rules.
+So instead the footer now **paints nothing at all** and inherits the app
+shell. And the shell moved from raw `bg-black` (`#000000`) to
+**`bg-surface`** (`#050505`) -- the same token every page uses.
 
-**No grouping.** Two rows of links, then four stacked paragraphs, then
-two more links. A flat pile.
+That matters: before this, the shell and the pages disagreed by five
+points of lightness, so anything transparent sitting on the shell was
+subtly darker than the page it belonged to. Now the shell, the pages and
+the footer are all one token and cannot drift apart. A page that sets its
+own background still gets a footer matching the shell rather than a
+mismatched slab.
 
-## Now
+The `LoadingFallback` was changed to match too, or it flashes a slightly
+different black before the app paints.
 
-**Three labelled columns:** identity, Explore, and Safety & legal. The
-compliance links are grouped together because that is how someone
-looking for them thinks about them.
+## What else changed in the footer
 
-**Links are muted by default and go orange on hover**, so orange now
-means "you can interact with this" rather than decorating everything at
-once. The only permanently-orange items are the two that matter in a bad
-moment: Contact support and Report content.
+**Terms and Privacy appeared twice** -- once as "Terms" / "Privacy" in the
+top row, again as "Terms of Service" / "Privacy Policy" below. Same
+destinations, different labels, a few pixels apart. Deduplicated.
 
-**The duplication is gone** -- Terms and Privacy are filtered out of the
-Explore column since Safety & legal already lists them under their full
-legal names.
+**Fifteen links, all the same orange.** Nothing read as more important
+than anything else. Links are now muted and go orange on hover, so orange
+means "interactive" rather than decorating everything. The only
+permanently orange items are the two that matter in a bad moment:
+Contact support and Report content.
 
-**The legal block is condensed** from four stacked paragraphs to two,
-with the entity, ABN and contact email on one line.
+**A rotating blurred orange blob** (`animate-spin-medium` on a radial
+gradient) ran behind it on every page. Removed -- ambient background
+animation is out per the design rules.
 
-Tokens throughout, no raw hex, framer-motion dropped entirely.
+**Three labelled columns** -- identity, Explore, Safety & legal --
+replacing two flat rows of links followed by four stacked paragraphs.
+
+Tokens throughout, no raw hex, framer-motion dropped.
 
 ## The P mark
 
-`public/p-mark.png` -- the icon from last night, with the black
-background removed, sitting beside the wordmark.
+`public/p-mark.png` -- last night's icon with the black background
+removed, beside the wordmark.
 
-Extracting it took a flood fill from the edges rather than "remove all
+Extracting it needed a flood fill from the edges rather than "remove all
 black": the envelope outline and the counter of the P are themselves
-black, so stripping every dark pixel would have punched holes straight
-through the artwork. Only black reachable from outside the mark counts as
-background.
+black, so stripping every dark pixel would have punched holes through the
+artwork.
 
-Transparent rather than the black tile because a black square on a
-near-black footer reads as a mistake rather than a logo.
-
-**One thing to know:** the P is white, so this asset **disappears on a
-light background**. Fine in the footer, but do not reuse it on anything
-pale without an outline or a dark plate behind it.
-
-Plain `<img>` rather than `next/image`: it is a small decorative asset at
-a fixed 32px, so the optimisation pipeline would cost a request and gain
-nothing. `aria-hidden` because the wordmark sits right beside it and a
-screen reader should not announce the brand twice.
+**The P is white, so this asset disappears on a light background.** Fine
+in the footer; do not reuse it on anything pale without a dark plate.
 
 ## Kept deliberately
 
-**The merchant identification block.** Payment processors require the
-operating entity to be identifiable on the site itself, not only in the
-terms -- so the ABN and trading name stay on every page despite being the
-least glamorous thing on it.
+**Merchant identification.** Payment processors require the operating
+entity to be identifiable on the site itself, not only in the terms -- so
+the ABN and trading name stay on every page.
 
 **"Complaints & Content Removal" wording is unchanged.** The original
-file carries a comment saying the processor's review checks for that
-exact phrase. Not reworded.
+file notes that the processor's review checks for that exact phrase.
 
 ## Ship
 
 ```powershell
 npx tsc --noEmit
-git add src/components/homepage/Footer.tsx public/p-mark.png
-git commit -m "Footer: three columns, deduplicated links, remove ambient animation"
+git add src/components/homepage/Footer.tsx src/app/ClientLayout.tsx public/p-mark.png
+git commit -m "Footer: transparent, three columns, deduplicated; shell on bg-surface"
 ```
 
-## Note
-
-The mojibake you saw earlier (`┬⌐` for `©`) was PowerShell's console
-encoding mangling curl output, **not** the source. This file was clean.
-Nothing to fix.
+**Worth a look after deploying:** the shell background change touches
+every page. It should be invisible (5 points of lightness), but if any
+page looked right against pure black specifically, this is the change
+that would show it.

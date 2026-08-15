@@ -97,7 +97,17 @@ export default function Footer() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-line bg-surface">
+    // No background of its own. The footer is a sibling of <main>, so a
+    // page's own background stops above it -- painting one here meant the
+    // footer sat as a panel LIGHTER than the page above it, which reads
+    // as more important than it is.
+    //
+    // Transparent, it inherits the app shell (ClientLayout), which is now
+    // bg-surface. Footer, shell and pages therefore all sit on one token,
+    // and a page that sets its own background still gets a footer that
+    // matches the shell rather than a mismatched slab. Separation comes
+    // from the hairline alone.
+    <footer className="border-t border-line">
       <div className="mx-auto max-w-6xl px-6 py-12 md:px-8">
         <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1.5fr]">
           {/* Identity */}

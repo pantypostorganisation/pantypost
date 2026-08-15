@@ -17,7 +17,9 @@ import { usePerformanceMonitoring } from '@/hooks/usePerformanceMonitoring';
 
 // SILENT loading - no spinner, just black screen
 function LoadingFallback() {
-  return <div className="min-h-screen bg-black" />;
+  // Matches the shell below; bg-black here would flash a slightly
+  // different black before the app paints.
+  return <div className="min-h-screen bg-surface" />;
 }
 
 /* =====================================================================
@@ -278,7 +280,13 @@ export default function ClientLayout({
             and inherit whatever is actually left over. No magic numbers.
           */}
           <div
-            className={`flex flex-col bg-black text-white app-fade-in ${
+            /* bg-surface, not bg-black. The pages use bg-surface
+               (#050505) while this shell was pure #000, so anything
+               transparent above it -- the footer especially -- sat five
+               points darker than the page it belonged to. One token for
+               the shell, the pages and the footer means they cannot
+               drift apart again. */
+            className={`flex flex-col bg-surface text-white app-fade-in ${
               isFixedHeightMessaging
                 ? 'h-dvh overflow-hidden'
                 : 'fullscreen md:min-h-screen'
