@@ -18,12 +18,27 @@
      accumulated (#0a0a0a, #111, #121212, #131313, #171717, #1a1a1a,
      #0b0b0f, #101010). Each step is a clear stop, so depth reads as
      intentional rather than accidental. */
-  /* Depth comes from small steps against a near-black page, not from
-     grey panels. Each step is ~4 points of lightness: enough to read as
-     a distinct layer, not enough to look like a grey box sitting on
-     black. Pure #000 is avoided for the page because it makes the steps
-     above it look muddy and causes halation against white text. */
-  --color-surface: #050505;        /* page background */
+  /* THE PAGE IS BLACK, and that is deliberate.
+   *
+   * This was #050505, which is defensible in isolation -- a hair off pure
+   * black avoids halation against white text. The problem is that pages
+   * across the codebase paint `bg-black` (#000000) on their own
+   * containers: /browse/[id], the wallet pages, the dashboard, my-listings,
+   * both blog guides and more. Those containers end above the footer, so
+   * the footer inherited the shell at #050505 while the page above it sat
+   * at #000 -- a visible seam on every page.
+   *
+   * Two ways to fix that: edit every page that paints its own background
+   * and keep finding stragglers for weeks, or make the token agree with
+   * what the pages already do. This is the second.
+   *
+   * `bg-surface` and `bg-black` are now the same colour, so a page, the
+   * app shell and the footer cannot disagree no matter which one an
+   * author reaches for.
+   *
+   * Depth is unaffected: it comes from the raised/overlay steps below,
+   * which are unchanged. */
+  --color-surface: #000000;        /* page background */
   --color-surface-raised: #0e0e0e; /* cards, panels */
   --color-surface-overlay: #161616;/* inputs, modals, hover states */
   --color-surface-hover: #1e1e1e;

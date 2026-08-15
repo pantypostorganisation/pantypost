@@ -5,7 +5,33 @@
 The footer renders on **every page** (via `ClientLayout`), not just the
 homepage -- which is why it is worth structuring properly.
 
-## The background question
+## The background question -- and the real fix
+
+You asked for the footer to be the same colour as the page it is on, on
+EVERY page. That turned out to need a change one level deeper than the
+footer.
+
+**Why the seam existed:** the footer is a sibling of `<main>`, so a
+page's own background stops above it. Making the footer transparent means
+it inherits the app shell -- but pages across the codebase paint
+**`bg-black` (#000000)** on their own containers, while the shell and
+`bg-surface` were **#050505**. Five points of lightness, visible as a
+seam on every page that does this. At least eight files do:
+`/browse/[id]`, both wallet pages, the buyer dashboard, my-listings, both
+blog guides, and `ListingForm`.
+
+**The fix: `--color-surface` is now `#000000`.**
+
+`bg-surface` and `bg-black` are therefore the same colour. A page, the
+app shell and the footer cannot disagree regardless of which one an
+author reaches for -- and no page needs editing, now or later. The
+alternative was hunting `bg-black` through the whole codebase and still
+finding stragglers in a month.
+
+Depth is unaffected: it comes from `surface-raised` (#0e0e0e) and
+`surface-overlay` (#161616), both unchanged.
+
+## The footer itself
 
 You asked whether the footer should be darker, black, or match the page.
 It was rendering **lighter than the page above it**, which reads as more
@@ -76,11 +102,16 @@ file notes that the processor's review checks for that exact phrase.
 
 ```powershell
 npx tsc --noEmit
-git add src/components/homepage/Footer.tsx src/app/ClientLayout.tsx public/p-mark.png
+git add src/components/homepage/Footer.tsx src/app/ClientLayout.tsx src/app/globals.css public/p-mark.png
 git commit -m "Footer: transparent, three columns, deduplicated; shell on bg-surface"
 ```
 
-**Worth a look after deploying:** the shell background change touches
-every page. It should be invisible (5 points of lightness), but if any
-page looked right against pure black specifically, this is the change
-that would show it.
+**Worth a look after deploying:** the token change touches every page.
+Most already rendered pure black, so most will look identical -- the
+pages that will actually change are the ones that were correctly using
+`bg-surface` and now go five points darker. Check browse, messages and a
+seller shop.
+
+The wordmark next to the footer mark is gone, as asked -- the mark now
+stands alone at 40px and carries "Panty Post" as its alt text, since it
+is no longer decorative.
