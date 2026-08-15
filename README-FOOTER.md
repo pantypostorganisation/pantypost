@@ -43,6 +43,29 @@ with the entity, ABN and contact email on one line.
 
 Tokens throughout, no raw hex, framer-motion dropped entirely.
 
+## The P mark
+
+`public/p-mark.png` -- the icon from last night, with the black
+background removed, sitting beside the wordmark.
+
+Extracting it took a flood fill from the edges rather than "remove all
+black": the envelope outline and the counter of the P are themselves
+black, so stripping every dark pixel would have punched holes straight
+through the artwork. Only black reachable from outside the mark counts as
+background.
+
+Transparent rather than the black tile because a black square on a
+near-black footer reads as a mistake rather than a logo.
+
+**One thing to know:** the P is white, so this asset **disappears on a
+light background**. Fine in the footer, but do not reuse it on anything
+pale without an outline or a dark plate behind it.
+
+Plain `<img>` rather than `next/image`: it is a small decorative asset at
+a fixed 32px, so the optimisation pipeline would cost a request and gain
+nothing. `aria-hidden` because the wordmark sits right beside it and a
+screen reader should not announce the brand twice.
+
 ## Kept deliberately
 
 **The merchant identification block.** Payment processors require the
@@ -58,7 +81,7 @@ exact phrase. Not reworded.
 
 ```powershell
 npx tsc --noEmit
-git add src/components/homepage/Footer.tsx
+git add src/components/homepage/Footer.tsx public/p-mark.png
 git commit -m "Footer: three columns, deduplicated links, remove ambient animation"
 ```
 

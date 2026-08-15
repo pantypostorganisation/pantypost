@@ -102,8 +102,27 @@ export default function Footer() {
         <div className="grid gap-10 md:grid-cols-[1.5fr_1fr_1.5fr]">
           {/* Identity */}
           <div>
-            <h2 className="text-lg font-bold text-primary">Panty Post</h2>
-            <p className="mt-2 max-w-xs text-sm leading-relaxed text-ink-faint">
+            {/* The P mark, transparent so it sits on the footer surface
+                rather than in its own black tile -- a black square on a
+                near-black background reads as a mistake.
+
+                Plain <img>, not next/image: it is a small decorative
+                asset at a fixed size, so the optimisation pipeline would
+                cost a request and gain nothing. aria-hidden with the
+                wordmark right beside it, so a screen reader does not
+                hear the brand name twice. */}
+            <div className="mb-3 flex items-center gap-2.5">
+              <img
+                src="/p-mark.png"
+                alt=""
+                width={32}
+                height={32}
+                className="h-8 w-8"
+                aria-hidden="true"
+              />
+              <h2 className="text-lg font-bold text-primary">Panty Post</h2>
+            </div>
+            <p className="max-w-xs text-sm leading-relaxed text-ink-faint">
               A discreet marketplace for worn underwear. Every listing reviewed before it goes
               live.
             </p>
