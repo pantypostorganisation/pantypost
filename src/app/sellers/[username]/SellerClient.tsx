@@ -14,6 +14,7 @@
 'use client';
 
 import React, { useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import BanCheck from '@/components/BanCheck';
 import ProfileHeader from '@/components/seller-profile/ProfileHeader';
@@ -53,6 +54,7 @@ export default function SellerClient() {
     // User data
     user,
     sellerUser,
+    hasLoaded,
     isVerified,
 
     // Profile data
@@ -223,14 +225,53 @@ export default function SellerClient() {
     );
   }
 
-  // Validate required data before rendering
-  if (!user) {
+  /* THIS GATE WAS BLOCKING EVERY LOGGED-OUT VISITOR.
+   *
+   * `user` is the VIEWER, from useAuth -- not the seller. So
+   * `if (!user)` meant "if nobody is signed in", and the page returned a
+   * spinner labelled "Loading profile..." that could never resolve,
+   * because a signed-out visitor never becomes signed in by waiting.
+   *
+   * Anyone following a link to a seller's shop without an account saw a
+   * permanent loading spinner. So did every crawler, which is the real
+   * reason these pages could not rank no matter how good their metadata
+   * was.
+   *
+   * The data was never the problem: useSellerProfile's fetch only guards
+   * on `!username`, so seller data loads perfectly well without a token.
+   *
+   * The correct gate is on the SELLER, and only while genuinely still
+   * loading. */
+  if (!sellerUser && !hasLoaded) {
     return (
       <BanCheck>
-        <main className="min-h-screen bg-black text-white flex items-center justify-center">
+        <main className="flex min-h-screen items-center justify-center bg-surface text-white">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-[#ff950e]/20 border-t-[#ff950e] rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-400">Loading profile...</p>
+            <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-primary-line border-t-primary" />
+            <p className="text-ink-muted">Loading profile...</p>
+          </div>
+        </main>
+      </BanCheck>
+    );
+  }
+
+  /* Loaded, but there is no such seller. Previously unreachable, because
+     the gate above caught everyone first. */
+  if (!sellerUser) {
+    return (
+      <BanCheck>
+        <main className="flex min-h-screen items-center justify-center bg-surface px-4 text-white">
+          <div className="text-center">
+            <h1 className="mb-2 text-xl font-bold">Seller not found</h1>
+            <p className="mb-6 text-sm text-ink-muted">
+              This shop does not exist, or it is no longer available.
+            </p>
+            <Link
+              href="/browse"
+              className="inline-flex items-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-primary-hover"
+            >
+              <span className="text-black">Browse listings</span>
+            </Link>
           </div>
         </main>
       </BanCheck>

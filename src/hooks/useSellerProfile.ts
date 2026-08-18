@@ -38,6 +38,20 @@ export function useSellerProfile(username: string) {
   const { orderHistory } = useWallet();
 
   const [sellerUser, setSellerUser] = useState<any>(null);
+
+  /* Whether the seller fetch has finished, regardless of outcome.
+
+     The hook had no loading flag, so SellerClient used `!user` as a
+
+     stand-in -- and `user` is the VIEWER, not the seller. That made
+
+     the page show "Loading profile..." forever to anyone signed out,
+
+     including every crawler. A real flag lets the page distinguish
+
+     "still fetching" from "no such seller". */
+
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [bio, setBio] = useState('');
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
@@ -262,7 +276,9 @@ export function useSellerProfile(username: string) {
       }
     };
 
-    fetchSellerData();
+    fetchSellerData().finally(() => {
+      setHasLoaded(true);
+    });
   }, [username, user, token, orderHistory]);
 
   useEffect(() => {
@@ -444,6 +460,7 @@ export function useSellerProfile(username: string) {
   return {
     user,
     sellerUser,
+    hasLoaded,
     isVerified,
     bio,
     profilePic,
