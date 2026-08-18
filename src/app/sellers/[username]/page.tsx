@@ -107,6 +107,23 @@ export async function generateMetadata({
   };
 }
 
-export default function SellerProfilePage() {
-  return <SellerClient />;
+/* The seller record is fetched once, here, and used for BOTH the
+   metadata above and the initial render below.
+   
+   Next dedupes identical fetch() calls within a single request, so
+   calling getSeller twice costs one network round trip -- generateMetadata
+   and this function share the result.
+   
+   The page previously rendered a client component that fetched
+   everything itself, so the first HTML was a spinner. Now the seller's
+   name, bio and avatar are in the markup before it leaves the server. */
+export default async function SellerProfilePage({
+  params,
+}: {
+  params: Promise<{ username: string }>;
+}) {
+  const { username } = await params;
+  const seller = await getSeller(username);
+
+  return <SellerClient initialSeller={seller ?? undefined} />;
 }

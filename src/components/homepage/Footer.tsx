@@ -211,7 +211,7 @@ export default function Footer() {
           <p className="max-w-3xl">
             All users must be 18 or over. Every listing, post and image is reviewed before
             publication. We do not permit content published without the consent of everyone
-            depicted &mdash; if you believe such content appears here, please use our{' '}
+            depicted. If you believe such content appears here, please use our{' '}
             <Link href="/complaints" className="text-ink-muted underline transition-colors hover:text-primary">
               Complaints &amp; Content Removal
             </Link>{' '}

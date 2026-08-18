@@ -33,11 +33,19 @@ function coerceProfileData(profileRespData: any): any {
   return profileRespData;
 }
 
-export function useSellerProfile(username: string) {
+/* `initialSeller` is the seller record the SERVER already fetched for
+   generateMetadata. Passing it in means the page renders with the
+   seller's name, bio and avatar in the very first HTML -- no spinner for
+   a real visitor, and real content for a crawler that does not run JS.
+   
+   It is a SEED, not a replacement: the client still fetches on mount for
+   anything live (follower counts, the gallery, whether the viewer has
+   purchased). This only removes the empty first paint. */
+export function useSellerProfile(username: string, initialSeller?: any) {
   const { user, token } = useAuth();
   const { orderHistory } = useWallet();
 
-  const [sellerUser, setSellerUser] = useState<any>(null);
+  const [sellerUser, setSellerUser] = useState<any>(initialSeller ?? null);
 
   /* Whether the seller fetch has finished, regardless of outcome.
 
@@ -51,13 +59,19 @@ export function useSellerProfile(username: string) {
 
      "still fetching" from "no such seller". */
 
+  /* Seeded from the server payload where available, so the first paint
+
+     is the real profile rather than empty strings that fill in a moment
+
+     later. Each still gets overwritten by the client fetch. */
+
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [bio, setBio] = useState('');
+  const [bio, setBio] = useState<any>(initialSeller?.bio ?? '');
   const [profilePic, setProfilePic] = useState<string | null>(null);
   const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
   const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
-  const [isVerified, setIsVerified] = useState(false);
+  const [isVerified, setIsVerified] = useState<any>(Boolean(initialSeller?.isVerified));
   const [sellerTierInfo, setSellerTierInfo] = useState<TierInfo | null>(null);
   const [country, setCountry] = useState<string | null>(null);
   const [isLocationPublic, setIsLocationPublic] = useState(true);

@@ -36,7 +36,10 @@ const MemoizedListingsGrid = React.memo(ListingsGrid);
 const MemoizedProfileGallery = React.memo(ProfileGallery);
 const MemoizedReviewsSection = React.memo(ReviewsSection);
 
-export default function SellerClient() {
+/* `initialSeller` comes from page.tsx, which already fetched this record
+   to build the metadata. Reusing it costs nothing and means the first
+   HTML contains the real profile instead of a loading state. */
+export default function SellerClient({ initialSeller }: { initialSeller?: any }) {
   const rawParams = useParams() as Record<string, string | string[] | undefined> | null;
   const router = useRouter();
   const rawUsername = rawParams?.username;
@@ -124,7 +127,7 @@ export default function SellerClient() {
     togglePause,
     goToPrevSlide,
     goToNextSlide,
-  } = useSellerProfile(safeUsername);
+  } = useSellerProfile(safeUsername, initialSeller);
 
   // Memoize seller ID generation to prevent unnecessary recalculations
   const sellerId = useMemo(() => (safeUsername ? `seller_${safeUsername}` : ''), [safeUsername]);
