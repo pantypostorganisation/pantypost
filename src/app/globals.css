@@ -112,46 +112,70 @@
   --color-primary-light: var(--color-primary-hover);
 }
 
-html,
-body,
-#__next {
-  height: 100%;
-  background: #000; /* prevents reveal behind iOS toolbars */
-}
+/* =====================================================================
+   BASE ELEMENT DEFAULTS -- deliberately inside @layer base.
+   =====================================================================
 
-body {
-  background: var(--color-surface);
-  color: var(--color-ink);
-  /* NOTE: font-family is deliberately NOT set here.
-     next/font applies Inter via className on <body>, and a
-     font-family rule at this level overrides it. That is exactly what
-     was happening before: Inter was downloaded, then discarded, and
-     the site rendered in Arial. */
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-}
+   These used to sit OUTSIDE any cascade layer. Unlayered CSS beats
+   layered CSS regardless of specificity, and Tailwind's utilities live
+   in @layer utilities -- so `a { color: var(--color-primary) }` silently
+   defeated every `text-*` utility applied to a link.
 
-/* Headings carry the weight; body text stays comfortable. Tightening
-   tracking on large type is most of what separates considered
-   typography from default typography. */
-h1, h2, h3, h4 {
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-}
+   The visible symptom, three separate times in this codebase: an orange
+   button with a link inside it rendered orange-on-orange, unreadable.
+   Each was patched locally with an inline style or a wrapper <span>.
+   This removes the cause.
 
-p {
-  text-wrap: pretty;
-}
+   Inside @layer base these are still defaults -- a bare <a> is still
+   orange -- but any utility now wins, which is the behaviour every
+   developer already assumes.
 
-a {
-  color: var(--color-primary);
-  text-decoration: none;
-  transition: color 150ms ease;
-}
+   The workarounds already in the codebase (inline `style={{ color:
+   '#000' }}`, label-in-a-span) stay correct and harmless. They just
+   stop being necessary for anything written from here on.
+   ===================================================================== */
+@layer base {
+  html,
+  body,
+  #__next {
+    height: 100%;
+    background: #000; /* prevents reveal behind iOS toolbars */
+  }
 
-a:hover {
-  color: var(--color-primary-hover);
+  body {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    /* NOTE: font-family is deliberately NOT set here.
+       next/font applies Inter via className on <body>, and a
+       font-family rule at this level overrides it. That is exactly what
+       was happening before: Inter was downloaded, then discarded, and
+       the site rendered in Arial. */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings carry the weight; body text stays comfortable. Tightening
+     tracking on large type is most of what separates considered
+     typography from default typography. */
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  a {
+    color: var(--color-primary);
+    text-decoration: none;
+    transition: color 150ms ease;
+  }
+
+  a:hover {
+    color: var(--color-primary-hover);
+  }
 }
 
 ::selection {
@@ -562,11 +586,25 @@ a:hover {
   }
 }
 
-.safe-top { padding-top: env(safe-area-inset-top); }
-.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-.safe-inset {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+/* Safe-area helpers, in @layer utilities so a Tailwind padding utility
+   can override them.
+
+   Unlayered, `.safe-bottom` beat every `py-*` and `pb-*` utility on the
+   same element. That cost a full round trip on the messaging composer:
+   `sm:py-5` set the top padding and had its bottom silently discarded,
+   so the composer looked correct on a phone (where the safe-area inset
+   is a real number) and wrong on desktop (where it resolves to 0).
+
+   Layered, they are still the default and still clear the iOS home
+   indicator -- but an explicit utility now wins, which is what anyone
+   writing `pb-6` expects. */
+@layer utilities {
+  .safe-top { padding-top: env(safe-area-inset-top); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-inset {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 
 @media (max-width: 767px) {
