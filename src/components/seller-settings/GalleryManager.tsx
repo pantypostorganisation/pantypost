@@ -59,13 +59,13 @@ export default function GalleryManager(props: GalleryManagerProps) {
   };
 
   return (
-    <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
+    <div className="bg-surface-raised rounded-md p-6 border border-line">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          <ImageIcon className="w-5 h-5 text-[#ff950e]" />
+          <ImageIcon className="w-5 h-5 text-primary" />
           Photo Gallery
         </h2>
-        <span className="text-sm text-gray-400">
+        <span className="text-sm text-ink-muted">
           {galleryImages.length} / {MAX_GALLERY_IMAGES} images
         </span>
       </div>
@@ -74,7 +74,7 @@ export default function GalleryManager(props: GalleryManagerProps) {
       {galleryImages.length > 0 && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium text-gray-300">Current Gallery</h3>
+            <h3 className="text-sm font-medium text-ink-muted">Current Gallery</h3>
             {galleryImages.length > 0 && (
               <button
                 onClick={handleClearAll}
@@ -92,12 +92,12 @@ export default function GalleryManager(props: GalleryManagerProps) {
                 <img
                   src={image}
                   alt={`Gallery ${index + 1}`}
-                  className="w-full h-full object-cover rounded-lg border border-gray-700"
+                  className="w-full h-full object-cover rounded-lg border border-line"
                   loading="lazy"
                 />
                 <button
                   onClick={() => handleRemoveGalleryImage(index)}
-                  className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
+                  className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"
                   title="Remove image"
                   disabled={isUploading}
                   type="button"
@@ -112,9 +112,9 @@ export default function GalleryManager(props: GalleryManagerProps) {
 
       {/* File Upload Section */}
       <div className="space-y-4">
-        <div className="border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-gray-600 transition">
-          <ImageIcon className="w-12 h-12 text-gray-500 mx-auto mb-3" />
-          <p className="text-gray-400 mb-2">
+        <div className="border-2 border-dashed border-line rounded-lg p-6 text-center hover:border-gray-600 transition">
+          <ImageIcon className="w-12 h-12 text-ink-faint mx-auto mb-3" />
+          <p className="text-ink-muted mb-2">
             {galleryImages.length === 0 
               ? "Add photos to your gallery" 
               : `Add more photos (${MAX_GALLERY_IMAGES - galleryImages.length} remaining)`}
@@ -136,7 +136,7 @@ export default function GalleryManager(props: GalleryManagerProps) {
           >
             Select Images
           </button>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-ink-faint mt-2">
             JPEG, JPG, PNG, or WebP • Max 10MB per file
           </p>
         </div>
@@ -144,7 +144,7 @@ export default function GalleryManager(props: GalleryManagerProps) {
         {/* Selected Files Preview */}
         {selectedFiles.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-gray-300 mb-2">
+            <h3 className="text-sm font-medium text-ink-muted mb-2">
               Selected Files ({selectedFiles.length})
             </h3>
             <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -154,11 +154,11 @@ export default function GalleryManager(props: GalleryManagerProps) {
                   className="flex items-center justify-between p-2 bg-gray-800 rounded-lg"
                 >
                   <div className="flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-300 truncate max-w-[200px]">
+                    <ImageIcon className="w-4 h-4 text-ink-muted" />
+                    <span className="text-sm text-ink-muted truncate max-w-[200px]">
                       {sanitizeStrict(file.name)}
                     </span>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-ink-faint">
                       ({(file.size / 1024 / 1024).toFixed(2)} MB)
                     </span>
                   </div>
@@ -179,12 +179,12 @@ export default function GalleryManager(props: GalleryManagerProps) {
               {isUploading ? (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Uploading...</span>
-                    <span className="text-[#ff950e]">{uploadProgress}%</span>
+                    <span className="text-ink-muted">Uploading...</span>
+                    <span className="text-primary">{uploadProgress}%</span>
                   </div>
-                  <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+                  <div className="w-full bg-gray-700 rounded-md h-2 overflow-hidden">
                     <div
-                      className="bg-[#ff950e] h-full transition-all duration-300"
+                      className="bg-primary h-full transition-all duration-300"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
@@ -193,7 +193,7 @@ export default function GalleryManager(props: GalleryManagerProps) {
                 <button
                   onClick={handleUploadClick}
                   disabled={selectedFiles.length === 0}
-                  className="w-full bg-[#ff950e] text-black font-bold py-2 rounded-lg hover:bg-[#e0850d] transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-primary text-black font-bold py-2 rounded-lg hover:bg-primary-press transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   type="button"
                 >
                   <Upload className="w-4 h-4" />
@@ -207,8 +207,8 @@ export default function GalleryManager(props: GalleryManagerProps) {
 
       {/* Info Text */}
       <div className="mt-4 p-3 bg-gray-800 rounded-lg">
-        <p className="text-xs text-gray-400">
-          <strong className="text-gray-300">Tips:</strong> High-quality photos help attract more buyers. 
+        <p className="text-xs text-ink-muted">
+          <strong className="text-ink-muted">Tips:</strong> High-quality photos help attract more buyers. 
           Consider adding variety with different angles and styles. All images are automatically optimized for web display.
         </p>
       </div>

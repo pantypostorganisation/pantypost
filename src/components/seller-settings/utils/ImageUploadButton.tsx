@@ -41,7 +41,7 @@ export default function ImageUploadButton(rawProps: ImageUploadButtonProps) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center gap-2 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition disabled:bg-gray-600 disabled:cursor-not-allowed ${sanitizedClass}`}
+      className={`flex items-center gap-2 px-4 py-2 bg-primary text-black font-bold rounded-lg hover:bg-primary-hover transition disabled:bg-gray-600 disabled:cursor-not-allowed ${sanitizedClass}`}
       aria-disabled={disabled || undefined}
     >
       {icon ?? <Upload className="w-4 h-4" />}

@@ -142,7 +142,7 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
   const hasUnsavedChanges = subscriptionPrice !== lastSavedPrice;
 
   return (
-    <div className="bg-[#1a1a1a] rounded-xl shadow-lg border border-gray-800 p-6 relative">
+    <div className="bg-surface-raised rounded-md shadow-lg border border-line p-6 relative">
       {/* Save Status Indicator */}
       <div className="absolute top-4 right-4 flex items-center gap-2">
         {isSaving && (
@@ -169,30 +169,30 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
 
       {/* Profile Picture Section */}
       <div className="flex flex-col items-center mb-6">
-        <div className="w-32 h-32 rounded-full border-4 border-[#ff950e] bg-black flex items-center justify-center overflow-hidden mb-4 shadow-lg relative group">
+        <div className="w-32 h-32 rounded-full border-4 border-primary bg-surface flex items-center justify-center overflow-hidden mb-4 shadow-lg relative group">
           {isUploading ? (
             <div className="flex flex-col items-center justify-center">
-              <div className="w-8 h-8 border-2 border-[#ff950e] border-t-transparent rounded-full animate-spin mb-2"></div>
-              <span className="text-xs text-[#ff950e]">Uploading...</span>
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mb-2"></div>
+              <span className="text-xs text-primary">Uploading...</span>
             </div>
           ) : preview || profilePic ? (
             <SecureImage src={preview || profilePic || ''} alt="Profile preview" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-gray-700 flex items-center justify-center text-gray-400 text-4xl font-bold">
+            <div className="w-full h-full bg-gray-700 flex items-center justify-center text-ink-muted text-4xl font-bold">
               {sanitizedUsername ? sanitizedUsername.charAt(0).toUpperCase() : '?'}
             </div>
           )}
 
           {!isUploading && (
             <div
-              className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+              className="absolute inset-0 bg-surface bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
               onClick={() => profilePicInputRef.current?.click()}
               role="button"
               tabIndex={0}
               onKeyDown={onOverlayKey}
               aria-label="Change profile photo"
             >
-              <div className="text-white text-xs font-medium bg-[#ff950e] rounded-full px-3 py-1">Change Photo</div>
+              <div className="text-white text-xs font-medium bg-primary rounded-md px-3 py-1">Change Photo</div>
             </div>
           )}
         </div>
@@ -210,8 +210,8 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
         <button
           onClick={() => !isUploading && profilePicInputRef.current?.click()}
           disabled={isUploading}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg bg-[#ff950e] text-white font-medium transition-all ${
-            isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-[#ff8c00] active:scale-95'
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium transition-all ${
+            isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-primary-hover active:scale-95'
           }`}
         >
           <Camera className="w-4 h-4" />
@@ -236,7 +236,7 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
           value={bio}
           onChange={handleBioChange}
           onBlur={() => setTouched((prev) => ({ ...prev, bio: true }))}
-          className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e] h-28 resize-none"
+          className="w-full p-3 border border-line rounded-lg bg-surface text-white placeholder-ink-faint focus:outline-none focus:ring-2 focus:ring-primary h-28 resize-none"
           placeholder="Tell buyers about yourself..."
           maxLength={500}
           characterCount={true}
@@ -250,7 +250,7 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
 
       {/* Subscription Price */}
       <div className="mb-4 w-full">
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-ink-muted mb-2">
           Subscription Price ($/month)
           {showPriceSaving && (
             <span className="ml-2 text-yellow-500 text-xs">
@@ -269,7 +269,7 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
           value={subscriptionPrice}
           onChange={handlePriceChange}
           onBlur={() => setTouched((prev) => ({ ...prev, price: true }))}
-          className="w-full px-4 py-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+          className="w-full px-4 py-3 border border-line rounded-lg bg-surface text-white placeholder-ink-faint focus:outline-none focus:ring-2 focus:ring-primary"
           placeholder="19.99"
           min="0"
           max="999.99"

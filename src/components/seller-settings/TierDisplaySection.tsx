@@ -87,25 +87,25 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
   const credit = typeof sellerTierInfo.credit === 'number' && Number.isFinite(sellerTierInfo.credit) ? sellerTierInfo.credit : 0;
 
   return (
-    <div className="relative flex flex-col gap-8 rounded-3xl bg-gradient-to-br from-[#191919] via-[#111] to-[#1f1f1f] p-8 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.9)]">
-      <div className="pointer-events-none absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-[#ff950e]/10 blur-3xl" />
-      <section className="relative z-10 flex flex-col gap-6 rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
+    <div className="relative flex flex-col gap-8 rounded-lg bg-surface-raised p-8 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.9)]">
+      <div className="pointer-events-none absolute -bottom-16 -left-10 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
+      <section className="relative z-10 flex flex-col gap-6 rounded-lg border border-white/5 bg-surface/40 p-6 backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
           <div className="flex-shrink-0">
             {currentTier && currentTier !== 'None' ? <TierBadge tier={currentTier} size="2xl" showTooltip={true} /> : null}
           </div>
           <div className="space-y-2">
             <h2 className="flex items-center text-2xl font-semibold text-white">
-              <Award className="mr-3 h-6 w-6 text-[#ff950e]" />
+              <Award className="mr-3 h-6 w-6 text-primary" />
               Your Seller Tier
             </h2>
-            <p className="text-base text-gray-300">
+            <p className="text-base text-ink-muted">
               Current level:{' '}
-              <span className="font-semibold text-[#ff950e]">
+              <span className="font-semibold text-primary">
                 {currentTier && currentTier !== 'None' ? currentTier : '—'}
               </span>
             </p>
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-ink-muted">
               {credit > 0 ? (
                 <>
                   You earn an additional <span className="font-semibold text-green-400">{(credit * 100).toFixed(0)}%</span> on
@@ -119,8 +119,8 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
         </div>
 
         {currentTier !== 'Goddess' && nextTier && (
-          <div className="flex w-full flex-col gap-3 rounded-2xl border border-white/5 bg-black/60 p-5 shadow-inner lg:w-auto lg:max-w-xs">
-            <div className="text-sm font-medium text-gray-300">
+          <div className="flex w-full flex-col gap-3 rounded-lg border border-white/5 bg-surface/60 p-5 shadow-inner lg:w-auto lg:max-w-xs">
+            <div className="text-sm font-medium text-ink-muted">
               Next tier:{' '}
               <span className="text-purple-400">{nextTier}</span>
             </div>
@@ -135,13 +135,13 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
       </section>
 
       {/* Simple Interactive Tier Table */}
-      <section className="relative z-10 flex-1 rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-sm">
+      <section className="relative z-10 flex-1 rounded-lg border border-white/5 bg-surface/40 p-6 backdrop-blur-sm">
         <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h3 className="flex items-center gap-2 text-lg font-semibold text-gray-200">
-            <Star className="h-5 w-5 text-[#ff950e]" />
+            <Star className="h-5 w-5 text-primary" />
             Seller Tier Overview
           </h3>
-          <span className="text-xs uppercase tracking-wide text-gray-500">Click a tier to explore benefits</span>
+          <span className="text-xs uppercase tracking-wide text-ink-faint">Click a tier to explore benefits</span>
         </div>
 
         {/* Tier Badges Row */}
@@ -154,12 +154,12 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
               <button
                 key={tier}
                 onClick={() => onTierSelect(isSelected ? null : tier)}
-                className={`group relative flex min-w-[220px] flex-shrink-0 items-center justify-between gap-3 rounded-2xl border-2 px-4 py-3 text-left transition-all duration-300 ${
+                className={`group relative flex min-w-[220px] flex-shrink-0 items-center justify-between gap-3 rounded-lg border-2 px-4 py-3 text-left transition-all duration-300 ${
                   isCurrentTier
-                    ? 'border-[#ff950e] bg-[#ff950e]/10 shadow-[0_12px_30px_-20px_rgba(255,149,14,0.8)]'
+                    ? 'border-primary bg-primary/10 shadow-[0_12px_30px_-20px_rgba(255,149,14,0.8)]'
                     : isSelected
                     ? 'border-purple-400 bg-purple-400/15 shadow-[0_12px_30px_-20px_rgba(168,85,247,0.7)]'
-                    : 'border-gray-700 bg-gray-900/60 hover:border-[#ff950e]/50 hover:bg-gray-900'
+                    : 'border-line bg-gray-900/60 hover:border-primary/50 hover:bg-gray-900'
                 }`}
                 type="button"
                 aria-pressed={isSelected}
@@ -169,10 +169,10 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
                   <TierBadge tier={tier} size="lg" showTooltip={false} />
                   <div className="space-y-1">
                     <div className="text-sm font-medium text-white">{tier}</div>
-                    <div className="text-xs text-gray-400">+{(TIER_LEVELS[tier].credit * 100).toFixed(0)}% bonus</div>
+                    <div className="text-xs text-ink-muted">+{(TIER_LEVELS[tier].credit * 100).toFixed(0)}% bonus</div>
                   </div>
                 </div>
-                {isCurrentTier && <div className="text-xs font-semibold text-[#ff950e]">Current</div>}
+                {isCurrentTier && <div className="text-xs font-semibold text-primary">Current</div>}
               </button>
             );
           })}
@@ -180,13 +180,13 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
 
         {/* Expanded Details */}
         {selectedTierDetails && (
-          <div className="mt-6 rounded-2xl border border-white/5 bg-[#0a0a0a] p-6 shadow-inner animate-in slide-in-from-top duration-300">
+          <div className="mt-6 rounded-lg border border-white/5 bg-surface p-6 shadow-inner animate-in slide-in-from-top duration-300">
             <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-4">
                 <TierBadge tier={selectedTierDetails} size="lg" showTooltip={false} />
                 <div>
-                  <h4 className="text-xl font-bold text-[#ff950e]">{selectedTierDetails} Tier</h4>
-                  <p className="text-sm text-gray-400">
+                  <h4 className="text-xl font-bold text-primary">{selectedTierDetails} Tier</h4>
+                  <p className="text-sm text-ink-muted">
                     Level {(['Tease', 'Flirt', 'Obsession', 'Desire', 'Goddess'] as TierLevel[]).indexOf(selectedTierDetails) + 1} of 5
                   </p>
                 </div>
@@ -201,22 +201,22 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
                   Requirements
                 </h5>
                 <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/60 p-3">
-                    <span className="text-gray-300">Total Sales</span>
-                    <span className="font-medium text-[#ff950e]">{TIER_LEVELS[selectedTierDetails].minSales}+</span>
+                  <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
+                    <span className="text-ink-muted">Total Sales</span>
+                    <span className="font-medium text-primary">{TIER_LEVELS[selectedTierDetails].minSales}+</span>
                   </div>
-                  <div className="text-center text-xs uppercase tracking-wide text-gray-500">or</div>
-                  <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/60 p-3">
-                    <span className="text-gray-300">Total Revenue</span>
-                    <span className="font-medium text-[#ff950e]">
+                  <div className="text-center text-xs uppercase tracking-wide text-ink-faint">or</div>
+                  <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
+                    <span className="text-ink-muted">Total Revenue</span>
+                    <span className="font-medium text-primary">
                       {formatCurrency(TIER_LEVELS[selectedTierDetails].minAmount)}+
                     </span>
                   </div>
 
                   {/* User Progress */}
-                  <div className="mt-4 rounded-xl border border-white/5 bg-black/50 p-4">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Your progress</p>
-                    <div className="space-y-2 text-xs text-gray-300">
+                  <div className="mt-4 rounded-md border border-white/5 bg-surface/50 p-4">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-ink-muted">Your progress</p>
+                    <div className="space-y-2 text-xs text-ink-muted">
                       <div className="flex items-center justify-between">
                         <span>Sales: {userStats.totalSales}</span>
                         <span>Revenue: {formatCurrency(userStats.totalRevenue)}</span>
@@ -239,8 +239,8 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
                   Benefits
                 </h5>
                 <div className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/60 p-3">
-                    <span className="text-gray-300">Bonus Credits</span>
+                  <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
+                    <span className="text-ink-muted">Bonus Credits</span>
                     <span className="font-bold text-green-400">
                       {TIER_LEVELS[selectedTierDetails].credit > 0
                         ? `+${(TIER_LEVELS[selectedTierDetails].credit * 100).toFixed(0)}%`
@@ -250,12 +250,12 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
 
                   {selectedTierDetails !== 'Tease' && (
                     <>
-                      <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/60 p-3">
-                        <span className="text-gray-300">Priority Support</span>
+                      <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
+                        <span className="text-ink-muted">Priority Support</span>
                         <span className="text-green-400">✓</span>
                       </div>
-                      <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/60 p-3">
-                        <span className="text-gray-300">Featured Profile</span>
+                      <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
+                        <span className="text-ink-muted">Featured Profile</span>
                         <span className="text-green-400">✓</span>
                       </div>
                     </>
@@ -263,20 +263,20 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
 
                   {(selectedTierDetails === 'Desire' || selectedTierDetails === 'Goddess') && (
                     <>
-                      <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/60 p-3">
-                        <span className="text-gray-300">Custom Badge</span>
+                      <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
+                        <span className="text-ink-muted">Custom Badge</span>
                         <span className="text-green-400">✓</span>
                       </div>
-                      <div className="flex items-center justify-between rounded-xl border border-white/5 bg-black/60 p-3">
-                        <span className="text-gray-300">VIP Events</span>
+                      <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
+                        <span className="text-ink-muted">VIP Events</span>
                         <span className="text-green-400">✓</span>
                       </div>
                     </>
                   )}
 
                   {selectedTierDetails === 'Goddess' && (
-                    <div className="flex items-center justify-between rounded-xl border border-purple-500/40 bg-gradient-to-r from-purple-900/30 to-pink-900/30 p-3">
-                      <span className="text-gray-300">Elite Status</span>
+                    <div className="flex items-center justify-between rounded-md border border-purple-500/40 bg-surface-raised p-3">
+                      <span className="text-ink-muted">Elite Status</span>
                       <span className="flex items-center gap-1 text-purple-400">
                         <Crown className="h-4 w-4" />
                         VIP

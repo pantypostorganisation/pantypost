@@ -158,7 +158,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
 
   if (loading) {
     return (
-      <div className={`bg-[#1a1a1a] rounded-3xl border border-white/5 p-8 animate-pulse ${sanitizeStrict(className)}`}>
+      <div className={`bg-surface-raised rounded-lg border border-white/5 p-8 animate-pulse ${sanitizeStrict(className)}`}>
         <div className="h-6 bg-gray-800 rounded w-32 mb-4"></div>
         <div className="grid grid-cols-3 gap-4">
           <div className="h-20 bg-gray-800 rounded"></div>
@@ -173,22 +173,22 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`bg-[#1a1a1a] rounded-3xl border border-white/5 p-8 backdrop-blur ${sanitizeStrict(className)}`}
+      className={`bg-surface-raised rounded-lg border border-white/5 p-8 backdrop-blur ${sanitizeStrict(className)}`}
     >
       {/* Header Section */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-          <div className="p-3 bg-[#ff950e]/10 rounded-xl">
-            <Gift className="w-6 h-6 text-[#ff950e]" />
+          <div className="p-3 bg-primary/10 rounded-md">
+            <Gift className="w-6 h-6 text-primary" />
           </div>
           <div>
             <h2 className="text-2xl font-bold text-white">Referral Program</h2>
-            <p className="text-sm text-gray-400 mt-1">Earn 5% lifetime commission on every sale</p>
+            <p className="text-sm text-ink-muted mt-1">Earn 5% lifetime commission on every sale</p>
           </div>
         </div>
         <button
           onClick={handleViewDetails}
-          className="text-sm text-[#ff950e] hover:text-[#ff8c00] transition-colors flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-[#ff950e]/10"
+          className="text-sm text-primary hover:text-primary-hover transition-colors flex items-center gap-1 px-4 py-2 rounded-lg hover:bg-primary/10"
           type="button"
         >
           View Details
@@ -199,65 +199,65 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {/* Total Earnings Card */}
-        <div className="bg-black/40 rounded-2xl border border-white/5 p-5">
+        <div className="bg-surface/40 rounded-lg border border-white/5 p-5">
           <div className="flex items-center justify-between mb-2">
-            <DollarSign className="w-5 h-5 text-[#ff950e]/60" />
+            <DollarSign className="w-5 h-5 text-primary/60" />
             <span className="text-xs text-green-400 font-medium">Lifetime</span>
           </div>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(stats?.stats.totalEarnings || 0)}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Total Earnings</p>
+          <p className="text-xs text-ink-muted mt-1">Total Earnings</p>
         </div>
 
         {/* Monthly Earnings Card - Note: API doesn't return this, showing total */}
-        <div className="bg-black/40 rounded-2xl border border-white/5 p-5">
+        <div className="bg-surface/40 rounded-lg border border-white/5 p-5">
           <div className="flex items-center justify-between mb-2">
-            <TrendingUp className="w-5 h-5 text-[#ff950e]/60" />
+            <TrendingUp className="w-5 h-5 text-primary/60" />
             <span className="text-xs text-blue-400 font-medium">Total</span>
           </div>
           <p className="text-2xl font-bold text-white">
             {formatCurrency(stats?.stats.totalEarnings || 0)}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Earnings</p>
+          <p className="text-xs text-ink-muted mt-1">Earnings</p>
         </div>
 
         {/* Total Referrals Card */}
-        <div className="bg-black/40 rounded-2xl border border-white/5 p-5">
+        <div className="bg-surface/40 rounded-lg border border-white/5 p-5">
           <div className="flex items-center justify-between mb-2">
-            <Users className="w-5 h-5 text-[#ff950e]/60" />
+            <Users className="w-5 h-5 text-primary/60" />
             <span className="text-xs text-purple-400 font-medium">Active</span>
           </div>
           <p className="text-2xl font-bold text-white">
             {stats?.stats.totalReferrals || 0}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Referrals</p>
+          <p className="text-xs text-ink-muted mt-1">Referrals</p>
         </div>
 
         {/* Total Sales Card */}
-        <div className="bg-black/40 rounded-2xl border border-white/5 p-5">
+        <div className="bg-surface/40 rounded-lg border border-white/5 p-5">
           <div className="flex items-center justify-between mb-2">
-            <Target className="w-5 h-5 text-[#ff950e]/60" />
-            <span className="text-xs text-[#ff950e] font-medium">Sales</span>
+            <Target className="w-5 h-5 text-primary/60" />
+            <span className="text-xs text-primary font-medium">Sales</span>
           </div>
           <p className="text-2xl font-bold text-white">
             {stats?.stats.totalSales || 0}
           </p>
-          <p className="text-xs text-gray-400 mt-1">Total Sales</p>
+          <p className="text-xs text-ink-muted mt-1">Total Sales</p>
         </div>
       </div>
 
       {/* Referral Code Section - with Edit capability */}
-      <div className="bg-gradient-to-r from-[#ff950e]/5 to-[#ff6b00]/5 rounded-2xl border border-[#ff950e]/20 p-6 mb-8">
+      <div className="bg-surface-raised rounded-lg border border-primary/20 p-6 mb-8">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Link2 className="w-5 h-5 text-[#ff950e]" />
-            <p className="text-sm font-medium text-gray-300">Your Referral Code</p>
+            <Link2 className="w-5 h-5 text-primary" />
+            <p className="text-sm font-medium text-ink-muted">Your Referral Code</p>
           </div>
           {referralCode?.status === 'active' && referralCode.code && !editingCode && (
             <button
               onClick={() => setEditingCode(true)}
-              className="text-sm text-[#ff950e] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
+              className="text-sm text-primary hover:text-primary-hover transition-colors flex items-center gap-1"
               type="button"
             >
               <Edit2 className="w-4 h-4" />
@@ -277,7 +277,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
               className="space-y-4"
             >
               <div>
-                <label className="block text-sm text-gray-400 mb-2">
+                <label className="block text-sm text-ink-muted mb-2">
                   {referralCode?.code ? 'Update Your Code' : 'Create Your Referral Code'} (3-20 characters)
                 </label>
                 <div className="flex gap-2">
@@ -289,14 +289,14 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
                       setCodeError('');
                     }}
                     maxLength={20}
-                    className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff950e]"
+                    className="flex-1 px-4 py-2 bg-surface/50 border border-line rounded-lg text-white focus:outline-none focus:border-primary"
                     placeholder="Enter your custom code"
                     disabled={saving}
                   />
                   <button
                     onClick={handleUpdateCode}
                     disabled={saving || !newCode || newCode.length < 3}
-                    className="px-4 py-2 bg-[#ff950e] text-black rounded-lg hover:bg-[#ff8c00] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    className="px-4 py-2 bg-primary text-black rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                     type="button"
                   >
                     {saving ? (
@@ -323,7 +323,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
                 {codeError && (
                   <p className="text-red-400 text-sm mt-1">{codeError}</p>
                 )}
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-ink-faint mt-2">
                   Use letters, numbers, hyphens, and underscores only
                 </p>
               </div>
@@ -339,19 +339,19 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
             >
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="flex-1">
-                  <p className="text-3xl font-mono font-bold text-[#ff950e] mb-2">
+                  <p className="text-3xl font-mono font-bold text-primary mb-2">
                     {sanitizeStrict(referralCode.code)}
                   </p>
-                  <p className="text-xs text-gray-500 break-all">
+                  <p className="text-xs text-ink-faint break-all">
                     {referralService.formatReferralUrl(referralCode.code)}
                   </p>
                 </div>
                 <button
                   onClick={handleCopyCode}
-                  className={`px-6 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2 ${
+                  className={`px-6 py-3 rounded-md font-medium transition-all flex items-center justify-center gap-2 ${
                     copied
                       ? 'bg-green-500 text-white'
-                      : 'bg-[#ff950e] text-black hover:bg-[#ff8c00]'
+                      : 'bg-primary text-black hover:bg-primary-hover'
                   }`}
                   type="button"
                 >
@@ -372,11 +372,11 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
               {/* Code Stats */}
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
                 <div className="text-center">
-                  <p className="text-xs text-gray-400">Times Used</p>
+                  <p className="text-xs text-ink-muted">Times Used</p>
                   <p className="text-lg font-semibold text-white">{referralCode.usageCount || 0}</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs text-gray-400">Conversion Rate</p>
+                  <p className="text-xs text-ink-muted">Conversion Rate</p>
                   <p className="text-lg font-semibold text-green-400">
                     {referralCode.conversionRate?.toFixed(1) || 0}%
                   </p>
@@ -389,13 +389,13 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
 
       {/* Recent Referrals Preview */}
       {stats && stats.stats.activeReferrals && stats.stats.activeReferrals.length > 0 && (
-        <div className="bg-black/40 rounded-2xl border border-white/5 p-6">
+        <div className="bg-surface/40 rounded-lg border border-white/5 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-              <Award className="w-4 h-4 text-[#ff950e]" />
+            <h3 className="text-sm font-medium text-ink-muted flex items-center gap-2">
+              <Award className="w-4 h-4 text-primary" />
               Recent Referrals
             </h3>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-ink-faint">
               Showing {Math.min(3, stats.stats.activeReferrals.length)} of {stats.stats.activeReferrals.length}
             </span>
           </div>
@@ -403,15 +403,15 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
             {stats.stats.activeReferrals.slice(0, 3).map((referral, index) => (
               <div
                 key={`${referral.username}-${index}`}
-                className="flex items-center justify-between p-3 rounded-lg bg-black/60 border border-white/5"
+                className="flex items-center justify-between p-3 rounded-lg bg-surface/60 border border-white/5"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] flex items-center justify-center text-xs font-bold text-black">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-black">
                     {sanitizeStrict(referral.username).charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <span className="text-sm text-white">{sanitizeStrict(referral.username)}</span>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-ink-faint">
                       Joined {new Date(referral.joinedDate).toLocaleDateString()}
                     </p>
                   </div>
@@ -420,7 +420,7 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
                   <span className="text-sm font-semibold text-green-400">
                     +{formatCurrency(referral.earnings)}
                   </span>
-                  <p className="text-xs text-gray-500">{referral.sales} {referral.sales === 1 ? 'sale' : 'sales'}</p>
+                  <p className="text-xs text-ink-faint">{referral.sales} {referral.sales === 1 ? 'sale' : 'sales'}</p>
                 </div>
               </div>
             ))}
@@ -430,18 +430,18 @@ export default function ReferralSection(rawProps: ReferralSectionProps) {
 
       {/* Call to Action for New Users */}
       {(!stats || !stats.stats || stats.stats.totalReferrals === 0) && (
-        <div className="mt-6 p-6 bg-gradient-to-r from-[#ff950e]/10 to-[#ff8c00]/10 rounded-2xl border border-[#ff950e]/20">
+        <div className="mt-6 p-6 bg-surface-raised rounded-lg border border-primary/20">
           <div className="flex items-start gap-4">
-            <div className="p-2 bg-[#ff950e]/20 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-[#ff950e]" />
+            <div className="p-2 bg-primary/20 rounded-lg">
+              <TrendingUp className="w-5 h-5 text-primary" />
             </div>
             <div className="flex-1">
               <h4 className="text-base font-semibold text-white mb-2">Start Earning Passive Income!</h4>
-              <p className="text-sm text-gray-300 mb-3">
+              <p className="text-sm text-ink-muted mb-3">
                 Share your unique referral code with potential buyers and earn 5% commission on every purchase they make. 
                 Your earnings continue for as long as they remain active on the platform.
               </p>
-              <ul className="space-y-1 text-xs text-gray-400">
+              <ul className="space-y-1 text-xs text-ink-muted">
                 <li className="flex items-center gap-2">
                   <Check className="w-3 h-3 text-green-400" />
                   <span>Lifetime commissions on all referred sales</span>

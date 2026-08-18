@@ -2,7 +2,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ListingDetailPage from '@/app/browse/[id]/page';
+import ListingDetailPage from '@/app/browse/[id]/ListingClient';
 
 // Mock components
 jest.mock('@/components/BanCheck', () => ({

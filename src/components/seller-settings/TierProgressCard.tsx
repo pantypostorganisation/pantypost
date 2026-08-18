@@ -107,18 +107,18 @@ export default function TierProgressCard(rawProps: TierProgressCardProps) {
   const revenuePct = clampPercent(tierProgress.revenueProgress);
 
   return (
-    <div className="relative flex h-full flex-col justify-between gap-10 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#161616] via-[#101010] to-[#161616] p-8 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.9)]">
-      <div className="pointer-events-none absolute -top-10 -right-6 h-40 w-40 rounded-full bg-[#ff950e]/10 blur-3xl" />
-      <div className="absolute top-8 right-8 text-[#ff950e]/40">{getTierIcon(currentTier)}</div>
+    <div className="relative flex h-full flex-col justify-between gap-10 overflow-hidden rounded-lg border border-white/10 bg-surface-raised p-8 shadow-[0_24px_80px_-40px_rgba(0,0,0,0.9)]">
+      <div className="pointer-events-none absolute -top-10 -right-6 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />
+      <div className="absolute top-8 right-8 text-primary/40">{getTierIcon(currentTier)}</div>
 
       <header className="flex flex-col items-start gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
-          <p className="text-sm font-medium uppercase tracking-widest text-[#ff950e]/70">Seller insights</p>
+          <p className="text-sm font-medium uppercase tracking-widest text-primary/70">Seller insights</p>
           <h2 className="text-2xl font-semibold text-white">Seller Tier Progress</h2>
         </div>
         <button
           onClick={() => onTierClick(currentTier)}
-          className="inline-flex items-center rounded-full border border-[#ff950e]/40 px-4 py-2 text-sm font-medium text-[#ff950e] transition hover:border-[#ff950e]/60 hover:bg-[#ff950e]/10"
+          className="inline-flex items-center rounded-md border border-primary/40 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary/60 hover:bg-primary/10"
           type="button"
         >
           View Details
@@ -126,50 +126,50 @@ export default function TierProgressCard(rawProps: TierProgressCardProps) {
       </header>
 
       {/* Current Tier Display */}
-      <section className="flex flex-col justify-between gap-6 rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-sm sm:flex-row sm:items-center">
+      <section className="flex flex-col justify-between gap-6 rounded-lg border border-white/5 bg-surface/40 p-6 backdrop-blur-sm sm:flex-row sm:items-center">
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-gray-400">Current Tier</p>
+          <p className="text-xs uppercase tracking-wide text-ink-muted">Current Tier</p>
           <div className="flex items-center gap-3">
             {currentTier !== 'None' ? <TierBadge tier={currentTier} size="lg" /> : null}
             <span className="text-2xl font-semibold text-white">{currentTier}</span>
           </div>
         </div>
         <div className="grid w-full grid-cols-1 gap-4 sm:w-auto sm:grid-cols-2">
-          <div className="rounded-2xl border border-white/5 bg-black/60 p-4 text-center shadow-inner">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Total Sales</p>
-            <p className="text-2xl font-bold text-[#ff950e]">{userStats.totalSales}</p>
+          <div className="rounded-lg border border-white/5 bg-surface/60 p-4 text-center shadow-inner">
+            <p className="text-xs uppercase tracking-wide text-ink-muted">Total Sales</p>
+            <p className="text-2xl font-bold text-primary">{userStats.totalSales}</p>
           </div>
-          <div className="rounded-2xl border border-white/5 bg-black/60 p-4 text-center shadow-inner">
-            <p className="text-xs uppercase tracking-wide text-gray-400">Total Revenue</p>
-            <p className="text-2xl font-bold text-[#ff950e]">{formatCurrency(userStats.totalRevenue)}</p>
+          <div className="rounded-lg border border-white/5 bg-surface/60 p-4 text-center shadow-inner">
+            <p className="text-xs uppercase tracking-wide text-ink-muted">Total Revenue</p>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(userStats.totalRevenue)}</p>
           </div>
         </div>
       </section>
 
       {/* Progress to Next Tier */}
       {currentTier !== 'Goddess' && nextRequirements && (
-        <section className="flex flex-col gap-6 rounded-2xl border border-white/5 bg-black/40 p-6 backdrop-blur-sm">
+        <section className="flex flex-col gap-6 rounded-lg border border-white/5 bg-surface/40 p-6 backdrop-blur-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium text-gray-200">
-              Progress to <span className="text-[#ff950e]">{nextTier}</span>
+              Progress to <span className="text-primary">{nextTier}</span>
             </p>
             <div className="flex items-center gap-3">
               <TierBadge tier={nextTier} size="sm" />
-              <span className="text-xs uppercase tracking-wide text-gray-400">Next milestone</span>
+              <span className="text-xs uppercase tracking-wide text-ink-muted">Next milestone</span>
             </div>
           </div>
 
           {/* Sales Progress */}
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between text-xs text-gray-400">
-              <span className="font-medium text-gray-300">
+            <div className="flex flex-wrap items-center justify-between text-xs text-ink-muted">
+              <span className="font-medium text-ink-muted">
                 Sales: {userStats.totalSales}/{nextRequirements.minSales}
               </span>
-              <span className="text-[#ff950e]">{salesPct.toFixed(0)}%</span>
+              <span className="text-primary">{salesPct.toFixed(0)}%</span>
             </div>
-            <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
+            <div className="h-3 w-full overflow-hidden rounded-md bg-gray-800">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff7a0a] to-[#ff6b00] transition-all duration-500"
+                className="h-full rounded-md bg-surface-raised transition-all duration-500"
                 style={{ width: `${salesPct}%` }}
               />
             </div>
@@ -177,30 +177,33 @@ export default function TierProgressCard(rawProps: TierProgressCardProps) {
 
           {/* Revenue Progress */}
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between text-xs text-gray-400">
-              <span className="font-medium text-gray-300">
+            <div className="flex flex-wrap items-center justify-between text-xs text-ink-muted">
+              <span className="font-medium text-ink-muted">
                 Revenue: {formatCurrency(userStats.totalRevenue)}/{formatCurrency(nextRequirements.minAmount)}
               </span>
-              <span className="text-[#ff950e]">{revenuePct.toFixed(0)}%</span>
+              <span className="text-primary">{revenuePct.toFixed(0)}%</span>
             </div>
-            <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
+            <div className="h-3 w-full overflow-hidden rounded-md bg-gray-800">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-[#ff950e] via-[#ff7a0a] to-[#ff6b00] transition-all duration-500"
+                className="h-full rounded-md bg-surface-raised transition-all duration-500"
                 style={{ width: `${revenuePct}%` }}
               />
             </div>
           </div>
 
-          <p className="text-center text-xs text-gray-400">
-            Reach both milestones to unlock <span className="text-[#ff950e] font-medium">{nextTier}</span> tier
+          <p className="text-center text-xs text-ink-muted">
+            Reach both milestones to unlock <span className="text-primary font-medium">{nextTier}</span> tier
           </p>
         </section>
       )}
 
       {/* Max Tier Reached */}
+      {/* Was an orange gradient with black text. Flattened to a grey
+          surface it kept the black text and became unreadable, so it
+          keeps a brand fill: black on #ff950e is 9.56:1 and passes AA. */}
       {currentTier === 'Goddess' && (
-        <section className="rounded-2xl border border-[#ff950e]/40 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] p-6 text-center text-black shadow-lg">
-          <p className="text-lg font-bold">🎉 Maximum Tier Achieved!</p>
+        <section className="rounded-lg border border-primary bg-primary p-6 text-center text-black">
+          <p className="text-lg font-bold">Maximum tier achieved</p>
           <p className="text-sm font-medium">You've reached the highest seller tier</p>
         </section>
       )}

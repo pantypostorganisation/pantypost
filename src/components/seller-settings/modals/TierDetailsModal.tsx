@@ -114,7 +114,7 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
       case 'Desire':
         return 'from-pink-500 to-pink-700';
       case 'Goddess':
-        return 'from-[#ff950e] to-[#ff6b00]';
+        return 'bg-primary';
       default:
         return 'from-gray-500 to-gray-700';
     }
@@ -122,12 +122,12 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-surface bg-opacity-75 flex items-center justify-center z-50 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`${selectedTier} Tier details`}
     >
-      <div className="bg-[#1a1a1a] rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+      <div className="bg-surface-raised rounded-md max-w-2xl w-full max-h-[80vh] overflow-y-auto">
         {/* Header */}
         <div className={`bg-gradient-to-r ${getTierColor(selectedTier)} p-6 relative`}>
           <button onClick={onClose} className="absolute top-4 right-4 text-white hover:text-gray-200" type="button">
@@ -148,17 +148,17 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
           {/* Requirements */}
           <div>
             <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
-              <Target className="w-5 h-5 text-[#ff950e]" />
+              <Target className="w-5 h-5 text-primary" />
               Requirements
             </h3>
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-black rounded-lg p-4">
-                <p className="text-sm text-gray-400">Minimum Sales</p>
-                <p className="text-2xl font-bold text-[#ff950e]">{tierInfo.minSales.toLocaleString()}</p>
+              <div className="bg-surface rounded-lg p-4">
+                <p className="text-sm text-ink-muted">Minimum Sales</p>
+                <p className="text-2xl font-bold text-primary">{tierInfo.minSales.toLocaleString()}</p>
               </div>
-              <div className="bg-black rounded-lg p-4">
-                <p className="text-sm text-gray-400">Minimum Revenue</p>
-                <p className="text-2xl font-bold text-[#ff950e]">{formatCurrency(tierInfo.minAmount)}</p>
+              <div className="bg-surface rounded-lg p-4">
+                <p className="text-sm text-ink-muted">Minimum Revenue</p>
+                <p className="text-2xl font-bold text-primary">{formatCurrency(tierInfo.minAmount)}</p>
               </div>
             </div>
           </div>
@@ -173,7 +173,7 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
               {getBenefitsForTier(selectedTier).map((benefit, index) => (
                 <li key={index} className="flex items-start gap-2">
                   <span className="text-green-500 mt-1">✓</span>
-                  <span className="text-gray-300">{benefit}</span>
+                  <span className="text-ink-muted">{benefit}</span>
                 </li>
               ))}
             </ul>
@@ -182,15 +182,15 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
           {/* Tier Progression */}
           <div>
             <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-[#ff950e]" />
+              <TrendingUp className="w-5 h-5 text-primary" />
               Tier Progression
             </h3>
             <div className="flex items-center justify-between">
               {tiers.map((tier, index) => (
                 <div key={tier} className="flex items-center">
                   <div className={`flex flex-col items-center ${tier === selectedTier ? 'scale-110' : ''}`}>
-                    <TierBadge tier={tier} size="sm" className={tier === selectedTier ? 'ring-2 ring-[#ff950e]' : 'opacity-60'} />
-                    <span className={`text-xs mt-1 ${tier === selectedTier ? 'text-[#ff950e] font-bold' : 'text-gray-500'}`}>
+                    <TierBadge tier={tier} size="sm" className={tier === selectedTier ? 'ring-2 ring-primary' : 'opacity-60'} />
+                    <span className={`text-xs mt-1 ${tier === selectedTier ? 'text-primary font-bold' : 'text-ink-faint'}`}>
                       {tier}
                     </span>
                   </div>
@@ -202,7 +202,7 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
 
           {/* Action Button */}
           <div className="flex justify-center pt-4">
-            <button onClick={onClose} className="px-6 py-3 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition" type="button">
+            <button onClick={onClose} className="px-6 py-3 bg-primary text-black font-bold rounded-lg hover:bg-primary-hover transition" type="button">
               Got it!
             </button>
           </div>

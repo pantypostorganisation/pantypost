@@ -44,7 +44,7 @@ export default function CoverPhotoCard({
         </div>
 
         {isPending && (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-warning-soft bg-warning-soft px-3 py-1 text-xs font-medium text-warning">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-warning-soft bg-warning-soft px-3 py-1 text-xs font-medium text-warning">
             <Clock3 className="h-3.5 w-3.5" />
             Awaiting review
           </span>
@@ -93,7 +93,7 @@ export default function CoverPhotoCard({
           type="button"
           onClick={openPicker}
           disabled={isUploading}
-          className="rounded-full border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-line-strong disabled:opacity-60"
+          className="rounded-md border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-line-strong disabled:opacity-60"
         >
           {coverPhoto ? 'Replace' : 'Upload'}
         </button>
@@ -103,7 +103,7 @@ export default function CoverPhotoCard({
             type="button"
             onClick={onRemove}
             disabled={isUploading}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line px-4 py-2 text-sm font-medium text-ink-muted transition-colors hover:border-danger hover:text-danger disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line px-4 py-2 text-sm font-medium text-ink-muted transition-colors hover:border-danger hover:text-danger disabled:opacity-60"
           >
             <Trash2 className="h-3.5 w-3.5" />
             {isPending ? 'Withdraw' : 'Remove'}
