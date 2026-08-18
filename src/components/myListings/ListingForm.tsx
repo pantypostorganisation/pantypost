@@ -115,9 +115,21 @@ export default function ListingForm({
           ? 'Reserve price must be at least the starting bid'
           : 'Valid reserve price'
       },
+      /* Selected files are NOT images yet. They only count once
+         "Add to Listing" has uploaded them and pushed URLs into
+         imageUrls -- which is what the save path requires.
+
+         The old copy said "At least one image is required" while the
+         seller was looking at their own thumbnails on screen, with the
+         submit button greyed out and nothing indicating why. Naming the
+         button is the whole fix. */
       images: {
         isValid: formState.imageUrls.length > 0,
-        message: formState.imageUrls.length === 0 ? 'At least one image is required' : `${formState.imageUrls.length} image${formState.imageUrls.length === 1 ? '' : 's'} added`
+        message: formState.imageUrls.length > 0
+          ? `${formState.imageUrls.length} image${formState.imageUrls.length === 1 ? '' : 's'} added`
+          : selectedFiles.length > 0
+          ? `Click "Add to Listing" to upload your ${selectedFiles.length} selected file${selectedFiles.length === 1 ? '' : 's'}`
+          : 'At least one image is required'
       },
       tags: {
         count: tagsLength,
@@ -311,14 +323,14 @@ export default function ListingForm({
             <AlertCircle className="w-5 h-5 text-red-400" />
             <h3 className="font-semibold text-red-300">Please fix the following issues:</h3>
           </div>
-          <ul className="text-sm text-red-200 space-y-1">
-            {!validation.title.isValid && touched.title && <li>â€¢ {validation.title.message}</li>}
-            {!validation.description.isValid && touched.description && <li>â€¢ {validation.description.message}</li>}
-            {!validation.price.isValid && touched.price && <li>â€¢ {validation.price.message}</li>}
-            {!validation.startingPrice.isValid && touched.startingPrice && <li>â€¢ {validation.startingPrice.message}</li>}
-            {!validation.reservePrice.isValid && touched.reservePrice && <li>â€¢ {validation.reservePrice.message}</li>}
-            {!validation.images.isValid && <li>â€¢ {validation.images.message}</li>}
-            {!validation.tags.isValid && touched.tags && <li>â€¢ {validation.tags.message}</li>}
+          <ul className="text-sm text-red-200 space-y-1 list-disc list-inside">
+            {!validation.title.isValid && touched.title && <li>{validation.title.message}</li>}
+            {!validation.description.isValid && touched.description && <li>{validation.description.message}</li>}
+            {!validation.price.isValid && touched.price && <li>{validation.price.message}</li>}
+            {!validation.startingPrice.isValid && touched.startingPrice && <li>{validation.startingPrice.message}</li>}
+            {!validation.reservePrice.isValid && touched.reservePrice && <li>{validation.reservePrice.message}</li>}
+            {!validation.images.isValid && <li>{validation.images.message}</li>}
+            {!validation.tags.isValid && touched.tags && <li>{validation.tags.message}</li>}
           </ul>
         </div>
       )}
@@ -881,13 +893,13 @@ export default function ListingForm({
               <AlertCircle className="w-6 h-6 text-purple-400 flex-shrink-0 mt-0.5" />
               <div>
                 <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
-                <ul className="text-sm text-gray-300 space-y-1">
+                <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
                   <li>
-                    â€¢ Auctions run for {formState.auctionDuration === '0.000694' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing
+                    Auctions run for {formState.auctionDuration === '0.000694' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing
                   </li>
-                  <li>â€¢ Bidders must have sufficient funds in their wallet to place a bid</li>
-                  <li>â€¢ If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
-                  <li>â€¢ You can cancel an auction at any time before it ends</li>
+                  <li>Bidders must have sufficient funds in their wallet to place a bid</li>
+                  <li>If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
+                  <li>You can cancel an auction at any time before it ends</li>
                 </ul>
               </div>
             </div>
@@ -998,3 +1010,4 @@ export default function ListingForm({
     </SecureForm>
   );
 }
+

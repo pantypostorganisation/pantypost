@@ -33,6 +33,35 @@ function coerceProfileData(profileRespData: any): any {
   return profileRespData;
 }
 
+/* Coercions used ONLY to seed state from the server payload. They mirror
+   what the client fetch does further down, so a seeded value and the
+   value that replaces it a moment later cannot disagree in format --
+   which is also what keeps the server and client first renders
+   byte-identical and avoids a hydration warning. */
+function seedNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(n) ? n : null;
+}
+
+function seedCount(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function seedGallery(seller: any): string[] {
+  if (!seller || !Array.isArray(seller.galleryImages)) return [];
+  return seller.galleryImages
+    .map((u: string) => normalizeImageUrl(u))
+    .filter((u: string | null): u is string => !!u);
+}
+
+function seedCountry(seller: any): string | null {
+  const raw = typeof seller?.country === 'string' ? seller.country : '';
+  if (!raw) return null;
+  return sanitizeStrict(raw) || null;
+}
+
 /* `initialSeller` is the seller record the SERVER already fetched for
    generateMetadata. Passing it in means the page renders with the
    seller's name, bio and avatar in the very first HTML -- no spinner for
@@ -48,47 +77,64 @@ export function useSellerProfile(username: string, initialSeller?: any) {
   const [sellerUser, setSellerUser] = useState<any>(initialSeller ?? null);
 
   /* Whether the seller fetch has finished, regardless of outcome.
-
      The hook had no loading flag, so SellerClient used `!user` as a
-
-     stand-in -- and `user` is the VIEWER, not the seller. That made
-
-     the page show "Loading profile..." forever to anyone signed out,
-
+     stand-in -- and `user` is the VIEWER, not the seller. That made the
+     page show "Loading profile..." forever to anyone signed out,
      including every crawler. A real flag lets the page distinguish
-
      "still fetching" from "no such seller". */
-
-  /* Seeded from the server payload where available, so the first paint
-
-     is the real profile rather than empty strings that fill in a moment
-
-     later. Each still gets overwritten by the client fetch. */
-
   const [hasLoaded, setHasLoaded] = useState(false);
+
+  /* Seeded from the server payload where available.
+
+     Previously only sellerUser, bio and isVerified were seeded, so the
+     server-rendered HTML carried the name and bio and then left the
+     header's credentials line -- rating, review count, sales, years --
+     blank, with no avatar and no cover photo. page.tsx had already
+     fetched every one of those fields to build the metadata, and they
+     were being thrown away and re-requested on the client.
+
+     That costs more than a crawler impression: the OG preview for a shop
+     link pasted into Reddit or X is built from this first render, and
+     that link is the growth channel.
+
+     Every value below is still overwritten by the client fetch, which
+     remains the source of truth for anything live. */
   const [bio, setBio] = useState<any>(initialSeller?.bio ?? '');
-  const [profilePic, setProfilePic] = useState<string | null>(null);
-  const [coverPhoto, setCoverPhoto] = useState<string | null>(null);
-  const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(null);
-  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [profilePic, setProfilePic] = useState<string | null>(() =>
+    normalizeImageUrl(initialSeller?.profilePic ?? initialSeller?.profilePicture ?? null)
+  );
+  const [coverPhoto, setCoverPhoto] = useState<string | null>(() =>
+    normalizeImageUrl(initialSeller?.coverPhoto ?? null)
+  );
+  const [subscriptionPrice, setSubscriptionPrice] = useState<number | null>(() =>
+    seedNumber(initialSeller?.subscriptionPrice)
+  );
+  const [galleryImages, setGalleryImages] = useState<string[]>(() => seedGallery(initialSeller));
   const [isVerified, setIsVerified] = useState<any>(Boolean(initialSeller?.isVerified));
   const [sellerTierInfo, setSellerTierInfo] = useState<TierInfo | null>(null);
-  const [country, setCountry] = useState<string | null>(null);
-  const [isLocationPublic, setIsLocationPublic] = useState(true);
+  const [country, setCountry] = useState<string | null>(() => seedCountry(initialSeller));
+  const [isLocationPublic, setIsLocationPublic] = useState<boolean>(() =>
+    typeof initialSeller?.isLocationPublic === 'boolean' ? initialSeller.isLocationPublic : true
+  );
 
   const [totalPhotos, setTotalPhotos] = useState(0);
   const [totalVideos] = useState(0);
-  const [followers, setFollowers] = useState(0);
-  const [averageRating, setAverageRating] = useState<number | null>(null);
+  const [followers, setFollowers] = useState(() => seedCount(initialSeller?.subscriberCount));
+  const [averageRating, setAverageRating] = useState<number | null>(() =>
+    typeof initialSeller?.rating === 'number' ? initialSeller.rating : null
+  );
   const [reviews, setReviews] = useState<any[]>([]);
 
   // Shop-header stats. These come from the profile endpoint, which
   // aggregates them from the Review and Order collections rather than
   // reading the User counters (which nothing writes to).
-  const [reviewCount, setReviewCount] = useState(0);
-  const [totalSales, setTotalSales] = useState(0);
+  const [reviewCount, setReviewCount] = useState(() => seedCount(initialSeller?.reviewCount));
+  const [totalSales, setTotalSales] = useState(() => seedCount(initialSeller?.totalSales));
   const [listingCount, setListingCount] = useState(0);
-  const [memberSince, setMemberSince] = useState<string | null>(null);
+  const [memberSince, setMemberSince] = useState<string | null>(() => {
+    const raw = initialSeller?.createdAt ?? initialSeller?.joinedDate ?? null;
+    return raw ? String(raw) : null;
+  });
 
   const [standardListings, setStandardListings] = useState<any[]>([]);
   const [premiumListings, setPremiumListings] = useState<any[]>([]);
@@ -555,3 +601,4 @@ export function useSellerProfile(username: string, initialSeller?: any) {
     goToNextSlide,
   };
 }
+
