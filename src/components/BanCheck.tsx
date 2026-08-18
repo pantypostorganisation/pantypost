@@ -251,7 +251,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="max-w-4xl w-full bg-[#1a1a1a] border-2 border-red-800 rounded-xl p-8 shadow-2xl">
+      <div className="max-w-4xl w-full bg-[#1a1a1a] border-2 border-red-800 rounded-lg p-8 shadow-2xl">
         {/* Connection Error Banner */}
         {connectionError && (
           <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-800 rounded-lg flex items-center gap-3">
@@ -549,7 +549,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
               setRetryCount(0);
               void checkBanStatus();
             }}
-            className="px-6 py-3 bg-[#ff950e] text-black rounded-lg hover:bg-[#e88800] transition-colors font-medium flex items-center gap-2"
+            className="px-6 py-3 bg-[#ff950e] text-black rounded-lg hover:bg-primary-hover transition-colors font-medium flex items-center gap-2"
             disabled={connectionError && retryCount >= maxRetries}
           >
             <RefreshCw size={16} className={connectionError ? 'animate-spin' : ''} />
@@ -588,3 +588,5 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
 };
 
 export default BanCheck;
+
+

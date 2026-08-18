@@ -244,7 +244,7 @@ export default function PrivacyPolicyPage() {
             </p>
           </section>
 
-          <section className="rounded-xl border border-white/10 bg-[#0b0b0f] p-5">
+          <section className="rounded-lg border border-white/10 bg-[#0b0b0f] p-5">
             <p className="text-sm">
               Questions:{' '}
               <a href="mailto:support@pantypost.com" className="text-[#ff950e] hover:underline">

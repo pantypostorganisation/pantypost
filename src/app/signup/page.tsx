@@ -46,7 +46,7 @@ const ReferralCodeInput: React.FC<{
         <button
           type="button"
           onClick={() => setIsExpanded(true)}
-          className="w-full p-3 bg-gradient-to-r from-[#ff950e]/10 to-[#ff6b00]/10 border border-[#ff950e]/20 rounded-lg text-left hover:border-[#ff950e]/40 transition-all duration-200 group"
+          className="w-full p-3 bg-gradient-to-r from-primary/10 to-primary-press/10 border border-[#ff950e]/20 rounded-lg text-left hover:border-[#ff950e]/40 transition-all duration-200 group"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -350,7 +350,7 @@ export default function SignupPage() {
 
           {/* Form Card */}
           <motion.div
-            className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl"
+            className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-lg p-6 shadow-xl"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.4, delay: 0.2 }}
@@ -491,3 +491,5 @@ export default function SignupPage() {
     </div>
   );
 }
+
+

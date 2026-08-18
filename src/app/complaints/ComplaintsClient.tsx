@@ -152,12 +152,12 @@ export default function ComplaintsPage() {
     return (
       <main className="min-h-screen bg-black text-white px-4 py-16">
         <div className="mx-auto max-w-2xl">
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-8">
+          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-8">
             <CheckCircle2 className="h-12 w-12 text-emerald-400 mb-4" />
             <h1 className="text-2xl font-bold mb-3">Complaint received</h1>
             <p className="text-gray-300 mb-6">{submitted.message}</p>
 
-            <div className="rounded-xl border border-white/10 bg-black/40 p-4 mb-6">
+            <div className="rounded-lg border border-white/10 bg-black/40 p-4 mb-6">
               <p className="text-xs uppercase tracking-wider text-gray-500 mb-1">
                 Your reference
               </p>
@@ -170,7 +170,7 @@ export default function ComplaintsPage() {
             </div>
 
             {submitted.contentRemoved && (
-              <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 mb-6">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 mb-6">
                 <p className="text-sm text-amber-200">
                   The content you reported has already been withdrawn from public view while we
                   investigate.
@@ -209,7 +209,7 @@ export default function ComplaintsPage() {
           </p>
         </header>
 
-        <div className="space-y-5 rounded-2xl border border-white/10 bg-[#0b0b0f] p-6">
+        <div className="space-y-5 rounded-lg border border-white/10 bg-[#0b0b0f] p-6">
           {/* Category */}
           <div>
             <label htmlFor="complaintType" className="block text-sm font-medium mb-2">
@@ -235,7 +235,7 @@ export default function ComplaintsPage() {
           </div>
 
           {isUrgent && (
-            <div className="flex gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+            <div className="flex gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
               <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" />
               <p className="text-sm text-amber-100/90">
                 This is treated as urgent. If you give us a link, the content will be withdrawn
@@ -339,7 +339,7 @@ export default function ComplaintsPage() {
           </div>
 
           {/* Depiction declaration */}
-          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-black/40 p-4">
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-black/40 p-4">
             <input
               type="checkbox"
               checked={declaresDepicted}
@@ -360,7 +360,7 @@ export default function ComplaintsPage() {
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#ff950e] px-4 py-3 font-semibold text-black transition hover:bg-[#e88800] disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#ff950e] px-4 py-3 font-semibold text-black transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? (
               <>
@@ -378,7 +378,7 @@ export default function ComplaintsPage() {
         </div>
 
         {/* Status lookup */}
-        <section className="mt-10 rounded-2xl border border-white/10 bg-[#0b0b0f] p-6">
+        <section className="mt-10 rounded-lg border border-white/10 bg-[#0b0b0f] p-6">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
             <Search className="h-5 w-5 text-[#ff950e]" /> Check an existing complaint
           </h2>
@@ -406,7 +406,7 @@ export default function ComplaintsPage() {
           {lookupError && <p className="mt-3 text-sm text-red-300">{lookupError}</p>}
 
           {lookupResult && (
-            <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-4 text-sm">
+            <div className="mt-4 rounded-lg border border-white/10 bg-black/40 p-4 text-sm">
               <p className="font-mono text-[#ff950e]">{lookupResult.referenceCode}</p>
               <p className="mt-2 text-gray-300">
                 Status: <span className="text-white">{String(lookupResult.status).replace(/_/g, ' ')}</span>

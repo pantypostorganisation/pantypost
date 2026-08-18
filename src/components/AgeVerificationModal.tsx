@@ -77,7 +77,7 @@ export default function AgeVerificationModal(): React.ReactElement | null {
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-lg z-[100] flex items-center justify-center p-4">
-      <div className="bg-[#161616] border-2 border-[#ff950e]/50 p-8 rounded-2xl max-w-md w-full shadow-2xl shadow-[#ff950e]/10">
+      <div className="bg-[#161616] border-2 border-[#ff950e]/50 p-8 rounded-lg max-w-md w-full shadow-2xl shadow-[#ff950e]/10">
         <h2 className="text-2xl font-bold text-[#ff950e] mb-4 text-center">Age Verification</h2>
         <p className="mb-6 text-center text-gray-300">
           You must be at least 18 years old to enter this site. By entering, you confirm you are
@@ -93,7 +93,7 @@ export default function AgeVerificationModal(): React.ReactElement | null {
           <button
             onClick={handleYes}
             type="button"
-            className="group relative inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-[#ff950e] to-[#ffb347] text-black font-bold rounded-full overflow-hidden transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg hover:shadow-[#ff950e]/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            className="group relative inline-flex items-center justify-center px-6 py-3 bg-gradient-to-r from-primary to-primary-hover text-black font-bold rounded-full overflow-hidden transition-all duration-300 ease-out hover:scale-105 hover:shadow-lg hover:shadow-[#ff950e]/30 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           >
             <span className="relative z-10">I am 18 or over</span>
           </button>
@@ -109,3 +109,5 @@ export default function AgeVerificationModal(): React.ReactElement | null {
     </div>
   );
 }
+
+

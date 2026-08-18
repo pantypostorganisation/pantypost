@@ -2,6 +2,7 @@
 'use client';
 
 import { Suspense, useCallback } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import BanCheck from '@/components/BanCheck';
 import HeroSection from '@/components/homepage/HeroSection';
@@ -36,7 +37,7 @@ function FeaturedSkeleton() {
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 md:gap-5 lg:gap-6">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-[#131313] rounded-lg sm:rounded-xl border border-white/10 overflow-hidden">
+          <div key={i} className="bg-[#131313] rounded-lg sm:rounded-lg border border-white/10 overflow-hidden">
             <div className="aspect-[4/5] sm:aspect-square bg-gray-800/50 animate-pulse"></div>
             <div className="p-3 sm:p-4 md:p-5 space-y-2 sm:space-y-3">
               <div className="h-4 sm:h-5 bg-gray-800/50 rounded animate-pulse"></div>
@@ -58,7 +59,7 @@ function FeaturesSkeleton() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-[#131313] rounded-xl p-6 border border-white/10 animate-pulse">
+            <div key={i} className="bg-[#131313] rounded-lg p-6 border border-white/10 animate-pulse">
               <div className="w-12 h-12 bg-gray-700 rounded-full mb-5"></div>
               <div className="h-6 bg-gray-700 rounded w-3/4 mb-3"></div>
               <div className="space-y-2">
@@ -83,9 +84,9 @@ function FAQSkeleton() {
         </div>
         <div className="grid gap-6">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="bg-[#131313] rounded-2xl p-6 sm:p-8 border border-white/10 animate-pulse">
+            <div key={i} className="bg-[#131313] rounded-lg p-6 sm:p-8 border border-white/10 animate-pulse">
               <div className="flex gap-4 sm:gap-6">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gray-700 rounded-2xl"></div>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gray-700 rounded-lg"></div>
                 <div className="flex-1 space-y-3">
                   <div className="h-6 bg-gray-700 rounded w-3/4"></div>
                   <div className="space-y-2">
@@ -122,7 +123,7 @@ const SectionWrapper = ({
         <div className={`${fallbackHeight || 'min-h-[200px]'} flex items-center justify-center`}>
           <div className="text-center p-8 max-w-md mx-auto">
             <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-red-400 text-xl">⚠</span>
+              <AlertTriangle className="w-6 h-6 text-red-400" aria-hidden="true" />
             </div>
             <h3 className="text-red-400 font-semibold mb-2">Section Unavailable</h3>
             <p className="text-gray-500 text-sm mb-4">
@@ -130,7 +131,7 @@ const SectionWrapper = ({
             </p>
             <button 
               onClick={handleRetry} 
-              className="text-[#ff950e] text-sm hover:underline hover:text-[#ff6b00] transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded px-2 py-1"
+              className="text-[#ff950e] text-sm hover:underline hover:text-primary-hover transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded px-2 py-1"
             >
               Try Again
             </button>

@@ -2,6 +2,7 @@
 'use client';
 
 import { motion, useInView } from 'framer-motion';
+import { AlertTriangle } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { itemVariants, containerVariants, shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
 import { PLATFORM_FEATURES } from '@/utils/homepage-constants';
@@ -9,7 +10,7 @@ import { sanitizeStrict } from '@/utils/security/sanitization';
 
 // Enhanced loading skeleton for feature cards
 const FeatureSkeleton = () => (
-  <div className="bg-[#131313] rounded-xl p-6 border border-white/10 animate-pulse">
+  <div className="bg-[#131313] rounded-lg p-6 border border-white/10 animate-pulse">
     <div className="w-12 h-12 bg-gray-700 rounded-full mb-5 animate-skeleton"></div>
     <div className="space-y-3">
       <div className="w-3/4 h-6 bg-gray-700 rounded animate-skeleton delay-75"></div>
@@ -55,9 +56,9 @@ const FeatureCard = ({
 
   if (errorMessage) {
     return (
-      <div className="bg-[#131313] rounded-xl p-6 border border-red-800/30 transition-all duration-300">
+      <div className="bg-[#131313] rounded-lg p-6 border border-red-800/30 transition-all duration-300">
         <div className="w-12 h-12 bg-red-900/20 rounded-full flex items-center justify-center mb-5">
-          <span className="text-red-400 text-xl">⚠️</span>
+          <AlertTriangle className="w-6 h-6 text-red-400" aria-hidden="true" />
         </div>
         <h3 className="text-lg font-semibold text-red-400 mb-3">Feature Unavailable</h3>
         <p className="text-gray-500 text-sm mb-4">This feature could not be loaded.</p>
@@ -69,7 +70,7 @@ const FeatureCard = ({
         {onRetry && (
           <button
             onClick={onRetry}
-            className="text-[#ff950e] text-sm hover:underline hover:text-[#ff6b00] transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded px-2 py-1"
+            className="text-[#ff950e] text-sm hover:underline hover:text-primary-hover transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black rounded px-2 py-1"
           >
             Retry
           </button>
@@ -93,12 +94,12 @@ const FeatureCard = ({
   if (skipAnimation) {
     return (
       <div
-        className="group relative bg-[#131313] rounded-xl p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
+        className="group relative bg-[#131313] rounded-lg p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
         role="article"
         aria-labelledby={`feature-title-${index}`}
       >
         {/* Enhanced shine effect */}
-        <div className="absolute inset-0 rounded-xl overflow-hidden">
+        <div className="absolute inset-0 rounded-lg overflow-hidden">
           <div className="absolute inset-0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
         </div>
 
@@ -130,14 +131,14 @@ const FeatureCard = ({
 
   return (
     <motion.div
-      className="group relative bg-[#131313] rounded-xl p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
+      className="group relative bg-[#131313] rounded-lg p-6 transition-all duration-300 border border-white/10 hover:border-[#ff950e]/50 hover:scale-[1.03] hover:shadow-2xl hover:shadow-[#ff950e]/10"
       variants={itemVariants}
       whileHover={{ y: -8 }}
       role="article"
       aria-labelledby={`feature-title-${index}`}
     >
       {/* Enhanced shine effect */}
-      <div className="absolute inset-0 rounded-xl overflow-hidden">
+      <div className="absolute inset-0 rounded-lg overflow-hidden">
         <div className="absolute inset-0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
       </div>
 
@@ -354,7 +355,7 @@ export default function FeaturesSection() {
             )}
             <button
               onClick={handleRetry}
-              className="px-6 py-3 bg-[#ff950e] text-black font-semibold rounded-lg hover:bg-[#e88800] transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black"
+              className="px-6 py-3 bg-[#ff950e] text-black font-semibold rounded-lg hover:bg-primary-hover transition-colors focus:outline-none focus:ring-2 focus:ring-[#ff950e] focus:ring-offset-2 focus:ring-offset-black"
             >
               Try Again
             </button>
@@ -396,3 +397,5 @@ export default function FeaturesSection() {
     </div>
   );
 }
+
+

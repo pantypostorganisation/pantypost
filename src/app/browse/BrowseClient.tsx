@@ -377,7 +377,7 @@ export default function BrowseClient() {
         <main className="min-h-screen bg-black text-white pb-16 pt-8">
           {/* Show banner for guest users */}
           {isGuest && (
-            <div className="bg-gradient-to-r from-[#ff950e]/20 to-[#ff6b00]/20 border border-[#ff950e]/50 text-[#ff950e] p-4 rounded-lg mb-6 max-w-4xl mx-auto">
+            <div className="bg-gradient-to-r from-primary/20 to-primary-press/20 border border-[#ff950e]/50 text-[#ff950e] p-4 rounded-lg mb-6 max-w-4xl mx-auto">
               <p className="text-sm flex items-center justify-center gap-2 font-semibold">
                 👀 You're browsing as a guest • Sign up or log in to view full details and make purchases
               </p>

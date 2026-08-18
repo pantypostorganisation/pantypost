@@ -50,7 +50,7 @@ export default function TermsPage() {
 
           {/* Main Content */}
           <div className="md:w-3/4">
-            <div className="bg-[#121212] rounded-xl p-6 md:p-8 shadow-xl">
+            <div className="bg-[#121212] rounded-lg p-6 md:p-8 shadow-xl">
               {TERMS_SECTIONS.map((section, index) => (
                 <TermsSection
                   key={section.id}

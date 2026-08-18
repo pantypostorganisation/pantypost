@@ -973,11 +973,17 @@ export default function Header(): React.ReactElement | null {
                     >
                       Log In
                     </Link>
+                    {/* The most important button on the site, previously a
+                        four-way violation: a rogue orange as the gradient
+                        stop, and text colour set to grey via an INLINE STYLE
+                        -- someone hit the white-on-orange contrast fail and
+                        patched it with a random grey instead of text-black
+                        (9.56:1, the documented pairing). Same glow,
+                        sanctioned oranges only. */}
                     <Link
                       href="/signup"
-                      className="block text-center bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-[0_0_30px_rgba(255,149,14,0.35)] hover:shadow-[0_0_45px_rgba(255,149,14,0.45)]"
+                      className="block text-center bg-gradient-to-r from-primary to-primary-press hover:from-primary-press hover:to-primary text-black font-bold px-4 py-3 rounded-lg transition-all duration-300 shadow-[0_0_30px_rgba(255,149,14,0.35)] hover:shadow-[0_0_45px_rgba(255,149,14,0.45)]"
                       onClick={handleMobileMenuClose}
-                      style={{ color: '#2a2a2a' }}
                     >
                       Sign Up
                     </Link>
@@ -1041,7 +1047,7 @@ export default function Header(): React.ReactElement | null {
         <div className="flex min-w-0 items-center gap-2 ml-auto">
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="flex md:hidden items-center justify-center w-10 h-10 bg-primary text-black rounded-sm hover:bg-[#ff6b00] transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+            className="flex md:hidden items-center justify-center w-10 h-10 bg-primary text-black rounded-sm hover:bg-primary-hover transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
             aria-label="Open menu"
           >
             <Menu className="w-6 h-6" />
@@ -1510,3 +1516,4 @@ export default function Header(): React.ReactElement | null {
     </>
   );
 }
+

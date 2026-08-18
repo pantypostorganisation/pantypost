@@ -39,7 +39,7 @@ const LoginButton = () => {
   return (
     <button
       onClick={handleClick}
-      className="mt-6 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition w-full"
+      className="mt-6 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-primary-hover transition w-full"
     >
       Log In
     </button>
@@ -268,7 +268,7 @@ export default function SellerVerifyPage() {
     return (
       <BanCheck>
         <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-xl shadow-xl p-8 max-w-md w-full border border-gray-800">
+          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800">
             <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
             <p className="text-gray-400 text-center">Loading verification page...</p>
           </div>
@@ -282,13 +282,13 @@ export default function SellerVerifyPage() {
     return (
       <BanCheck>
         <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-xl shadow-xl p-8 max-w-md w-full border border-gray-800">
+          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800">
             <Shield className="w-12 h-12 text-red-500 mb-4 mx-auto" />
             <h1 className="text-2xl font-bold mb-4 text-center">Error</h1>
             <p className="text-gray-400 text-center mb-4">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="w-full px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition"
+              className="w-full px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-primary-hover transition"
             >
               Retry
             </button>
@@ -303,7 +303,7 @@ export default function SellerVerifyPage() {
     return (
       <BanCheck>
         <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-xl shadow-xl p-8 max-w-md w-full border border-gray-800">
+          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800">
             <Shield className="w-12 h-12 text-[#ff950e] mb-4 mx-auto" />
             <h1 className="text-2xl font-bold mb-4">Seller Verification</h1>
             <p className="text-gray-400">You must be logged in as a seller to access this page.</p>
@@ -319,7 +319,7 @@ export default function SellerVerifyPage() {
     return (
       <BanCheck>
         <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-xl shadow-xl p-8 max-w-md w-full border border-gray-800 text-center">
+          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800 text-center">
             <Shield className="w-12 h-12 text-yellow-500 mb-4 mx-auto" />
             <h1 className="text-2xl font-bold mb-2">Sellers Only</h1>
             <p className="text-gray-400 mb-6">
@@ -327,7 +327,7 @@ export default function SellerVerifyPage() {
             </p>
             <Link
               href="/"
-              className="inline-flex items-center justify-center px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-[#e88800] transition"
+              className="inline-flex items-center justify-center px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-primary-hover transition"
             >
               Go Home
             </Link>
@@ -391,3 +391,4 @@ export default function SellerVerifyPage() {
     </BanCheck>
   );
 }
+

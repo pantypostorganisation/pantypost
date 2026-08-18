@@ -27,8 +27,43 @@ export default function AgeVerificationCompletePage() {
   const [status, setStatus] = useState<AgeStatus | null>(null);
   const [checking, setChecking] = useState(true);
   const [timedOut, setTimedOut] = useState(false);
+
+  /* "Try again" used to be a Link pointing at a "start" route that has
+     never existed, so the retry path for a declined or expired check was
+     a hard 404 at the exact moment a seller wanted to fix it. Starting a
+     check was never a page: it is a service call that returns the
+     provider's hosted-session URL. So these are buttons now, doing
+     exactly what AgeGate's own button does. */
+  const [restarting, setRestarting] = useState(false);
+  const [restartError, setRestartError] = useState<string | null>(null);
   const pollCount = useRef(0);
   const cancelled = useRef(false);
+
+  const handleRestart = async () => {
+    setRestarting(true);
+    setRestartError(null);
+
+    const response = await ageVerificationService.start();
+
+    if (response.success && response.data) {
+      if (response.data.alreadyVerified) {
+        router.push('/');
+        return;
+      }
+      if (response.data.sessionUrl) {
+        // Full redirect, not a new tab: mobile browsers block popups and
+        // the camera flow needs a real page. Same reasoning as AgeGate.
+        window.location.href = response.data.sessionUrl;
+        return;
+      }
+    }
+
+    setRestartError(
+      (response as { error?: { message?: string } })?.error?.message ||
+        'We could not start verification just now. Please try again shortly.'
+    );
+    setRestarting(false);
+  };
 
   useEffect(() => {
     cancelled.current = false;
@@ -104,12 +139,17 @@ export default function AgeVerificationCompletePage() {
             <h1 className="text-2xl font-bold">{copy?.title}</h1>
             <p className="mt-2 text-gray-400">{copy?.body}</p>
             <div className="mt-7 flex flex-col gap-3">
-              <Link
-                href="/age-verification/start"
-                className="rounded-lg bg-[#ff950e] px-5 py-3 font-semibold text-black transition hover:bg-[#e88800]"
+              <button
+                type="button"
+                onClick={handleRestart}
+                disabled={restarting}
+                className="rounded-lg bg-[#ff950e] px-5 py-3 font-semibold text-black transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Try again
-              </Link>
+                {restarting ? 'Starting…' : 'Try again'}
+              </button>
+              {restartError && (
+                <p className="text-sm text-red-400">{restartError}</p>
+              )}
               <a
                 href="mailto:support@pantypost.com"
                 className="text-sm text-gray-400 hover:text-white"
@@ -136,12 +176,17 @@ export default function AgeVerificationCompletePage() {
             <XCircle className="mx-auto mb-5 h-14 w-14 text-gray-500" />
             <h1 className="text-2xl font-bold">{copy?.title}</h1>
             <p className="mt-2 text-gray-400">{copy?.body}</p>
-            <Link
-              href="/age-verification/start"
-              className="mt-7 inline-block rounded-lg bg-[#ff950e] px-5 py-3 font-semibold text-black transition hover:bg-[#e88800]"
+            <button
+              type="button"
+              onClick={handleRestart}
+              disabled={restarting}
+              className="mt-7 inline-block rounded-lg bg-[#ff950e] px-5 py-3 font-semibold text-black transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Start again
-            </Link>
+              {restarting ? 'Starting…' : 'Start again'}
+            </button>
+            {restartError && (
+              <p className="mt-3 text-sm text-red-400">{restartError}</p>
+            )}
           </>
         )}
 
@@ -165,3 +210,4 @@ export default function AgeVerificationCompletePage() {
     </main>
   );
 }
+

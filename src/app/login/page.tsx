@@ -419,7 +419,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           <LoginHeader step={step} showAdminMode={showAdminMode} onLogoClick={() => router.push('/')} />
 
-          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl transition-all duration-500">
+          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-lg p-6 shadow-xl transition-all duration-500">
             <div className="transition-all duration-300">
               {step === 1 && (
                 <UsernameStep
@@ -462,3 +462,5 @@ export default function LoginPage() {
     </div>
   );
 }
+
+

@@ -27,7 +27,7 @@ export default function AgeVerificationPolicyPage() {
           {/* 1 */}
           <section>
             <h2 className="mb-3 text-xl font-semibold text-white">1. Minimum age</h2>
-            <div className="rounded-xl border border-[#ff950e]/25 bg-[#ff950e]/5 p-4">
+            <div className="rounded-lg border border-[#ff950e]/25 bg-[#ff950e]/5 p-4">
               <p>
                 You must be <strong className="text-white">18 years of age or older</strong> to
                 hold an account or use Panty Post in any capacity, as a buyer or a seller.
@@ -198,7 +198,7 @@ export default function AgeVerificationPolicyPage() {
             </p>
           </section>
 
-          <section className="rounded-xl border border-white/10 bg-[#0b0b0f] p-5">
+          <section className="rounded-lg border border-white/10 bg-[#0b0b0f] p-5">
             <h2 className="mb-2 text-lg font-semibold text-white">Questions about this policy</h2>
             <p className="text-sm">
               Email{' '}
@@ -216,3 +216,4 @@ export default function AgeVerificationPolicyPage() {
     </main>
   );
 }
+

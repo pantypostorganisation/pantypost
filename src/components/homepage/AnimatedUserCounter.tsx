@@ -345,7 +345,7 @@ export default function AnimatedUserCounter({
 
   return (
     <motion.div 
-      className={`bg-white/5 backdrop-blur-sm rounded-2xl p-6 border border-white/10 relative ${className}`}
+      className={`bg-white/5 backdrop-blur-sm rounded-lg p-6 border border-white/10 relative ${className}`}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
@@ -403,3 +403,4 @@ export default function AnimatedUserCounter({
     </motion.div>
   );
 }
+

@@ -48,7 +48,7 @@ export default function ContentPolicyPage() {
           {/* 2 */}
           <section>
             <h2 className="mb-3 text-xl font-semibold text-white">2. Edits return content to review</h2>
-            <div className="rounded-xl border border-[#ff950e]/25 bg-[#ff950e]/5 p-4">
+            <div className="rounded-lg border border-[#ff950e]/25 bg-[#ff950e]/5 p-4">
               <p>
                 Approval applies to the content that was reviewed — not to the listing or post
                 indefinitely. If a user later changes a title, description, tags or any image, the
@@ -229,7 +229,7 @@ export default function ContentPolicyPage() {
           </section>
 
           {/* Contact */}
-          <section className="rounded-xl border border-white/10 bg-[#0b0b0f] p-5">
+          <section className="rounded-lg border border-white/10 bg-[#0b0b0f] p-5">
             <h2 className="mb-2 text-lg font-semibold text-white">Questions about this policy</h2>
             <p className="text-sm">
               Email{' '}

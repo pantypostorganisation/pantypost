@@ -153,12 +153,12 @@ export default function HeroSection() {
       ref={heroRef}
       className="relative w-full pt-10 pb-8 md:pt-12 md:pb-12 overflow-hidden"
     >
-      {/* Subtle Noise Overlay */}
-      <div
-        className="absolute inset-0 opacity-[0.02] bg-[url('/noise.png')] bg-repeat pointer-events-none"
-        role="presentation"
-        style={{ willChange: 'opacity' }}
-      />
+      {/* The "subtle noise overlay" that sat here fetched /noise.png --
+          a file that does not exist and never has. Every homepage load
+          paid for a guaranteed 404 to paint a texture at 2% opacity that,
+          being a missing image, painted nothing at all. Removing the div
+          changes zero pixels. If real grain is ever wanted, add the
+          actual file first. */}
 
       {/* Floating particles */}
       {mounted && <FloatingParticles />}
@@ -303,3 +303,5 @@ export default function HeroSection() {
     </section>
   );
 }
+
+

@@ -131,7 +131,7 @@ export default function AgeGate({ children, block = true }: AgeGateProps) {
           <button
             onClick={handleStart}
             disabled={starting}
-            className="rounded-md bg-[#ff950e] px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-[#e88800] disabled:opacity-60"
+            className="rounded-md bg-[#ff950e] px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-primary-hover disabled:opacity-60"
           >
             {starting ? 'Starting…' : 'Verify now'}
           </button>
@@ -151,8 +151,8 @@ export default function AgeGate({ children, block = true }: AgeGateProps) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-black px-4 py-12 text-white">
       <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-white/10 bg-[#0b0b0f] p-8 text-center">
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+        <div className="rounded-lg border border-white/10 bg-[#0b0b0f] p-8 text-center">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg border border-[#ff950e]/40 bg-[#ff950e]/10">
             <ShieldCheck className="h-7 w-7 text-[#ff950e]" />
           </div>
 
@@ -160,7 +160,7 @@ export default function AgeGate({ children, block = true }: AgeGateProps) {
           <p className="mt-3 text-gray-400 leading-relaxed">{copy.body}</p>
 
           {status !== 'declined' && (
-            <div className="mt-6 space-y-2.5 rounded-xl border border-white/5 bg-black/40 p-4 text-left text-sm text-gray-400">
+            <div className="mt-6 space-y-2.5 rounded-lg border border-white/5 bg-black/40 p-4 text-left text-sm text-gray-400">
               <p className="flex items-start gap-2.5">
                 <Camera className="mt-0.5 h-4 w-4 shrink-0 text-[#ff950e]" />
                 <span>A quick selfie is usually all that is needed — no document upload.</span>
@@ -186,7 +186,7 @@ export default function AgeGate({ children, block = true }: AgeGateProps) {
             <button
               onClick={handleStart}
               disabled={starting}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#ff950e] px-5 py-3 font-semibold text-black transition hover:bg-[#e88800] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#ff950e] px-5 py-3 font-semibold text-black transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {starting ? (
                 <>
@@ -215,3 +215,4 @@ export default function AgeGate({ children, block = true }: AgeGateProps) {
     </main>
   );
 }
+

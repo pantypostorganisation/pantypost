@@ -73,17 +73,17 @@ export default function FAQSection() {
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, amount: 0.2 }}
-                className="group relative bg-[#131313] rounded-2xl p-6 sm:p-8 text-left border border-white/10 hover:border-[#ff950e]/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#ff950e]/10"
+                className="group relative bg-[#131313] rounded-lg p-6 sm:p-8 text-left border border-white/10 hover:border-[#ff950e]/50 transition-all duration-300 hover:shadow-2xl hover:shadow-[#ff950e]/10"
               >
                 {/* Enhanced shine effect on hover - matching Features section */}
-                <div className="absolute inset-0 rounded-2xl overflow-hidden">
+                <div className="absolute inset-0 rounded-lg overflow-hidden">
                   <div className="absolute inset-0 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12" />
                 </div>
 
                 <div className="relative flex flex-col sm:flex-row gap-4 sm:gap-6">
                   {/* Icon with gradient background - matching Features section style */}
                   <div className="flex-shrink-0">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#ff950e]/10 to-[#ff950e]/5 rounded-2xl flex items-center justify-center border border-[#ff950e]/20 group-hover:scale-110 transition-transform duration-300">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-[#ff950e]/10 to-[#ff950e]/5 rounded-lg flex items-center justify-center border border-[#ff950e]/20 group-hover:scale-110 transition-transform duration-300">
                       <Icon className={`w-7 h-7 sm:w-8 sm:h-8 ${item.iconColor}`} aria-hidden="true" />
                     </div>
                   </div>
@@ -115,7 +115,7 @@ export default function FAQSection() {
             Still have questions?{' '}
             <a 
               href="/help" 
-              className="text-[#ff950e] hover:text-[#ffb347] font-semibold transition-colors underline-offset-4 hover:underline"
+              className="text-[#ff950e] hover:text-primary-hover font-semibold transition-colors underline-offset-4 hover:underline"
             >
               Contact our support team
             </a>
