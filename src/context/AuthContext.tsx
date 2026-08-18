@@ -14,6 +14,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { apiConfig } from '@/config/environment';
 import { z } from 'zod';
 import { sanitizeUsername } from '@/utils/security/sanitization';
+import { clearAgeStatusCache } from '@/services/ageVerification.service';
 
 // ==================== TYPES ====================
 
@@ -701,6 +702,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     tokenStorageRef.current.clear();
+    /* The age status cache lives for the session, so it must be dropped
+       here -- otherwise the next account signed in on this device would
+       inherit the previous user's verified state. */
+    clearAgeStatusCache();
     setUser(null);
     setError(null);
     router.push('/login');

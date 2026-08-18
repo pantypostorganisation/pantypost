@@ -57,10 +57,48 @@ export const AGE_STATUS_COPY: Record<AgeStatus, { title: string; body: string }>
   },
 };
 
+
+/* =====================================================================
+ * STATUS CACHE
+ *
+ * AgeGate wraps `children` PER ROUTE in ClientLayout, and its effect
+ * calls getStatus() whenever it mounts. So an already-approved user was
+ * re-checked against the API on EVERY navigation to a gated page, and
+ * saw the gate's loading state each time before it decided they were
+ * fine. That is the repeated prompting.
+ *
+ * An approved result does not change, so it is cached for the session.
+ * Non-final states (pending, in_review) are NOT cached, because those
+ * genuinely do change and the UI has to see the transition.
+ *
+ * Cleared on logout so the next account cannot inherit it.
+ * ===================================================================== */
+let cachedStatus: AgeStatusResponse | null = null;
+
+export function clearAgeStatusCache(): void {
+  cachedStatus = null;
+}
+
 class AgeVerificationService {
   /** Current status for the signed-in user. */
   async getStatus() {
-    return apiCall<AgeStatusResponse>('/age-verification/status', { method: 'GET' });
+    // A settled 'approved' cannot change; serve it without a round trip.
+    if (cachedStatus && cachedStatus.status === 'approved') {
+      return { success: true as const, data: cachedStatus };
+    }
+
+    const response = await apiCall<AgeStatusResponse>('/age-verification/status', {
+      method: 'GET',
+    });
+
+    /* Only a settled 'approved' is cached. pending and in_review are
+       deliberately left uncached -- those transition, and the UI has to
+       see it happen. */
+    if (response.success && response.data?.status === 'approved') {
+      cachedStatus = response.data;
+    }
+
+    return response;
   }
 
   /**
@@ -80,6 +118,9 @@ class AgeVerificationService {
    * Used on the return page in case the webhook has not landed yet.
    */
   async refresh() {
+    // Asks the provider directly, so any cached verdict is now stale.
+    cachedStatus = null;
+
     return apiCall<{ status: AgeStatus; isVerified: boolean }>('/age-verification/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -9,7 +9,7 @@ import { useWallet } from '@/context/WalletContext';
 import { useMessages, getReportCount } from '@/context/MessageContext';
 import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
-import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X, Compass, AlertTriangle, BarChart3 } from 'lucide-react';
+import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X, Compass, AlertTriangle, BarChart3, ShieldCheck } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
@@ -906,15 +906,15 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Seller Menu</span>
                   </div>
                   {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
-                  {renderMobileLink(
-                    '/sellers/verify',
-                    <img
-                      src="/verification_badge.png"
-                      alt="Verification badge"
-                      className="w-5 h-5"
-                    />,
-                    isSellerVerified ? 'Verified!' : 'Get Verified'
-                  )}
+                  {/* Same rule as desktop: only while there is something
+                      to do. Also drops /verification_badge.png, which
+                      404s. */}
+                  {!isSellerVerified &&
+                    renderMobileLink(
+                      '/sellers/verify',
+                      <ShieldCheck className="w-5 h-5" />,
+                      'Get Verified'
+                    )}
                   {renderMobileLink('/sellers/messages', <MessageSquare className="w-5 h-5" />, 'Messages', unreadCount)}
                   {renderMobileLink('/sellers/subscribers', <Users className="w-5 h-5" />, 'Analytics')}
                   {renderMobileLink('/sellers/orders-to-fulfil', <Package className="w-5 h-5" />, 'Orders to Fulfil', pendingOrdersCount)}
@@ -1191,17 +1191,26 @@ export default function Header(): React.ReactElement | null {
                 <span className="sr-only xl:not-sr-only xl:inline">My Listings</span>
               </Link>
 
-              <Link
-                href="/sellers/verify"
-                className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-sm transition-all duration-300 border border-line hover:border-primary-line shadow-lg text-xs"
-              >
-                <img
-                  src="/verification_badge.png"
-                  alt="Verification badge"
-                  className="w-3.5 h-3.5 flex-shrink-0 group-hover:scale-110 transition-transform"
-                />
-                <span className="sr-only xl:not-sr-only xl:inline">{isSellerVerified ? 'Verified!' : 'Get Verified'}</span>
-              </Link>
+              {/* Shown ONLY while unverified.
+                  "Get Verified" is a call to action: it unlocks listings
+                  and auctions, so it earns a permanent slot. "Verified!"
+                  does not -- it told a seller something they already knew,
+                  on every page, forever, in a header that runs out of room
+                  at laptop widths. Settled status now lives on the profile,
+                  which is where someone goes to check their own standing.
+
+                  It also used /verification_badge.png, which 404s, so
+                  verified sellers were seeing a broken image announcing
+                  their verification. Now a lucide icon. */}
+              {!isSellerVerified && (
+                <Link
+                  href="/sellers/verify"
+                  className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-sm transition-colors duration-200 border border-line hover:border-primary-line text-xs"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+                  <span className="sr-only xl:not-sr-only xl:inline">Get Verified</span>
+                </Link>
+              )}
 
               <Link href="/sellers/messages" className="relative group">
                 <div className="flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-sm transition-all duration-300 border border-line hover:border-primary-line text-xs">
