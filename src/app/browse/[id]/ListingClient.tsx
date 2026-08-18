@@ -35,7 +35,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 import { listingsService, type DropInfo } from '@/services/listings.service';
 
-export default function ListingClient() {
+/* `initialListing` comes from page.tsx, which already fetched it for
+   generateMetadata. Reusing it costs nothing and puts the real listing
+   in the first HTML. */
+export default function ListingClient({ initialListing }: { initialListing?: any }) {
   const { trackEvent, trackPurchase } = useAnalytics();
   const isMountedRef = useRef(true);
   const trackingRef = useRef({ hasTrackedView: false, hasTrackedPurchase: false });
@@ -112,7 +115,7 @@ export default function ListingClient() {
     
     // Error state
     rateLimitError
-  } = useBrowseDetail();
+  } = useBrowseDetail(initialListing);
 
   // Use local listing state that can be updated
   const listing = localListing || contextListing;
@@ -483,8 +486,10 @@ export default function ListingClient() {
     );
   }
 
-  // Loading state
-  if (isLoading) {
+  /* Only spin when there is genuinely nothing to show. With a
+     server-supplied listing the page renders immediately and the live
+     data (current bid, drop counts) fills in underneath. */
+  if (isLoading && !listing) {
     return (
       <BanCheck>
         <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">

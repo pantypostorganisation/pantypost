@@ -65,7 +65,14 @@ interface Message {
   isRead?: boolean;
 }
 
-export const useBrowseDetail = () => {
+/* `initialListing` is the record page.tsx already fetched to build the
+   metadata. Seeding it means the title, price, photos and seller are in
+   the first HTML rather than behind a spinner.
+
+   A SEED only: the client still loads everything live -- current bid,
+   bid history, drop counts, whether the viewer can afford it. This just
+   removes the empty first paint on the page buyers land on from search. */
+export const useBrowseDetail = (initialListing?: any) => {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -92,7 +99,7 @@ export const useBrowseDetail = () => {
   
   // State
   const [state, setState] = useState<DetailState>(initialState);
-  const [listing, setListing] = useState<ListingWithDetails | undefined>();
+  const [listing, setListing] = useState<ListingWithDetails | undefined>(initialListing);
   const [sellerReviews, setSellerReviews] = useState<any[]>([]);
   const [sellerAverageRating, setSellerAverageRating] = useState<number | null>(null);
   const [sellerReviewStats, setSellerReviewStats] = useState<any>(null);

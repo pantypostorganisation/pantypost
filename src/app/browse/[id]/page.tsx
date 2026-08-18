@@ -110,10 +110,25 @@ export async function generateMetadata({
   };
 }
 
-export default function ListingDetailPage() {
+/* The listing is fetched once and used for BOTH the metadata above and
+   the first render below. Next dedupes identical fetch() calls within a
+   request, so this costs one round trip, not two.
+
+   The Suspense boundary stays: useBrowseDetail calls useSearchParams(),
+   which makes the server render the nearest fallback. Without a boundary
+   here that would be the one wrapping the whole app, and this route
+   would serve an empty body again. */
+export default async function ListingDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const listing = await getListing(id);
+
   return (
     <Suspense fallback={<div className="min-h-screen bg-surface" />}>
-      <ListingClient />
+      <ListingClient initialListing={listing ?? undefined} />
     </Suspense>
   );
 }
