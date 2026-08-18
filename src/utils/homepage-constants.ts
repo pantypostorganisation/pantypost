@@ -134,6 +134,41 @@ export const CTA_CONTENT = {
    review. '/help' now exists and covers contact; '/contact' 301s to it
    (see next.config.ts) so any external link still resolves, but there is
    no reason to send our own users through a redirect. */
+/* The homepage FAQ, in ONE place.
+
+   FAQSection renders these on screen and the homepage's FAQPage JSON-LD
+   is generated from the same array -- Google requires the schema text to
+   match what is visibly on the page, and two hand-maintained copies is
+   how they drift apart.
+
+   Every claim below is checkable against how the platform actually
+   works. The previous copy said we "monitor all transactions in
+   real-time", that "refunds are instant", that "rate-limiting prevents
+   fraud" and that messaging is "encrypted" -- none of which we can
+   stand behind, in front of users or a payment processor. */
+export const HOMEPAGE_FAQ = [
+  {
+    question: 'How does your wallet system protect buyers?',
+    answer:
+      'Purchases are paid from your prefunded PantyPost wallet, so your card details are never shared with another user. Every transaction is recorded, and if something goes wrong our admin team can step in and resolve the dispute directly - every complaint is answered within five business days.',
+  },
+  {
+    question: 'What are seller tiers and how do they benefit me?',
+    answer:
+      'Sellers progress through five tiers - Tease, Flirt, Obsession, Desire and Goddess - based on their sales. Each tier adds a bonus of up to 5% on top of the standard 90% sellers keep from every direct sale. Buyers can also subscribe to their favourite verified sellers for access to premium listings.',
+  },
+  {
+    question: 'How do auctions work on Panty Post?',
+    answer:
+      'Sellers can list items for competitive bidding with an optional reserve price. When you bid, the funds are held from your wallet balance, and you are automatically refunded the moment you are outbid. The winner pays exactly their final bid - no added fees - and the seller receives 80% of it.',
+  },
+  {
+    question: 'What makes Panty Post safer than other platforms?',
+    answer:
+      'Every listing, photo and profile is reviewed by a human moderator before it goes live - nothing publishes automatically. Sellers verify their identity and age before they can sell, payments stay inside the platform wallet, and a public complaints process guarantees a response to every report within five business days.',
+  },
+];
+
 export const FOOTER_LINKS = [
   /* /blog needs a link from somewhere or it is orphaned exactly as its
      two guides were: nothing on the site pointed at them, Google crawled
@@ -162,3 +197,4 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     PLATFORM_FEATURES: PLATFORM_FEATURES.map(feature => ({ title: feature.title, hasIcon: !!feature.icon })),
   });
 }
+

@@ -4,37 +4,23 @@
 import { motion } from 'framer-motion';
 import { Wallet, Gavel, Shield, Crown } from 'lucide-react';
 import { containerVariants, itemVariants, shapeVariants, VIEWPORT_CONFIG } from '@/utils/motion.config';
+import { HOMEPAGE_FAQ } from '@/utils/homepage-constants';
 
-const FAQ_ITEMS = [
-  {
-    icon: Wallet,
-    iconColor: 'text-green-400',
-    question: 'How does your wallet system protect buyers from scams?',
-    answer:
-      'Panty Post uses a secure escrow-style wallet system. When you make a purchase, funds are held in your wallet balance until the order is confirmed. If any issues arise, our admin team can credit or debit accounts to resolve disputes, making scams extremely rare. All transactions are tracked and transparent.'
-  },
-  {
-    icon: Crown,
-    iconColor: 'text-[#ff950e]',
-    question: 'What are seller tiers and how do they benefit me?',
-    answer:
-      'Sellers on Panty Post progress through five tiers (Tease, Flirt, Obsession, Desire, Goddess) based on sales volume. Higher tiers unlock better revenue shares, reduced platform fees, and exclusive features. Buyers benefit from a premium subscription system that grants access to exclusive content from their favorite verified sellers.'
-  },
-  {
-    icon: Gavel,
-    iconColor: 'text-purple-400',
-    question: 'How do auctions work on Panty Post?',
-    answer:
-      'Our auction system lets sellers create competitive bidding listings with optional reserve prices. When you place a bid, funds are securely held in your wallet. If you\'re outbid, you\'re automatically refunded. Winners are charged only once at auction end, and sellers receive 80% of the final bid (20% platform fee). It\'s transparent, secure, and exciting!'
-  },
-  {
-    icon: Shield,
-    iconColor: 'text-blue-400',
-    question: 'What makes Panty Post safer than other platforms?',
-    answer:
-      'Beyond our wallet escrow system, we verify seller identities, monitor all transactions in real-time, and maintain a dedicated admin team that can intervene in disputes. Every payment is tracked, refunds are instant, and our rate-limiting prevents fraud. Plus, encrypted messaging keeps your conversations private.'
-  }
+/* The question/answer text lives in homepage-constants.ts, shared with
+   the FAQPage JSON-LD the server homepage emits -- Google requires the
+   schema to match the visible page, and one array cannot disagree with
+   itself. Only the presentation (icons, colours) belongs to this file. */
+const FAQ_STYLE = [
+  { icon: Wallet, iconColor: 'text-green-400' },
+  { icon: Crown, iconColor: 'text-[#ff950e]' },
+  { icon: Gavel, iconColor: 'text-purple-400' },
+  { icon: Shield, iconColor: 'text-blue-400' },
 ];
+
+const FAQ_ITEMS = HOMEPAGE_FAQ.map((item, i) => ({
+  ...item,
+  ...FAQ_STYLE[i % FAQ_STYLE.length],
+}));
 
 export default function FAQSection() {
   return (
@@ -139,3 +125,5 @@ export default function FAQSection() {
     </section>
   );
 }
+
+

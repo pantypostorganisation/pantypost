@@ -65,6 +65,13 @@ export interface ListingFormProps {
   onCancel: () => void;
   onSaveDraft?: () => void;
   onLoadDraft?: (draft: ListingDraft) => void;
+  /* Errors raised by useMyListings AFTER the form hands off, e.g. a
+     bound the form does not check or a rule that only exists in the
+     hook. Nothing rendered these before, so a save that failed the
+     hook's own validation looked to the seller like the button simply
+     did nothing. */
+  saveError?: string | null;
+  fieldErrors?: Record<string, string>;
 }
 
 export interface ListingCardProps {
@@ -111,3 +118,4 @@ export interface BulkActionsProps {
   onBulkUpdatePremium: (isPremium: boolean) => void;
   onBulkUpdatePrice: (priceChange: number) => void;
 }
+

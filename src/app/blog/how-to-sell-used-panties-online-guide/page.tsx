@@ -34,28 +34,66 @@ export const metadata: Metadata = {
     url: `${BASE_URL}/blog/how-to-sell-used-panties-online-guide`,
     type: 'article',
     publishedTime: '2025-01-15',
+    modifiedTime: '2026-08-19',
   },
 };
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: 'How to Sell Used Panties Online in 2026',
+  description:
+    'Complete guide to selling used panties safely online: verification, pricing, discreet shipping, anonymity and growing your income.',
+  url: `${BASE_URL}/blog/how-to-sell-used-panties-online-guide`,
+  mainEntityOfPage: `${BASE_URL}/blog/how-to-sell-used-panties-online-guide`,
+  datePublished: '2025-01-15',
+  dateModified: '2026-08-19',
+  image: `${BASE_URL}/og-image.png`,
+  author: { '@type': 'Organization', name: 'PantyPost', url: BASE_URL },
+  publisher: {
+    '@type': 'Organization',
+    name: 'PantyPost',
+    url: BASE_URL,
+    logo: { '@type': 'ImageObject', url: `${BASE_URL}/icons/icon-512x512.png` },
+  },
+} as const;
 
 
 export default function SellingGuidePage() {
 
   return (
     <article className="min-h-screen bg-surface text-white">
+      {/* BlogPosting structured data -- server-rendered, so it exists
+          before any JavaScript runs. dateModified is the freshness
+          signal for "how to" queries; update it when the content
+          changes, not otherwise. */}
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(articleSchema).replace(/</g, '\\u003c'),
+        }}
+      />
+
       {/* Header */}
       <header className="bg-surface-raised py-12 border-b border-white/10">
         <div className="max-w-4xl mx-auto px-4">
           <Link href="/" className="text-primary hover:underline text-sm mb-4 inline-block">
             ← Back to Panty Post
           </Link>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-surface-raised bg-clip-text text-transparent">
-            How to Sell Used Panties Online in 2025
+          {/* This H1 was `bg-surface-raised bg-clip-text text-transparent`:
+              transparent text filled with a near-black background on a
+              black page -- the leftover of a flattened gradient. The main
+              heading of our most important SEO page was invisible to
+              every human reader. */}
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white">
+            How to Sell Used Panties Online in 2026
           </h1>
           <p className="text-ink-muted text-lg">
             The complete guide to starting, growing, and succeeding as a panty seller
           </p>
           <div className="flex gap-4 mt-6 text-sm text-ink-faint">
-            <span>📅 Published: January 15, 2025</span>
+            <span>Published January 2025 · Updated August 2026</span>
             <span>⏱️ 15 min read</span>
           </div>
         </div>
@@ -1306,3 +1344,4 @@ export default function SellingGuidePage() {
     </article>
   );
 }
+

@@ -85,13 +85,18 @@ export const metadata: Metadata = {
     apple: [{ url: '/icons/icon-192x192.png', type: 'image/png', sizes: '180x180' }],
   },
 
-  alternates: {
-    canonical: '/',
-    languages: {
-      'en-US': '/',
-      'en-GB': '/',
-    },
-  },
+  /* NO `alternates` HERE. EVER.
+
+     This block used to set `canonical: '/'`. Metadata declared in the
+     root layout is inherited by every page that does not declare its
+     own -- so /browse, /terms, /privacy, /content-policy, /complaints,
+     /signup and every other client-component page told Google "my
+     canonical URL is the homepage". Google believed it, treated them
+     all as duplicates of `/`, and indexed almost none of the site --
+     which is exactly what Search Console showed: 3 of 48.
+
+     A canonical is a per-page fact. It lives in each page's own
+     metadata export, never in a shared layout. */
 
   // CRITICAL: Enable indexing for production
   robots: {
@@ -115,12 +120,19 @@ export const metadata: Metadata = {
     title: 'Panty Post - Buy & Sell Used Panties | Discreet Anonymous Marketplace',
     description:
       'Safe, anonymous platform to buy and sell used panties. Verified sellers, secure transactions, complete privacy. 18+ only.',
+    /* 1200x630 -- the size Reddit, X and every link-preview renderer is
+       built around. The old image was a 512px square, which those
+       surfaces letterbox or crop; shop links pasted by creators are the
+       acquisition channel, so the preview card is doing real work.
+       Deliberately brand-only and non-explicit, so shared links are never
+       auto-flagged by the platform they are shared on. Seller shops and
+       listings override this with their own cover/listing image. */
     images: [
       {
-        url: `${BASE_URL}/googlesearchimage.png`,
-        width: 512,
-        height: 512,
-        alt: 'PantyPost - Premium Used Panties Marketplace',
+        url: `${BASE_URL}/og-image.png`,
+        width: 1200,
+        height: 630,
+        alt: 'PantyPost - the reviewed marketplace for worn underwear',
       },
     ],
   },
@@ -130,7 +142,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Panty Post - Buy & Sell Used Panties Anonymously',
     description: 'Discreet marketplace for used panties. Verified sellers, secure payments, complete privacy.',
-    images: [`${BASE_URL}/googlesearchimage.png`],
+    images: [`${BASE_URL}/og-image.png`],
     creator: '@pantypost',
   },
 
@@ -139,9 +151,8 @@ export const metadata: Metadata = {
     google: 'Gsm1a2UpYcIATRHoie3WTPlp416gBAxw2f5vqEPWNwY',
   },
 
-  // Additional meta tags
-  category: 'adult marketplace',
-  classification: 'Adult Content - 18+',
+  /* `category` / `classification` moved to the explicit pages alongside
+     the rating tags, for the same reason those moved. */
 };
 
 // Separate viewport export with viewport-fit=cover for iOS safe areas
@@ -195,11 +206,23 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
 
-        {/* Age restriction meta tags */}
-        <meta name="rating" content="adult" />
-        <meta name="age" content="18" />
-        {/* RTA label — recognised by parental filtering software. */}
-        <meta name="RATING" content="RTA-5042-1996-1400-1577-RTA" />
+        {/* NO sitewide adult-rating meta tags. They moved to the pages
+            that actually carry explicit content.
+
+            `rating: adult` and the RTA label are the exact signals
+            Google's SafeSearch reads. Declared here, in the layout, they
+            were stamped onto EVERY page -- including /blog, /help and
+            the legality guides, the only pages that can rank for the
+            seller-intent searches this business depends on. SafeSearch
+            filtered the whole site, guides included, for every searcher
+            with the default filter on.
+
+            Google's own guidance is to tag explicit pages individually
+            and keep non-explicit pages separate, so a mixed site keeps
+            its clean pages visible. The tags now live in the metadata of
+            /browse, /browse/[id] and /sellers/[username] -- the explicit
+            surfaces -- via `other: { rating: 'adult', ... }`. Do not put
+            them back here. */}
 
         {/* Structured Data */}
         <script
@@ -239,3 +262,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+

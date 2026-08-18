@@ -57,6 +57,8 @@ function MyListingsContent() {
     auctionCount,
     premiumCount,
     standardCount,
+    error,
+    validationErrors,
 
     setShowForm,
     updateFormState,
@@ -185,6 +187,8 @@ function MyListingsContent() {
               onImageReorder={handleImageReorder}
               onSave={handleSaveListing}
               onCancel={resetForm}
+              saveError={error}
+              fieldErrors={validationErrors}
             />
           </div>
         )}
@@ -244,3 +248,5 @@ export default function MyListingsPage() {
     </BanCheck>
   );
 }
+
+

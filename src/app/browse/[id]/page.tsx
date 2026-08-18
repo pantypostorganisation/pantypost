@@ -65,6 +65,13 @@ export async function generateMetadata({
       title: 'Listing on Panty Post',
       description: 'Browse worn underwear from verified sellers on Panty Post.',
       alternates: { canonical },
+    /* SafeSearch: this page carries explicit imagery, so it is tagged
+       adult HERE, per-page -- the tags were removed from the root layout
+       where they were filtering the whole site including the blog. */
+    other: {
+      rating: 'adult',
+      RATING: 'RTA-5042-1996-1400-1577-RTA',
+    },
     };
   }
 
@@ -100,6 +107,13 @@ export async function generateMetadata({
     title,
     description,
     alternates: { canonical },
+    /* SafeSearch: this page carries explicit imagery, so it is tagged
+       adult HERE, per-page -- the tags were removed from the root layout
+       where they were filtering the whole site including the blog. */
+    other: {
+      rating: 'adult',
+      RATING: 'RTA-5042-1996-1400-1577-RTA',
+    },
     openGraph: {
       title,
       description,
@@ -132,3 +146,4 @@ export default async function ListingDetailPage({
     </Suspense>
   );
 }
+

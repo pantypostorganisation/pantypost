@@ -34,29 +34,66 @@ export const metadata: Metadata = {
     url: `${BASE_URL}/blog/how-to-buy-used-panties-online-guide`,
     type: 'article',
     publishedTime: '2025-10-15',
+    modifiedTime: '2026-08-19',
   },
 };
 
-import Head from 'next/head';
+/* A stray `import Head from 'next/head'` sat here. next/head is the
+   Pages Router API and is a NO-OP in the App Router -- nothing used it,
+   and nothing could have. */
+
+const articleSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: 'The Complete Guide to Buying Used Panties Online in 2026',
+  description:
+    'How to buy used panties safely and discreetly: how listings work, choosing a seller, payment safety, delivery and avoiding scams.',
+  url: `${BASE_URL}/blog/how-to-buy-used-panties-online-guide`,
+  mainEntityOfPage: `${BASE_URL}/blog/how-to-buy-used-panties-online-guide`,
+  datePublished: '2025-10-15',
+  dateModified: '2026-08-19',
+  image: `${BASE_URL}/og-image.png`,
+  author: { '@type': 'Organization', name: 'PantyPost', url: BASE_URL },
+  publisher: {
+    '@type': 'Organization',
+    name: 'PantyPost',
+    url: BASE_URL,
+    logo: { '@type': 'ImageObject', url: `${BASE_URL}/icons/icon-512x512.png` },
+  },
+} as const;
 
 export default function BuyingGuidePage() {
 
   return (
     <article className="min-h-screen bg-surface text-white">
+      {/* BlogPosting structured data -- server-rendered, so it exists
+          before any JavaScript runs. dateModified is the freshness
+          signal for "how to" queries; update it when the content
+          changes, not otherwise. */}
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(articleSchema).replace(/</g, '\\u003c'),
+        }}
+      />
+
       {/* Header */}
       <header className="bg-surface-raised py-12 border-b border-white/10">
         <div className="max-w-4xl mx-auto px-4">
           <Link href="/" className="text-primary hover:underline text-sm mb-4 inline-block">
             ← Back to Panty Post
           </Link>
-          <h1 className="text-4xl md:text-5xl font-bold mb-4 bg-surface-raised bg-clip-text text-transparent">
-            The Complete Guide to Buying Used Panties Online in 2025
+          {/* Same invisible-H1 leftover as the selling guide: transparent
+              text clipped to a near-black fill. See that file. */}
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white">
+            The Complete Guide to Buying Used Panties Online in 2026
           </h1>
           <p className="text-ink-muted text-lg">
             Everything you need to know about buying used panties safely and discreetly
           </p>
           <div className="flex gap-4 mt-6 text-sm text-ink-faint">
-            <span>📅 Published: October 15, 2025</span>
+            <span>Published October 2025 · Updated August 2026</span>
             <span>⏱️ 12 min read</span>
           </div>
         </div>
@@ -68,7 +105,7 @@ export default function BuyingGuidePage() {
         {/* Introduction */}
         <section className="mb-12">
           <p className="text-lg text-ink-muted leading-relaxed mb-6">
-            Buying used panties online has become increasingly popular, with thousands of people discovering this unique interest every year. Whether you're new to this market or looking to make your first purchase with confidence, this comprehensive guide will walk you through everything you need to know about buying used panties safely and discreetly in 2025.
+            Buying used panties online has become increasingly popular, with thousands of people discovering this unique interest every year. Whether you're new to this market or looking to make your first purchase with confidence, this comprehensive guide will walk you through everything you need to know about buying used panties safely and discreetly in 2026.
           </p>
           <p className="text-lg text-ink-muted leading-relaxed">
             <strong className="text-primary">Panty Post</strong> (also known as PantyPost) has helped connect thousands of verified sellers with satisfied buyers. In this guide, we'll share insider knowledge on how to navigate the used panties marketplace, what to expect, and how to ensure you're making safe, legitimate purchases.
@@ -100,7 +137,7 @@ export default function BuyingGuidePage() {
             The used panties marketplace has evolved significantly over the past decade. What was once a niche corner of the internet has transformed into a legitimate, well-organized industry with platforms like <strong className="text-primary">Panty Post</strong> providing secure, anonymous transactions between buyers and sellers.
           </p>
 
-          <h3 className="text-2xl font-semibold mb-4 text-white">The Current State of the Market in 2025</h3>
+          <h3 className="text-2xl font-semibold mb-4 text-white">The Current State of the Market in 2026</h3>
           
           <ul className="space-y-3 text-ink-muted mb-6">
             <li className="flex items-start">
@@ -302,7 +339,7 @@ export default function BuyingGuidePage() {
           <h2 className="text-3xl font-bold mb-6 text-white">Pricing Guide: What to Expect</h2>
           
           <p className="text-ink-muted leading-relaxed mb-6">
-            Understanding typical pricing helps you identify fair deals and avoid overpaying. Here's a breakdown of standard pricing in 2025 for used panties online.
+            Understanding typical pricing helps you identify fair deals and avoid overpaying. Here's a breakdown of standard pricing in 2026 for used panties online.
           </p>
 
           <h3 className="text-2xl font-semibold mb-4 text-white">Standard Price Ranges:</h3>
@@ -764,3 +801,4 @@ export default function BuyingGuidePage() {
     </article>
   );
 }
+

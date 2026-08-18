@@ -32,7 +32,12 @@ const VALIDATION_REQUIREMENTS = {
   description: { min: 20, max: 2000 },
   price: { min: 0.01, max: 10000 },
   tags: { max: 200 },
-  hoursWorn: { min: 0, max: 999 }
+  /* 168 = 7 days, and it must match useMyListings.validateFormData.
+     The form used to allow 999 while the hook rejected anything over
+     168, so a seller entering 200 saw every field green, an enabled
+     submit button, and then nothing at all -- the hook returned early
+     and its error was never rendered. */
+  hoursWorn: { min: 0, max: 168 }
 };
 
 interface ValidationState {
@@ -59,7 +64,9 @@ export default function ListingForm({
   onRemoveImage,
   onImageReorder,
   onSave,
-  onCancel
+  onCancel,
+  saveError,
+  fieldErrors
 }: ListingFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -277,6 +284,25 @@ export default function ListingForm({
           setTouched(prev => ({ ...prev, dropUnits: true }));
           return;
         }
+
+        /* The hook and the server both reject a bad open time, but
+           neither message reached the seller -- so an out-of-range date
+           made the button appear to do nothing. Checked here too, where
+           the field actually is. */
+        if (formState.dropScheduledFor.trim() !== '') {
+          const when = new Date(formState.dropScheduledFor);
+          const maxAhead = Date.now() + 60 * 24 * 60 * 60 * 1000;
+          if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now() || when.getTime() > maxAhead) {
+            setErrors({ submit: 'Drop open time must be in the future and within 60 days.' });
+            setTouched(prev => ({ ...prev, dropScheduledFor: true }));
+            return;
+          }
+        }
+
+        if (isEditing) {
+          setErrors({ submit: 'Drops cannot be edited after creation. Cancel it and create a new one.' });
+          return;
+        }
       }
 
       if (!formValidation.isValid) {
@@ -487,7 +513,12 @@ export default function ListingForm({
                   checked={formState.isDrop}
                   onChange={() => {
                     if (isVerified) {
-                      onFormChange({ isDrop: true, isAuction: false });
+                      /* hoursWorn is cleared deliberately. A drop unit is
+                         "put on during the filmed drop"; carrying a wear
+                         time onto it produces a listing whose data
+                         contradicts its own description, which is the
+                         misleading-listing chargeback vector. */
+                      onFormChange({ isDrop: true, isAuction: false, hoursWorn: '' });
                     }
                   }}
                   disabled={!isVerified}
@@ -668,21 +699,30 @@ export default function ListingForm({
                 )}
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Hours Worn (optional)</label>
-              <SecureInput
-                type="number"
-                placeholder="e.g. 24"
-                value={formState.hoursWorn?.toString() || ''}
-                onChange={(value) => {
-                  const num = value === '' ? '' : sanitizeNumber(value, 0, 999);
-                  onFormChange({ hoursWorn: num });
-                }}
-                min="0"
-                max="999"
-                className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
-              />
-            </div>
+            {/* Hours Worn is meaningless on a drop -- and worse than
+                meaningless, since the unit is sold as worn on camera
+                during the drop itself. Offering the field invited a
+                seller to describe one thing and record another. */}
+            {!formState.isDrop && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Hours Worn (optional)</label>
+                <SecureInput
+                  type="number"
+                  placeholder="e.g. 24"
+                  value={formState.hoursWorn?.toString() || ''}
+                  onChange={(value) => {
+                    const num = value === '' ? '' : sanitizeNumber(value, 0, VALIDATION_REQUIREMENTS.hoursWorn.max);
+                    onFormChange({ hoursWorn: num });
+                  }}
+                  min="0"
+                  max={VALIDATION_REQUIREMENTS.hoursWorn.max}
+                  className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Up to {VALIDATION_REQUIREMENTS.hoursWorn.max} hours (7 days)
+                </p>
+              </div>
+            )}
           </div>
         )}
         
@@ -911,6 +951,30 @@ export default function ListingForm({
           <div className="text-red-400 text-sm flex items-center gap-2">
             <AlertCircle className="w-4 h-4" />
             {errors.submit}
+          </div>
+        )}
+
+        {/* Errors raised by the save path itself.
+
+            useMyListings sets `error` and `validationErrors` and returns
+            early on failure, but the page never read either, so a
+            rejected save produced no message anywhere -- the spinner
+            stopped and the form just sat there. Both are surfaced here
+            now. */}
+        {(saveError || (fieldErrors && Object.keys(fieldErrors).length > 0)) && (
+          <div className="rounded-lg border border-red-700 bg-red-900 bg-opacity-30 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <h3 className="font-semibold text-red-300">This listing could not be saved</h3>
+            </div>
+            {saveError && <p className="text-sm text-red-200">{saveError}</p>}
+            {fieldErrors && Object.keys(fieldErrors).length > 0 && (
+              <ul className="mt-2 text-sm text-red-200 space-y-1 list-disc list-inside">
+                {Object.entries(fieldErrors).map(([field, message]) => (
+                  <li key={field}>{message}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         
