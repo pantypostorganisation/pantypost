@@ -1,79 +1,88 @@
-# Seller shops were invisible to everyone who was not logged in
+# Seller shops were invisible to every logged-out visitor
 
 2 files, frontend only. Extract into the repo root; Replace when asked.
+Both parse clean.
 
-## The finding
+## What was happening
 
-I went looking for why seller shops render "Loading profile..." to a
-crawler. The cause is worse than a crawler problem:
+Your console log gave the whole sequence for a signed-out visitor:
 
-```jsx
-const { user, sellerUser, ... } = useSellerProfile(username);
-
-if (!user) {
-  return <spinner /> "Loading profile...";
-}
+```
+/api/users/testseller/profile        -> 200   (data arrives)
+/api/users/testseller/profile/full   -> 401
+/api/auth/logout                     -> 401
+... "Loading profile..." forever
 ```
 
-**`user` is the VIEWER, from `useAuth` -- not the seller.**
-
-So `if (!user)` means "if nobody is signed in". A signed-out visitor got
-a spinner that could never resolve, because waiting does not sign anyone
-in.
+1. `getUser()` fetches the **public** profile. It works. The data the
+   page needs is now in hand.
+2. `getUserProfile()` then calls `/profile/full`, which requires auth. No
+   token, so **401**.
+3. The api client's interceptor reads that 401 as a session expiry and
+   fires a logout.
+4. The resulting throw is caught by the outer handler, so
+   `setSellerUser()` never runs -- and the page discards data it had
+   already successfully fetched.
 
 **Every logged-out person who followed a link to a seller's shop saw a
-permanent loading spinner.** Not just Googlebot -- a real buyer clicking
-a creator's link, someone arriving from social, anyone browsing before
-they register. On a marketplace whose growth plan is "a creator sends
-their audience to their shop", that is the single most expensive bug in
-the codebase.
+permanent spinner.** Not just crawlers -- a buyer clicking a creator's
+link, anyone arriving from social, anyone browsing before registering. On
+a marketplace whose growth plan is "a creator points their audience at
+their shop", that is the most expensive bug in the codebase.
 
-It is also the real reason those pages cannot rank. The metadata work
-was correct and necessary, but a crawler still found a spinner behind it.
+## Two fixes
 
-**The data was never the problem.** `useSellerProfile`'s fetch guards
-only on `!username`, so seller data loads perfectly well without a token.
-It was purely the render gate.
+**1. `/profile/full` is only called when there is a token, and its
+failure is now non-fatal.** It is an enhancement, not a requirement: the
+public endpoint already returns everything the shop page needs, and
+`/full` only adds the gallery. It is wrapped in its own try/catch so it
+can never take the page down again.
 
-## The fix
+**The backend is right and was not changed.** `/profile/full` returns
+email, phone and age-assurance detail to the owner and admins, and a
+curated payload to everyone else. That auth requirement is correct -- the
+frontend was simply treating an optional call as mandatory.
 
-`useSellerProfile` had **no loading flag at all** -- which is why `!user`
-was being used as a stand-in. It now exposes `hasLoaded`, set when the
-fetch settles regardless of outcome.
+**2. The render gate was wrong too.** The page did:
 
-The page then distinguishes three real states:
+```jsx
+if (!user) return <spinner /> "Loading profile...";
+```
 
-- **still fetching** -> spinner
-- **loaded, no such seller** -> "Seller not found" with a way back to
-  browse (previously unreachable, because the old gate caught everyone
-  first)
-- **loaded** -> the shop
+`user` is the VIEWER, from `useAuth` -- not the seller. So it meant "if
+nobody is signed in", and returned a spinner that could never resolve.
 
-## What this does NOT do yet
+The hook had **no loading flag at all**, which is why `!user` was being
+used as a stand-in. It now exposes `hasLoaded`, so the page can tell:
 
-The page still renders client-side. A crawler now gets the shop instead
-of a spinner **once JavaScript runs**, which Google does execute -- but
-it is slower to index than server-rendered HTML, and other crawlers do
-not run JS at all.
-
-True server-rendering means passing the seller data from the server
-wrapper (which already fetches it for `generateMetadata`) down as props.
-That is a bigger change and worth doing separately, now that the page
-actually renders at all.
+- still fetching -> spinner
+- loaded, no such seller -> "Seller not found" with a way back to browse
+  (previously unreachable; a bad URL span forever)
+- loaded -> the shop
 
 ## Ship
 
 ```powershell
 npx tsc --noEmit
 git add src/hooks/useSellerProfile.ts "src/app/sellers/[username]/SellerClient.tsx"
-git commit -m "Seller shops: fix gate that blocked all logged-out visitors"
+git commit -m "Seller shops: render for logged-out visitors"
 ```
 
-## Test this one properly
+## Test
 
-Open an **incognito window** and go to a seller's shop, signed out. You
-should see the shop. Before this change you would have seen "Loading
-profile..." indefinitely.
+**Incognito window, signed out, open a seller shop.** You should see the
+shop -- name, bio, listings. Before this you got "Loading profile..."
+indefinitely.
 
-Worth trying a URL that does not exist too -- it should say "Seller not
-found" rather than spinning.
+Then try a username that does not exist: "Seller not found", not a
+spinner.
+
+Then signed in, to confirm the gallery still loads (that is the part
+`/profile/full` adds).
+
+## Still to come
+
+The page renders client-side. Google runs JS so it will index, but true
+SSR -- passing the server wrapper's data down as props -- is faster to
+index and works for crawlers that do not run JS. Worth doing now that the
+page renders at all.

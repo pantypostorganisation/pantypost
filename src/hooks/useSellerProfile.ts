@@ -138,13 +138,33 @@ export function useSellerProfile(username: string) {
           const userResult: any = await usersService.getUser(username);
           if (userResult?.success && userResult.data) {
             userData = userResult.data;
-            const profileResult: any = await usersService.getUserProfile(username);
-            if (profileResult?.success && profileResult.data) {
-              profileData = coerceProfileData(profileResult.data);
-              if (profileData?.galleryImages && Array.isArray(profileData.galleryImages)) {
-                gallery = profileData.galleryImages
-                  .map((u: string) => normalizeImageUrl(u))
-                  .filter((u: string | null): u is string => !!u);
+
+            /* getUserProfile() hits /users/:username/profile/full, which
+               requires auth. Called without a token it 401s, the api
+               client's interceptor treats that as a session expiry and
+               fires a logout, and the resulting throw was caught by the
+               outer handler below -- so setSellerUser() never ran and the
+               page sat on "Loading profile..." forever.
+
+               Every logged-out visitor to every seller shop hit this.
+
+               The data was already in hand from getUser() above; the full
+               profile only adds the gallery. So it is an enhancement, not
+               a requirement: skipped entirely when signed out, and its
+               own failure can no longer take the page down. */
+            if (token) {
+              try {
+                const profileResult: any = await usersService.getUserProfile(username);
+                if (profileResult?.success && profileResult.data) {
+                  profileData = coerceProfileData(profileResult.data);
+                  if (profileData?.galleryImages && Array.isArray(profileData.galleryImages)) {
+                    gallery = profileData.galleryImages
+                      .map((u: string) => normalizeImageUrl(u))
+                      .filter((u: string | null): u is string => !!u);
+                  }
+                }
+              } catch (profileError) {
+                console.warn('[SellerProfile] Full profile unavailable, using public data:', profileError);
               }
             }
           }
