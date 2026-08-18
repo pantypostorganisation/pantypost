@@ -141,7 +141,7 @@ export default function ProfileHeader({
             {/* Scrim exists to keep the avatar edge legible against a
                 photo. Over the flat fallback there is nothing to
                 separate, so it only renders with an image behind it. */}
-            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/20 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent" />
           </>
         )}
       </div>
@@ -166,8 +166,12 @@ export default function ProfileHeader({
                 )}
               </div>
 
+              {/* Sat at -bottom-2 -right-2, overlapping the avatar's own
+                  4px border, which read as squashed rather than layered.
+                  Pushed out so it clears the border and sits ON the
+                  corner instead of inside it. */}
               {sellerTierInfo && sellerTierInfo.tier !== 'None' && (
-                <div className="absolute -bottom-2 -right-2">
+                <div className="absolute -bottom-3 -right-3">
                   <TierBadge tier={sellerTierInfo.tier} size="md" showTooltip />
                 </div>
               )}
@@ -261,7 +265,7 @@ export default function ProfileHeader({
               {onMessage && (
                 <button
                   onClick={onMessage}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-full border border-line px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-line-strong sm:flex-none"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-md border border-line px-5 py-2.5 text-sm font-medium text-ink transition-colors hover:border-line-strong sm:flex-none"
                 >
                   <MessageCircle className="h-4 w-4" />
                   Message
@@ -274,7 +278,7 @@ export default function ProfileHeader({
               {hasAccess && onUnsubscribe ? (
                 <button
                   onClick={onUnsubscribe}
-                  className="group flex flex-1 items-center justify-center gap-2 rounded-full border border-primary-line bg-primary-soft px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:border-danger hover:text-danger sm:flex-none"
+                  className="group flex flex-1 items-center justify-center gap-2 rounded-md border border-primary-line bg-primary-soft px-5 py-2.5 text-sm font-semibold text-primary transition-colors hover:border-danger hover:text-danger sm:flex-none"
                 >
                   <Check className="h-4 w-4 group-hover:hidden" />
                   <span className="group-hover:hidden">Subscribed</span>
@@ -287,7 +291,7 @@ export default function ProfileHeader({
                      2.20:1 and fail WCAG AA. */
                   <button
                     onClick={onSubscribe}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover sm:flex-none"
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover sm:flex-none"
                   >
                     <Heart className="h-4 w-4" />
                     Subscribe{priceLabel ? ` · ${priceLabel}` : ''}
@@ -298,7 +302,7 @@ export default function ProfileHeader({
               {onTip && (
                 <button
                   onClick={onTip}
-                  className="hidden items-center justify-center rounded-full border border-line px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-line-strong sm:flex"
+                  className="hidden items-center justify-center rounded-md border border-line px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:border-line-strong sm:flex"
                 >
                   Tip
                 </button>

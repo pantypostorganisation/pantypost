@@ -134,21 +134,21 @@ export default function TipModal({
   const displayError = localTipError || parentTipError;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur p-4">
-      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/70 p-6 sm:p-8 shadow-[0_25px_70px_-40px_rgba(0,0,0,0.9)]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/85 backdrop-blur p-4">
+      <div className="w-full max-w-md rounded-lg border border-white/10 bg-surface/70 p-6 sm:p-8 shadow-[0_25px_70px_-40px_rgba(0,0,0,0.9)]">
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2 text-white">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
-              <Gift className="h-5 w-5 text-[#ff950e]" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/40 bg-primary/10">
+              <Gift className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h2 className="text-xl font-semibold">Send a tip</h2>
-              <p className="text-xs uppercase tracking-[0.2em] text-gray-400">Support {sanitizedUsername}</p>
+              <p className="text-xs uppercase tracking-[0.2em] text-ink-muted">Support {sanitizedUsername}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-full border border-white/20 bg-white/5 p-2 text-gray-300 transition hover:text-white"
+            className="rounded-md border border-white/20 bg-white/5 p-2 text-ink-muted transition hover:text-white"
             aria-label="Close"
             type="button"
             disabled={isProcessing}
@@ -158,7 +158,7 @@ export default function TipModal({
         </div>
 
         {displaySuccess ? (
-          <div className="rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-8 text-center text-emerald-100">
+          <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-8 text-center text-emerald-100">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-3xl">
               ✓
             </div>
@@ -171,7 +171,7 @@ export default function TipModal({
             rateLimitKey="tip_send"
             rateLimitConfig={{ maxAttempts: 20, windowMs: 60 * 60 * 1000 }}
           >
-            <p className="mb-6 text-center text-sm text-gray-300">
+            <p className="mb-6 text-center text-sm text-ink-muted">
               Choose a custom amount or tap a quick suggestion to send instant appreciation.
             </p>
 
@@ -179,7 +179,7 @@ export default function TipModal({
               <div>
                 <label className="block text-sm font-semibold text-white/80">Amount ($)</label>
                 <div className="relative mt-2">
-                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[#ff950e]">
+                  <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-primary">
                     <DollarSign className="h-4 w-4" />
                   </div>
                   <SecureInput
@@ -187,7 +187,7 @@ export default function TipModal({
                     value={tipAmount}
                     onChange={handleSecureAmountChange}
                     onBlur={() => setTouched(true)}
-                    className="w-full rounded-2xl border border-white/15 bg-black/60 py-3 pl-9 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                    className="w-full rounded-lg border border-white/15 bg-surface/60 py-3 pl-9 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Enter amount"
                     min="0.01"
                     max="500"
@@ -209,10 +209,10 @@ export default function TipModal({
                         setTouched(true);
                       }}
                       disabled={isProcessing || userBalance < amount}
-                      className={`rounded-xl border px-2 py-2 text-sm font-semibold transition ${
+                      className={`rounded-md border px-2 py-2 text-sm font-semibold transition ${
                         userBalance >= amount
-                          ? 'border-[#ff950e]/30 bg-[#ff950e]/10 text-[#ff950e] hover:border-[#ff950e]/50'
-                          : 'border-white/10 bg-white/5 text-gray-500 cursor-not-allowed'
+                          ? 'border-primary/30 bg-primary/10 text-primary hover:border-primary/50'
+                          : 'border-white/10 bg-white/5 text-ink-faint cursor-not-allowed'
                       }`}
                     >
                       ${amount}
@@ -222,7 +222,7 @@ export default function TipModal({
               </div>
 
               {user && (
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300">
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-ink-muted">
                   <div className="flex items-center justify-between">
                     <span>Wallet balance</span>
                     <span className="text-white font-semibold">${userBalance.toFixed(2)}</span>
@@ -243,7 +243,7 @@ export default function TipModal({
               )}
 
               {displayError && (
-                <div className="rounded-2xl border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200">
+                <div className="rounded-lg border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-200">
                   {displayError}
                 </div>
               )}
@@ -253,10 +253,10 @@ export default function TipModal({
               <button
                 type="submit"
                 disabled={disabled || userBalance < parseFloat(tipAmount || '0')}
-                className={`inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-semibold transition ${
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-md px-6 py-3 text-sm font-semibold transition ${
                   !disabled && userBalance >= parseFloat(tipAmount || '0')
-                    ? 'bg-gradient-to-r from-[#ff950e] to-[#fb923c] text-black hover:from-[#ffa733] hover:to-[#ffb347]'
-                    : 'border border-white/10 bg-white/5 text-gray-400 cursor-not-allowed'
+                    ? 'bg-primary text-black hover:bg-primary-hover active:bg-primary-press'
+                    : 'border border-white/10 bg-white/5 text-ink-muted cursor-not-allowed'
                 }`}
               >
                 {isProcessing ? (
@@ -272,7 +272,7 @@ export default function TipModal({
                 type="button"
                 onClick={onClose}
                 disabled={isProcessing}
-                className="w-full rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 disabled:opacity-50"
+                className="w-full rounded-md border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-white transition hover:border-white/30 disabled:opacity-50"
               >
                 Cancel
               </button>

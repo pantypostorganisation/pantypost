@@ -97,9 +97,9 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
     return (
       <div className="mt-12">
         <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
-        <div className="flex items-center justify-center py-10 bg-[#1a1a1a] rounded-xl border border-gray-800">
-          <Loader2 className="w-8 h-8 animate-spin text-[#ff950e]" />
-          <span className="ml-3 text-gray-400">Loading reviews...</span>
+        <div className="flex items-center justify-center py-10 bg-surface-raised rounded-md border border-line">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <span className="ml-3 text-ink-muted">Loading reviews...</span>
         </div>
       </div>
     );
@@ -110,7 +110,7 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
       <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white">Reviews</h2>
 
       {reviews.length === 0 ? (
-        <div className="text-center py-10 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
+        <div className="text-center py-10 bg-surface-raised rounded-md border border-dashed border-line text-ink-muted italic shadow-lg">
           <p className="text-lg">No reviews yet.</p>
         </div>
       ) : (
@@ -122,17 +122,17 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
             const safeDate = formatDateSafe(review.date);
 
             return (
-              <li key={key} className="bg-[#1a1a1a] border border-gray-800 rounded-xl p-6 shadow-lg">
+              <li key={key} className="bg-surface-raised border border-line rounded-md p-6 shadow-lg">
                 <div className="flex items-center gap-3 mb-3">
                   <StarRating rating={safeRating} />
-                  <span className="text-gray-400 text-sm">
+                  <span className="text-ink-muted text-sm">
                     by <span className="font-semibold text-white">{safeReviewer || 'Anonymous'}</span> on {safeDate}
                   </span>
                 </div>
 
                 <SecureMessageDisplay
                   content={review.comment}
-                  className="text-base text-gray-300 leading-relaxed mb-3"
+                  className="text-base text-ink-muted leading-relaxed mb-3"
                   allowBasicFormatting={false}
                   maxLength={1000}
                 />
@@ -140,29 +140,29 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
                 {(review.asDescribed !== undefined ||
                   review.fastShipping !== undefined ||
                   review.wouldBuyAgain !== undefined) && (
-                  <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-gray-700">
+                  <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-line">
                     {review.asDescribed && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ As Described</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md">✓ As Described</span>
                     )}
                     {review.fastShipping && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ Fast Shipping</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md">✓ Fast Shipping</span>
                     )}
                     {review.wouldBuyAgain && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-full">✓ Would Buy Again</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md">✓ Would Buy Again</span>
                     )}
                   </div>
                 )}
 
                 {review.sellerResponse && (
-                  <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border-l-4 border-[#ff950e]">
-                    <p className="text-sm font-semibold text-[#ff950e] mb-2">Seller Response:</p>
+                  <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border-l-4 border-primary">
+                    <p className="text-sm font-semibold text-primary mb-2">Seller Response:</p>
                     <SecureMessageDisplay
                       content={review.sellerResponse.text}
-                      className="text-sm text-gray-300"
+                      className="text-sm text-ink-muted"
                       allowBasicFormatting={false}
                       maxLength={500}
                     />
-                    <p className="text-xs text-gray-500 mt-2">{formatDateSafe(review.sellerResponse.date)}</p>
+                    <p className="text-xs text-ink-faint mt-2">{formatDateSafe(review.sellerResponse.date)}</p>
                   </div>
                 )}
               </li>
@@ -172,25 +172,25 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
       )}
 
       {canReview && (
-        <div className="border-t border-gray-700 pt-8 mt-8" id="review-form">
+        <div className="border-t border-line pt-8 mt-8" id="review-form">
           <h3 className="text-xl font-bold mb-4 text-white">Leave a Review</h3>
 
           {submitted ? (
-            <div className="p-6 bg-green-900/20 border border-green-600 rounded-xl">
+            <div className="p-6 bg-green-900/20 border border-green-600 rounded-md">
               <p className="text-green-500 text-lg font-semibold flex items-center">
                 <span className="text-2xl mr-2">✓</span>
                 Review submitted successfully!
               </p>
-              <p className="text-gray-400 text-sm mt-2">Thank you for your feedback.</p>
+              <p className="text-ink-muted text-sm mt-2">Thank you for your feedback.</p>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-300 mb-2">Rating</label>
+                <label className="block text-sm font-medium text-ink-muted mb-2">Rating</label>
                 <select
                   value={rating}
                   onChange={(e) => onRatingChange(Number(e.target.value))}
-                  className="block w-full max-w-[200px] border border-gray-700 rounded-lg px-3 py-2 bg-black text-white focus:outline-none focus:ring-2 focus:ring-[#ff950e]"
+                  className="block w-full max-w-[200px] border border-line rounded-lg px-3 py-2 bg-surface text-white focus:outline-none focus:ring-2 focus:ring-primary"
                   disabled={isSubmitting}
                 >
                   {[5, 4, 3, 2, 1].map((r) => (
@@ -219,11 +219,11 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
 
               {/* Additional options (informational only) */}
               <div className="mb-6 space-y-2">
-                <p className="text-sm text-gray-400 mb-2">Your review will include:</p>
+                <p className="text-sm text-ink-muted mb-2">Your review will include:</p>
                 <div className="flex flex-wrap gap-3">
-                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Item as described</span>
-                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Fast shipping</span>
-                  <span className="text-xs bg-gray-800 text-gray-300 px-3 py-1 rounded-full">✓ Would buy again</span>
+                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md">✓ Item as described</span>
+                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md">✓ Fast shipping</span>
+                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md">✓ Would buy again</span>
                 </div>
               </div>
 
@@ -236,7 +236,7 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
               <button
                 type="submit"
                 disabled={isSubmitting || !comment || comment.trim().length < 10}
-                className="bg-[#ff950e] text-black px-6 py-3 rounded-full hover:bg-[#e0850d] font-bold transition text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="bg-primary text-black px-6 py-3 rounded-md hover:bg-primary-press font-bold transition text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isSubmitting ? (
                   <>

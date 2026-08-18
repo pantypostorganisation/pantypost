@@ -62,12 +62,12 @@ export default function TipStatsComponent({ username, isOwnProfile = false }: Ti
     if (!isOwnProfile) return null;
 
     return (
-      <div className="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-lg p-4">
+      <div className="bg-gray-800/50 backdrop-blur border border-line rounded-lg p-4">
         <h3 className="text-lg font-medium text-white mb-2 flex items-center gap-2">
           <Heart className="w-5 h-5 text-pink-500" />
           Tips Received
         </h3>
-        <p className="text-gray-400">No tips received yet</p>
+        <p className="text-ink-muted">No tips received yet</p>
       </div>
     );
   }
@@ -76,7 +76,7 @@ export default function TipStatsComponent({ username, isOwnProfile = false }: Ti
   const averageTipLabel = formatCurrency(stats.averageTip);
 
   return (
-    <div className="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-lg p-4">
+    <div className="bg-gray-800/50 backdrop-blur border border-line rounded-lg p-4">
       <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
         <Heart className="w-5 h-5 text-pink-500" />
         Tips Received
@@ -84,7 +84,7 @@ export default function TipStatsComponent({ username, isOwnProfile = false }: Ti
 
       <div className="grid grid-cols-2 gap-4 mb-4">
         <div className="bg-gray-900/50 rounded p-3">
-          <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
+          <div className="flex items-center gap-2 text-ink-muted text-sm mb-1">
             <DollarSign className="w-4 h-4" />
             Total Earned
           </div>
@@ -92,7 +92,7 @@ export default function TipStatsComponent({ username, isOwnProfile = false }: Ti
         </div>
 
         <div className="bg-gray-900/50 rounded p-3">
-          <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
+          <div className="flex items-center gap-2 text-ink-muted text-sm mb-1">
             <TrendingUp className="w-4 h-4" />
             Average Tip
           </div>
@@ -102,7 +102,7 @@ export default function TipStatsComponent({ username, isOwnProfile = false }: Ti
 
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-gray-900/50 rounded p-3">
-          <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
+          <div className="flex items-center gap-2 text-ink-muted text-sm mb-1">
             <Heart className="w-4 h-4" />
             Total Tips
           </div>
@@ -110,7 +110,7 @@ export default function TipStatsComponent({ username, isOwnProfile = false }: Ti
         </div>
 
         <div className="bg-gray-900/50 rounded p-3">
-          <div className="flex items-center gap-2 text-gray-400 text-sm mb-1">
+          <div className="flex items-center gap-2 text-ink-muted text-sm mb-1">
             <Users className="w-4 h-4" />
             Unique Tippers
           </div>
@@ -119,12 +119,12 @@ export default function TipStatsComponent({ username, isOwnProfile = false }: Ti
       </div>
 
       {stats.recentTips.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-gray-700">
-          <h4 className="text-sm font-medium text-gray-400 mb-2">Recent Tips</h4>
+        <div className="mt-4 pt-4 border-t border-line">
+          <h4 className="text-sm font-medium text-ink-muted mb-2">Recent Tips</h4>
           <div className="space-y-2">
             {stats.recentTips.slice(0, 3).map((tip, index) => (
               <div key={index} className="flex justify-between items-center text-sm">
-                <span className="text-gray-300">{sanitizeStrict(tip.from)}</span>
+                <span className="text-ink-muted">{sanitizeStrict(tip.from)}</span>
                 <span className="text-green-400 font-medium">{formatCurrency(tip.amount)}</span>
               </div>
             ))}

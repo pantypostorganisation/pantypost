@@ -27,7 +27,7 @@ export default function GalleryModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-surface/90 backdrop-blur"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
@@ -39,7 +39,7 @@ export default function GalleryModal({
         {galleryImages.length > 1 && (
           <button
             onClick={onPrevious}
-            className="absolute left-6 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80"
+            className="absolute left-6 top-1/2 -translate-y-1/2 rounded-md border border-white/20 bg-surface/60 p-3 text-white shadow-lg transition hover:bg-surface/80"
             aria-label="Previous image"
             type="button"
           >
@@ -47,12 +47,12 @@ export default function GalleryModal({
           </button>
         )}
 
-        <div className="relative overflow-hidden rounded-3xl border border-white/15 bg-gradient-to-br from-black via-black/80 to-[#1b0f12] p-[3px]">
-          <div className="rounded-3xl bg-black/90 p-4">
+        <div className="relative overflow-hidden rounded-lg border border-white/15 bg-surface-raised p-[3px]">
+          <div className="rounded-lg bg-surface/90 p-4">
             <img
               src={selectedImage}
               alt="Gallery image"
-              className="max-h-[80vh] max-w-[80vw] rounded-2xl object-contain"
+              className="max-h-[80vh] max-w-[80vw] rounded-lg object-contain"
             />
           </div>
         </div>
@@ -60,7 +60,7 @@ export default function GalleryModal({
         {galleryImages.length > 1 && (
           <button
             onClick={onNext}
-            className="absolute right-6 top-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/60 p-3 text-white shadow-lg transition hover:bg-black/80"
+            className="absolute right-6 top-1/2 -translate-y-1/2 rounded-md border border-white/20 bg-surface/60 p-3 text-white shadow-lg transition hover:bg-surface/80"
             aria-label="Next image"
             type="button"
           >
@@ -70,14 +70,14 @@ export default function GalleryModal({
 
         <button
           onClick={onClose}
-          className="absolute right-8 top-8 rounded-full border border-white/20 bg-black/60 p-2 text-white transition hover:bg-black/80"
+          className="absolute right-8 top-8 rounded-md border border-white/20 bg-surface/60 p-2 text-white transition hover:bg-surface/80"
           aria-label="Close gallery"
           type="button"
         >
           <X strokeWidth={3} className="h-4 w-4" />
         </button>
 
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-full border border-white/20 bg-black/60 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-md border border-white/20 bg-surface/60 px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white">
           {currentImageIndex + 1} / {galleryImages.length}
         </div>
       </div>

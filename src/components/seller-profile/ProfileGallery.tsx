@@ -43,17 +43,17 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
   return (
     <div className="mt-12">
       <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-white flex items-center gap-2">
-        <ImageIcon className="w-7 h-7 text-[#ff950e]" />
+        <ImageIcon className="w-7 h-7 text-primary" />
         Photo Gallery
       </h2>
 
       {galleryImages.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-6 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
+        <div className="flex flex-col items-center justify-center p-6 bg-surface-raised rounded-md border border-dashed border-line text-ink-muted italic shadow-lg">
           <ImageIcon className="w-12 h-12 text-gray-600 mb-3" />
           <p className="text-lg">No gallery photos yet.</p>
         </div>
       ) : (
-        <div className="relative rounded-xl overflow-hidden border border-gray-800 shadow-xl bg-gradient-to-b from-[#1a1a1a] to-black">
+        <div className="relative rounded-md overflow-hidden border border-line bg-surface-raised">
           {/* Slideshow Container */}
           <div className="relative h-96 sm:h-[480px] overflow-hidden">
             <div
@@ -66,7 +66,7 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
                 return (
                   <div
                     key={index}
-                    className="w-full h-full flex-shrink-0 flex items-center justify-center bg-black"
+                    className="w-full h-full flex-shrink-0 flex items-center justify-center bg-surface"
                     style={{ minWidth: '100%' }}
                   >
                     <img
@@ -87,7 +87,7 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
             {galleryImages.length > 1 && (
               <>
                 <button
-                  className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
+                  className="absolute top-1/2 left-4 transform -translate-y-1/2 bg-primary text-black p-1.5 rounded-md hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
                   onClick={(e) => onPrevSlide?.(e)}
                   aria-label="Previous image"
                   type="button"
@@ -96,7 +96,7 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
                 </button>
 
                 <button
-                  className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-[#ff950e] text-black p-1.5 rounded-full hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
+                  className="absolute top-1/2 right-4 transform -translate-y-1/2 bg-primary text-black p-1.5 rounded-md hover:bg-opacity-100 z-10 shadow-lg transition-transform duration-300 hover:scale-110"
                   onClick={(e) => onNextSlide?.(e)}
                   aria-label="Next image"
                   type="button"
@@ -107,9 +107,9 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
             )}
 
             {/* Controls and image counter overlay */}
-            <div className="absolute bottom-0 left-0 right-0 flex justify-between items-center p-4 bg-gradient-to-t from-black to-transparent z-10">
+            <div className="absolute bottom-0 left-0 right-0 z-10 flex items-center justify-between bg-gradient-to-t from-black/80 to-transparent p-4">
               {/* Current slide indicator */}
-              <div className="text-white font-medium text-sm bg-black bg-opacity-60 px-3 py-1 rounded-full">
+              <div className="text-white font-medium text-sm bg-surface bg-opacity-60 px-3 py-1 rounded-md">
                 {slideIndex + 1} / {galleryImages.length}
               </div>
 
@@ -117,7 +117,7 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
               <div className="flex gap-2">
                 <button
                   onClick={onTogglePause}
-                  className="bg-black bg-opacity-60 text-white p-1 rounded-full hover:bg-opacity-80 transition-all"
+                  className="bg-surface bg-opacity-60 text-white p-1 rounded-md hover:bg-opacity-80 transition-all"
                   aria-label={isPaused ? 'Play slideshow' : 'Pause slideshow'}
                   type="button"
                 >
@@ -155,7 +155,7 @@ export default function ProfileGallery(rawProps: ProfileGalleryProps) {
 
                 <button
                   onClick={() => onImageClick(safeImageSrc(galleryImages[slideIndex]), slideIndex)}
-                  className="bg-black bg-opacity-60 text-white p-1 rounded-full hover:bg-opacity-80 transition-all flex items-center justify-center"
+                  className="bg-surface bg-opacity-60 text-white p-1 rounded-md hover:bg-opacity-80 transition-all flex items-center justify-center"
                   aria-label="View fullscreen"
                   type="button"
                 >

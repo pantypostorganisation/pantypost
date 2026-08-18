@@ -63,12 +63,12 @@ export default function ListingsGrid(props: ListingsGridProps) {
       </h2>
 
       {allListings.length === 0 ? (
-        <div className="text-center py-10 bg-[#1a1a1a] rounded-xl border border-dashed border-gray-700 text-gray-400 italic shadow-lg">
+        <div className="text-center py-10 bg-surface-raised rounded-md border border-dashed border-line text-ink-muted italic shadow-lg">
           <p className="text-lg mb-2">This seller has no active listings.</p>
           {user?.username === username && (
             <p className="text-sm mt-1">
               Go to{' '}
-              <Link href="/sellers/my-listings" className="text-[#ff950e] hover:underline">
+              <Link href="/sellers/my-listings" className="text-primary hover:underline">
                 My Listings
               </Link>{' '}
               to create one.
@@ -92,7 +92,7 @@ export default function ListingsGrid(props: ListingsGridProps) {
             return (
               <div
                 key={listing.id || `listing-${index}`}
-                className="rounded-xl border border-gray-800 bg-[#1a1a1a] shadow-lg hover:shadow-xl transition relative flex flex-col overflow-hidden"
+                className="rounded-md border border-line bg-surface-raised shadow-lg hover:shadow-xl transition relative flex flex-col overflow-hidden"
               >
                 <div className="relative w-full h-56 overflow-hidden">
                   <img
@@ -107,16 +107,16 @@ export default function ListingsGrid(props: ListingsGridProps) {
                   />
 
                   {listing.isPremium && !hasAccess && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center bg-black bg-opacity-70 text-white font-bold rounded-xl p-4">
-                      <Lock className="w-8 h-8 mb-2 text-[#ff950e]" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center bg-surface bg-opacity-70 text-white font-bold rounded-md p-4">
+                      <Lock className="w-8 h-8 mb-2 text-primary" />
                       <span className="text-lg mb-2">Premium Content</span>
-                      <p className="text-sm text-gray-300 mb-4">
+                      <p className="text-sm text-ink-muted mb-4">
                         Subscribe to {sanitizedUsername} to unlock this listing.
                       </p>
                       {user?.role === 'buyer' && user.username !== username && (
                         <button
                           onClick={onShowSubscribeModal}
-                          className="bg-[#ff950e] text-black text-sm font-bold px-4 py-2 rounded-full hover:bg-[#e0850d] transition"
+                          className="bg-primary text-black text-sm font-bold px-4 py-2 rounded-md hover:bg-primary-press transition"
                           type="button"
                         >
                           Subscribe Now
@@ -127,14 +127,14 @@ export default function ListingsGrid(props: ListingsGridProps) {
 
                   {listing.isPremium && hasAccess && (
                     <div className="absolute top-3 right-3 z-10">
-                      <span className="bg-[#ff950e] text-black text-xs px-3 py-1.5 rounded-full font-bold flex items-center shadow">
+                      <span className="bg-primary text-black text-xs px-3 py-1.5 rounded-md font-bold flex items-center shadow">
                         <Crown className="w-4 h-4 mr-1" /> Premium
                       </span>
                     </div>
                   )}
 
                   {typeof listing.hoursWorn === 'number' && Number.isFinite(listing.hoursWorn) && (
-                    <div className="absolute bottom-3 left-3 bg-black bg-opacity-70 text-white text-xs px-2.5 py-1.5 rounded-full flex items-center gap-1">
+                    <div className="absolute bottom-3 left-3 bg-surface bg-opacity-70 text-white text-xs px-2.5 py-1.5 rounded-md flex items-center gap-1">
                       <Clock className="w-3 h-3" /> {listing.hoursWorn} Hours Worn
                     </div>
                   )}
@@ -145,7 +145,7 @@ export default function ListingsGrid(props: ListingsGridProps) {
                     <SecureMessageDisplay content={sanitizedTitle} allowBasicFormatting={false} />
                   </h3>
 
-                  <div className="text-sm text-gray-400 mb-3 line-clamp-2 flex-grow">
+                  <div className="text-sm text-ink-muted mb-3 line-clamp-2 flex-grow">
                     <SecureMessageDisplay content={sanitizedDescription} allowBasicFormatting={false} />
                   </div>
 
@@ -154,7 +154,7 @@ export default function ListingsGrid(props: ListingsGridProps) {
                       {listing.tags.slice(0, 12).map((tag, idx) => (
                         <span
                           key={`${listing.id}-tag-${idx}`}
-                          className="bg-gray-700 text-gray-300 text-xs px-2 py-0.5 rounded-full"
+                          className="bg-gray-700 text-ink-muted text-xs px-2 py-0.5 rounded-md"
                         >
                           {sanitizeStrict(tag)}
                         </span>
@@ -162,15 +162,25 @@ export default function ListingsGrid(props: ListingsGridProps) {
                     </div>
                   )}
 
-                  <div className="flex justify-between items-center mt-auto pt-3 border-t border-gray-700">
-                    <p className="text-[#ff950e] font-bold text-xl">{priceLabel}</p>
+                  <div className="flex justify-between items-center mt-auto pt-3 border-t border-line">
+                    <p className="text-primary font-bold text-xl">{priceLabel}</p>
 
                     {(!listing.isPremium || hasAccess) && (
                       <Link
                         href={`/browse/${encodeURIComponent(listing.id)}`}
-                        className="inline-flex items-center gap-1 text-sm bg-[#ff950e] text-black px-4 py-2 rounded-full hover:bg-[#e0850d] font-bold transition"
+                        className="inline-flex items-center gap-1 rounded-md bg-primary px-4 py-2 text-sm font-bold transition-colors hover:bg-primary-hover active:bg-primary-press"
+                        style={{ color: '#000' }}
                       >
-                        View
+                        {/* The label is wrapped in a span, and the inline
+                            style is on the Link.
+
+                            globals.css declares `a { color: var(--color-primary) }`
+                            OUTSIDE any cascade layer, and unlayered rules beat
+                            layered ones -- so a Tailwind `text-black` utility on
+                            an <a> loses and the button renders orange text on an
+                            orange fill, which is what you saw. Nothing unlayered
+                            targets <span>. */}
+                        <span className="text-black">View</span>
                       </Link>
                     )}
                   </div>

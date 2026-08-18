@@ -31,25 +31,25 @@ export default function ProfileStats(rawProps: ProfileStatsProps) {
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-      <div className="bg-[#1a1a1a] p-4 rounded-xl text-center border border-gray-800">
-        <Camera className="w-6 h-6 mx-auto mb-2 text-[#ff950e]" />
+      <div className="bg-surface-raised p-4 rounded-md text-center border border-line">
+        <Camera className="w-6 h-6 mx-auto mb-2 text-primary" />
         <p className="text-2xl font-bold text-white">{totalPhotos}</p>
-        <p className="text-sm text-gray-400">Photos</p>
+        <p className="text-sm text-ink-muted">Photos</p>
       </div>
-      <div className="bg-[#1a1a1a] p-4 rounded-xl text-center border border-gray-800">
-        <Video className="w-6 h-6 mx-auto mb-2 text-[#ff950e]" />
+      <div className="bg-surface-raised p-4 rounded-md text-center border border-line">
+        <Video className="w-6 h-6 mx-auto mb-2 text-primary" />
         <p className="text-2xl font-bold text-white">{totalVideos}</p>
-        <p className="text-sm text-gray-400">Videos</p>
+        <p className="text-sm text-ink-muted">Videos</p>
       </div>
-      <div className="bg-[#1a1a1a] p-4 rounded-xl text-center border border-gray-800">
-        <Users className="w-6 h-6 mx-auto mb-2 text-[#ff950e]" />
+      <div className="bg-surface-raised p-4 rounded-md text-center border border-line">
+        <Users className="w-6 h-6 mx-auto mb-2 text-primary" />
         <p className="text-2xl font-bold text-white">{followers}</p>
-        <p className="text-sm text-gray-400">Followers</p>
+        <p className="text-sm text-ink-muted">Followers</p>
       </div>
-      <div className="bg-[#1a1a1a] p-4 rounded-xl text-center border border-gray-800">
-        <Star className="w-6 h-6 mx-auto mb-2 text-[#ff950e]" />
+      <div className="bg-surface-raised p-4 rounded-md text-center border border-line">
+        <Star className="w-6 h-6 mx-auto mb-2 text-primary" />
         <p className="text-2xl font-bold text-white">{avgDisplay}</p>
-        <p className="text-sm text-gray-400">{reviewsCount} {reviewsCount === 1 ? 'Review' : 'Reviews'}</p>
+        <p className="text-sm text-ink-muted">{reviewsCount} {reviewsCount === 1 ? 'Review' : 'Reviews'}</p>
       </div>
     </div>
   );
