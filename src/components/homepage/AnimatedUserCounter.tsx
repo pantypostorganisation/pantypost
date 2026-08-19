@@ -4,7 +4,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
-import { CheckCircle, Users, TrendingUp } from 'lucide-react';
+import { CircleUserRound, Users, TrendingUp } from 'lucide-react';
 import { userStatsService } from '@/services/userStats.service';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -290,7 +290,11 @@ export default function AnimatedUserCounter({
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <CheckCircle className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
+        {/* Was the circled tick -- a tick says "task complete", not
+            "people". A head-and-shoulders in a circle says users, and the
+            circle matches the payments counter's icon so the pair carry
+            the same visual weight. */}
+        <CircleUserRound className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
         <span className="text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap">
           Trusted by{' '}
           <span className="relative inline-block">
