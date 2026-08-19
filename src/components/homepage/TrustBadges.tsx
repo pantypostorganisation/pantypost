@@ -32,8 +32,16 @@ export default function TrustBadges() {
          chip: the longest label ("Secure & Private") is ~87px at 11px
          Inter Medium, + 38px of icon/gap/padding/borders = ~125px,
          leaving 5px slack. If a label ever gets longer, re-check that
-         budget before it silently wraps. */
-      className="grid grid-cols-2 gap-2 mt-6 w-full sm:grid-cols-4 sm:w-[34rem]" 
+         budget before it silently wraps.
+
+         Radius is rounded-sm ON PURPOSE, not drift. The buttons use
+         0.75rem on a 52px-tall element (23% of height); the same
+         0.75rem on a 34px chip curves through far more of the edge and
+         reads rounder despite being the identical number -- verified:
+         both resolved to 0.75rem before this change. 0.5rem is the
+         chip-height equivalent of the buttons' curvature. mt-4 makes
+         the row gap equal the buttons' own 1rem gap. */
+      className="grid grid-cols-2 gap-2 mt-4 w-full sm:grid-cols-4 sm:w-[34rem]" 
       variants={containerVariants}
       role="region"
       aria-label="Trust and security indicators"
@@ -41,7 +49,7 @@ export default function TrustBadges() {
       {trustBadges.map((badge, index) => (
         <motion.span
           key={`trust-badge-${index}`}
-          className="flex items-center justify-center gap-1.5 bg-white/5 backdrop-blur-lg text-gray-200 px-2 py-2 sm:py-1.5 rounded-md border border-white/10 shadow-sm transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-md hover:scale-105 group cursor-default"
+          className="flex items-center justify-center gap-1.5 bg-white/5 backdrop-blur-lg text-gray-200 px-2 py-2 sm:py-1.5 rounded-sm border border-white/10 shadow-sm transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-md hover:scale-105 group cursor-default"
           variants={itemVariants}
           whileHover={{ 
             scale: 1.05,
