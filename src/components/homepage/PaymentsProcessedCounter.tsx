@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign } from 'lucide-react';
+import MoneyBillWave from '@/components/icons/MoneyBillWave';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -326,13 +326,11 @@ export default function PaymentsProcessedCounter({
       transition={{ duration: 0.5 }}
       aria-label="Payments processed"
     >
-      {/* Rendered every candidate at the real 20px hero size before
-          settling this: the banknote's inner detail collapses, Material's
-          attach_money draws thinner than everything else, and hand-coins
-          is unreadable. The default 2px dollar glyph was fine but light --
-          at 2.75 it is the boldest, clearest mark of the lot. If this ever
-          feels heavy, tune strokeWidth; do not switch icon libraries. */}
-      <DollarSign className={iconClasses} strokeWidth={2.75} aria-hidden="true" />
+      {/* Solid wave banknote, paired with the solid-filled person on the
+          users counter. Solid + solid is the point: a filled glyph next
+          to a 2px outline is the weight mismatch this row started with.
+          If either icon changes, change both or match their weights. */}
+      <MoneyBillWave className={iconClasses} />
       <span className={textClasses}>
         Payments processed{' '}
         <span className="relative inline-block">

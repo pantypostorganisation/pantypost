@@ -291,9 +291,10 @@ export default function AnimatedUserCounter({
         transition={{ duration: 0.5 }}
       >
         {/* Was the circled tick -- a tick says "task complete", not
-            "people". Bare head-and-shoulders, no enclosure, per Oakley:
-            the label text carries the weight, the glyph just cues it. */}
-        <UserRound className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
+            "people". Solid-filled head-and-shoulders, weight-matched to
+            the solid wave banknote on the payments counter: fill both or
+            stroke both, never one of each. */}
+        <UserRound fill="currentColor" className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
         <span className="text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap">
           Trusted by{' '}
           <span className="relative inline-block">
