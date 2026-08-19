@@ -100,6 +100,22 @@
   letter-spacing: -0.01em;
 }
 
+/* Equal widths. Neither button declares a width, so each sized to its
+   own label and "Browse Listings" rendered ~40px wider than "Start
+   Selling" -- the pair read as accidental. A shared min-width (not
+   width) keeps them identical while still letting longer copy grow both
+   if the labels ever change. Scoped to the same breakpoint where the
+   group switches to a row; below it they stack full-width and are equal
+   by definition -- and an unconditional 17rem would overflow a 320px
+   viewport. .ctaInner already centres at width:100%, so the shorter
+   label sits correctly in the extra room. */
+@media (min-width: 640px) {
+  .browseListingsBtn,
+  .startSellingBtn {
+    min-width: 17rem;
+  }
+}
+
 /* SECONDARY — ghost.
    Two identically-styled buttons meant the page had no primary action,
    while seller signup is the business priority. This one steps back:
