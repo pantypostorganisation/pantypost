@@ -291,10 +291,11 @@ export default function AnimatedUserCounter({
         transition={{ duration: 0.5 }}
       >
         {/* Was the circled tick -- a tick says "task complete", not
-            "people". Solid-filled head-and-shoulders, weight-matched to
-            the solid wave banknote on the payments counter: fill both or
-            stroke both, never one of each. */}
-        <UserRound fill="currentColor" className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
+            "people". Stroked outline, next to the SOLID wave banknote on
+            the payments counter -- reviewed live and chosen deliberately
+            (19 Aug 2026): the contrast reads as intentional on the real
+            page. Do not "fix" this into a matched pair without asking. */}
+        <UserRound className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
         <span className="text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap">
           Trusted by{' '}
           <span className="relative inline-block">

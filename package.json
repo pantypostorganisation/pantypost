@@ -2,11 +2,19 @@
   "name": "pantypost",
   "version": "0.1.0",
   "private": true,
+  "allowScripts": {
+    "@sentry/cli": true,
+    "@tailwindcss/oxide": true,
+    "sharp": true,
+    "unrs-resolver": true,
+    "msw": false,
+    "puppeteer": false
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "npm run build:clean && npm run build:next",
     "build:clean": "rimraf .next out",
-    "build:next": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build && npm run postbuild",
+    "build:next": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "next lint",
     "postbuild": "npm run generate-icons",
@@ -93,3 +101,5 @@
     "webpack-bundle-analyzer": "^4.10.2"
   }
 }
+
+
