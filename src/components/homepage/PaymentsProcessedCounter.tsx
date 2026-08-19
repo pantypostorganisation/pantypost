@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { CircleDollarSign } from 'lucide-react';
+import { Banknote } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -326,9 +326,10 @@ export default function PaymentsProcessedCounter({
       transition={{ duration: 0.5 }}
       aria-label="Payments processed"
     >
-      {/* Was the bare glyph next to the users counter's circled icon --
-          mismatched weights made both look off. Circled pair now. */}
-      <CircleDollarSign className={iconClasses} aria-hidden="true" />
+      {/* A banknote, not a dollar glyph: the figure beside this icon
+          already begins with "$", so a dollar-sign icon said the same
+          thing twice -- and bare, it read as thin next to the label. */}
+      <Banknote className={iconClasses} aria-hidden="true" />
       <span className={textClasses}>
         Payments processed{' '}
         <span className="relative inline-block">
