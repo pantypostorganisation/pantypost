@@ -100,19 +100,27 @@
   letter-spacing: -0.01em;
 }
 
-/* Equal widths. Neither button declares a width, so each sized to its
-   own label and "Browse Listings" rendered ~40px wider than "Start
-   Selling" -- the pair read as accidental. A shared min-width (not
-   width) keeps them identical while still letting longer copy grow both
-   if the labels ever change. Scoped to the same breakpoint where the
-   group switches to a row; below it they stack full-width and are equal
-   by definition -- and an unconditional 17rem would overflow a 320px
-   viewport. .ctaInner already centres at width:100%, so the shorter
-   label sits correctly in the extra room. */
+/* Equal widths, married to the trust chips below.
+
+   The hero action block is ONE 34rem (544px) unit shared by two rows:
+
+     buttons:  16.5rem + 1rem gap + 16.5rem              = 34rem
+     chips:    4 x 8.125rem + 3 x 0.5rem gaps            = 34rem
+               (see TrustBadges.tsx -- keep the two in sync)
+
+   34rem is not arbitrary: the left hero column caps at ~547px on xl
+   screens (45% of the 1216px container), and the previous 2 x 17rem row
+   was already overflowing it by 13px. 544 is the largest block that
+   fits the column AND gives the longest chip label room at 11px.
+
+   min-width (not width) so longer copy can still grow both buttons.
+   Scoped to the row breakpoint; below it everything stacks full-width
+   and is equal by definition. .ctaInner centres at width:100%, so the
+   shorter label sits correctly in the extra room. */
 @media (min-width: 640px) {
   .browseListingsBtn,
   .startSellingBtn {
-    min-width: 17rem;
+    min-width: 16.5rem;
   }
 }
 
