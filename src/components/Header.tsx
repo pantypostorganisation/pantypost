@@ -126,7 +126,7 @@ export default function Header(): React.ReactElement | null {
 
   /* Drives the body scroll-lock effect ONLY. Render must never branch
      on this: it is `false` during SSR and on every fresh mount, so any
-     `isMobile ? â€¦ : â€¦` in JSX paints one desktop frame first â€” which is
+     `isMobile ? ... : ...` in JSX paints one desktop frame first -- which is
      exactly the flash of desktop nav buttons iPhones showed when leaving
      a chat (ClientLayout remounts this header when the thread closes).
      Mobile/desktop visibility in the markup is pure CSS (md:hidden /
@@ -312,48 +312,40 @@ export default function Header(): React.ReactElement | null {
       return { active: [] as UINotification[], cleared: [] as UINotification[] };
     }
 
-    const addNotificationEmojis = (message: string): string => {
-      const sanitizedMessage = sanitizeStrict(message);
-      
-      if (sanitizedMessage.match(/^[Ã°Å¸Å½â€°Ã°Å¸â€™Â¸Ã°Å¸â€™Â°Ã°Å¸â€ºâ€™Ã°Å¸â€Â¨Ã¢Å¡Â Ã¯Â¸ÂÃ¢â€žÂ¹Ã¯Â¸ÂÃ°Å¸â€ºâ€˜Ã°Å¸Ââ€ Ã°Å¸â€ºÂÃ¯Â¸Â]/)) {
-        return sanitizedMessage;
-      }
-      
-      if (sanitizedMessage.includes('subscribed to you')) return `Ã°Å¸Å½â€° ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Tip received') || sanitizedMessage.includes('tipped you')) return `Ã°Å¸â€™Â¸ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('New custom order')) return `Ã°Å¸â€ºâ€™ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('New bid')) return `Ã°Å¸â€™Â° ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('created a new auction')) return `Ã°Å¸â€Â¨ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('cancelled your auction')) return `Ã°Å¸â€ºâ€˜ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Reserve price not met')) return `Ã°Å¸â€Â¨ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('No bids were placed')) return `Ã°Å¸â€Â¨ ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('insufficient funds') || sanitizedMessage.includes('payment error')) return `Ã¢Å¡Â Ã¯Â¸Â ${sanitizedMessage}`;
-      if (sanitizedMessage.includes('Original highest bidder')) return `Ã¢â€žÂ¹Ã¯Â¸Â ${sanitizedMessage}`;
-      
-      return sanitizedMessage;
-    };
+    /* The emoji-prefix decorator that lived here is deleted, not
+       repaired. Two things were wrong with it. First, every emoji
+       literal in it had been mojibake'd by tooling round-trips (twice
+       over), so a tip or bid notification rendered leading garbage
+       bytes in the dropdown, in production. Second, even healthy it
+       broke the design rule: no emoji as icons. The strip below cleans
+       any emoji that legacy stored notifications still carry;
+       \p{Extended_Pictographic} is the Unicode property class for
+       pictographs and cannot be corrupted because it contains no
+       literal emoji bytes. */
+    const stripLegacyEmojiPrefix = (message: string): string =>
+      sanitizeStrict(message).replace(/^[\p{Extended_Pictographic}\uFE0F\s]+/u, '').trim();
 
     const deduplicateNotifications = (notifications: UINotification[]): UINotification[] => {
       const seen = new Map<string, UINotification>();
       const deduped: UINotification[] = [];
 
       for (const n of notifications) {
-        const cleanMessage = (n.message || '').replace(/^[Ã°Å¸Å½â€°Ã°Å¸â€™Â¸Ã°Å¸â€™Â°Ã°Å¸â€ºâ€™Ã°Å¸â€Â¨Ã¢Å¡Â Ã¯Â¸ÂÃ¢â€žÂ¹Ã¯Â¸ÂÃ°Å¸â€ºâ€˜Ã°Å¸Ââ€ Ã°Å¸â€ºÂÃ¯Â¸Â]\s*/, '').trim();
+        const cleanMessage = stripLegacyEmojiPrefix(n.message || '');
         const timestamp = new Date(n.timestamp || Date.now());
         const timeWindow = Math.floor(timestamp.getTime() / (60 * 1000));
         const key = `${cleanMessage}_${timeWindow}`;
 
         if (!seen.has(key)) {
-          const withEmoji = { ...n, message: addNotificationEmojis(n.message) };
-          seen.set(key, withEmoji);
-          deduped.push(withEmoji);
+          const cleanedNotification = { ...n, message: stripLegacyEmojiPrefix(n.message) };
+          seen.set(key, cleanedNotification);
+          deduped.push(cleanedNotification);
         } else {
           const existing = seen.get(key)!;
           if (timestamp > new Date(existing.timestamp || 0)) {
-            const withEmoji = { ...n, message: addNotificationEmojis(n.message) };
-            seen.set(key, withEmoji);
+            const cleanedNotification = { ...n, message: stripLegacyEmojiPrefix(n.message) };
+            seen.set(key, cleanedNotification);
             const idx = deduped.findIndex((x) => x.id === existing.id);
-            if (idx !== -1) deduped[idx] = withEmoji;
+            if (idx !== -1) deduped[idx] = cleanedNotification;
           }
         }
       }
@@ -467,7 +459,7 @@ export default function Header(): React.ReactElement | null {
         /* Both flags have to be falsy.
            
            The API returns `isRead`; only the websocket path and the local
-           mark-as-read set `read`. Checking `read` alone Ã¢â‚¬â€ as this did Ã¢â‚¬â€
+           mark-as-read set `read`. Checking `read` alone -- as this did --
            counts every already-read message the server told us about,
            because `read` is simply undefined on anything that arrived via
            a normal fetch. MessageContext's own per-thread count already
@@ -522,7 +514,7 @@ export default function Header(): React.ReactElement | null {
   }, [isAdminUser]);
 
   // Pending-moderation badge. Exists because the queue is invisible
-  // unless an admin thinks to open /admin/approval Ã¢â‚¬â€ content sat
+  // unless an admin thinks to open /admin/approval -- content sat
   // unreviewed for days purely for lack of a signal. Polling plus a
   // focus refresh is deliberately boring: a websocket event would be
   // fancier, but a 60s-stale count on a moderation badge is fine and
@@ -1117,7 +1109,7 @@ export default function Header(): React.ReactElement | null {
                 <ClipboardCheck className="w-3.5 h-3.5 text-purple-300" />
                 <span className="sr-only">Approval</span>
                 {approvalCount > 0 && (
-                  /* Black on the accent Ã¢â‚¬â€ white here is 2.20:1 and fails. */
+                  /* Black on the accent -- white here is 2.20:1 and fails. */
                   <span className="absolute -top-2 -right-2 min-w-[18px] rounded-full border-2 border-white bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold text-black">
                     {approvalCount > 99 ? '99+' : approvalCount}
                   </span>
@@ -1440,7 +1432,7 @@ export default function Header(): React.ReactElement | null {
                 href="/signup"
                 /* Solid brand fill: this is the primary action in the
                    header for a signed-out visitor, and the only filled
-                   orange element up here. Black label — white on #ff950e
+                   orange element up here. Black label -- white on #ff950e
                    is 2.20:1 and fails AA. The inline colour is the guard
                    against the unlayered `a {}` rule in globals.css that
                    would otherwise render this orange-on-orange. */

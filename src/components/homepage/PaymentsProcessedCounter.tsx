@@ -143,7 +143,7 @@ export default function PaymentsProcessedCounter({
   /* The subscription effect below used to depend on updateValue directly.
      updateValue's identity changes whenever hasInitialLoad flips, and the
      websocket context objects are NOT identity-stable across provider
-     re-renders — so the effect tore down and rebuilt the subscription
+     re-renders -- so the effect tore down and rebuilt the subscription
      repeatedly, each time waiting 1s before re-subscribing. Any stats
      event arriving in those gaps was silently dropped.
 
@@ -366,7 +366,7 @@ export default function PaymentsProcessedCounter({
       </span>
       {process.env.NODE_ENV === 'development' && compact && (
         <span className={`ml-1 text-[8px] ${publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
-          {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'â—' : 'â—‹'}
+          {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? '\u25CF' : '\u25CB'}
         </span>
       )}
     </motion.div>

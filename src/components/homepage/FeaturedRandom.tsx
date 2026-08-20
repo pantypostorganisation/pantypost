@@ -12,8 +12,8 @@ import { resolveApiUrl } from '@/utils/url';
 
 // Enhanced loading skeleton component - matching browse page dimensions
 const ListingSkeleton = React.memo(() => (
-  /* Mirrors the real card exactly — square image, title, two-line
-     description slot, price, seller footer — so nothing shifts when the
+  /* Mirrors the real card exactly -- square image, title, two-line
+     description slot, price, seller footer -- so nothing shifts when the
      data lands. */
   <div className="overflow-hidden rounded-lg border border-line bg-surface-raised">
     <div className="aspect-square animate-pulse bg-surface-overlay" />
@@ -40,7 +40,7 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
   const [sellerPicFailed, setSellerPicFailed] = useState(false);
 
   /* GET /api/listings populates sellerProfile.pic via
-     populateSellerProfile(), so the photo is already in the payload —
+     populateSellerProfile(), so the photo is already in the payload --
      this card just never rendered it and always drew the initial.
      resolveApiUrl turns a relative /uploads/... path into an absolute
      one, the same way the browse card does. */
@@ -173,7 +173,7 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
             </div>
           )}
 
-          {/* Auction countdown, bottom-left of the image — the one place
+          {/* Auction countdown, bottom-left of the image -- the one place
               auction cards may differ, because it is time-critical and
               belongs on the photo, not in the text column. */}
           {isAuction && listing.auction && formatTimeRemaining && (
@@ -199,7 +199,7 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
             {listing.description}
           </p>
 
-          {/* Price — same position and shape on both variants. Auctions
+          {/* Price -- same position and shape on both variants. Auctions
               add a label and bid count instead of changing the layout. */}
           <div className="mt-3">
             <div className="flex items-baseline gap-2">
@@ -241,7 +241,7 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
             )}
           </div>
 
-          {/* Seller — pinned to the bottom of every card by mt-auto, with
+          {/* Seller -- pinned to the bottom of every card by mt-auto, with
               a hairline separator so it reads as the card's footer. */}
           <div className="mt-auto flex items-center gap-2 border-t border-line pt-3">
             {resolvedSellerPic && !sellerPicFailed ? (
@@ -377,7 +377,9 @@ export default function FeaturedRandom() {
           className="text-xs font-medium text-primary transition-colors hover:text-primary-hover hover:underline underline-offset-4 sm:text-sm"
           prefetch={false}
         >
-          View all â†’
+          {/* Unicode escape on purpose: this file has been mojibake'd
+              by tooling round-trips before; escapes cannot corrupt. */}
+          View all {'\u2192'}
         </Link>
       </div>
 
@@ -392,3 +394,4 @@ export default function FeaturedRandom() {
     </section>
   );
 }
+

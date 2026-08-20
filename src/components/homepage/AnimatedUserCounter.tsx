@@ -50,12 +50,12 @@ export default function AnimatedUserCounter({
   // Spring animation for smooth counting
   /* Tuned to finish alongside PaymentsProcessedCounter, which runs a
      fixed 2000ms eased count-up. This one is a spring, so it has no
-     duration to set — the settle time comes from the physics.
+     duration to set -- the settle time comes from the physics.
 
      A spring's period scales with 1/sqrt(stiffness), so quartering
      stiffness (65 -> 16) roughly doubles the time to rest, taking it
      from ~1s to ~2s. Damping drops with it (14 -> 7) to hold the same
-     damping ratio (~0.87, just under critical) — otherwise the lower
+     damping ratio (~0.87, just under critical) -- otherwise the lower
      stiffness would read as sluggish and over-damped rather than
      slower. restDelta 0.5 stops it settling on fractions the display
      rounds away anyway.
@@ -119,7 +119,7 @@ export default function AnimatedUserCounter({
   /* The subscription effect below used to depend on updateCount directly.
      updateCount's identity changes whenever hasInitialLoad flips, and the
      websocket context objects are NOT identity-stable across provider
-     re-renders — so the effect tore down and rebuilt the subscription
+     re-renders -- so the effect tore down and rebuilt the subscription
      repeatedly, each time waiting 1s before re-subscribing. Any stats
      event arriving in those gaps was silently dropped.
 
@@ -341,7 +341,7 @@ export default function AnimatedUserCounter({
         </span>
         {process.env.NODE_ENV === 'development' && (
           <span className={`ml-1 text-[8px] ${publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
-            {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'â—' : 'â—‹'}
+            {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? '\u25CF' : '\u25CB'}
           </span>
         )}
       </motion.div>
