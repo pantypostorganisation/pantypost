@@ -41,6 +41,18 @@ const codeVerifyLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+/* /verify-username had no limiter at all: unlimited-speed username
+   enumeration, which on an adult platform is also a privacy surface
+   and the raw material for targeted credential-stuffing lists. The
+   ceiling is generous because the signup form calls this while the
+   user types; real users never notice it, scrapers do. Note this and
+   every limiter above only work per-IP because server.js sets
+   `trust proxy` -- see the comment there before changing either. */
+const usernameCheckLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,
+});
+
 const emailSendLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
@@ -1004,7 +1016,7 @@ router.post('/refresh', async (req, res) => {
 });
 
 // GET /api/auth/verify-username
-router.get('/verify-username', async (req, res) => {
+router.get('/verify-username', usernameCheckLimiter, async (req, res) => {
   try {
     const username = cleanUsername(req.query.username);
     if (!isValidUsername(username)) {
@@ -1381,3 +1393,5 @@ router.post('/reset-password', codeVerifyLimiter, async (req, res) => {
 });
 
 module.exports = router;
+
+

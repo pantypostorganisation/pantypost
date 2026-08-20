@@ -103,6 +103,22 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
   process.exit(1);
 }
 
+// =====================================================
+// CRITICAL: trust exactly ONE proxy hop (nginx).
+//
+// Without this, Express behind nginx reports req.ip as 127.0.0.1 for
+// every visitor, so every express-rate-limit bucket in auth.routes.js
+// (and complaint/report/traffic routes) was ONE SHARED GLOBAL BUCKET:
+// 20 login attempts per 15 minutes for the entire userbase combined.
+// One hostile request every 45 seconds would have locked every real
+// user out of login, signup and password reset indefinitely.
+//
+// The value must be 1, not true: `true` trusts the whole client-
+// supplied X-Forwarded-For chain, which lets an attacker spoof a fresh
+// IP per request and bypass the limits instead.
+// =====================================================
+app.set('trust proxy', 1);
+
 // Create HTTP server
 const server = http.createServer(app);
 
