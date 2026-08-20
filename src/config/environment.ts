@@ -483,7 +483,9 @@ export function validateConfiguration(): { valid: boolean; errors: string[] } {
 
   // Validate monitoring in production
   if (isProduction() && errorReportingConfig.requested && !errorReportingConfig.sentryDsn) {
-    errors.push('Sentry DSN is required when error reporting is enabled');
+    errors.push(
+      'Error reporting is enabled (NEXT_PUBLIC_ENABLE_ERROR_REPORTING defaults to true in production) but NEXT_PUBLIC_SENTRY_DSN is empty. Either set a Sentry DSN, or set NEXT_PUBLIC_ENABLE_ERROR_REPORTING=false in the deployment environment.'
+    );
   }
 
   return {
@@ -496,7 +498,10 @@ export function validateConfiguration(): { valid: boolean; errors: string[] } {
 export const validateEnvironment = (): void => {
   const validation = validateConfiguration();
   if (!validation.valid && isProduction()) {
-    console.warn('[Environment] Configuration validation errors:', validation.errors);
+    /* Was `console.warn(label, errors)` -- browsers collapse that to
+       "Array(1)", which is why this stayed undiagnosed for months. Each
+       error now prints as its own readable line. */
+    validation.errors.forEach((e) => console.warn('[Environment] ' + e));
   }
 };
 
@@ -533,7 +538,10 @@ if (isDevelopment() && typeof window !== 'undefined') {
   
   const validation = validateConfiguration();
   if (!validation.valid) {
-    console.warn('[Environment] Configuration validation errors:', validation.errors);
+    /* Was `console.warn(label, errors)` -- browsers collapse that to
+       "Array(1)", which is why this stayed undiagnosed for months. Each
+       error now prints as its own readable line. */
+    validation.errors.forEach((e) => console.warn('[Environment] ' + e));
   }
 }
 
@@ -541,3 +549,4 @@ if (isDevelopment() && typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   validateEnvironment();
 }
+

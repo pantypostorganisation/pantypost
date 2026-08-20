@@ -62,15 +62,24 @@ async function enrichPostsWithAuthorInfo(posts, viewerUsername = null) {
 }
 
 // Helper: Send notification (async, non-blocking)
-async function sendNotification(userId, type, data) {
+//
+// This wrote `userId: user._id` since the day it was written. The
+// Notification schema has no userId field -- it requires `recipient`,
+// a username string (every static on the model uses usernames). So
+// every follow, like and comment notification failed Mongoose
+// validation, landed in the catch below, printed one console line
+// nobody was watching, and vanished. The Explore feed's entire
+// engagement loop was silently dead.
+async function sendNotification(recipientUsername, type, data) {
   try {
-    if (!userId) return;
-    
-    const user = await User.findOne({ username: userId });
+    if (!recipientUsername) return;
+
+    // Existence check only -- the schema stores the username itself.
+    const user = await User.findOne({ username: recipientUsername });
     if (!user) return;
-    
+
     await Notification.create({
-      userId: user._id,
+      recipient: user.username,
       type,
       title: data.title,
       message: data.message,
@@ -773,3 +782,4 @@ router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+

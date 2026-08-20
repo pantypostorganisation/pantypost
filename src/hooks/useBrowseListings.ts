@@ -109,7 +109,6 @@ export const useBrowseListings = () => {
     
     try {
       setIsLoading(true);
-      console.log('[useBrowseListings] Fetching fresh listings from API...');
       
       // Clear the listings service cache to force fresh data
       listingsService.clearCache();
@@ -118,7 +117,6 @@ export const useBrowseListings = () => {
       const result = await listingsService.getListings({ isActive: true });
       
       if (result.success && result.data && mountedRef.current) {
-        console.log('[useBrowseListings] Got fresh listings:', result.data.length);
         setFreshListings(result.data);
         setLastFetchTime(Date.now());
       }
@@ -151,7 +149,6 @@ export const useBrowseListings = () => {
   // Listen for any events that should trigger a refresh
   useEffect(() => {
     const handleRefreshNeeded = () => {
-      console.log('[useBrowseListings] Refresh triggered by event');
       fetchFreshListings();
     };
     
@@ -207,10 +204,11 @@ export const useBrowseListings = () => {
   }, []);
 
   // Apply filters to fresh listings (not context listings)
+  /* The step-by-step "=== Filtering listings ===" console narration
+     that lived through this memo shipped to every visitor's browser and
+     to the Vercel build log. Debug locally with the React devtools or a
+     temporary log; nothing here should print in production. */
   const filteredListings = useMemo(() => {
-    console.log('=== Filtering listings ===');
-    console.log('Fresh listings count:', freshListings.length);
-    console.log('Current filters:', { filter, searchTerm: debouncedSearchTerm, minPrice, maxPrice, sortBy, selectedHourRange });
 
     let filtered = [...freshListings];
 
@@ -227,7 +225,6 @@ export const useBrowseListings = () => {
       return endTime > now;
     });
     
-    console.log('After active filter:', filtered.length);
     
     // Apply category filter
     if (filter !== 'all') {
@@ -239,7 +236,6 @@ export const useBrowseListings = () => {
       });
     }
     
-    console.log('After category filter:', filtered.length);
     
     // Apply search filter
     if (debouncedSearchTerm) {
@@ -252,7 +248,6 @@ export const useBrowseListings = () => {
       );
     }
     
-    console.log('After search filter:', filtered.length);
     
     // Apply price filters
     if (minPrice) {
@@ -275,7 +270,6 @@ export const useBrowseListings = () => {
       }
     }
     
-    console.log('After price filter:', filtered.length);
     
     // Apply hour range filter
     filtered = filtered.filter(listing => {
@@ -283,7 +277,6 @@ export const useBrowseListings = () => {
       return hoursWorn >= selectedHourRange.min && hoursWorn <= selectedHourRange.max;
     });
     
-    console.log('After hour range filter:', filtered.length);
     
     // Apply sorting
     filtered.sort((a, b) => {
@@ -308,7 +301,6 @@ export const useBrowseListings = () => {
       }
     });
     
-    console.log('Final filtered count:', filtered.length);
     return filtered;
   }, [freshListings, filter, debouncedSearchTerm, minPrice, maxPrice, selectedHourRange, sortBy]);
 
@@ -470,7 +462,6 @@ export const useBrowseListings = () => {
           };
         }
         
-        console.log(`[Browse] Seller ${listing.seller} verification from backend:`, isSellerVerified);
         
         return {
           ...listing,
@@ -485,7 +476,6 @@ export const useBrowseListings = () => {
       const start = page * PAGE_SIZE;
       const end = start + PAGE_SIZE;
       
-      console.log(`Paginating: page ${page}, showing items ${start}-${end} of ${listingsWithProfiles.length}`);
       
       return listingsWithProfiles.slice(start, end);
     } catch (error) {
@@ -652,3 +642,4 @@ export const useBrowseListings = () => {
     PAGE_SIZE
   };
 };
+

@@ -5,7 +5,7 @@ import { Package, ShoppingBag, Crown, Gavel, Info } from 'lucide-react';
 import { BrowseHeaderProps } from '@/types/browse';
 
 /* Filter definitions live in one array so the four buttons cannot drift
-   apart in styling — previously each was a separate block with its own
+   apart in styling -- previously each was a separate block with its own
    copy of a long gradient class string. */
 const FILTERS = [
   { key: 'all', label: 'All', icon: Package },
@@ -47,7 +47,7 @@ export default function BrowseHeader({
         </div>
 
         {/* Segmented control. One container, one border, dividers between
-            options — reads as a single control rather than four
+            options -- reads as a single control rather than four
             independent buttons. */}
         <div className="flex w-full overflow-x-auto rounded-md border border-line bg-surface-raised p-1 lg:w-auto">
           {FILTERS.map(({ key, label, icon: Icon }) => {
@@ -80,3 +80,5 @@ export default function BrowseHeader({
     </div>
   );
 }
+
+

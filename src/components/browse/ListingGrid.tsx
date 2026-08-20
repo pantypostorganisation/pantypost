@@ -32,7 +32,7 @@ export default function ListingGrid({
         // Individual listing error handling
         if (listingErrors[listing.id]) {
           return (
-            <div key={listing.id} className="bg-red-900/20 border border-red-700 rounded-xl p-4 text-center">
+            <div key={listing.id} className="bg-red-900/20 border border-red-700 rounded-lg p-4 text-center">
               <AlertTriangle className="w-8 h-8 text-red-400 mx-auto mb-2" />
               <p className="text-red-400 text-sm">Error loading listing</p>
               <SecureMessageDisplay
@@ -75,3 +75,5 @@ export default function ListingGrid({
     </div>
   );
 }
+
+

@@ -217,7 +217,7 @@ export default function BrowseFilters({
           />
         </div>
 
-        {/* Sort — emoji removed. They render inconsistently across
+        {/* Sort -- emoji removed. They render inconsistently across
             platforms and read as decoration rather than information. */}
         <select
           value={sortBy}
@@ -261,3 +261,5 @@ export default function BrowseFilters({
     </div>
   );
 }
+
+

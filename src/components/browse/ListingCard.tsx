@@ -139,7 +139,7 @@ export default function ListingCard({
   return (
     /* Marketplace-grid card, in the Etsy idiom: the image does the
        selling, and everything beneath it is compact scannable metadata.
-       No card border or background â€” the photo defines the tile, which
+       No card border or background -- the photo defines the tile, which
        keeps a dense grid from looking like a wall of boxes. */
     <article
       className={`group flex flex-col ${isGuest ? '' : 'cursor-pointer'}`}
@@ -150,7 +150,7 @@ export default function ListingCard({
       {/* --- Image --- */}
       <div
         ref={imageContainerRef}
-        className="relative aspect-square overflow-hidden rounded-xl bg-black"
+        className="relative aspect-square overflow-hidden rounded-lg bg-black"
       >
         {listing.imageUrls && listing.imageUrls.length > 0 ? (
           <>
@@ -253,7 +253,7 @@ export default function ListingCard({
               <Trash2 className="h-4 w-4" />
               {confirmingRemove && (
                 <span className="text-xs font-semibold">
-                  {removing ? 'Removingâ€¦' : 'Confirm'}
+                  {removing ? 'Removing...' : 'Confirm'}
                 </span>
               )}
             </button>
@@ -275,7 +275,7 @@ export default function ListingCard({
           </div>
         )}
 
-        {/* Drop inventory — mirrors the auction countdown's slot */}
+        {/* Drop inventory -- mirrors the auction countdown's slot */}
         {isDrop && drop && (
           <div className="absolute bottom-2 left-2 z-20">
             <span
@@ -350,7 +350,7 @@ export default function ListingCard({
               onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-300 hover:underline"
             >
-              {hasRating && <span className="text-gray-700">Â·</span>}
+              {hasRating && <span className="text-gray-700">{'\u00B7'}</span>}
               {resolvedSellerPic && !sellerPicFailed ? (
                 <img
                   src={resolvedSellerPic}
@@ -398,3 +398,4 @@ export default function ListingCard({
     </article>
   );
 }
+

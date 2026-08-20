@@ -3,6 +3,13 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 
+/* TRAP, documented after biting repeatedly (see the project's
+   recurring-traps list): `className` is applied to the WRAPPER DIV,
+   not the <img>. Sizing and positioning utilities work as expected;
+   image-specific utilities (object-position, filters, etc.) silently
+   do nothing. If you need classes on the image element itself, extend
+   this component with an `imgClassName` prop -- do not "fix" the
+   existing behaviour, every current call site depends on it. */
 interface OptimizedImageProps {
   src: string;
   alt: string;
@@ -42,7 +49,7 @@ export default function OptimizedImage({
   const [imageError, setImageError] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(src);
 
-  // ✅ Fix: Properly process all image sources
+  // -- Fix: Properly process all image sources
   const processedSrc = useMemo(() => {
     if (!currentSrc) return PLACEHOLDER_IMAGE;
 
@@ -96,7 +103,7 @@ export default function OptimizedImage({
     ...style,
   };
 
-  // ✅✅✅ FIXED FILL MODE (This is what was breaking Explore)
+  // -- FIXED FILL MODE (This is what was breaking Explore)
   if (fill) {
     return (
       <div
@@ -125,7 +132,7 @@ export default function OptimizedImage({
     );
   }
 
-  // ✅ Fixed-dimension mode (used by Browse avatars, previews, etc.)
+  // -- Fixed-dimension mode (used by Browse avatars, previews, etc.)
   return (
     <div
       className={`relative ${className}`}
@@ -152,3 +159,5 @@ export default function OptimizedImage({
     </div>
   );
 }
+
+

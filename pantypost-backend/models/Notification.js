@@ -44,6 +44,11 @@ const notificationSchema = new mongoose.Schema({
       'post',
       'like',
       'comment',
+      // ADDED with the recipient-field fix in post.routes.js: the
+      // follow button sends type 'follow', which was never in this
+      // enum -- so even after fixing the field name, follow
+      // notifications would have kept failing validation silently.
+      'follow',
       // ADDED: pre-publication moderation outcomes
       'content_approved',
       'content_denied',
@@ -404,3 +409,4 @@ notificationSchema.statics.createCustomRequestPaidNotification = async function(
 const Notification = mongoose.model('Notification', notificationSchema);
 
 module.exports = Notification;
+

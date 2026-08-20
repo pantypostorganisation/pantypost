@@ -23,7 +23,7 @@ export default function ListingCard({
   const dropUnitsSold = drop?.unitsSold ?? 0;
   const dropTotalUnits = drop?.totalUnits ?? 0;
   const dropPct = dropTotalUnits > 0 ? Math.round((dropUnitsSold / dropTotalUnits) * 100) : 0;
-  // Gross of platform fees — what buyers have paid for units so far, at
+  // Gross of platform fees -- what buyers have paid for units so far, at
   // the listed per-unit price. Net earnings live in the wallet.
   const dropRevenue = dropUnitsSold * (listing.price || 0);
 
@@ -101,7 +101,11 @@ export default function ListingCard({
             ? { label: 'Premium', tone: 'bg-primary text-black' }
             : null;
 
-  const canEdit = !isAuctionListing || (listing.auction && listing.auction.status !== 'active');
+  /* Drops cannot be edited after creation -- the hook and the form
+     both refuse. Showing Edit here invited the seller to refill the
+     whole form and only then be told no. The button now simply does
+     not exist for drops. */
+  const canEdit = !isDrop && (!isAuctionListing || (listing.auction && listing.auction.status !== 'active'));
   const canCancelAuction = isAuctionListing && listing.auction?.status === 'active';
 
   return (
@@ -231,3 +235,5 @@ export default function ListingCard({
     </>
   );
 }
+
+
