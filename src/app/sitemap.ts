@@ -133,6 +133,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'weekly',
       priority: 0.7,
     },
+    {
+      url: `${BASE_URL}/blog/is-it-legal-to-sell-used-panties-in-the-us`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/blog/is-it-legal-to-sell-used-panties-in-the-uk`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/blog/is-it-legal-to-sell-used-panties-in-australia`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/blog/is-it-legal-to-sell-used-panties-in-canada`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
     { url: `${BASE_URL}/help`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
 
     // Compliance surfaces. Low priority for ranking, but a payment
@@ -170,3 +194,4 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [...staticPages, ...listingPages, ...sellerPages];
 }
+

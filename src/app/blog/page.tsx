@@ -44,6 +44,46 @@ export const metadata: Metadata = {
  * around a dozen. */
 const POSTS = [
   {
+    slug: 'is-it-legal-to-sell-used-panties-in-the-us',
+    title: 'Is It Legal to Sell Used Panties in the US?',
+    description:
+      'Yes - and here is exactly what US sellers need to know: the age rule, taxes, shipping, and how to sell safely in 2026.',
+    published: '2026-08-20',
+    publishedLabel: 'August 2026',
+    readingMinutes: 8,
+    audience: 'For sellers',
+  },
+  {
+    slug: 'is-it-legal-to-sell-used-panties-in-the-uk',
+    title: 'Is It Legal to Sell Used Panties in the UK?',
+    description:
+      'Yes - what UK sellers need to know about the law, HMRC and the 1,000 pound trading allowance, Royal Mail and selling safely.',
+    published: '2026-08-20',
+    publishedLabel: 'August 2026',
+    readingMinutes: 8,
+    audience: 'For sellers',
+  },
+  {
+    slug: 'is-it-legal-to-sell-used-panties-in-australia',
+    title: 'Is It Legal to Sell Used Panties in Australia?',
+    description:
+      'Yes - what Australian sellers need to know about the law, the ATO, Australia Post and selling safely on an Australian-operated platform.',
+    published: '2026-08-20',
+    publishedLabel: 'August 2026',
+    readingMinutes: 8,
+    audience: 'For sellers',
+  },
+  {
+    slug: 'is-it-legal-to-sell-used-panties-in-canada',
+    title: 'Is It Legal to Sell Used Panties in Canada?',
+    description:
+      'Yes - what Canadian sellers need to know about the law, the CRA, Canada Post and cross-border shipping in 2026.',
+    published: '2026-08-20',
+    publishedLabel: 'August 2026',
+    readingMinutes: 8,
+    audience: 'For sellers',
+  },
+  {
     slug: 'how-to-buy-used-panties-online-guide',
     title: 'The Complete Guide to Buying Used Panties Online',
     description:
@@ -166,3 +206,5 @@ export default function BlogIndexPage() {
     </main>
   );
 }
+
+
