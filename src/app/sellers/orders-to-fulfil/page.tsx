@@ -244,7 +244,7 @@ export default function OrdersToFulfilPage() {
   // AddressDisplay helpers
   const getShippingLabel = useCallback((order: Order) => {
     const a = order.deliveryAddress!;
-    // Simple, readable block — matches the AddressDisplay expectation (string)
+    // Simple, readable block -- matches the AddressDisplay expectation (string)
     return [
       a.fullName,
       a.addressLine1,
@@ -353,7 +353,7 @@ export default function OrdersToFulfilPage() {
               <ShoppingBag className="w-7 h-7 text-orange-400" />
               <h1 className="text-3xl font-bold text-white">Orders to fulfil</h1>
             </div>
-            <div className="text-center py-16 bg-red-900/20 rounded-2xl border border-red-500/30">
+            <div className="text-center py-16 bg-red-900/20 rounded-lg border border-red-500/30">
               <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
               <h3 className="text-red-300 text-xl mb-2">{error}</h3>
               <button

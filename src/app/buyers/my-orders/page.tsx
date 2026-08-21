@@ -17,15 +17,15 @@ function OrdersError({ error, onRetry }: { error: string; onRetry: () => void })
  return (
  <div className="min-h-screen bg-[#020202] text-white">
  <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6 py-16">
- <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center">
- <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-2xl border border-red-500/30 bg-red-500/10">
+ <div className="w-full max-w-md rounded-lg border border-white/10 bg-white/[0.03] p-10 text-center">
+ <div className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10">
  <AlertCircle className="h-10 w-10 text-red-400" />
  </div>
  <h1 className="text-3xl font-semibold tracking-tight">We couldn&apos;t load your orders</h1>
  <p className="mt-3 text-sm text-gray-400">{error}</p>
  <button
  onClick={onRetry}
- className="mt-8 inline-flex items-center justify-center rounded-2xl bg-[#ff950e] px-8 py-3 text-base font-semibold text-black transition-colors hover:bg-[#ff7a00] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/60"
+ className="mt-8 inline-flex items-center justify-center rounded-lg bg-[#ff950e] px-8 py-3 text-base font-semibold text-black transition-colors hover:bg-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff950e]/60"
  >
  Try again
  </button>
@@ -40,11 +40,11 @@ function OrdersLoading() {
  return (
  <div className="min-h-screen bg-[#020202] text-white">
  <div className="mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6 py-16">
- <div className="flex flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/[0.03] px-10 py-16">
- <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10">
+ <div className="flex flex-col items-center gap-4 rounded-lg border border-white/10 bg-white/[0.03] px-10 py-16">
+ <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-[#ff950e]/40 bg-[#ff950e]/10">
  <Loader2 className="h-8 w-8 animate-spin text-[#ff950e]" />
  </div>
- <p className="text-base text-gray-300">Loading your orders…</p>
+ <p className="text-base text-gray-300">Loading your orders...</p>
  </div>
  </div>
  </div>
@@ -91,7 +91,7 @@ function MyOrdersContent() {
  /* The page previously rendered its OWN <header> with"My Orders",
  and then ALSO rendered <OrdersHeader /> -- two headings, one above
  the other. Each of the three blocks then sat inside its own
- rounded-2xl bordered card with a shadow, so the content was boxes
+ rounded-lg bordered card with a shadow, so the content was boxes
  inside boxes inside a box.
 
  Now: one heading, one line of figures, one list. The borders come
@@ -202,3 +202,4 @@ export default function MyOrdersPage() {
  </BanCheck>
  );
 }
+

@@ -24,7 +24,7 @@ export default function BalanceCard({
   return (
     <section
       aria-label="Available balance"
-      className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8"
+      className="rounded-lg border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8"
     >
         <div className="flex flex-col gap-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -37,7 +37,7 @@ export default function BalanceCard({
               </div>
             </div>
 
-            <div className="inline-flex items-center gap-3 rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10 px-4 py-2 text-sm font-semibold text-[#ff950e]">
+            <div className="inline-flex items-center gap-3 rounded-lg border border-[#ff950e]/30 bg-[#ff950e]/10 px-4 py-2 text-sm font-semibold text-[#ff950e]">
               <DollarSign className="h-4 w-4" />
               Payout ready
             </div>
@@ -58,7 +58,7 @@ export default function BalanceCard({
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 rounded-2xl border border-gray-800 bg-[#0c0c0c] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 rounded-lg border border-gray-800 bg-[#0c0c0c] p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col text-sm text-gray-400">
               <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Daily availability</span>
               <span className="mt-2 text-base text-gray-300">
@@ -86,7 +86,7 @@ export default function BalanceCard({
           </div>
 
           {safeBalance < 50 && (
-            <div className="flex items-start gap-2 rounded-2xl border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-3 text-sm text-[#ff950e]">
+            <div className="flex items-start gap-2 rounded-lg border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-3 text-sm text-[#ff950e]">
               <ArrowUpRight className="mt-0.5 h-4 w-4 flex-shrink-0" />
               <span>Boost your balance by fulfilling more orders or adjusting pricing.</span>
             </div>
@@ -95,3 +95,5 @@ export default function BalanceCard({
     </section>
   );
 }
+
+

@@ -96,7 +96,7 @@ export default function WithdrawSection({
   };
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
+    <section className="rounded-lg border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
@@ -108,13 +108,13 @@ export default function WithdrawSection({
               Available funds are ready to send. Secure, rate-limited withdrawals keep your payouts protected.
             </p>
           </div>
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10">
+          <div className="flex h-14 w-14 items-center justify-center rounded-lg border border-[#ff950e]/30 bg-[#ff950e]/10">
             <ArrowDownCircle className="h-6 w-6 text-[#ff950e]" />
           </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-gray-800 bg-[#0c0c0c] p-4">
+          <div className="rounded-lg border border-gray-800 bg-[#0c0c0c] p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Remaining today</p>
             <p className="mt-2 text-xl font-semibold text-white">${Math.max(0, remainingDailyLimit).toFixed(2)}</p>
             <p className="mt-1 text-xs text-gray-500">
@@ -123,10 +123,10 @@ export default function WithdrawSection({
                 : 'No withdrawals taken yet today.'}
             </p>
           </div>
-          <div className="rounded-2xl border border-gray-800 bg-[#0c0c0c] p-4">
+          <div className="rounded-lg border border-gray-800 bg-[#0c0c0c] p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">Withdrawal limits</p>
             <p className="mt-2 text-sm text-gray-300">
-              Min ${withdrawalLimits.MIN_AMOUNT.toFixed(2)} • Max ${withdrawalLimits.MAX_AMOUNT.toLocaleString()}
+              Min ${withdrawalLimits.MIN_AMOUNT.toFixed(2)} {'\u2022'} Max ${withdrawalLimits.MAX_AMOUNT.toLocaleString()}
             </p>
             <p className="mt-1 text-xs text-gray-500">
               Daily cap ${withdrawalLimits.DAILY_LIMIT.toLocaleString()} keeps payouts compliant.
@@ -140,7 +140,7 @@ export default function WithdrawSection({
           rateLimitConfig={RATE_LIMITS.WITHDRAWAL}
           className="flex flex-col gap-6"
         >
-          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+          <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
             <div className="flex items-start gap-3">
               <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-300" />
               <div className="text-sm text-blue-100">
@@ -179,7 +179,7 @@ export default function WithdrawSection({
               </div>
               <button
                 type="submit"
-                className={`flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-sm font-semibold transition-colors ${
+                className={`flex items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold transition-colors ${
                   balance <= 0 ||
                   isLoading ||
                   !!amountError ||
@@ -187,7 +187,7 @@ export default function WithdrawSection({
                   Number.isNaN(parseFloat(withdrawAmount)) ||
                   parseFloat(withdrawAmount) <= 0
                     ? 'cursor-not-allowed border border-gray-800 bg-[#1c1c1c] text-gray-500'
-                    : 'border border-transparent bg-[#ff950e] text-black hover:bg-[#e88800]'
+                    : 'border border-transparent bg-[#ff950e] text-black hover:bg-primary-hover'
                 }`}
                 disabled={
                   balance <= 0 ||
@@ -245,7 +245,7 @@ export default function WithdrawSection({
 
         {message && (
           <div
-            className={`flex items-start gap-3 rounded-2xl border p-4 text-sm ${
+            className={`flex items-start gap-3 rounded-lg border p-4 text-sm ${
               messageType === 'success'
                 ? 'border-green-500/30 bg-green-500/10 text-green-300'
                 : 'border-red-500/30 bg-red-500/10 text-red-300'
@@ -261,7 +261,7 @@ export default function WithdrawSection({
         )}
 
         {!message && !amountError && !validationError && (
-          <div className="flex items-start gap-3 rounded-2xl border border-gray-800 bg-[#0c0c0c] p-4 text-xs text-gray-400">
+          <div className="flex items-start gap-3 rounded-lg border border-gray-800 bg-[#0c0c0c] p-4 text-xs text-gray-400">
             <Info className="mt-0.5 h-4 w-4 text-[#ff950e]" />
             <span>
               Need to adjust a withdrawal? You can cancel within 30 minutes by contacting support. Keep your payout details up to date
@@ -273,3 +273,4 @@ export default function WithdrawSection({
     </section>
   );
 }
+

@@ -1,3 +1,7 @@
+/* This page was themed in a second orange family that exists nowhere
+   in the design system, including two white-on-orange buttons (the
+   forbidden contrast pairing). Mapped wholesale onto the sanctioned
+   palette: primary / primary-hover / primary-press. */
 // src/app/sellers/subscribers/page.tsx
 'use client';
 
@@ -42,8 +46,7 @@ import {
   X,
   ExternalLink,
   Calendar,
-  Award
-} from 'lucide-react';
+  Award, Gavel } from 'lucide-react';
 
 // Helper function to format currency
 function formatCurrency(amount: number): string {
@@ -84,7 +87,7 @@ function MetricCard({
   };
   
   return (
-    <div className={`bg-gradient-to-br ${bgGradient} rounded-xl p-6 border relative overflow-hidden`}>
+    <div className={`bg-gradient-to-br ${bgGradient} rounded-lg p-6 border relative overflow-hidden`}>
       <div className="absolute top-0 right-0 w-32 h-32 bg-black/10 rounded-full -translate-y-16 translate-x-16" />
       <div className="relative">
         <div className="flex items-center gap-3 mb-4">
@@ -354,7 +357,7 @@ export default function SellerAnalyticsPage() {
       <BanCheck>
         <RequireAuth role="seller">
           <main className="min-h-screen bg-black text-white p-8">
-            <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
+            <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-lg shadow-lg p-8 border border-gray-800">
               <Loader2 className="w-16 h-16 text-[#ff950e] animate-spin mx-auto mb-4" />
               <h1 className="text-2xl font-bold text-center mb-4">Loading Analytics</h1>
               <p className="text-gray-400 text-center">Calculating your performance metrics...</p>
@@ -388,7 +391,7 @@ export default function SellerAnalyticsPage() {
           {/* Loading overlay for refresh */}
           {isReloading && (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-              <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800 shadow-xl">
+              <div className="bg-[#1a1a1a] rounded-lg p-6 border border-gray-800 shadow-xl">
                 <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-3" />
                 <p className="text-white font-medium">Refreshing analytics...</p>
               </div>
@@ -403,7 +406,7 @@ export default function SellerAnalyticsPage() {
                   <BarChart3 className="h-8 w-8" />
                   Analytics Dashboard
                 </h1>
-                <p className="text-gray-400 mt-1">Track your sales performance and growth 📈</p>
+                <p className="text-gray-400 mt-1">Track your sales performance and growth</p>
               </div>
               
               <button
@@ -448,7 +451,7 @@ export default function SellerAnalyticsPage() {
                     prefix="$"
                     icon={DollarSign}
                     iconColor="bg-[#ff950e]"
-                    bgGradient="from-[#ff950e]/20 to-[#ff6b00]/10 border-[#ff950e]/30"
+                    bgGradient="from-[#ff950e]/20 to-primary-press/10 border-[#ff950e]/30"
                   />
                   <MetricCard
                     title="Total Orders"
@@ -486,7 +489,7 @@ export default function SellerAnalyticsPage() {
                 {/* Revenue & Order Status */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Revenue Breakdown */}
-                  <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
+                  <div className="bg-[#1a1a1a] rounded-lg p-6 border border-gray-800">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                       <TrendingUp className="h-5 w-5 text-[#ff950e]" />
                       Revenue Breakdown
@@ -531,7 +534,7 @@ export default function SellerAnalyticsPage() {
                   </div>
 
                   {/* Order Status */}
-                  <div className="bg-[#1a1a1a] rounded-xl p-6 border border-gray-800">
+                  <div className="bg-[#1a1a1a] rounded-lg p-6 border border-gray-800">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                       <Activity className="h-5 w-5 text-[#ff950e]" />
                       Order Status
@@ -561,7 +564,7 @@ export default function SellerAnalyticsPage() {
                 </div>
 
                 {/* Recent Orders */}
-                <div className="bg-[#1a1a1a] rounded-xl border border-gray-800">
+                <div className="bg-[#1a1a1a] rounded-lg border border-gray-800">
                   <div className="p-6 border-b border-gray-800">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       <Clock className="h-5 w-5 text-[#ff950e]" />
@@ -606,9 +609,9 @@ export default function SellerAnalyticsPage() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {order.wasAuction ? (
-                                <span className="text-purple-400">🔨 Auction</span>
+                                <span className="text-purple-400 inline-flex items-center gap-1"><Gavel className="w-3.5 h-3.5" aria-hidden="true" /> Auction</span>
                               ) : (
-                                <span className="text-blue-400">🛍️ Regular</span>
+                                <span className="text-blue-400 inline-flex items-center gap-1"><ShoppingBag className="w-3.5 h-3.5" aria-hidden="true" /> Regular</span>
                               )}
                             </td>
                           </tr>
@@ -656,7 +659,7 @@ export default function SellerAnalyticsPage() {
                 />
 
                 {/* Revenue Data Table */}
-                <div className="bg-[#1a1a1a] rounded-xl border border-gray-800">
+                <div className="bg-[#1a1a1a] rounded-lg border border-gray-800">
                   <div className="p-6 border-b border-gray-800">
                     <h3 className="text-lg font-bold text-white">Revenue Details</h3>
                   </div>
@@ -723,7 +726,7 @@ export default function SellerAnalyticsPage() {
                     prefix="$"
                     icon={DollarSign}
                     iconColor="bg-[#ff950e]"
-                    bgGradient="from-[#ff950e]/20 to-[#ff6b00]/10 border-[#ff950e]/30"
+                    bgGradient="from-[#ff950e]/20 to-primary-press/10 border-[#ff950e]/30"
                   />
                   <MetricCard
                     title="Conversion Rate"
@@ -737,7 +740,7 @@ export default function SellerAnalyticsPage() {
                 </div>
 
                 {/* Product Performance Table */}
-                <div className="bg-[#1a1a1a] rounded-xl border border-gray-800">
+                <div className="bg-[#1a1a1a] rounded-lg border border-gray-800">
                   <div className="p-6 border-b border-gray-800">
                     <h3 className="text-lg font-bold text-white">Product Performance</h3>
                   </div>
@@ -782,9 +785,9 @@ export default function SellerAnalyticsPage() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                               {product.type === 'auction' ? (
-                                <span className="text-purple-400">🔨 Auction</span>
+                                <span className="text-purple-400 inline-flex items-center gap-1"><Gavel className="w-3.5 h-3.5" aria-hidden="true" /> Auction</span>
                               ) : (
-                                <span className="text-blue-400">🛍️ Regular</span>
+                                <span className="text-blue-400 inline-flex items-center gap-1"><ShoppingBag className="w-3.5 h-3.5" aria-hidden="true" /> Regular</span>
                               )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
@@ -828,7 +831,7 @@ export default function SellerAnalyticsPage() {
                     prefix="$"
                     icon={TrendingUp}
                     iconColor="bg-[#ff950e]"
-                    bgGradient="from-[#ff950e]/20 to-[#ff6b00]/10 border-[#ff950e]/30"
+                    bgGradient="from-[#ff950e]/20 to-primary-press/10 border-[#ff950e]/30"
                     breakdown={[
                       { label: 'Total revenue', value: subscriberData.monthlyRecurringRevenue },
                       { label: 'You keep (75%)', value: subscriberData.monthlyRecurringRevenue * 0.75 }
@@ -855,7 +858,7 @@ export default function SellerAnalyticsPage() {
                 </div>
 
                 {/* Subscriber List */}
-                <div className="bg-[#1a1a1a] rounded-xl border border-gray-800">
+                <div className="bg-[#1a1a1a] rounded-lg border border-gray-800">
                   <div className="p-6 border-b border-gray-800">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       <Users className="h-5 w-5 text-[#ff950e]" />
@@ -940,8 +943,8 @@ export default function SellerAnalyticsPage() {
                     className="bg-gray-900 rounded-lg p-6"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <div className="p-2 bg-[#ff6b00]/10 rounded-lg">
-                        <DollarSign className="w-6 h-6 text-[#ff6b00]" />
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <DollarSign className="w-6 h-6 text-primary" />
                       </div>
                       <span className="text-xs text-green-400">Lifetime</span>
                     </div>
@@ -994,7 +997,7 @@ export default function SellerAnalyticsPage() {
                       {!editingCode && referralCode.code && (
                         <button
                           onClick={() => setEditingCode(true)}
-                          className="text-sm text-[#ff6b00] hover:text-[#ff8c00] transition-colors flex items-center gap-1"
+                          className="text-sm text-primary hover:text-primary-hover transition-colors flex items-center gap-1"
                         >
                           <Edit2 className="w-4 h-4" />
                           Edit Code
@@ -1023,13 +1026,13 @@ export default function SellerAnalyticsPage() {
                                   setCodeError('');
                                 }}
                                 maxLength={20}
-                                className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-[#ff6b00]"
+                                className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-primary"
                                 placeholder="Enter custom code"
                               />
                               <button
                                 onClick={handleUpdateCode}
                                 disabled={saving}
-                                className="px-4 py-2 bg-[#ff6b00] text-white rounded-lg hover:bg-[#ff8c00] transition-colors disabled:opacity-50"
+                                className="px-4 py-2 bg-primary text-black rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50"
                               >
                                 {saving ? (
                                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
@@ -1067,7 +1070,7 @@ export default function SellerAnalyticsPage() {
                             </label>
                             <div className="flex gap-2">
                               <div className="flex-1 px-4 py-2 bg-black/50 border border-gray-700 rounded-lg">
-                                <span className="text-xl font-mono font-bold text-[#ff6b00]">
+                                <span className="text-xl font-mono font-bold text-primary">
                                   {referralCode.code}
                                 </span>
                               </div>
@@ -1101,7 +1104,7 @@ export default function SellerAnalyticsPage() {
                           <p className="text-gray-400 mb-4">You haven't created a referral code yet</p>
                           <button
                             onClick={() => setEditingCode(true)}
-                            className="px-6 py-3 bg-[#ff6b00] text-white rounded-lg hover:bg-[#ff8c00] transition-colors"
+                            className="px-6 py-3 bg-primary text-black rounded-lg hover:bg-primary-hover transition-colors"
                           >
                             Create Referral Code
                           </button>
@@ -1177,17 +1180,17 @@ export default function SellerAnalyticsPage() {
                 )}
 
                 {/* Info Box */}
-                <div className="bg-gradient-to-r from-[#ff6b00]/10 to-[#ff8c00]/10 border border-[#ff6b00]/20 rounded-lg p-6">
+                <div className="bg-gradient-to-r from-primary/10 to-primary-hover/10 border border-primary/20 rounded-lg p-6">
                   <div className="flex items-start gap-3">
-                    <Award className="w-6 h-6 text-[#ff6b00] mt-1 flex-shrink-0" />
+                    <Award className="w-6 h-6 text-primary mt-1 flex-shrink-0" />
                     <div>
                       <h4 className="font-semibold mb-2">How the Referral Program Works</h4>
-                      <ul className="space-y-1 text-sm text-gray-300">
-                        <li>• Share your unique referral code with potential sellers</li>
-                        <li>• When they sign up using your code, they become your referral</li>
-                        <li>• Earn 5% commission on every sale they make - forever!</li>
-                        <li>• Commissions are automatically credited to your wallet</li>
-                        <li>• Track your earnings and referrals in real-time</li>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-gray-300">
+                        <li>Share your unique referral code with potential sellers</li>
+                        <li>When they sign up using your code, they become your referral</li>
+                        <li>Earn 5% commission on every sale they make - forever!</li>
+                        <li>Commissions are automatically credited to your wallet</li>
+                        <li>Track your earnings and referrals in real-time</li>
                       </ul>
                     </div>
                   </div>
@@ -1200,3 +1203,5 @@ export default function SellerAnalyticsPage() {
     </BanCheck>
   );
 }
+
+

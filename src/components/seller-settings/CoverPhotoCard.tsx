@@ -17,7 +17,7 @@ interface CoverPhotoCardProps {
 
 /**
  * Cover photos go through the same pre-publication review as profile
- * pictures and gallery images — uploading queues the banner, it does not
+ * pictures and gallery images -- uploading queues the banner, it does not
  * publish it. The card says so plainly rather than letting a seller
  * assume buyers can already see it.
  */
@@ -38,8 +38,8 @@ export default function CoverPhotoCard({
         <div>
           <h2 className="text-sm font-medium text-ink">Cover photo</h2>
           <p className="mt-1 text-xs text-ink-muted">
-            The banner across the top of your shop page. Wide images work best — around
-            1600×540. Max 8MB.
+            The banner across the top of your shop page. Wide images work best {'\u2014'} around
+            1600x540. Max 8MB.
           </p>
         </div>
 
@@ -51,7 +51,7 @@ export default function CoverPhotoCard({
         )}
       </div>
 
-      {/* 3:1 preview — the same proportion the shop header renders, so
+      {/* 3:1 preview -- the same proportion the shop header renders, so
           what a seller sees here is what buyers will get. */}
       <div className="relative aspect-[3/1] w-full overflow-hidden rounded-md border border-line bg-surface-overlay">
         {coverPhoto ? (
@@ -111,7 +111,7 @@ export default function CoverPhotoCard({
         )}
 
         <p className="text-xs text-ink-faint">
-          Uploading submits the image for review — it is not saved with the button below.
+          Uploading submits the image for review {'\u2014'} it is not saved with the button below.
         </p>
       </div>
 
@@ -119,3 +119,4 @@ export default function CoverPhotoCard({
     </section>
   );
 }
+

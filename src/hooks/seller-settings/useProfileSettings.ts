@@ -240,7 +240,7 @@ export function useProfileSettings() {
     setCoverUploading(true);
     try {
       // Withdraw a queued banner; otherwise remove the live one. Both
-      // apply immediately — taking an image down cannot introduce
+      // apply immediately -- taking an image down cannot introduce
       // prohibited content.
       const endpoint = coverPending ? '/upload/cover-photo/pending' : '/upload/cover-photo';
       const response = await fetch(buildApiUrl(endpoint), {
@@ -378,7 +378,7 @@ export function useProfileSettings() {
       const result = await response.json();
 
       // data.gallery is the APPROVED list, which does not include what
-      // was just uploaded — the upload endpoint queues rather than
+      // was just uploaded -- the upload endpoint queues rather than
       // publishes. Rendering only that made images appear to vanish the
       // instant they finished uploading.
       const newGallery = (result?.data?.gallery || [])
@@ -533,7 +533,7 @@ export function useProfileSettings() {
     //
     // galleryImages: managed entirely by POST/DELETE /api/upload/gallery,
     //   which persist on their own. Sending the array here re-queued
-    //   every not-yet-approved image — and it was being sent twice,
+    //   every not-yet-approved image -- and it was being sent twice,
     //   once in this payload and again via handleSaveWithGallery.
     // =====================================================
     const payload: {
@@ -624,3 +624,5 @@ export function useProfileSettings() {
     locationError
   };
 }
+
+

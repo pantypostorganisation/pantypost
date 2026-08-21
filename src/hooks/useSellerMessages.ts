@@ -139,16 +139,13 @@ export function useSellerMessages() {
     const initializeMessages = async () => {
       if (user && !initialLoadAttempted) {
         setInitialLoadAttempted(true);
-        console.log('[useSellerMessages] Initializing messages...');
         
         // Always refresh on mount to ensure we have the latest data
         if (!isInitialized || Object.keys(messages).length === 0) {
-          console.log('[useSellerMessages] Refreshing messages...');
           await refreshMessages();
         }
         
         setMounted(true);
-        console.log('[useSellerMessages] Initialization complete');
       }
     };
 
@@ -214,7 +211,6 @@ export function useSellerMessages() {
       const customEvent = event as CustomEvent;
       const newMessage = customEvent.detail;
       
-      console.log('[useSellerMessages] New message event received:', newMessage);
       
       // Check if this is a confirmation of an optimistic message
       if (newMessage.sender === user?.username && newMessage.receiver === activeThread) {
@@ -260,7 +256,6 @@ export function useSellerMessages() {
     // Also listen for read events to update UI
     const handleMessageRead = (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('[useSellerMessages] Message read event received:', customEvent.detail);
       
       // Update optimistic messages' read status
       if (customEvent.detail.messageIds) {
@@ -365,7 +360,6 @@ export function useSellerMessages() {
       // Sanitize and validate thread parameter
       const sanitizedThread = sanitizeStrict(threadParam);
       if (sanitizedThread && sanitizedThread.length <= 100) {
-        console.log('[useSellerMessages] Setting active thread from URL:', sanitizedThread);
         setActiveThread(sanitizedThread);
       }
     }
@@ -383,9 +377,6 @@ export function useSellerMessages() {
       return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
     }
     
-    console.log('[SellerMessages] Processing messages for seller:', user.username);
-    console.log('[SellerMessages] Total conversation keys:', Object.keys(messages).length);
-    console.log('[SellerMessages] Available seller profiles:', sellerProfiles);
     
     // Process all conversations to find ones involving the seller
     Object.entries(messages).forEach(([conversationKey, msgs]) => {
@@ -406,11 +397,9 @@ export function useSellerMessages() {
       // If we don't know the role, assume they're a buyer (better to show than hide)
       const isOtherSeller = otherUser?.role === 'seller' || otherUser?.role === 'admin';
       if (isOtherSeller) {
-        console.log('[SellerMessages] Skipping conversation with seller/admin:', otherParty);
         return;
       }
       
-      console.log('[SellerMessages] Including conversation with buyer:', otherParty);
       
       // Validate messages
       const validMessages = msgs.filter(msg => {
@@ -427,7 +416,7 @@ export function useSellerMessages() {
       // Combine real messages with optimistic ones for this thread
       let combinedMessages = [...validMessages];
       
-      /* Add optimistic messages for this thread â€” but only the ones the
+      /* Add optimistic messages for this thread -- but only the ones the
          real thread does not already contain.
 
          This used to append unconditionally, so after the websocket echo
@@ -485,7 +474,6 @@ export function useSellerMessages() {
       
       // CRITICAL FIX: Get buyer profile from sellerProfiles (which contains ALL user profiles)
       const profileFromContext = getSellerProfile(otherParty);
-      console.log(`[SellerMessages] Profile for buyer ${otherParty}:`, profileFromContext);
       
       if (profileFromContext) {
         buyerProfiles[otherParty] = {
@@ -504,8 +492,6 @@ export function useSellerMessages() {
       }
     });
     
-    console.log('[SellerMessages] Final thread count:', Object.keys(threads).length);
-    console.log('[SellerMessages] Final buyer profiles:', buyerProfiles);
     
     return { threads, unreadCounts, lastMessages, buyerProfiles, totalUnreadCount };
   }, [user?.username, messages, users, optimisticMessages, messageUpdateCounter, sellerProfiles, getSellerProfile]);
@@ -648,11 +634,6 @@ export function useSellerMessages() {
         }
       }
 
-      console.log('[SellerMessages] Sending message:', {
-        text: sanitizedContent,
-        imageUrl: selectedImage,
-        receiver: activeThread
-      });
 
       // For image messages, allow empty text
       const messageContent = sanitizedContent;
@@ -995,7 +976,6 @@ export function useSellerMessages() {
       }
       
       // Upload to Cloudinary
-      console.log('Uploading image to Cloudinary...');
       const uploadResult = await uploadToCloudinary(file, 'message');
       
       // Validate returned URL
@@ -1006,7 +986,6 @@ export function useSellerMessages() {
       
       // Set the Cloudinary URL
       setSelectedImage(uploadResult.url);
-      console.log('Image uploaded successfully:', uploadResult.url);
     } catch (error) {
       console.error('Image upload error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to upload image';
@@ -1090,3 +1069,4 @@ export function useSellerMessages() {
     isUserReported,
   };
 }
+

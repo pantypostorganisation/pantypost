@@ -276,7 +276,7 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
     sellerSalesCount: backendListing.sellerSalesCount || 0,
   };
 
-  // Drop passthrough — counters are display-only on this side.
+  // Drop passthrough -- counters are display-only on this side.
   if (backendListing.drop?.isDrop) {
     frontendListing.drop = {
       isDrop: true,
@@ -373,7 +373,6 @@ export class ListingsService {
    */
   async getListings(params?: ListingSearchParams): Promise<ApiResponse<Listing[]>> {
     try {
-      console.log('[ListingsService] Getting listings with params:', params);
 
       // Sanitize search params if provided
       if (params) {
@@ -395,7 +394,6 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Using backend API for listings');
         
         const queryParams = new URLSearchParams();
         if (params) {
@@ -428,7 +426,6 @@ export class ListingsService {
           const listings = response.data?.data || response.data || [];
           const convertedListings = listings.map(convertBackendToFrontend);
           
-          console.log('[ListingsService] Converted backend listings:', convertedListings.length);
           
           // Update cache only if no filters
           if (!params) {
@@ -446,7 +443,6 @@ export class ListingsService {
       }
 
       // Fallback to localStorage implementation
-      console.log('[ListingsService] Using localStorage fallback');
       
       // Check cache first - but ONLY if no params are provided
       const now = Date.now();
@@ -455,7 +451,6 @@ export class ListingsService {
         this.listingsCache.data &&
         now - this.listingsCache.timestamp < CACHE_DURATION
       ) {
-        console.log('[ListingsService] Returning cached listings:', this.listingsCache.data.length);
         return {
           success: true,
           data: this.listingsCache.data,
@@ -464,7 +459,6 @@ export class ListingsService {
 
       // LocalStorage implementation
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      console.log('[ListingsService] Found listings in storage:', listings.length);
       
       if (listings.length === 0) {
         console.warn('[ListingsService] No listings found in storage! Check if listings are being created properly.');
@@ -494,7 +488,6 @@ export class ListingsService {
             
             return isActive;
           });
-          console.log(`[ListingsService] Active filter: ${beforeFilterCount} -> ${filteredListings.length}`);
         }
 
         if (params.query) {
@@ -507,7 +500,6 @@ export class ListingsService {
               listing.tags?.some(tag => tag.toLowerCase().includes(query)) ||
               listing.seller.toLowerCase().includes(query)
           );
-          console.log(`[ListingsService] Query filter "${params.query}": ${beforeQueryCount} -> ${filteredListings.length}`);
         }
 
         if (params.seller) {
@@ -515,7 +507,6 @@ export class ListingsService {
           filteredListings = filteredListings.filter(
             listing => listing.seller === params.seller
           );
-          console.log(`[ListingsService] Seller filter "${params.seller}": ${beforeSellerCount} -> ${filteredListings.length}`);
         }
 
         if (params.minPrice !== undefined) {
@@ -524,7 +515,6 @@ export class ListingsService {
             const price = listing.auction?.highestBid || listing.price;
             return price >= params.minPrice!;
           });
-          console.log(`[ListingsService] Min price filter ${params.minPrice}: ${beforeMinPriceCount} -> ${filteredListings.length}`);
         }
 
         if (params.maxPrice !== undefined) {
@@ -533,7 +523,6 @@ export class ListingsService {
             const price = listing.auction?.highestBid || listing.price;
             return price <= params.maxPrice!;
           });
-          console.log(`[ListingsService] Max price filter ${params.maxPrice}: ${beforeMaxPriceCount} -> ${filteredListings.length}`);
         }
 
         if (params.tags && params.tags.length > 0) {
@@ -541,7 +530,6 @@ export class ListingsService {
           filteredListings = filteredListings.filter(listing =>
             listing.tags?.some(tag => params.tags!.includes(tag))
           );
-          console.log(`[ListingsService] Tags filter: ${beforeTagsCount} -> ${filteredListings.length}`);
         }
 
         if (params.isPremium !== undefined) {
@@ -549,7 +537,6 @@ export class ListingsService {
           filteredListings = filteredListings.filter(
             listing => listing.isPremium === params.isPremium
           );
-          console.log(`[ListingsService] Premium filter ${params.isPremium}: ${beforePremiumCount} -> ${filteredListings.length}`);
         }
 
         if (params.isAuction !== undefined) {
@@ -557,12 +544,10 @@ export class ListingsService {
           filteredListings = filteredListings.filter(
             listing => (params.isAuction ? !!listing.auction : !listing.auction)
           );
-          console.log(`[ListingsService] Auction filter ${params.isAuction}: ${beforeAuctionCount} -> ${filteredListings.length}`);
         }
 
         // Sorting
         if (params.sortBy) {
-          console.log(`[ListingsService] Sorting by ${params.sortBy} ${params.sortOrder || 'asc'}`);
           filteredListings.sort((a, b) => {
             let compareValue = 0;
             
@@ -600,7 +585,6 @@ export class ListingsService {
           const start = params.page * params.limit;
           const end = start + params.limit;
           
-          console.log(`[ListingsService] Paginating: page ${params.page}, limit ${params.limit}, showing ${start}-${end} of ${filteredListings.length}`);
           
           return {
             success: true,
@@ -614,7 +598,6 @@ export class ListingsService {
         }
       }
 
-      console.log('[ListingsService] Returning listings:', filteredListings.length);
       
       return {
         success: true,
@@ -641,7 +624,6 @@ export class ListingsService {
       const sanitizedId = sanitize.strict(id);
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Fetching listing from backend:', sanitizedId);
         
         const response = await apiCall<any>(`/listings/${sanitizedId}`);
         
@@ -660,7 +642,6 @@ export class ListingsService {
           const premiumAccess = response.data?.premiumAccess ?? responseAsAny.premiumAccess;
           
           if (premiumAccess !== undefined) {
-            console.log('[ListingsService] Premium access for listing:', premiumAccess);
           }
           
           return {
@@ -765,7 +746,6 @@ export class ListingsService {
    */
   async createListing(request: CreateListingRequest): Promise<ApiResponse<Listing>> {
     try {
-      console.log('[ListingsService] Creating listing:', request);
 
       // Check rate limit
       const rateLimiter = getRateLimiter();
@@ -849,7 +829,6 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Creating listing via backend API');
         
         const backendRequest = convertFrontendToBackend({
           ...sanitizedData,
@@ -865,7 +844,6 @@ export class ListingsService {
           body: JSON.stringify(backendRequest),
         });
 
-        console.log('[ListingsService] Backend response:', response);
 
         if (response.success && response.data) {
           const convertedListing = convertBackendToFrontend(response.data);
@@ -884,7 +862,6 @@ export class ListingsService {
 
       // LocalStorage implementation (fallback)
       const listings = await storageService.getItem<Listing[]>('listings', []);
-      console.log('[ListingsService] Current listings count before create:', listings.length);
       
       const newListing: Listing = {
         id: uuidv4(),
@@ -912,7 +889,6 @@ export class ListingsService {
         } : undefined,
       };
 
-      console.log('[ListingsService] New listing object:', newListing);
 
       listings.push(newListing);
       const saveResult = await storageService.setItem('listings', listings);
@@ -923,7 +899,6 @@ export class ListingsService {
 
       // Verify the save
       const verifyListings = await storageService.getItem<Listing[]>('listings', []);
-      console.log('[ListingsService] Verified listings count after save:', verifyListings.length);
       
       // Check if our listing is in the saved data
       const savedListing = verifyListings.find(l => l.id === newListing.id);
@@ -994,7 +969,6 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Updating listing via backend API:', sanitizedId);
         
         const response = await apiCall<BackendListing>(`/listings/${sanitizedId}`, {
           method: 'PATCH',
@@ -1073,13 +1047,11 @@ export class ListingsService {
    */
   async deleteListing(id: string): Promise<ApiResponse<void>> {
     try {
-      console.log('[ListingsService] Deleting listing:', id);
 
       // Sanitize ID
       const sanitizedId = sanitize.strict(id);
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Deleting listing via backend API:', sanitizedId);
         
         const response = await apiCall<void>(`/listings/${sanitizedId}`, { 
           method: 'DELETE' 
@@ -1108,7 +1080,6 @@ export class ListingsService {
       const filtered = listings.filter(l => l.id !== sanitizedId);
       const afterCount = filtered.length;
       
-      console.log(`[ListingsService] Delete listing: ${beforeCount} -> ${afterCount} listings`);
       
       if (beforeCount === afterCount) {
         console.warn(`[ListingsService] Listing ${sanitizedId} was not found in storage`);
@@ -1123,7 +1094,6 @@ export class ListingsService {
       if (typeof window !== 'undefined') {
         try {
           localStorage.removeItem('browse_listings_cache');
-          console.log('[ListingsService] Cleared browse listings cache');
         } catch (e) {
           console.warn('Failed to clear browse cache:', e);
         }
@@ -1252,7 +1222,6 @@ export class ListingsService {
       }
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Placing bid via backend API:', sanitizedId, sanitizedAmount);
         
         const response = await apiCall<BackendListing>(`/listings/${sanitizedId}/bid`, {
           method: 'POST',
@@ -1502,7 +1471,6 @@ export class ListingsService {
       const sanitizedId = sanitize.strict(listingId);
 
       if (FEATURES.USE_API_LISTINGS) {
-        console.log('[ListingsService] Ending auction via backend:', sanitizedId);
         
         const response = await apiCall<any>(`/listings/${sanitizedId}/end-auction`, {
           method: 'POST',
@@ -1594,8 +1562,6 @@ export class ListingsService {
             };
           }
 
-          console.log('[ListingsService] Update views response payload:', primaryPayload);
-          console.log('[ListingsService] Extracted view count:', viewCount);
 
           // Update cache with new count
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: Date.now() });
@@ -1675,8 +1641,6 @@ export class ListingsService {
             };
           }
 
-          console.log('[ListingsService] getListingViews response payload:', primaryPayload);
-          console.log('[ListingsService] Extracted view count:', viewCount);
 
           this.viewsCache.set(sanitizedId, { count: viewCount, timestamp: now });
 
@@ -1973,7 +1937,6 @@ export class ListingsService {
    * Invalidate cache
    */
   private invalidateCache(): void {
-    console.log('[ListingsService] Invalidating cache');
     this.listingsCache = { data: null, timestamp: 0 };
     this.popularTagsCache = { data: null, timestamp: 0 };
   }
@@ -1982,7 +1945,6 @@ export class ListingsService {
    * Clear all caches
    */
   clearCache(): void {
-    console.log('[ListingsService] Clearing all caches');
     this.invalidateCache();
     this.viewsCache.clear();
   }
@@ -1990,3 +1952,4 @@ export class ListingsService {
 
 // Export singleton instance
 export const listingsService = new ListingsService();
+

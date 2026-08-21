@@ -154,13 +154,9 @@ export const useBuyerMessages = () => {
   useEffect(() => {
     const loadInitialData = async () => {
       if (user && !initialLoadComplete) {
-        console.log('[useBuyerMessages] Loading initial data...');
-        console.log('[useBuyerMessages] User:', user.username);
-        console.log('[useBuyerMessages] Is initialized:', isInitialized);
 
         // If messages context is not initialized, refresh
         if (!isInitialized) {
-          console.log('[useBuyerMessages] Context not initialized, refreshing...');
           await refreshMessages();
         }
 
@@ -268,7 +264,6 @@ export const useBuyerMessages = () => {
       const customEvent = event as CustomEvent;
       const newMessage = customEvent.detail;
       
-      console.log('[useBuyerMessages] New message event received:', newMessage);
       
       // Check if this is a confirmation of an optimistic message
       if (newMessage.sender === user?.username && newMessage.receiver === activeThread) {
@@ -314,7 +309,6 @@ export const useBuyerMessages = () => {
     // Also listen for read events to update optimistic messages
     const handleMessageRead = (event: Event) => {
       const customEvent = event as CustomEvent;
-      console.log('[useBuyerMessages] Message read event received:', customEvent.detail);
       
       // Update optimistic messages' read status
       if (customEvent.detail.messageIds) {
@@ -407,7 +401,7 @@ export const useBuyerMessages = () => {
 
           /* Only the optimistic messages the real thread does not already
              contain. The dedupe pass below relies on optimisticMessageIds,
-             which is populated by a content + 5-second-window matcher — and
+             which is populated by a content + 5-second-window matcher -- and
              that silently fails whenever the browser and server clocks are
              more than five seconds apart, leaving the message on screen
              twice until the 10-second sweeper ran. */
@@ -430,7 +424,7 @@ export const useBuyerMessages = () => {
            against the server's (real). A browser running even a few seconds
            behind the VPS put a just-sent message ABOVE ones sent moments
            earlier; when the websocket echo arrived with the real server
-           timestamp it re-sorted to the end — the "appears above, then drops
+           timestamp it re-sorted to the end -- the "appears above, then drops
            to the bottom" jump. An optimistic message is by definition the
            newest thing in the thread, so its position should not depend on a
            clock we do not control. */
@@ -508,7 +502,6 @@ export const useBuyerMessages = () => {
       });
     }
     
-    console.log('[useBuyerMessages] Threads updated, count:', Object.keys(result).length);
     
     return result;
   }, [messages, user, optimisticMessages, messageUpdateCounter]);
@@ -517,32 +510,21 @@ export const useBuyerMessages = () => {
   const sellerProfiles = useMemo(() => {
     const profiles: { [seller: string]: { profilePic: string | null; isVerified: boolean } } = {};
     
-    console.log('[useBuyerMessages] ========== BUILDING SELLER PROFILES ==========');
-    console.log('[useBuyerMessages] contextProfiles from MessageContext:', contextProfiles);
-    console.log('[useBuyerMessages] getSellerProfile function available?', !!getSellerProfile);
-    console.log('[useBuyerMessages] Current threads (sellers):', Object.keys(threads));
     
     Object.keys(threads).forEach(seller => {
-      console.log(`[useBuyerMessages] Processing seller: ${seller}`);
       
       // Try to get profile using the function first
       let profile = null;
       if (getSellerProfile) {
         profile = getSellerProfile(seller);
-        console.log(`[useBuyerMessages]   - getSellerProfile(${seller}) returned:`, profile);
       }
       
       // Fallback to contextProfiles if function didn't return anything
       if (!profile && contextProfiles) {
         profile = contextProfiles[seller];
-        console.log(`[useBuyerMessages]   - contextProfiles[${seller}]:`, profile);
       }
       
       if (profile) {
-        console.log(`[useBuyerMessages]   ✓ Found profile for ${seller}:`, {
-          profilePic: profile.profilePic,
-          isVerified: profile.isVerified
-        });
         
         // UPDATED: Use backend field names directly
         profiles[seller] = {
@@ -550,7 +532,6 @@ export const useBuyerMessages = () => {
           isVerified: profile.isVerified || false
         };
       } else {
-        console.log(`[useBuyerMessages]   ✗ No profile found for ${seller}, using defaults`);
         profiles[seller] = {
           profilePic: null,
           isVerified: false
@@ -558,9 +539,6 @@ export const useBuyerMessages = () => {
       }
     });
     
-    console.log('[useBuyerMessages] ========== FINAL SELLER PROFILES ==========');
-    console.log('[useBuyerMessages] Final profiles object:', profiles);
-    console.log('[useBuyerMessages] Total profiles built:', Object.keys(profiles).length);
     
     return profiles;
   }, [threads, contextProfiles, getSellerProfile]);
@@ -592,7 +570,6 @@ export const useBuyerMessages = () => {
       totalUnreadCount += unread;
     });
     
-    console.log('[useBuyerMessages] Unread counts updated, total:', totalUnreadCount);
     
     return { unreadCounts, lastMessages, totalUnreadCount };
   }, [threads, user?.username, messageUpdateCounter]);
@@ -695,11 +672,6 @@ export const useBuyerMessages = () => {
   const handleReply = useCallback(async () => {
     if (!activeThread || (!replyMessage.trim() && !selectedImage) || !user) return;
     
-    console.log('Sending message:', {
-      text: replyMessage.trim(),
-      imageUrl: selectedImage,
-      receiver: activeThread
-    });
     
     // Create optimistic message
     const tempId = uuidv4();
@@ -1025,7 +997,6 @@ export const useBuyerMessages = () => {
   
   // Handle pay now with better error handling and debugging
   const handlePayNow = useCallback(async (request: any) => {
-    console.log('handlePayNow called with request:', request);
     
     try {
       // Set the request first to ensure we have it
@@ -1033,10 +1004,8 @@ export const useBuyerMessages = () => {
       
       // Try to refresh wallet data if possible
       if (walletContext && walletContext.reloadData) {
-        console.log('Attempting to reload wallet data...');
         try {
           await walletContext.reloadData();
-          console.log('Wallet data reloaded successfully');
         } catch (error) {
           console.error('Error reloading wallet data:', error);
           // Continue anyway - don't block showing the modal
@@ -1044,7 +1013,6 @@ export const useBuyerMessages = () => {
       }
       
       // Now show the modal
-      console.log('Setting showPayModal to true');
       setShowPayModal(true);
     } catch (error) {
       console.error('Error in handlePayNow:', error);
@@ -1056,18 +1024,9 @@ export const useBuyerMessages = () => {
   
   // Handle confirm payment
   const handleConfirmPay = useCallback(async () => {
-    console.log('handleConfirmPay called');
-    console.log('Current state:', {
-      isProcessingPayment,
-      hasPayingRequest: !!payingRequest,
-      hasUser: !!user,
-      hasWalletContext: !!walletContext,
-      payingRequest
-    });
     
     // Prevent double-clicks and ensure we have all required data
     if (isProcessingPayment || !payingRequest || !user || !walletContext) {
-      console.log('Payment blocked - missing requirements');
       return;
     }
     
@@ -1076,7 +1035,6 @@ export const useBuyerMessages = () => {
     
     try {
       // Refresh wallet data first to ensure we have the latest balance
-      console.log('Refreshing wallet data...');
       if (walletContext.reloadData) {
         await walletContext.reloadData();
       }
@@ -1084,12 +1042,6 @@ export const useBuyerMessages = () => {
       const markupPrice = payingRequest.price * 1.1;
       const currentBalance = getBuyerBalance(user.username);
       
-      console.log('Payment attempt:', {
-        currentBalance,
-        markupPrice,
-        canPay: currentBalance >= markupPrice,
-        request: payingRequest
-      });
       
       if (currentBalance < markupPrice) {
         alert(`Insufficient balance. You have $${currentBalance.toFixed(2)} but need $${markupPrice.toFixed(2)}.`);
@@ -1107,11 +1059,9 @@ export const useBuyerMessages = () => {
         metadata: payingRequest
       };
       
-      console.log('Processing payment...', customRequest);
       const success = await walletContext.purchaseCustomRequest(customRequest);
       
       if (success) {
-        console.log('Payment successful, updating request status...');
         
         // Mark as paid
         await markRequestAsPaid(payingRequest.id);
@@ -1149,7 +1099,6 @@ export const useBuyerMessages = () => {
         sendMessage(user.username, payingRequest.seller, paymentMessage, { type: 'normal', _optimisticId: tempId });
         
         // Close modal and clear state
-        console.log('Closing modal...');
         setShowPayModal(false);
         setPayingRequest(null);
         
@@ -1161,7 +1110,6 @@ export const useBuyerMessages = () => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
         
-        console.log('Payment completed successfully');
       } else {
         console.error('Payment failed');
         alert('Payment failed. Please try again.');
@@ -1196,12 +1144,10 @@ export const useBuyerMessages = () => {
       }
       
       // Upload to Cloudinary instead of just reading as base64
-      console.log('Uploading image to Cloudinary...');
       const uploadResult = await uploadToCloudinary(file, 'message');
       
       // Set the Cloudinary URL, not base64 data
       setSelectedImage(uploadResult.url);
-      console.log('Image uploaded successfully:', uploadResult.url);
       
     } catch (error) {
       console.error('Image upload error:', error);
@@ -1595,3 +1541,5 @@ export const useBuyerMessages = () => {
     isUserReported,
   };
 };
+
+

@@ -86,7 +86,7 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
     return () => clearTimeout(timeoutId);
   }, [timeFilter, mounted]);
 
-  // ✅ Source of truth: role from backend-authenticated user
+  // -- Source of truth: role from backend-authenticated user
   const isAdminUser = useMemo(() => user?.role === 'admin', [user?.role]);
 
   const filteredData = useMemo(() => {
@@ -201,7 +201,7 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
   if (!walletInitialized || walletLoading || !mounted) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
-        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
+        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-lg shadow-lg p-8 border border-gray-800">
           <Loader2 className="w-16 h-16 text-[#ff950e] animate-spin mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-center mb-4">Loading Analytics</h1>
           <p className="text-gray-400 text-center">Initializing wallet data and calculating metrics...</p>
@@ -213,14 +213,14 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
   if (initializationError) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
-        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
+        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-lg shadow-lg p-8 border border-gray-800">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-center mb-4">Initialization Error</h1>
           <p className="text-gray-400 text-center mb-6">{initializationError}</p>
           <button
             onClick={handleForceReload}
             disabled={isReloading}
-            className="w-full px-4 py-2 bg-[#ff950e] hover:bg-[#ff6b00] text-black rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-4 py-2 bg-[#ff950e] hover:bg-primary-hover text-black rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isReloading ? 'Retrying...' : 'Retry Loading'}
           </button>
@@ -232,7 +232,7 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
   if (!isAdminUser) {
     return (
       <main className="min-h-screen bg-black text-white p-8">
-        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-xl shadow-lg p-8 border border-gray-800">
+        <div className="max-w-md mx-auto bg-[#1a1a1a] rounded-lg shadow-lg p-8 border border-gray-800">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-center mb-4">Access Denied</h1>
         </div>
@@ -244,7 +244,7 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
     <main className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 overflow-x-hidden">
       {isReloading && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-[#101010] rounded-xl p-6 border border-[#1f1f1f] shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
+          <div className="bg-[#101010] rounded-lg p-6 border border-[#1f1f1f] shadow-[0_12px_32px_rgba(0,0,0,0.45)]">
             <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-3" />
             <p className="text-sm font-medium text-gray-200">Reloading analytics data...</p>
           </div>
@@ -332,7 +332,7 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
                   className="inline-flex items-center justify-center gap-2 rounded-md border border-[#ff950e] bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black transition-colors hover:bg-[#ffa733] disabled:cursor-not-allowed disabled:border-[#ff950e]/60 disabled:bg-[#ff950e]/60"
                 >
                   <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
-                  {isReloading ? 'Reloading…' : 'Force Reload'}
+                  {isReloading ? 'Reloading...' : 'Force Reload'}
                 </button>
               </div>
             )}
@@ -434,3 +434,5 @@ export default function AdminProfitDashboard() {
     </RequireAuth>
   );
 }
+
+

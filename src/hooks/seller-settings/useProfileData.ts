@@ -145,19 +145,16 @@ export function useProfileData(): UseProfileDataReturn {
       return;
     }
 
-    console.log(`[useProfileData] Loading profile data for username: "${username}"`);
     setIsLoadingProfile(true);
     
     try {
       // Get profile data with proper username
-      console.log(`[useProfileData] Calling getUserProfile with username: "${username}"`);
       const profileResult = await usersService.getUserProfile(username);
       
       if (!profileResult.success) {
         console.error('[useProfileData] Failed to get user profile:', profileResult.error);
       } else if (profileResult.data) {
         const profile = profileResult.data;
-        console.log('[useProfileData] Profile data loaded successfully:', profile);
         
         // Sanitize loaded data
         const sanitizedBio = sanitizeStrict(profile.bio || '');
@@ -197,7 +194,6 @@ export function useProfileData(): UseProfileDataReturn {
       }
 
       // Calculate completeness - ensure username is passed
-      console.log(`[useProfileData] Calling getUser with username: "${username}"`);
       const userResult = await usersService.getUser(username);
       
       if (!userResult.success) {
@@ -209,18 +205,15 @@ export function useProfileData(): UseProfileDataReturn {
           subscriptionPrice: String(profileResult.data.subscriptionPrice || '0')
         });
         setCompleteness(comp);
-        console.log('[useProfileData] Profile completeness calculated:', comp);
       }
 
       // Load preferences - ensure username is passed
-      console.log(`[useProfileData] Calling getUserPreferences with username: "${username}"`);
       const prefsResult = await usersService.getUserPreferences(username);
       
       if (!prefsResult.success) {
         console.error('[useProfileData] Failed to get user preferences:', prefsResult.error);
       } else if (prefsResult.data) {
         setPreferences(prefsResult.data);
-        console.log('[useProfileData] User preferences loaded:', prefsResult.data);
       }
 
       // Track profile view activity
@@ -292,7 +285,6 @@ export function useProfileData(): UseProfileDataReturn {
       
       // Upload to Cloudinary
       const result = await uploadToCloudinary(file);
-      console.log('[useProfileData] Profile pic uploaded successfully:', result);
       
       // Validate uploaded URL
       const sanitizedUrl = sanitizeUrl(result.url);
@@ -304,7 +296,7 @@ export function useProfileData(): UseProfileDataReturn {
       //
       // POST /api/upload/profile-pic has already called
       // submitProfilePicForReview on the server, so at this point the
-      // image is IN the moderation queue. Save must not send it again —
+      // image is IN the moderation queue. Save must not send it again --
       // doing so re-queues it and resets its place in the line.
       setPreview(sanitizedUrl);
       setProfilePicPendingReview(Boolean((result as any)?.pendingReview ?? true));
@@ -404,13 +396,11 @@ export function useProfileData(): UseProfileDataReturn {
         isLocationPublic,
       };
 
-      console.log(`[useProfileData] Saving profile for username: "${username}"`, updates);
 
       // Update profile
       const result = await usersService.updateUserProfile(username, updates);
       
       if (result.success) {
-        console.log('[useProfileData] Profile saved successfully');
         
         // Update auth context if profile pic changed
         if (sanitizedProfilePic && sanitizedProfilePic !== user.profilePicture) {
@@ -480,12 +470,10 @@ export function useProfileData(): UseProfileDataReturn {
       // Sanitize preference updates
       const sanitizedUpdates = securityService.sanitizeForAPI(updates);
       
-      console.log(`[useProfileData] Updating preferences for username: "${username}"`, sanitizedUpdates);
       
       const result = await usersService.updateUserPreferences(username, sanitizedUpdates);
       if (result.success) {
         setPreferences(result.data);
-        console.log('[useProfileData] Preferences updated successfully');
       } else {
         console.error('[useProfileData] Failed to update preferences:', result.error);
       }
@@ -496,7 +484,6 @@ export function useProfileData(): UseProfileDataReturn {
 
   // Refresh profile data
   const refreshProfile = async () => {
-    console.log('[useProfileData] Refreshing profile data');
     // Clear cache to force fresh data
     usersService.clearCache();
     await loadProfileData();
@@ -592,3 +579,5 @@ export function useProfileData(): UseProfileDataReturn {
     errors,
   };
 }
+
+

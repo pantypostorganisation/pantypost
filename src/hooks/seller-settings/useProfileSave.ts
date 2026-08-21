@@ -20,7 +20,7 @@ interface UseProfileSaveReturn {
   saveSuccess: boolean;
   saveError: string;
   isSaving: boolean;
-  // Partial: Save no longer transmits profilePic or galleryImages —
+  // Partial: Save no longer transmits profilePic or galleryImages --
   // uploads commit those themselves. Every field is validated
   // individually below, so a subset is safe.
   handleSave: (data: Partial<ProfileSaveData>) => Promise<void>;
@@ -289,3 +289,5 @@ export function useProfileSave(): UseProfileSaveReturn {
     debouncedSave
   };
 }
+
+

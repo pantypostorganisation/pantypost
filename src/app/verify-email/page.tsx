@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Loader2, CheckCircle, XCircle, Mail } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, Mail, Lock, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { authService } from '@/services/auth.service';
 
 // Floating particle component - matching login/signup style
@@ -75,7 +75,7 @@ function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: nu
     };
   }, [dimensions]);
 
-  const colors = ['bg-[#ff950e]/30', 'bg-[#ff950e]/20', 'bg-white/20', 'bg-white/30', 'bg-[#ff6b00]/25'];
+  const colors = ['bg-[#ff950e]/30', 'bg-[#ff950e]/20', 'bg-white/20', 'bg-white/30', 'bg-primary-press/25'];
   const particleColor = colors[index % colors.length];
   const size = 4 + Math.random() * 4;
   const opacity = 0.3 + Math.random() * 0.4;
@@ -213,7 +213,7 @@ export default function VerifyEmailPage() {
           </div>
 
           {/* Status Card - matching login/signup style */}
-          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-8 shadow-xl">
+          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-lg p-8 shadow-xl">
             {verificationStatus === 'verifying' && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -292,7 +292,7 @@ export default function VerifyEmailPage() {
                 <div className="space-y-3">
                   <button
                     onClick={() => router.push('/verify-email-pending')}
-                    className="w-full py-3 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
+                    className="w-full py-3 bg-gradient-to-r from-primary to-primary-press hover:from-primary-press hover:to-primary text-black font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
                     style={{ color: '#000' }}
                   >
                     <Mail className="w-4 h-4" />
@@ -322,7 +322,7 @@ export default function VerifyEmailPage() {
               Having trouble?{' '}
               <a 
                 href="mailto:support@pantypost.com" 
-                className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors"
+                className="text-[#ff950e] hover:text-primary-hover font-medium transition-colors"
               >
                 Contact Support
               </a>
@@ -331,12 +331,14 @@ export default function VerifyEmailPage() {
 
           {/* Trust Indicators - matching login/signup style */}
           <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
-            <span>🔒 Secure</span>
-            <span>🛡️ Encrypted</span>
-            <span>✓ Verified</span>
+            <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" aria-hidden="true" /> Secure</span>
+            <span className="inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" aria-hidden="true" /> Encrypted</span>
+            <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3 h-3" aria-hidden="true" /> Verified</span>
           </div>
         </motion.div>
       </div>
     </div>
   );
 }
+
+

@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Mail, RefreshCw, CheckCircle, AlertCircle, Clock, ArrowRight } from 'lucide-react';
+import { Mail, RefreshCw, CheckCircle, AlertCircle, Clock, ArrowRight, Lock, ShieldCheck, BadgeCheck } from 'lucide-react';
 import { buildApiUrl } from '@/services/api.config';
 
 // Floating particle component - matching login/signup style
@@ -75,7 +75,7 @@ function FloatingParticle({ delay = 0, index = 0 }: { delay?: number; index?: nu
     };
   }, [dimensions]);
 
-  const colors = ['bg-[#ff950e]/30', 'bg-[#ff950e]/20', 'bg-white/20', 'bg-white/30', 'bg-[#ff6b00]/25'];
+  const colors = ['bg-[#ff950e]/30', 'bg-[#ff950e]/20', 'bg-white/20', 'bg-white/30', 'bg-primary-press/25'];
   const particleColor = colors[index % colors.length];
   const size = 4 + Math.random() * 4;
   const opacity = 0.3 + Math.random() * 0.4;
@@ -350,7 +350,7 @@ export default function VerifyEmailPendingPage() {
           </div>
 
           {/* Main Card - matching login/signup style */}
-          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl">
+          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-lg p-6 shadow-xl">
             {!showSuccess ? (
               <>
                 {/* Icon */}
@@ -411,7 +411,7 @@ export default function VerifyEmailPendingPage() {
                     <button
                       onClick={handleVerifyCode}
                       disabled={verificationCode.length !== 6 || isVerifying}
-                      className="px-6 py-3 bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold rounded-lg transition-all duration-200 flex items-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+                      className="px-6 py-3 bg-gradient-to-r from-primary to-primary-press hover:from-primary-press hover:to-primary disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold rounded-lg transition-all duration-200 flex items-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
                       style={{ color: (verificationCode.length !== 6 || isVerifying) ? undefined : '#000' }}
                     >
                       {isVerifying ? (
@@ -479,7 +479,7 @@ export default function VerifyEmailPendingPage() {
                   <button
                     onClick={handleResendEmail}
                     disabled={isResending || resendCooldown > 0}
-                    className="text-[#ff950e] hover:text-[#ff6b00] disabled:text-gray-500 font-medium text-sm transition-colors flex items-center gap-2 mx-auto disabled:cursor-not-allowed"
+                    className="text-[#ff950e] hover:text-primary-hover disabled:text-gray-500 font-medium text-sm transition-colors flex items-center gap-2 mx-auto disabled:cursor-not-allowed"
                   >
                     {isResending ? (
                       <>
@@ -549,7 +549,7 @@ export default function VerifyEmailPendingPage() {
               Wrong email?{' '}
               <button
                 onClick={() => router.push('/signup')}
-                className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors"
+                className="text-[#ff950e] hover:text-primary-hover font-medium transition-colors"
               >
                 Sign up again
               </button>
@@ -558,7 +558,7 @@ export default function VerifyEmailPendingPage() {
               Already verified?{' '}
               <button
                 onClick={() => router.push('/login')}
-                className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors"
+                className="text-[#ff950e] hover:text-primary-hover font-medium transition-colors"
               >
                 Log in
               </button>
@@ -567,12 +567,14 @@ export default function VerifyEmailPendingPage() {
 
           {/* Trust Indicators - matching login/signup style */}
           <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
-            <span>🔒 Secure</span>
-            <span>🛡️ Encrypted</span>
-            <span>✓ Verified</span>
+            <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" aria-hidden="true" /> Secure</span>
+            <span className="inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" aria-hidden="true" /> Encrypted</span>
+            <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3 h-3" aria-hidden="true" /> Verified</span>
           </div>
         </motion.div>
       </div>
     </div>
   );
 }
+
+

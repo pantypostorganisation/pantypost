@@ -259,7 +259,7 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
             </span>
           )}
           {!showPriceSaving && hasUnsavedChanges && !isSaving && (
-            <span className="ml-2 text-orange-500 text-xs">• Unsaved</span>
+            <span className="ml-2 text-orange-500 text-xs">{'\u2022'} Unsaved</span>
           )}
         </label>
         <SecureInput
@@ -291,3 +291,4 @@ export default function ProfileInfoCard(rawProps: ProfileInfoCardProps) {
     </div>
   );
 }
+

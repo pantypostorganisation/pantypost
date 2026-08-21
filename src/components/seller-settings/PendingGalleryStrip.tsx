@@ -20,7 +20,7 @@ interface PendingGalleryStripProps {
  * Kept separate from the approved gallery on purpose: the two are
  * deleted through different endpoints (approved by index, queued by
  * subdocument id), and merging them risks removing the wrong image.
- * Showing them at all is the point — a seller who cannot see their own
+ * Showing them at all is the point -- a seller who cannot see their own
  * queued uploads reasonably concludes the upload failed.
  */
 export default function PendingGalleryStrip({ images, onWithdraw }: PendingGalleryStripProps) {
@@ -66,3 +66,5 @@ export default function PendingGalleryStrip({ images, onWithdraw }: PendingGalle
     </section>
   );
 }
+
+

@@ -1,7 +1,7 @@
 // src/components/seller-settings/modals/TierDetailsModal.tsx
 'use client';
 
-import { X, Award, TrendingUp, Crown, Star, Gift, Target, CheckCircle } from 'lucide-react';
+import { X, Award, TrendingUp, Crown, Star, Gift, Target, CheckCircle, Check } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
 import type { TierLevel } from '@/utils/sellerTiers';
 import { z } from 'zod';
@@ -172,7 +172,7 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
             <ul className="space-y-2">
               {getBenefitsForTier(selectedTier).map((benefit, index) => (
                 <li key={index} className="flex items-start gap-2">
-                  <span className="text-green-500 mt-1">✓</span>
+                  <span className="text-green-500 mt-1"><Check className="w-3.5 h-3.5 inline" aria-hidden="true" /></span>
                   <span className="text-ink-muted">{benefit}</span>
                 </li>
               ))}
@@ -211,3 +211,4 @@ export default function TierDetailsModal(rawProps: TierDetailsModalProps) {
     </div>
   );
 }
+

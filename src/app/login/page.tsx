@@ -25,7 +25,7 @@ export default function LoginPage() {
   const { login, isAuthReady, user, error: authError, clearError, loading: authLoading } = authData;
 
   if (isDev) {
-    console.log('[Login] useAuth snapshot:', {
+    if (isDev) console.log('[Login] useAuth snapshot:', {
       hasLogin: !!login,
       loginType: typeof login,
       isAuthReady,
@@ -213,7 +213,7 @@ export default function LoginPage() {
   const handleLogin = useCallback(
     async (e?: React.FormEvent) => {
       if (isDev)
-        console.log('[Login] handleLogin called', {
+        if (isDev) console.log('[Login] handleLogin called', {
           hasEvent: !!e,
           username,
           role,
@@ -291,7 +291,7 @@ export default function LoginPage() {
 
         // Handle email verification error - silent redirect
         if (err?.requiresVerification) {
-          console.log('[Login] Email verification error caught:', {
+          if (isDev) console.log('[Login] Email verification error caught:', {
             requiresVerification: err.requiresVerification,
             email: err.email,
             username: err.username,
@@ -308,7 +308,7 @@ export default function LoginPage() {
         } 
         // Handle password reset pending error
         else if (err?.pendingPasswordReset) {
-          console.log('[Login] Password reset pending error caught:', {
+          if (isDev) console.log('[Login] Password reset pending error caught:', {
             pendingPasswordReset: err.pendingPasswordReset,
             email: err.email,
             username: err.username,
@@ -326,7 +326,7 @@ export default function LoginPage() {
         // CRITICAL FIX: Handle all other errors properly
         else {
           const errorMessage = err?.message || 'An unexpected error occurred. Please try again.';
-          console.log('[Login] Setting error message:', errorMessage);
+          if (isDev) console.log('[Login] Setting error message:', errorMessage);
           setError(errorMessage);
         }
       } finally {
@@ -462,5 +462,7 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
 
 

@@ -1,7 +1,7 @@
 // src/components/seller-settings/TierDisplaySection.tsx
 'use client';
 
-import { Award, TrendingUp, Star, Gift, Target, Crown } from 'lucide-react';
+import { Award, TrendingUp, Star, Gift, Target, Crown, Check } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
 import type { TierLevel } from '@/utils/sellerTiers';
 import { z } from 'zod';
@@ -102,7 +102,7 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
             <p className="text-base text-ink-muted">
               Current level:{' '}
               <span className="font-semibold text-primary">
-                {currentTier && currentTier !== 'None' ? currentTier : '—'}
+                {currentTier && currentTier !== 'None' ? currentTier : '\u2014'}
               </span>
             </p>
             <p className="text-sm text-ink-muted">
@@ -252,11 +252,11 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
                     <>
                       <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
                         <span className="text-ink-muted">Priority Support</span>
-                        <span className="text-green-400">✓</span>
+                        <span className="text-green-400"><Check className="w-3.5 h-3.5 inline" aria-hidden="true" /></span>
                       </div>
                       <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
                         <span className="text-ink-muted">Featured Profile</span>
-                        <span className="text-green-400">✓</span>
+                        <span className="text-green-400"><Check className="w-3.5 h-3.5 inline" aria-hidden="true" /></span>
                       </div>
                     </>
                   )}
@@ -265,11 +265,11 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
                     <>
                       <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
                         <span className="text-ink-muted">Custom Badge</span>
-                        <span className="text-green-400">✓</span>
+                        <span className="text-green-400"><Check className="w-3.5 h-3.5 inline" aria-hidden="true" /></span>
                       </div>
                       <div className="flex items-center justify-between rounded-md border border-white/5 bg-surface/60 p-3">
                         <span className="text-ink-muted">VIP Events</span>
-                        <span className="text-green-400">✓</span>
+                        <span className="text-green-400"><Check className="w-3.5 h-3.5 inline" aria-hidden="true" /></span>
                       </div>
                     </>
                   )}
@@ -292,3 +292,4 @@ export default function TierDisplaySection(rawProps: TierDisplaySectionProps) {
     </div>
   );
 }
+

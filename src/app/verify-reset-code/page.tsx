@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { KeyRound, ArrowLeft, AlertCircle, Mail, Lock } from 'lucide-react';
+import { KeyRound, ArrowLeft, AlertCircle, Mail, Lock, ShieldCheck, BadgeCheck } from 'lucide-react';
 import FloatingParticle from '@/components/login/FloatingParticle';
 import PublicRouteWrapper from '@/components/PublicRouteWrapper';
 import { authService } from '@/services/auth.service';
@@ -268,7 +268,7 @@ function VerifyResetCodeContent() {
           </div>
 
           {/* Form Card - matching login/signup style */}
-          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-2xl p-6 shadow-xl">
+          <div className="bg-[#111]/80 backdrop-blur-sm border border-gray-800/50 rounded-lg p-6 shadow-xl">
             {needsEmail ? (
               // Email input form
               <form onSubmit={handleEmailSubmit}>
@@ -294,7 +294,7 @@ function VerifyResetCodeContent() {
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] text-black font-semibold py-3 px-4 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full bg-gradient-to-r from-primary to-primary-press hover:from-primary-press hover:to-primary text-black font-semibold py-3 px-4 rounded-lg transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
                   style={{ color: '#000' }}
                 >
                   Continue
@@ -358,7 +358,7 @@ function VerifyResetCodeContent() {
                 <button
                   type="submit"
                   disabled={isLoading || code.some(d => !d) || verificationSuccess}
-                  className="w-full bg-gradient-to-r from-[#ff950e] to-[#ff6b00] hover:from-[#ff6b00] hover:to-[#ff950e] disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full bg-gradient-to-r from-primary to-primary-press hover:from-primary-press hover:to-primary disabled:from-gray-700 disabled:to-gray-600 text-black disabled:text-gray-400 font-semibold py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-[0.98]"
                   style={{ color: (isLoading || code.some(d => !d) || verificationSuccess) ? undefined : '#000' }}
                 >
                   {isLoading ? (
@@ -415,7 +415,7 @@ function VerifyResetCodeContent() {
                     <button
                       type="button"
                       onClick={handleResend}
-                      className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium transition-colors"
+                      className="text-[#ff950e] hover:text-primary-hover text-sm font-medium transition-colors"
                     >
                       Send new code
                     </button>
@@ -440,7 +440,7 @@ function VerifyResetCodeContent() {
           <div className="text-center mt-6 space-y-3">
             <p className="text-sm text-gray-500">
               Need help?{' '}
-              <a href="mailto:support@pantypost.com" className="text-[#ff950e] hover:text-[#ff6b00] font-medium transition-colors">
+              <a href="mailto:support@pantypost.com" className="text-[#ff950e] hover:text-primary-hover font-medium transition-colors">
                 Contact Support
               </a>
             </p>
@@ -448,9 +448,9 @@ function VerifyResetCodeContent() {
 
           {/* Trust Indicators - matching login/signup style */}
           <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-600">
-            <span>🔒 Secure</span>
-            <span>🛡️ Encrypted</span>
-            <span>✓ Verified</span>
+            <span className="inline-flex items-center gap-1"><Lock className="w-3 h-3" aria-hidden="true" /> Secure</span>
+            <span className="inline-flex items-center gap-1"><ShieldCheck className="w-3 h-3" aria-hidden="true" /> Encrypted</span>
+            <span className="inline-flex items-center gap-1"><BadgeCheck className="w-3 h-3" aria-hidden="true" /> Verified</span>
           </div>
         </div>
       </div>
@@ -465,3 +465,4 @@ export default function VerifyResetCodePage() {
     </PublicRouteWrapper>
   );
 }
+

@@ -12,8 +12,8 @@ export default function EmptyState({ showEmptyState }: EmptyStateProps): React.R
   if (!showEmptyState) return null;
 
   return (
-    <section className="flex h-full flex-col items-center justify-center rounded-2xl border border-gray-800 bg-[#111] p-12 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10">
+    <section className="flex h-full flex-col items-center justify-center rounded-lg border border-gray-800 bg-[#111] p-12 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-[#ff950e]/30 bg-[#ff950e]/10">
         <Wallet className="h-8 w-8 text-[#ff950e]" />
       </div>
       <h3 className="mt-6 text-2xl font-semibold text-white">No withdrawals yet</h3>
@@ -33,3 +33,5 @@ export default function EmptyState({ showEmptyState }: EmptyStateProps): React.R
     </section>
   );
 }
+
+

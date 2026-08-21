@@ -137,7 +137,7 @@ export default function GalleryManager(props: GalleryManagerProps) {
             Select Images
           </button>
           <p className="text-xs text-ink-faint mt-2">
-            JPEG, JPG, PNG, or WebP • Max 10MB per file
+            JPEG, JPG, PNG, or WebP -- Max 10MB per file
           </p>
         </div>
 
@@ -215,3 +215,4 @@ export default function GalleryManager(props: GalleryManagerProps) {
     </div>
   );
 }
+

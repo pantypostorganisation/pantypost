@@ -37,10 +37,10 @@ export default function RecentWithdrawals({ withdrawals }: RecentWithdrawalsProp
   };
 
   return (
-    <section className="rounded-2xl border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
+    <section className="rounded-lg border border-gray-800 bg-[#111] p-6 transition-colors sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#ff950e]/30 bg-[#ff950e]/10">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-[#ff950e]/30 bg-[#ff950e]/10">
             <Clock className="h-6 w-6 text-[#ff950e]" />
           </div>
           <div>
@@ -62,11 +62,11 @@ export default function RecentWithdrawals({ withdrawals }: RecentWithdrawalsProp
           return (
             <div
               key={index}
-              className="rounded-2xl border border-gray-800 bg-[#0c0c0c] p-4 transition-colors hover:border-[#ff950e]/40 hover:bg-[#111]"
+              className="rounded-lg border border-gray-800 bg-[#0c0c0c] p-4 transition-colors hover:border-[#ff950e]/40 hover:bg-[#111]"
             >
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-green-500/30 bg-green-500/10">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-green-500/30 bg-green-500/10">
                     <CheckCircle className="h-5 w-5 text-green-400" />
                   </div>
                   <div>
@@ -96,7 +96,7 @@ export default function RecentWithdrawals({ withdrawals }: RecentWithdrawalsProp
       </div>
 
       {withdrawals.length === 0 && (
-        <div className="mt-8 flex flex-col items-center gap-3 rounded-2xl border border-gray-800 bg-[#0c0c0c] p-8 text-center">
+        <div className="mt-8 flex flex-col items-center gap-3 rounded-lg border border-gray-800 bg-[#0c0c0c] p-8 text-center">
           <Hourglass className="h-6 w-6 text-gray-500" />
           <p className="text-sm text-gray-500">No withdrawals yet</p>
             <span className="text-xs text-gray-600">
@@ -106,7 +106,7 @@ export default function RecentWithdrawals({ withdrawals }: RecentWithdrawalsProp
       )}
 
       {withdrawals.length > 0 && (
-        <div className="mt-6 flex items-center justify-between rounded-2xl border border-gray-800 bg-[#0c0c0c] p-4 text-xs text-gray-400">
+        <div className="mt-6 flex items-center justify-between rounded-lg border border-gray-800 bg-[#0c0c0c] p-4 text-xs text-gray-400">
           <span>Keep fulfilling orders to maintain a healthy payout cadence.</span>
           <span className="inline-flex items-center gap-2 text-[#ff950e]">
             <ArrowUpRight className="h-4 w-4" />
@@ -117,3 +117,5 @@ export default function RecentWithdrawals({ withdrawals }: RecentWithdrawalsProp
     </section>
   );
 }
+
+
