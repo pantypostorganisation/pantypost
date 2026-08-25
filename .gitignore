@@ -42,3 +42,5 @@ pnpm-debug.log*
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+pantypost-backend/node_modules/
