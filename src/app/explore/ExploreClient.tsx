@@ -109,7 +109,7 @@ function VideoPlayer({ src, isVisible }: VideoPlayerProps) {
       <video
         ref={videoRef}
         src={src}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain"
         loop
         muted={isMuted}
         playsInline
@@ -257,6 +257,18 @@ function PostCard({
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+  // Tap-to-expand viewer for images; the feed frame clamps to 4:5, this
+  // is the escape hatch that shows the full media at full size.
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightboxOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightboxOpen]);
   const [showMenu, setShowMenu] = useState(false);
   const [isLiked, setIsLiked] = useState(
     currentUser ? post.likes.includes(currentUser.username) : false,
@@ -452,16 +464,36 @@ function PostCard({
       {/* Media (Images/Videos) */}
       {mediaUrls.length > 0 && (
         <div className="relative bg-black">
-          <div className="aspect-square relative overflow-hidden">
+          {/* The post frame. Fixed 4:5 portrait -- the ratio phone photos
+              are actually taken in, and the standard the big feeds
+              converged on. The frame owns the size; media can no longer
+              blow out the layout (a raw upload used to render at natural
+              height here). Foreground is object-contain over a blurred
+              copy of itself, so nothing a seller uploads is ever cropped
+              -- for a marketplace, the product must never be cut off.
+              Videos letterbox on plain black like every video player.
+              Plain <img>, not the image wrapper component, for the same
+              wrapper-div reason documented at the avatar above. */}
+          <div className="aspect-[4/5] relative overflow-hidden">
             {isCurrentMediaVideo ? (
               <VideoPlayer src={currentMedia} isVisible={isVisible} />
             ) : (
-              <OptimizedImage
-                src={currentMedia}
-                alt="Post media"
-                fill
-                objectFit="cover"
-              />
+              <>
+                <img
+                  src={currentMedia}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 h-full w-full object-cover scale-110 blur-2xl opacity-60"
+                  loading="lazy"
+                />
+                <img
+                  src={currentMedia}
+                  alt="Post media"
+                  className="absolute inset-0 h-full w-full object-contain cursor-zoom-in"
+                  loading="lazy"
+                  onClick={() => setLightboxOpen(true)}
+                />
+              </>
             )}
           </div>
 
@@ -507,6 +539,58 @@ function PostCard({
                   />
                 ))}
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Fullscreen media viewer */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4"
+          onClick={() => setLightboxOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Full size media"
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <img
+            src={currentMedia}
+            alt="Post media, full size"
+            className="max-h-full max-w-full object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          {mediaUrls.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentMediaIndex((i) => (i === 0 ? mediaUrls.length - 1 : i - 1));
+                }}
+                className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
+                aria-label="Previous media"
+              >
+                <ChevronLeft className="w-6 h-6" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCurrentMediaIndex((i) => (i === mediaUrls.length - 1 ? 0 : i + 1));
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
+                aria-label="Next media"
+              >
+                <ChevronRight className="w-6 h-6" />
+              </button>
             </>
           )}
         </div>
