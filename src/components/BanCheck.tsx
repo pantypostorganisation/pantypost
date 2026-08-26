@@ -1,6 +1,7 @@
 // src/components/BanCheck.tsx
 'use client';
 
+import { toast } from '@/components/toast/toaster';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBans } from '@/context/BanContext';
 import { useAuth } from '@/context/AuthContext';
@@ -105,11 +106,11 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
     const files = Array.from(event.target.files || []);
     const validFiles = files.filter((file) => {
       if (!file.type.startsWith('image/')) {
-        alert(`${file.name} is not an image file`);
+        toast.error(`${file.name} is not an image file`);
         return false;
       }
       if (file.size > 5 * 1024 * 1024) {
-        alert(`${file.name} is too large (max 5MB)`);
+        toast.error(`${file.name} is too large (max 5MB)`);
         return false;
       }
       return true;
@@ -164,7 +165,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
         setBanInfo(updatedBan);
 
         setTimeout(() => {
-          alert('Appeal submitted successfully! You will be notified of the decision.');
+          toast.success('Appeal submitted successfully! You will be notified of the decision.');
         }, 500);
       } else {
         setAppealError('Failed to submit appeal. Please try again.');

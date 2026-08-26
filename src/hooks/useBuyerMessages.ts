@@ -6,6 +6,7 @@ declare global {
   }
 }
 
+import { toast } from '@/components/toast/toaster';
 import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -838,7 +839,7 @@ export const useBuyerMessages = () => {
         // Force update
         setMessageUpdateCounter(prev => prev + 1);
       } else {
-        alert('Payment failed. Please try again.');
+        toast.error('Payment failed. Please try again.');
       }
     } else {
       // Update status to accepted but not paid
@@ -1044,7 +1045,7 @@ export const useBuyerMessages = () => {
       
       
       if (currentBalance < markupPrice) {
-        alert(`Insufficient balance. You have $${currentBalance.toFixed(2)} but need $${markupPrice.toFixed(2)}.`);
+        toast.error(`Insufficient balance. You have $${currentBalance.toFixed(2)} but need $${markupPrice.toFixed(2)}.`);
         setIsProcessingPayment(false);
         return;
       }
@@ -1112,11 +1113,11 @@ export const useBuyerMessages = () => {
         
       } else {
         console.error('Payment failed');
-        alert('Payment failed. Please try again.');
+        toast.error('Payment failed. Please try again.');
       }
     } catch (error) {
       console.error('Payment error:', error);
-      alert('An error occurred while processing payment. Please try again.');
+      toast.error('An error occurred while processing payment. Please try again.');
     } finally {
       // Always reset processing state
       setIsProcessingPayment(false);

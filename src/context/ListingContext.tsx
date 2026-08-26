@@ -1,6 +1,7 @@
 // src/context/ListingContext.tsx
 'use client';
 
+import { toast } from '@/components/toast/toaster';
 import {
   createContext,
   useContext,
@@ -577,7 +578,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   // ---------- Create listing ----------
   const addListing = async (listing: NewListingInput): Promise<Listing | null> => {
     if (!user || user.role !== 'seller') {
-      alert('You must be logged in as a seller to create listings.');
+      toast.error('You must be logged in as a seller to create listings.');
       return null;
     }
 
@@ -604,7 +605,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
 
     if (!validationResult.success) {
-      alert(
+      toast.error(
         'Please check your listing details:\n' +
           Object.values(validationResult.errors || {}).join('\n')
       );
@@ -616,7 +617,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const maxListings = isVerified ? 25 : 2;
 
     if (myListings.length >= maxListings) {
-      alert(
+      toast.error(
         isVerified
           ? 'You have reached the maximum of 25 listings for verified sellers.'
           : 'Unverified sellers can only have 2 active listings. Please verify your account to add more.'
@@ -646,12 +647,12 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
         return result.data;
       } else {
-        alert(result.error?.message || 'Failed to create listing. Please try again.');
+        toast.error(result.error?.message || 'Failed to create listing. Please try again.');
         return null;
       }
     } catch (error) {
       console.error('Error creating listing:', error);
-      alert('An error occurred while creating the listing.');
+      toast.error('An error occurred while creating the listing.');
       return null;
     }
   };
@@ -662,7 +663,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     auctionSettings: AuctionInput
   ): Promise<void> => {
     if (!user || user.role !== 'seller') {
-      alert('You must be logged in as a seller to create auction listings.');
+      toast.error('You must be logged in as a seller to create auction listings.');
       return;
     }
 
@@ -689,7 +690,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
 
     if (!listingValidation.success) {
-      alert(
+      toast.error(
         'Please check your listing details:\n' +
           Object.values(listingValidation.errors || {}).join('\n')
       );
@@ -701,7 +702,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       max: 10_000,
     });
     if (!amountValidation.valid) {
-      alert(amountValidation.error || 'Invalid starting price');
+      toast.error(amountValidation.error || 'Invalid starting price');
       return;
     }
 
@@ -711,7 +712,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         max: 10_000,
       });
       if (!reserveValidation.valid) {
-        alert('Reserve price must be at least the starting price');
+        toast.error('Reserve price must be at least the starting price');
         return;
       }
     }
@@ -721,7 +722,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     const maxListings = isVerified ? 25 : 2;
 
     if (myListings.length >= maxListings) {
-      alert(
+      toast.error(
         isVerified
           ? 'You have reached the maximum of 25 listings for verified sellers.'
           : 'Unverified sellers can only have 2 active listings. Please verify your account to add more.'
@@ -758,11 +759,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           );
         }
       } else {
-        alert(result.error?.message || 'Failed to create auction listing. Please try again.');
+        toast.error(result.error?.message || 'Failed to create auction listing. Please try again.');
       }
     } catch (error) {
       console.error('Error creating auction listing:', error);
-      alert('An error occurred while creating the auction listing.');
+      toast.error('An error occurred while creating the auction listing.');
     }
   };
 
@@ -805,7 +806,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
 
       console.error('Error removing listing:', error);
-      alert(error?.message || 'Failed to remove listing');
+      toast.error(error?.message || 'Failed to remove listing');
     }
   };
 
@@ -891,7 +892,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
     } catch (error: any) {
       console.error('Error updating listing:', error);
-      alert(error?.message || 'Failed to update listing');
+      toast.error(error?.message || 'Failed to update listing');
     }
   };
 
@@ -1079,7 +1080,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
     });
     if (!fileValidation.valid) {
-      alert(fileValidation.error || 'Invalid file');
+      toast.error(fileValidation.error || 'Invalid file');
       return null;
     }
     try {
@@ -1293,11 +1294,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           [user.username]: updatedUser,
         });
       } else {
-        alert('Failed to submit verification request. Please try again.');
+        toast.error('Failed to submit verification request. Please try again.');
       }
     } catch (error) {
       console.error('Error submitting verification request:', error);
-      alert('An error occurred while submitting verification request.');
+      toast.error('An error occurred while submitting verification request.');
     }
   };
 
@@ -1352,11 +1353,11 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
           prev.map((l) => (l.seller === sanitizedUsername ? { ...l, isVerified: status === 'verified' } : l))
         );
       } else {
-        alert('Failed to update verification status. Please try again.');
+        toast.error('Failed to update verification status. Please try again.');
       }
     } catch (error) {
       console.error('Error updating verification status:', error);
-      alert('An error occurred while updating verification status.');
+      toast.error('An error occurred while updating verification status.');
     }
   };
 
@@ -1412,3 +1413,4 @@ export const useListings = () => {
   if (!context) throw new Error('useListings must be used within a ListingProvider');
   return context;
 };
+

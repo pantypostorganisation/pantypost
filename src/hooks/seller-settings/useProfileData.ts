@@ -1,5 +1,6 @@
 // src/hooks/seller-settings/useProfileData.ts
 
+import { toast } from '@/components/toast/toaster';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { usersService } from '@/services';
@@ -253,7 +254,7 @@ export function useProfileData(): UseProfileDataReturn {
 
     // Check if user exists
     if (!user?.username) {
-      alert('Please log in to upload images');
+      toast.error('Please log in to upload images');
       return;
     }
 
@@ -264,7 +265,7 @@ export function useProfileData(): UseProfileDataReturn {
     });
 
     if (!rateLimitResult.allowed) {
-      alert(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
+      toast.error(`Too many uploads. Please wait ${rateLimitResult.waitTime} seconds.`);
       return;
     }
 
@@ -276,7 +277,7 @@ export function useProfileData(): UseProfileDataReturn {
     });
 
     if (!validation.valid) {
-      alert(validation.error);
+      toast.error(validation.error);
       return;
     }
 
@@ -311,7 +312,7 @@ export function useProfileData(): UseProfileDataReturn {
     } catch (error) {
       console.error("[useProfileData] Error uploading profile image:", error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to upload image: ${errorMessage}`);
+      toast.error(`Failed to upload image: ${errorMessage}`);
     } finally {
       setIsUploading(false);
     }
@@ -338,7 +339,7 @@ export function useProfileData(): UseProfileDataReturn {
   const saveProfile = async (): Promise<boolean> => {
     if (!user?.username) {
       console.error('[useProfileData] Cannot save profile: no username');
-      alert('Please log in to save your profile');
+      toast.error('Please log in to save your profile');
       return false;
     }
 
@@ -370,7 +371,7 @@ export function useProfileData(): UseProfileDataReturn {
     });
 
     if (!rateLimitResult.allowed) {
-      alert(`Too many profile updates. Please wait ${rateLimitResult.waitTime} seconds.`);
+      toast.error(`Too many profile updates. Please wait ${rateLimitResult.waitTime} seconds.`);
       return false;
     }
 
@@ -441,12 +442,12 @@ export function useProfileData(): UseProfileDataReturn {
         return true;
       } else {
         console.error('[useProfileData] Failed to save profile:', result.error);
-        alert(result.error?.message || 'Failed to save profile');
+        toast.error(result.error?.message || 'Failed to save profile');
         return false;
       }
     } catch (error) {
       console.error('[useProfileData] Error saving profile:', error);
-      alert('Failed to save profile');
+      toast.error('Failed to save profile');
       return false;
     } finally {
       setIsSaving(false);

@@ -44,3 +44,5 @@ pnpm-debug.log*
 *.tsbuildinfo
 
 pantypost-backend/node_modules/
+
+pantypost-backend/uploads/

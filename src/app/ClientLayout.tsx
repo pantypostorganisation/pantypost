@@ -4,6 +4,7 @@
 import { Suspense, useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import Providers from '@/components/Providers';
+import Toaster from '@/components/toast/Toaster';
 import Header from '@/components/Header';
 import AgeVerificationModal from '@/components/AgeVerificationModal';
 import AgeGate from '@/components/AgeGate';
@@ -323,7 +324,12 @@ export default function ClientLayout({
         </Suspense>
         {/* PWA Install Prompt */}
         <PWAInstall />
+
+        {/* App-wide toast notifications (replaces window.alert) */}
+        <Toaster />
       </Providers>
     </>
   );
 }
+
+
