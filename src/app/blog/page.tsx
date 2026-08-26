@@ -44,6 +44,26 @@ export const metadata: Metadata = {
  * around a dozen. */
 const POSTS = [
   {
+    slug: 'how-much-money-can-you-make-selling-used-panties',
+    title: 'How Much Money Can You Make Selling Used Panties?',
+    description:
+      'The honest answer: it varies enormously. What actually drives earnings, the exact math on the 90% seller cut, and realistic first-month expectations.',
+    published: '2026-08-26',
+    publishedLabel: 'August 2026',
+    readingMinutes: 8,
+    audience: 'For sellers',
+  },
+  {
+    slug: 'how-to-ship-used-panties-discreetly',
+    title: 'How to Ship Used Panties Discreetly',
+    description:
+      'Sealing that preserves the product, plain mailers that protect your privacy, honest customs forms, and the tracking habit that protects your earnings.',
+    published: '2026-08-26',
+    publishedLabel: 'August 2026',
+    readingMinutes: 7,
+    audience: 'For sellers',
+  },
+  {
     slug: 'is-it-legal-to-sell-used-panties-in-the-us',
     title: 'Is It Legal to Sell Used Panties in the US?',
     description:

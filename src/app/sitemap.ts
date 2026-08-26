@@ -157,6 +157,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.7,
     },
+    {
+      url: `${BASE_URL}/blog/how-much-money-can-you-make-selling-used-panties`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/blog/how-to-ship-used-panties-discreetly`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
     { url: `${BASE_URL}/help`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
 
     // Compliance surfaces. Low priority for ranking, but a payment
