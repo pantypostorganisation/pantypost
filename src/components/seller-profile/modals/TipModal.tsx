@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useContext } from 'react';
-import { Gift, DollarSign, X } from 'lucide-react';
+import { Gift, DollarSign, X, Check } from 'lucide-react';
 import { SecureInput } from '@/components/ui/SecureInput';
 import { SecureForm } from '@/components/ui/SecureForm';
 import { sanitizeStrict, sanitizeCurrency } from '@/utils/security/sanitization';
@@ -160,7 +160,7 @@ export default function TipModal({
         {displaySuccess ? (
           <div className="rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-8 text-center text-emerald-100">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-emerald-400/40 bg-emerald-500/20 text-3xl">
-              ✓
+              <Check className="w-8 h-8" aria-hidden="true" />
             </div>
             <p className="mt-4 text-lg font-semibold">Tip sent successfully!</p>
             <p className="mt-2 text-sm text-emerald-100/80">Thank you for supporting {sanitizedUsername}</p>
@@ -283,3 +283,4 @@ export default function TipModal({
     </div>
   );
 }
+

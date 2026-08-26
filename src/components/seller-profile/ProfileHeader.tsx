@@ -14,7 +14,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import TierBadge from '@/components/TierBadge';
-// SecureImage is exported from SecureMessageDisplay — there is no
+// SecureImage is exported from SecureMessageDisplay -- there is no
 // separate SecureImage module in this codebase.
 import { SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -36,7 +36,7 @@ interface ProfileHeaderProps {
   listingCount: number;
   /* ISO date. Rendered as "X years on Panty Post". */
   memberSince?: string | null;
-  /* Only pass this when the seller has location sharing switched on —
+  /* Only pass this when the seller has location sharing switched on --
      the component does not know about the privacy flag. */
   location?: string | null;
 
@@ -105,7 +105,7 @@ export default function ProfileHeader({
   // plain surface show through instead.
   const [coverFailed, setCoverFailed] = useState(false);
   // A profilePic URL can point at a file that no longer exists on the
-  // server — the DB row outlives the upload. Falling back to another
+  // server -- the DB row outlives the upload. Falling back to another
   // file only chains one 404 to the next, so a failed avatar drops to
   // the initial instead, which cannot break.
   const [avatarFailed, setAvatarFailed] = useState(false);
@@ -206,14 +206,14 @@ export default function ProfileHeader({
                   <span className="text-ink-faint">No reviews yet</span>
                 )}
 
-                <span className="text-ink-faint">·</span>
+                <span className="text-ink-faint">{'\u00B7'}</span>
 
                 <span className="inline-flex items-center gap-1">
                   <ShoppingBag className="h-3.5 w-3.5" />
                   {totalSales.toLocaleString()} {totalSales === 1 ? 'sale' : 'sales'}
                 </span>
 
-                <span className="text-ink-faint">·</span>
+                <span className="text-ink-faint">{'\u00B7'}</span>
 
                 <span className="inline-flex items-center gap-1">
                   <Package className="h-3.5 w-3.5" />
@@ -222,7 +222,7 @@ export default function ProfileHeader({
 
                 {membership && (
                   <>
-                    <span className="text-ink-faint">·</span>
+                    <span className="text-ink-faint">{'\u00B7'}</span>
                     <span className="inline-flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
                       {membership}
@@ -294,7 +294,7 @@ export default function ProfileHeader({
                     className="flex flex-1 items-center justify-center gap-2 rounded-md bg-primary px-5 py-2.5 text-sm font-semibold text-black transition-colors hover:bg-primary-hover sm:flex-none"
                   >
                     <Heart className="h-4 w-4" />
-                    Subscribe{priceLabel ? ` · ${priceLabel}` : ''}
+                    Subscribe{priceLabel ? ` \u00B7 ${priceLabel}` : ''}
                   </button>
                 )
               )}
@@ -320,3 +320,4 @@ export default function ProfileHeader({
     </header>
   );
 }
+

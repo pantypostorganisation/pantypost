@@ -29,7 +29,7 @@ export default function UnsubscribeModal({
           </div>
           <h2 className="mt-4 text-2xl font-bold text-white">Cancel subscription?</h2>
           <p className="mt-3 text-sm text-ink-muted">
-            You’ll immediately lose access to <span className="text-red-300">{sanitizedUsername}</span>'s premium drops and gallery reveals.
+            You'll immediately lose access to <span className="text-red-300">{sanitizedUsername}</span>'s premium drops and gallery reveals.
           </p>
         </div>
 
@@ -53,3 +53,4 @@ export default function UnsubscribeModal({
     </div>
   );
 }
+

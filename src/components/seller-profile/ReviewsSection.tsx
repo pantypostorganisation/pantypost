@@ -1,7 +1,7 @@
 // src/components/seller-profile/ReviewsSection.tsx
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check } from 'lucide-react';
 import { SecureTextarea } from '@/components/ui/SecureInput';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict } from '@/utils/security/sanitization';
@@ -47,7 +47,7 @@ function formatDateSafe(input: string): string {
   return Number.isFinite(d.getTime()) ? d.toLocaleDateString() : 'Unknown date';
 }
 
-// Clamp to 0–5 for display (StarRating can accept decimals if your component supports it)
+// Clamp to 0-5 for display (StarRating can accept decimals if your component supports it)
 function clampRating(n: number): number {
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(5, n));
@@ -142,13 +142,13 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
                   review.wouldBuyAgain !== undefined) && (
                   <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-line">
                     {review.asDescribed && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md">✓ As Described</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md"><Check className="w-3 h-3 inline mr-1" aria-hidden="true" />As Described</span>
                     )}
                     {review.fastShipping && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md">✓ Fast Shipping</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md"><Check className="w-3 h-3 inline mr-1" aria-hidden="true" />Fast Shipping</span>
                     )}
                     {review.wouldBuyAgain && (
-                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md">✓ Would Buy Again</span>
+                      <span className="text-xs bg-green-900/30 text-green-400 px-2 py-1 rounded-md"><Check className="w-3 h-3 inline mr-1" aria-hidden="true" />Would Buy Again</span>
                     )}
                   </div>
                 )}
@@ -178,7 +178,7 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
           {submitted ? (
             <div className="p-6 bg-green-900/20 border border-green-600 rounded-md">
               <p className="text-green-500 text-lg font-semibold flex items-center">
-                <span className="text-2xl mr-2">✓</span>
+                <Check className="w-6 h-6 mr-2 inline" aria-hidden="true" />
                 Review submitted successfully!
               </p>
               <p className="text-ink-muted text-sm mt-2">Thank you for your feedback.</p>
@@ -195,7 +195,7 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
                 >
                   {[5, 4, 3, 2, 1].map((r) => (
                     <option key={r} value={r}>
-                      {r} Star{r > 1 ? 's' : ''} {'★'.repeat(r)}
+                      {r} Star{r > 1 ? 's' : ''} {'\u2605'.repeat(r)}
                     </option>
                   ))}
                 </select>
@@ -221,9 +221,9 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
               <div className="mb-6 space-y-2">
                 <p className="text-sm text-ink-muted mb-2">Your review will include:</p>
                 <div className="flex flex-wrap gap-3">
-                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md">✓ Item as described</span>
-                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md">✓ Fast shipping</span>
-                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md">✓ Would buy again</span>
+                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md"><Check className="w-3 h-3 inline mr-1" aria-hidden="true" />Item as described</span>
+                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md"><Check className="w-3 h-3 inline mr-1" aria-hidden="true" />Fast shipping</span>
+                  <span className="text-xs bg-gray-800 text-ink-muted px-3 py-1 rounded-md"><Check className="w-3 h-3 inline mr-1" aria-hidden="true" />Would buy again</span>
                 </div>
               </div>
 
@@ -254,3 +254,4 @@ export default function ReviewsSection(rawProps: ReviewsSectionProps) {
     </div>
   );
 }
+

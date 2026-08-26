@@ -27,7 +27,7 @@ export default function ProfileStats(rawProps: ProfileStatsProps) {
   const avgDisplay =
     typeof averageRating === 'number' && Number.isFinite(averageRating)
       ? averageRating.toFixed(1)
-      : '—';
+      : '\u2014';
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -54,3 +54,4 @@ export default function ProfileStats(rawProps: ProfileStatsProps) {
     </div>
   );
 }
+
