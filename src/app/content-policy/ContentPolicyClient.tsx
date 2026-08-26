@@ -11,7 +11,7 @@ export default function ContentPolicyPage() {
     <main className="min-h-screen bg-black text-white px-4 py-12">
       <div className="mx-auto max-w-3xl">
         <header className="mb-10">
-          <p className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold text-[#ff950e]">
+          <p className="inline-flex items-center gap-2 rounded-sm border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold text-[#ff950e]">
             <ShieldCheck className="h-4 w-4" /> Content Policy
           </p>
           <h1 className="mt-3 text-3xl font-bold">Content Policy &amp; Moderation Controls</h1>

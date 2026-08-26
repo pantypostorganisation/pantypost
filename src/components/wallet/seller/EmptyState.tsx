@@ -20,7 +20,7 @@ export default function EmptyState({ showEmptyState }: EmptyStateProps): React.R
       <p className="mt-3 max-w-md text-sm text-gray-400">
         As soon as you start transferring earnings, your payout history will populate with real-time updates.
       </p>
-      <span className="mt-6 inline-flex items-center gap-2 rounded-full border border-gray-800 bg-[#0c0c0c] px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">
+      <span className="mt-6 inline-flex items-center gap-2 rounded-sm border border-gray-800 bg-[#0c0c0c] px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-gray-500">
         Seller insights
       </span>
       <p className="mt-4 text-xs text-gray-500">

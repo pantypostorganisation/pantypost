@@ -26,7 +26,7 @@ export default function EarningsCard({
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-green-400">
+            <span className="inline-flex items-center gap-2 rounded-sm border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-green-400">
               Growth
             </span>
             <h2 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">

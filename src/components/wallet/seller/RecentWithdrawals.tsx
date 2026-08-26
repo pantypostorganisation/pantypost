@@ -48,7 +48,7 @@ export default function RecentWithdrawals({ withdrawals }: RecentWithdrawalsProp
             <p className="text-sm text-gray-400">Track the latest payouts and their statuses.</p>
           </div>
         </div>
-        <span className="inline-flex items-center gap-2 rounded-full border border-gray-800 bg-[#0c0c0c] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+        <span className="inline-flex items-center gap-2 rounded-sm border border-gray-800 bg-[#0c0c0c] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
           Activity feed
         </span>
       </div>
@@ -76,7 +76,7 @@ export default function RecentWithdrawals({ withdrawals }: RecentWithdrawalsProp
                 </div>
 
                 <div className="flex flex-col items-end gap-2 text-right text-sm text-gray-400">
-                  <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${statusStyles}`}>
+                  <span className={`inline-flex items-center gap-2 rounded-sm border px-3 py-1 text-xs font-semibold ${statusStyles}`}>
                     {status}
                   </span>
                   <span className="inline-flex items-center gap-2 text-xs text-gray-500">

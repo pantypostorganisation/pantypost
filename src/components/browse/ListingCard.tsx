@@ -195,15 +195,15 @@ export default function ListingCard({
         {/* Status chips, top-left. Only ever one at a time. */}
         <div className="absolute left-2 top-2 z-20">
           {hasAuction ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/90 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur">
+            <span className="inline-flex items-center gap-1 rounded-sm bg-purple-500/90 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur">
               <Gavel className="h-3 w-3" /> Auction
             </span>
           ) : isDrop ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#ff950e] px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-black">
+            <span className="inline-flex items-center gap-1 rounded-sm bg-[#ff950e] px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-black">
               <Layers className="h-3 w-3" /> Drop
             </span>
           ) : listing.isPremium ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#ff950e] px-2 py-1 text-[11px] font-semibold text-black">
+            <span className="inline-flex items-center gap-1 rounded-sm bg-[#ff950e] px-2 py-1 text-[11px] font-semibold text-black">
               <Crown className="h-3 w-3" /> Premium
             </span>
           ) : null}
@@ -243,7 +243,7 @@ export default function ListingCard({
             <button
               onClick={handleRemove}
               disabled={removing}
-              className={`flex h-8 items-center gap-1.5 rounded-full px-2.5 shadow-md transition disabled:opacity-60 ${
+              className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 shadow-md transition disabled:opacity-60 ${
                 confirmingRemove
                   ? 'bg-red-600 text-white hover:bg-red-500'
                   : 'bg-white/90 text-gray-700 hover:bg-red-600 hover:text-white'
@@ -279,7 +279,7 @@ export default function ListingCard({
         {isDrop && drop && (
           <div className="absolute bottom-2 left-2 z-20">
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold backdrop-blur ${
+              className={`inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] font-semibold backdrop-blur ${
                 dropSoldOut ? 'bg-black/80 text-gray-300' : 'bg-black/80 text-white'
               }`}
             >
@@ -297,7 +297,7 @@ export default function ListingCard({
             className="absolute bottom-2 left-2 z-20"
             key={`timer-${listing.id}-${forceUpdateTimer}`}
           >
-            <span className="inline-flex items-center gap-1 rounded-full bg-black/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">
+            <span className="inline-flex items-center gap-1 rounded-sm bg-black/80 px-2 py-1 text-[11px] font-medium text-white backdrop-blur">
               <Clock className="h-3 w-3 text-purple-300" />
               {formatTimeRemaining(listing.auction.endTime)}
             </span>
@@ -306,7 +306,7 @@ export default function ListingCard({
 
         {isHovered && !isLockedPremium && !isGuest && (
           <button
-            className="absolute bottom-2 right-2 z-20 hidden items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-black shadow-md transition hover:bg-white/90 sm:inline-flex"
+            className="absolute bottom-2 right-2 z-20 hidden items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-black shadow-md transition hover:bg-white/90 sm:inline-flex"
             onClick={onQuickView}
             aria-label="Quick view"
           >

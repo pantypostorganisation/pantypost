@@ -277,7 +277,7 @@ const BanCheck: React.FC<BanCheckProps> = ({ children }) => {
           </h1>
           <p className="text-gray-400">Your access to PantyPost has been restricted</p>
           {escalationInfo && (
-            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-gray-900/50 rounded-full">
+            <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 bg-gray-900/50 rounded-sm">
               <Shield size={16} className={escalationInfo.color} />
               <span className={`text-sm font-medium ${escalationInfo.color}`}>
                 {escalationInfo.title} - {escalationInfo.description}

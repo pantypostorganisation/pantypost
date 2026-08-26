@@ -100,7 +100,7 @@ export default function WithdrawSection({
       <div className="flex flex-col gap-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <span className="inline-flex items-center gap-2 self-start rounded-full border border-[#ff950e]/30 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#ff950e]">
+            <span className="inline-flex items-center gap-2 self-start rounded-sm border border-[#ff950e]/30 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] text-[#ff950e]">
               Withdraw
             </span>
             <h2 className="text-2xl font-semibold text-white">Move earnings to your account</h2>
@@ -222,7 +222,7 @@ export default function WithdrawSection({
                   type="button"
                   onClick={() => onQuickAmountSelect(amount.toString())}
                   disabled={amount > balance || isLoading}
-                  className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                  className={`rounded-md border px-4 py-2 text-sm transition-colors ${
                     amount > balance
                       ? 'cursor-not-allowed border-gray-800 bg-[#151515] text-gray-600'
                       : 'border-gray-800 bg-[#0c0c0c] text-gray-300 hover:border-[#ff950e] hover:text-[#ff950e]'
@@ -235,7 +235,7 @@ export default function WithdrawSection({
                 type="button"
                 onClick={() => onQuickAmountSelect(balance.toFixed(2))}
                 disabled={balance <= 0 || isLoading}
-                className="rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-2 text-sm font-semibold text-[#ff950e] transition-colors hover:border-[#ff950e] hover:bg-[#ff950e]/20 disabled:cursor-not-allowed disabled:border-gray-800 disabled:bg-[#151515] disabled:text-gray-600"
+                className="rounded-md border border-[#ff950e]/40 bg-[#ff950e]/10 px-4 py-2 text-sm font-semibold text-[#ff950e] transition-colors hover:border-[#ff950e] hover:bg-[#ff950e]/20 disabled:cursor-not-allowed disabled:border-gray-800 disabled:bg-[#151515] disabled:text-gray-600"
               >
                 Max
               </button>

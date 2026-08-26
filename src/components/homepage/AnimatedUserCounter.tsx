@@ -374,7 +374,7 @@ export default function AnimatedUserCounter({
               animate={{ opacity: 1, scale: 1, rotate: 0 }}
               exit={{ opacity: 0, scale: 0, rotate: 180 }}
               transition={{ duration: 0.5, type: "spring" }}
-              className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-sm font-semibold"
+              className="bg-green-500/20 text-green-400 px-3 py-1 rounded-sm text-sm font-semibold"
             >
               <TrendingUp className="w-4 h-4 inline mr-1" />
               {incrementAmount > 1 ? `${incrementAmount} New Users!` : 'New User!'}

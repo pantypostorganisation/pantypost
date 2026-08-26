@@ -40,7 +40,7 @@ export default function PopularTags({ tags, onTagClick, isLoading, error }: Popu
           <button
             key={tag.tag}
             onClick={() => onTagClick(tag.tag)}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-raised px-3 py-1 text-xs text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface-raised px-3 py-1 text-xs text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
             title={`${tag.count} ${tag.count === 1 ? 'listing' : 'listings'}`}
           >
             {tag.tag}
