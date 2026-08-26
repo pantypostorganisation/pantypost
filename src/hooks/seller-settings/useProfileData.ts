@@ -1,6 +1,6 @@
 // src/hooks/seller-settings/useProfileData.ts
 
-import { toast } from '@/components/toast/toaster';
+import { toast } from '@/components/toast/Toaster';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { usersService } from '@/services';
@@ -277,7 +277,7 @@ export function useProfileData(): UseProfileDataReturn {
     });
 
     if (!validation.valid) {
-      toast.error(validation.error);
+      toast.error(validation.error || 'Invalid image');
       return;
     }
 

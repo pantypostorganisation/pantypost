@@ -1,7 +1,7 @@
 // src/components/BanCheck.tsx
 'use client';
 
-import { toast } from '@/components/toast/toaster';
+import { toast } from '@/components/toast/Toaster';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useBans } from '@/context/BanContext';
 import { useAuth } from '@/context/AuthContext';

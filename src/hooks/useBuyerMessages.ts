@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-import { toast } from '@/components/toast/toaster';
+import { toast } from '@/components/toast/Toaster';
 import { useState, useEffect, useRef, useMemo, useCallback, useContext } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';

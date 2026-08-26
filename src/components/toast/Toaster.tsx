@@ -1,18 +1,58 @@
 // src/components/toast/Toaster.tsx
 //
-// The single renderer for the toast bus (see toaster.ts). Mounted once
-// in ClientLayout. Bottom-centre on phones, bottom-right on desktop.
-// Errors use role="alert" so screen readers announce them immediately;
-// success/info use polite status. Four-second auto-dismiss, manual X,
-// stack capped at four so a burst of failures cannot wallpaper the
-// screen. Design system: surface tokens, rounded-lg, lucide icons,
-// variant expressed as a left accent bar -- no new colours invented.
+// The app's toast system: the bus AND the renderer in ONE file, on
+// purpose. The first version split them into toaster.ts + Toaster.tsx
+// -- filenames differing only in case, which collide on Windows's
+// case-insensitive filesystem and made TypeScript resolve the
+// component import into the bus. One file, no twins, no trap.
+//
+// Usage from anywhere (components, hooks, context providers):
+//   import { toast } from '@/components/toast/Toaster';
+//   toast.error('...'); toast.success('...'); toast.info('...');
+//
+// This replaced 34 window.alert() calls across the app. If the
+// renderer is somehow not mounted, the bus falls back to alert()
+// rather than silently swallowing user feedback -- the one failure
+// mode worse than an ugly popup.
 
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { Check, AlertTriangle, Info, X } from 'lucide-react';
-import { subscribeToToasts, type ToastItem, type ToastVariant } from './toaster';
+
+export type ToastVariant = 'success' | 'error' | 'info';
+
+export interface ToastItem {
+  id: number;
+  message: string;
+  variant: ToastVariant;
+}
+
+type Listener = (t: ToastItem) => void;
+
+let listener: Listener | null = null;
+let nextId = 1;
+
+function subscribeToToasts(fn: Listener): () => void {
+  listener = fn;
+  return () => {
+    if (listener === fn) listener = null;
+  };
+}
+
+function push(message: string, variant: ToastVariant): void {
+  if (listener) {
+    listener({ id: nextId++, message, variant });
+  } else if (typeof window !== 'undefined') {
+    window.alert(message);
+  }
+}
+
+export const toast = {
+  success: (message: string) => push(message, 'success'),
+  error: (message: string) => push(message, 'error'),
+  info: (message: string) => push(message, 'info'),
+};
 
 const AUTO_DISMISS_MS = 4000;
 const MAX_STACK = 4;
