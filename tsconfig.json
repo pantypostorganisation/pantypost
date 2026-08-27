@@ -17,10 +17,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
-    // Silences the TypeScript 7.0 deprecation warnings for
-    // "baseUrl" and "downlevelIteration" below. Both still work
-    // normally; this only suppresses the editor warnings.
-    "baseUrl": ".",
+
     "paths": {
       "@/*": [
         "./src/*"
@@ -44,12 +41,13 @@
         "./src/hooks/*"
       ]
     },
+
     "plugins": [
       {
         "name": "next"
       }
     ],
-    // Strict checks (keeping core ones, disabling problematic ones)
+
     "noImplicitAny": true,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
@@ -57,7 +55,7 @@
     "strictPropertyInitialization": true,
     "noImplicitThis": true,
     "alwaysStrict": true,
-    // Additional checks (relaxed for production)
+
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitReturns": true,
@@ -65,28 +63,28 @@
     "noUncheckedIndexedAccess": false,
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": false,
-    // IMPORTANT: Disable this to fix optional property errors
+
     "exactOptionalPropertyTypes": false,
-    // Module resolution
+
     "forceConsistentCasingInFileNames": true,
     "preserveConstEnums": true,
     "allowSyntheticDefaultImports": true,
-    // Emit
+
     "removeComments": false,
     "sourceMap": true,
     "declaration": false,
     "declarationMap": false,
-    // Interop constraints
+
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
-    // Advanced
+
     "skipDefaultLibCheck": true,
     "preserveWatchOutput": true,
-    // Next.js specific
-    "downlevelIteration": true,
+
     "emitDecoratorMetadata": false,
     "experimentalDecorators": false
   },
+
   "include": [
     "**/*.ts",
     "**/*.tsx",
@@ -95,6 +93,7 @@
     "scripts/**/*.js",
     ".next-dev/types/**/*.ts"
   ],
+
   "exclude": [
     "node_modules",
     ".next",
@@ -105,6 +104,7 @@
     "**/*.spec.ts",
     "**/*.test.ts"
   ],
+
   "ts-node": {
     "compilerOptions": {
       "module": "commonjs"
