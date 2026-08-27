@@ -474,7 +474,18 @@ class TokenStorage {
   }
 
   getTokens(): AuthTokens | null {
-    return this.memoryTokens;
+    /* Expiry is enforced HERE, at the single point every caller goes
+       through -- previously stored tokens were handed back regardless
+       of expiresAt, so an admin session capped to midnight survived
+       until something else happened to fail. Self-clearing on read
+       means a page load is enough to end an expired session. */
+    const tokens = this.memoryTokens;
+    if (!tokens) return null;
+    if (typeof tokens.expiresAt === 'number' && tokens.expiresAt <= Date.now()) {
+      this.clear();
+      return null;
+    }
+    return tokens;
   }
 
   clear() {
