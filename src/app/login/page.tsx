@@ -22,7 +22,7 @@ export default function LoginPage() {
 
   const router = useRouter();
   const authData = useAuth();
-  const { login, isAuthReady, user, error: authError, clearError, loading: authLoading } = authData;
+  const { login, isAuthReady, user, error: authError, clearError, loading: authLoading, verifyAdminCode } = authData;
 
   if (isDev) {
     if (isDev) console.log('[Login] useAuth snapshot:', {
@@ -42,6 +42,10 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [errorData, setErrorData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // Admin second-factor: set once the password is accepted and a code
+  // has been emailed; suppresses PasswordStep and shows the code panel.
+  const [twoFactorPending, setTwoFactorPending] = useState(false);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
   const [step, setStep] = useState(1);
   const [mounted, setMounted] = useState(false);
   const [showAdminMode, setShowAdminMode] = useState(false);
@@ -210,6 +214,30 @@ export default function LoginPage() {
     setStep(2);
   }, [username, clearError]);
 
+  const handleVerifyCode = useCallback(
+    async (e?: React.FormEvent) => {
+      if (e) e.preventDefault();
+      if (!twoFactorCode.trim() || isLoading) return;
+      setIsLoading(true);
+      setError('');
+      setErrorData(null);
+      try {
+        const ok = await verifyAdminCode(username.trim(), twoFactorCode.trim(), rememberMe);
+        if (!ok) {
+          setError('Incorrect code. Check the email and try again.');
+          setIsLoading(false);
+        }
+        // On success the auth context sets the user and the existing
+        // logged-in redirect takes over, same as a normal login.
+      } catch (err: any) {
+        if (isDev) console.error('[Login] verifyAdminCode threw:', err);
+        setError('Verification failed. Please try again.');
+        setIsLoading(false);
+      }
+    },
+    [twoFactorCode, isLoading, verifyAdminCode, username, rememberMe]
+  );
+
   const handleLogin = useCallback(
     async (e?: React.FormEvent) => {
       if (isDev)
@@ -290,6 +318,17 @@ export default function LoginPage() {
         if (isDev) console.error('[Login] login() threw error:', err);
 
         // Handle email verification error - silent redirect
+        // Admin second factor: password accepted, code emailed.
+        // Switch to the code step -- this is progress, not an error.
+        if (err?.requiresTwoFactor) {
+          setTwoFactorPending(true);
+          setTwoFactorCode('');
+          setError('');
+          setErrorData(null);
+          setIsLoading(false);
+          return;
+        }
+
         if (err?.requiresVerification) {
           if (isDev) console.log('[Login] Email verification error caught:', {
             requiresVerification: err.requiresVerification,
@@ -432,7 +471,7 @@ export default function LoginPage() {
                 />
               )}
 
-              {step === 2 && (
+              {step === 2 && !twoFactorPending && (
                 <PasswordStep
                   username={username}
                   password={password}
@@ -451,6 +490,52 @@ export default function LoginPage() {
                   rememberMe={rememberMe}
                   onRememberMeChange={setRememberMe}
                 />
+              )}
+
+              {twoFactorPending && (
+                <form onSubmit={handleVerifyCode} className="space-y-5">
+                  <div className="text-center space-y-2">
+                    <h2 className="text-xl font-semibold text-white">Check your email</h2>
+                    <p className="text-sm text-gray-400">
+                      Admin sign-in needs a second step: we emailed a 6-digit
+                      code to your account address. It expires in 10 minutes.
+                    </p>
+                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={twoFactorCode}
+                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="000000"
+                    autoFocus
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-center text-2xl tracking-[0.5em] text-white placeholder-gray-600 focus:border-primary focus:outline-none"
+                  />
+                  {error && (
+                    <p className="text-center text-sm text-red-400" role="alert">
+                      {error}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isLoading || twoFactorCode.length !== 6}
+                    className="w-full rounded-lg bg-gradient-to-r from-primary to-primary-press py-3 font-semibold text-black transition-all hover:from-primary-press hover:to-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isLoading ? 'Verifying...' : 'Verify and Sign In'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTwoFactorPending(false);
+                      setTwoFactorCode('');
+                      setError('');
+                    }}
+                    className="w-full text-center text-sm text-gray-400 transition-colors hover:text-primary-hover"
+                  >
+                    Back to sign in
+                  </button>
+                </form>
               )}
             </div>
           </div>

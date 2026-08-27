@@ -119,6 +119,12 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
 // =====================================================
 app.set('trust proxy', 1);
 
+// Privacy-policy enforcement: purge raw verification ID images after
+// the retention window (default 30 days post-decision). The policy
+// promises this deletion; this line is what makes the promise true.
+const { startVerificationCleanup } = require('./services/verificationCleanup');
+startVerificationCleanup();
+
 // Create HTTP server
 const server = http.createServer(app);
 

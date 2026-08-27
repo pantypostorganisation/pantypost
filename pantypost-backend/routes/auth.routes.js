@@ -8,6 +8,8 @@ const EmailVerification = require('../models/EmailVerification');
 const authMiddleware = require('../middleware/auth.middleware');
 const { ERROR_CODES } = require('../utils/constants');
 const { sendEmail, emailTemplates } = require('../config/email');
+const crypto = require('crypto');
+const AdminTwoFactor = require('../models/AdminTwoFactor');
 const webSocketService = require('../config/websocket');
 const publicWebSocketService = require('../config/publicWebsocket');
 
@@ -48,6 +50,14 @@ const codeVerifyLimiter = rateLimit({
    user types; real users never notice it, scrapers do. Note this and
    every limiter above only work per-IP because server.js sets
    `trust proxy` -- see the comment there before changing either. */
+/* Admin two-factor verification: 10 attempts per 15 minutes per IP.
+   Each code also carries its own 5-attempt cap and 10 minute life, so
+   this limiter is the outer fence, not the only one. */
+const adminTwoFactorLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+});
+
 const usernameCheckLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
@@ -848,6 +858,44 @@ router.post('/login', loginLimiter, async (req, res) => {
       }
     }
 
+    /* Admin accounts require a second factor on EVERY sign-in: a
+       6-digit code emailed to the account address. No token is issued
+       here -- an admin session only exists after /verify-admin-2fa. */
+    if (user.role === 'admin') {
+      const code = crypto.randomInt(100000, 1000000).toString();
+      const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+      await AdminTwoFactor.deleteMany({ username: user.username });
+      await AdminTwoFactor.create({
+        username: user.username,
+        codeHash,
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
+      });
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Your Panty Post admin sign-in code',
+          text: 'Your admin sign-in code is ' + code + '. It expires in 10 minutes. If you did not try to sign in, change your password now.',
+          html: '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#0e0e0e;color:#ffffff;border-radius:8px;">' +
+            '<h2 style="color:#ff950e;margin:0 0 16px;">Admin sign-in code</h2>' +
+            '<p style="margin:0 0 16px;color:#cccccc;">Use this code to finish signing in as <strong>' + user.username + '</strong>:</p>' +
+            '<div style="font-size:32px;letter-spacing:8px;font-weight:bold;background:#161616;border:1px solid #333333;border-radius:8px;padding:16px;text-align:center;">' + code + '</div>' +
+            '<p style="margin:16px 0 0;color:#888888;font-size:13px;">Expires in 10 minutes. If this was not you, change your password immediately.</p>' +
+            '</div>'
+        });
+      } catch (emailError) {
+        console.error('[Auth] Failed to send admin 2FA email:', emailError);
+        return res.status(500).json({
+          success: false,
+          error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Could not send your sign-in code. Please try again.' }
+        });
+      }
+      return res.json({
+        success: true,
+        data: { requiresTwoFactor: true, username: user.username }
+      });
+    }
+
     user.isOnline = true;
     user.lastActive = new Date();
     await user.save();
@@ -881,6 +929,96 @@ router.post('/login', loginLimiter, async (req, res) => {
         code: ERROR_CODES.INTERNAL_ERROR, 
         message: 'Login failed. Please try again.' 
       }
+    });
+  }
+});
+
+// POST /api/auth/verify-admin-2fa
+// Second step of admin sign-in: exchange the emailed 6-digit code for
+// a session. Mirrors the login success response exactly so the client
+// treats both paths identically.
+router.post('/verify-admin-2fa', adminTwoFactorLimiter, async (req, res) => {
+  try {
+    const raw = req.body || {};
+    const username = cleanUsername(raw.username);
+    const code = typeof raw.code === 'string' ? raw.code.trim() : '';
+
+    if (!isValidUsername(username) || !/^[0-9]{6}$/.test(code)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Enter the 6-digit code from your email.' }
+      });
+    }
+
+    const user = await User.findOne({ username });
+    if (!user || user.role !== 'admin') {
+      return res.status(401).json({
+        success: false,
+        error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Invalid code. Please sign in again.' }
+      });
+    }
+
+    const record = await AdminTwoFactor.findOne({ username });
+    if (!record || record.expiresAt < new Date()) {
+      await AdminTwoFactor.deleteMany({ username });
+      return res.status(401).json({
+        success: false,
+        error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Code expired. Please sign in again to get a new one.' }
+      });
+    }
+    if (record.attempts >= 5) {
+      await AdminTwoFactor.deleteMany({ username });
+      return res.status(429).json({
+        success: false,
+        error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Too many attempts. Please sign in again to get a new code.' }
+      });
+    }
+
+    const providedHash = crypto.createHash('sha256').update(code).digest('hex');
+    const expected = Buffer.from(record.codeHash, 'hex');
+    const provided = Buffer.from(providedHash, 'hex');
+    const matches = expected.length === provided.length && crypto.timingSafeEqual(expected, provided);
+    if (!matches) {
+      record.attempts += 1;
+      await record.save();
+      return res.status(401).json({
+        success: false,
+        error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Incorrect code. Check the email and try again.' }
+      });
+    }
+
+    await AdminTwoFactor.deleteMany({ username });
+
+    user.isOnline = true;
+    user.lastActive = new Date();
+    await user.save();
+
+    if (webSocketService && webSocketService.io) {
+      webSocketService.broadcastUserStatus(user.username, true);
+    }
+
+    const token = signToken(user);
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          role: user.role,
+          isVerified: user.isVerified || false,
+          emailVerified: user.emailVerified || false,
+          tier: user.tier || 'Tease'
+        },
+        token,
+        refreshToken: token
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] Admin 2FA verify error:', error);
+    res.status(400).json({
+      success: false,
+      error: { code: ERROR_CODES.INTERNAL_ERROR, message: 'Verification failed. Please try again.' }
     });
   }
 });

@@ -60,6 +60,7 @@ interface AuthContextType {
     rememberMe?: boolean
   ) => Promise<boolean>;
   logout: () => Promise<void>;
+  verifyAdminCode: (username: string, code: string, rememberMe?: boolean) => Promise<boolean>;
   updateUser: (updates: Partial<User>) => Promise<void>;
   isLoggedIn: boolean;
   loading: boolean;
@@ -594,6 +595,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[Auth] Login response (parsed):', response);
 
         if (response.success && response.data) {
+          if ((response.data as any).requiresTwoFactor) {
+            /* Admin password accepted; a 6-digit code is on its way to
+               the account email. No tokens exist yet -- the login page
+               switches to the code step and calls verifyAdminCode.
+               Thrown rather than returned to mirror the existing
+               EMAIL_VERIFICATION_REQUIRED pattern the page handles. */
+            const twoFactorError: any = new Error('ADMIN_2FA_REQUIRED');
+            twoFactorError.requiresTwoFactor = true;
+            twoFactorError.username = (response.data as any).username;
+            throw twoFactorError;
+          }
+
           // ban check
           const banCheckResponse = await apiClientRef.current!.get(
             `/users/${response.data.user.username}/ban-status`
@@ -672,6 +685,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (error: any) {
         console.error('[Auth] Login error (catch):', error);
 
+        if (error.requiresTwoFactor) {
+          throw error;
+        }
+
         if (error.requiresVerification) {
           throw error;
         }
@@ -683,6 +700,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const errorMessage =
           error?.message || 'Network error. Please check your connection and try again.';
         setError(errorMessage);
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [refreshSession]
+  );
+
+  const verifyAdminCode = useCallback(
+    async (username: string, code: string, rememberMe = false): Promise<boolean> => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await apiClientRef.current!.post('/auth/verify-admin-2fa', {
+          username,
+          code,
+        });
+        if (response.success && response.data) {
+          const expiresAt = deriveExpiry(
+            response.data.expiresIn ?? response.data.tokenExpiresIn,
+            31 * 24 * 60 * 60 * 1000
+          );
+          const tokens: AuthTokens = {
+            token: response.data.token,
+            refreshToken: response.data.refreshToken,
+            expiresAt,
+          };
+          tokenStorageRef.current.setPersistence(rememberMe);
+          tokenStorageRef.current.setTokens(tokens);
+          setUser(response.data.user);
+          try {
+            await refreshSession();
+          } catch (refreshError) {
+            console.error('[Auth] Failed to hydrate user after 2FA:', refreshError);
+          }
+          return true;
+        }
+        setError(response.error?.message || 'Incorrect code. Check the email and try again.');
+        return false;
+      } catch (err: any) {
+        console.error('[Auth] Admin 2FA verify error:', err);
+        setError(err?.message || 'Verification failed. Please try again.');
         return false;
       } finally {
         setLoading(false);
@@ -741,6 +800,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     isAuthReady,
     login,
+    verifyAdminCode,
     logout,
     updateUser,
     isLoggedIn: !!user,
@@ -789,3 +849,4 @@ export const getGlobalAuthToken = (): string | null => {
 
   return null;
 };
+

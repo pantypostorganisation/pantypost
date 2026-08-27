@@ -120,14 +120,30 @@ export default function PrivacyPolicyPage() {
                 delivery address you provide to a seller to fulfil an order.
               </li>
               <li>
-                <strong className="text-white">Payment processors</strong> — the information they
-                require to process transactions and meet their own compliance obligations,
-                including, on legitimate request, evidence that a seller was verified.
+                <strong className="text-white">Didit</strong> — our identity and age verification
+                provider. When you verify, Didit receives your identity document and the details
+                needed to confirm you are over 18 and who you say you are.
               </li>
               <li>
-                <strong className="text-white">Service providers</strong> — hosting, email delivery
-                and, where implemented, age assurance. They may process data only on our
-                instructions.
+                <strong className="text-white">Segpay</strong> — our payment processor (once
+                payments are live). Segpay receives the information required to process
+                transactions and meet its compliance obligations, including, on legitimate
+                request, evidence that a seller was verified.
+              </li>
+              <li>
+                <strong className="text-white">Vercel</strong> — delivers the website itself and,
+                like any host, processes technical data such as your IP address when you load a
+                page.
+              </li>
+              <li>
+                <strong className="text-white">Hostinger</strong> — hosts our application server
+                and database. Your account data lives on our own server infrastructure with
+                Hostinger, not in a third-party database service.
+              </li>
+              <li>
+                <strong className="text-white">Email delivery</strong> — our email provider
+                processes your email address to deliver account emails such as verification codes
+                and receipts.
               </li>
               <li>
                 <strong className="text-white">Law enforcement and regulators</strong> — where we
@@ -172,7 +188,7 @@ export default function PrivacyPolicyPage() {
             </h2>
             <ul className="space-y-1.5 pl-5 list-disc marker:text-[#ff950e]">
               <li><strong className="text-white">Account information</strong> — while your account is open, then deleted or anonymised on request.</li>
-              <li><strong className="text-white">Identity documents</strong> — while the account is active and for as long as required to evidence verification to our payment processors, then securely deleted.</li>
+              <li><strong className="text-white">Identity documents</strong> — the raw images of your identity document are automatically deleted 30 days after a verification decision. The verification record itself (the outcome, date and reviewer) is retained as evidence of the check, and we may retain document evidence for longer where our payment processor’s compliance rules require it.</li>
               <li><strong className="text-white">Transaction records</strong> — seven years, as required by Australian tax and financial record-keeping law.</li>
               <li><strong className="text-white">Moderation and complaint records</strong> — retained to evidence that review and investigation took place.</li>
               <li><strong className="text-white">Messages</strong> — while both accounts remain open.</li>
