@@ -6,7 +6,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     id: 'introduction',
     title: 'Terms & Conditions',
     content: [
-      { type: 'paragraph', text: 'Effective Date: 2 August 2026' },
+      { type: 'paragraph', text: 'Effective Date: 28 August 2026' },
       { type: 'paragraph', text: 'Welcome to Panty Post. By accessing or using our website, products, or services, you agree to comply with and be bound by these Terms and Conditions. If you do not agree to these Terms, you may not use the Service. These Terms govern your use of the Panty Post platform, which facilitates the sale of intimate garments (new or used) by verified sellers to consenting adult buyers.' },
       { type: 'paragraph', text: 'Panty Post is operated by G Dykyj & O Richards, trading as Panty Post (ABN 16 501 428 474), an Australian partnership. These Terms should be read alongside our Privacy Policy, Content Policy and Age Verification Policy, each of which forms part of your agreement with us.' }
     ]
@@ -31,7 +31,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     content: [
       { type: 'heading', title: '2.1. Registration', text: 'To use certain features of the Service, sellers and buyers must create an account by providing accurate, current, and complete information. Failure to provide accurate details may result in suspension or termination of your account.' },
       { type: 'heading', title: '2.2. Account Security', text: 'You are responsible for maintaining the confidentiality of your account credentials. Any activity conducted under your account is your responsibility. You must immediately notify us of any unauthorized use of your account.' },
-      { type: 'heading', title: '2.3. Account Suspension or Termination', text: 'We reserve the right to suspend or terminate any account at our sole discretion, especially in cases of misconduct, fraudulent activity, or violations of these Terms.' }
+      { type: 'heading', title: '2.3. Account Suspension or Termination', text: 'Panty Post may suspend, restrict or terminate an account where we reasonably believe the user has breached these Terms or our policies, engaged in fraud or unlawful activity, created a safety or security risk, failed required verification, or where suspension or termination is reasonably necessary to comply with law, regulatory requirements, payment-processor obligations or to protect users or the platform. Where appropriate, we may provide notice and an opportunity to respond before permanent termination.' }
     ]
   },
   {
@@ -52,8 +52,9 @@ export const TERMS_SECTIONS: TermsSection[] = [
     number: '4',
     content: [
       { type: 'heading', title: '4.1. Pricing', text: 'Sellers are free to set the price for their items. Prices must be fair and comply with any applicable legal pricing regulations.' },
-      { type: 'heading', title: '4.2. Payment Processing', text: 'We use third-party payment processors for all financial transactions. By using the platform, you agree to the terms and conditions of the payment processor. Panty Post is not responsible for payment disputes between users and the payment processor.' },
-      { type: 'heading', title: '4.3. Fees', text: 'Panty Post charges a commission on each sale made through the platform. The current fee structure is outlined on our website and may change from time to time. Sellers agree to these fees upon listing items for sale.' }
+      { type: 'heading', title: '4.2. Payment Processing', text: 'Payments on Panty Post are processed through approved third-party payment providers. Buyers may be required to fund or use a prefunded wallet or other approved payment method before completing a purchase. Payment funds may be held, reserved or released in accordance with the transaction status, our payment rules and the requirements of our payment processor. Panty Post does not store full payment-card details. Users may also be subject to the applicable terms and requirements of our payment providers.' },
+      { type: 'heading', title: '4.3. Fees', text: 'Panty Post may charge buyers and sellers transaction, platform or service fees as disclosed before a transaction is completed. The applicable seller commission or payout rate is the rate shown to the seller for the relevant transaction or seller tier. We may change our fee structure prospectively by giving reasonable notice of material changes. Changes do not retrospectively alter fees applicable to transactions already completed or accepted.' },
+      { type: 'heading', title: '4.4. Off-Platform Payments', text: 'Where a buyer and seller connect through Panty Post, they must not deliberately use Panty Post to arrange a transaction and then complete that transaction through an unapproved off-platform payment method for the purpose of avoiding Panty Post fees, payment protections or platform rules. Doing so may result in transaction restrictions, suspension or termination.' }
     ]
   },
   {
@@ -62,8 +63,8 @@ export const TERMS_SECTIONS: TermsSection[] = [
     number: '5',
     content: [
       { type: 'heading', title: '5.1. Seller\'s Responsibility', text: 'Sellers are responsible for ensuring that sold items are shipped promptly and discreetly to the buyer\'s address. The condition, hygiene, and packaging of the items must meet the buyer\'s expectations as described in the listing.' },
-      { type: 'heading', title: '5.2. Delivery Issues', text: 'Panty Post is not responsible for any issues related to the shipping or delivery of items, including lost or damaged packages. Disputes related to shipping must be resolved between the buyer and the seller directly.' },
-      { type: 'heading', title: '5.3. Tracking Number Requirement and Delivery Disputes', text: 'Sellers are required to include a valid tracking number when shipping an order. If a seller does not provide a tracking number and the buyer disputes the order, claiming the package was not delivered, the buyer will be eligible for a full refund.\n\nIf the seller provides a tracking number, and the tracking information indicates that the parcel has been marked as "Delivered" to the buyer\'s specified address, the order will be considered completed. Under these circumstances, the buyer cannot dispute the order or claim non-receipt of the package. It will be assumed that the delivery was legitimate, and no refunds will be issued.' }
+      { type: 'heading', title: '5.2. Delivery Issues', text: 'Sellers are responsible for dispatching orders in accordance with the listing and providing required shipping information. Buyers and sellers should first attempt to resolve ordinary delivery issues directly. Where a transaction may qualify for a refund, payment hold or other remedy under these Terms, Panty Post may review the available evidence and determine the appropriate outcome.' },
+      { type: 'heading', title: '5.3. Tracking Number Requirement and Delivery Disputes', text: 'Sellers must provide a valid tracking number where tracked shipping is required. If no valid tracking information is provided and the buyer reasonably disputes non-delivery, Panty Post may issue a refund or otherwise resolve the transaction in the buyer\'s favour.\n\nWhere valid carrier tracking shows the parcel as delivered to the address supplied by the buyer, this will generally be treated as evidence that delivery occurred. Panty Post may nevertheless review credible evidence of carrier error, fraud, incorrect fulfilment, an incorrectly addressed parcel or other exceptional circumstances before determining the outcome of a dispute.' }
     ]
   },
   {
@@ -71,8 +72,8 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Returns and Refunds',
     number: '6',
     content: [
-      { type: 'heading', title: '6.1. No Returns', text: 'Due to the nature of the products sold on Panty Post, returns are not accepted under any circumstances. Buyers are encouraged to carefully review listings before purchasing.' },
-      { type: 'heading', title: '6.2. Refunds', text: 'Refunds are only issued in exceptional cases, such as if the seller fails to deliver the product or if the product significantly differs from described. All refund requests must be made through Panty Post\'s support team.' }
+      { type: 'heading', title: '6.1. Returns', text: 'Because products sold through Panty Post may be intimate or personalised goods, change-of-mind returns are generally not accepted. This does not exclude or limit any refund, replacement or other remedy that a buyer is legally entitled to receive under the Australian Consumer Law or any other law that cannot lawfully be excluded.' },
+      { type: 'heading', title: '6.2. Refunds and Transaction Disputes', text: 'A buyer may request a refund or transaction review where, for example, the seller fails to dispatch the order, the item is materially different from the listing, there is credible evidence of fraud or incorrect fulfilment, or where a refund or other remedy is required by law. Requests must be submitted through Panty Post support or the applicable transaction-dispute process. Panty Post may request supporting evidence from the buyer, seller or shipping provider before determining the outcome.' }
     ]
   },
   {
@@ -129,7 +130,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Amendments',
     number: '11',
     content: [
-      { type: 'paragraph', text: 'Panty Post reserves the right to modify or update these Terms at any time. Changes will be effective immediately upon posting to the website. Continued use of the Service constitutes acceptance of the revised Terms.' }
+      { type: 'paragraph', text: 'Panty Post may update these Terms from time to time. Minor, administrative or legally required changes may take effect when posted. Where a change materially affects user fees, payouts or substantive contractual rights, we will provide reasonable notice before the change takes effect where practicable. Changes do not apply retrospectively to completed transactions unless required by law. Continued use of the Service after the effective date of revised Terms constitutes acceptance of those revised Terms.' }
     ]
   },
   {
@@ -146,11 +147,11 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Health and Safety',
     number: '13',
     content: [
-      { type: 'heading', title: '13.1. No Health Warranties', text: 'Panty Post and its sellers make no warranties, express or implied, regarding the health or safety of any items sold through the platform. Buyers acknowledge that they are purchasing used intimate products at their own risk, and Panty Post makes no representations regarding the sanitary conditions of these items.' },
-      { type: 'heading', title: '13.2. Risk of Exposure', text: 'Buyers understand that by purchasing used intimate apparel, there may be a potential risk of exposure to sexually transmitted infections (STIs) or other health-related concerns. Panty Post is not responsible for any health issues or infections resulting from the use or handling of any products sold through the platform.' },
-      { type: 'heading', title: '13.3. No Medical Claims', text: 'Panty Post does not provide any medical advice or guarantee the hygiene of products sold on the platform. Buyers are encouraged to take appropriate precautions when handling and using products, and it is recommended that buyers seek medical advice or consult with a healthcare professional for any concerns related to product usage.' },
-      { type: 'heading', title: '13.4. Limitation of Liability', text: 'Subject to the Australian Consumer Law, Panty Post shall not be held liable for any damages, claims, or health-related issues, including but not limited to sexually transmitted infections, that arise from the purchase, handling, or use of any products sold through the platform.' },
-      { type: 'heading', title: '13.5. Health Assurance and Biohazard Safety', text: 'Sellers affirm that they do not have any sexually transmitted infections (STIs), sexually transmitted diseases (STDs), or other infectious conditions that could pose a health risk to buyers. Furthermore, sellers confirm that to the best of their knowledge, they and/or their sexual partners are free from any such conditions. This assurance is necessary to prevent the listed items from being classified as biohazards or otherwise harmful for shipping or handling by buyers.\n\nAny violation of this clause may result in immediate suspension or termination of the seller\'s account, as well as potential legal action or liability for harm caused.' }
+      { type: 'heading', title: '13.1. Nature of Used Intimate Products', text: 'Products sold through Panty Post may include previously worn intimate garments. Panty Post does not physically inspect, test, clean or handle these products and does not make any representation or guarantee regarding their hygiene, sanitary condition or suitability for a particular purpose.' },
+      { type: 'heading', title: '13.2. Hygiene and Health Risks', text: 'Used intimate products may contain biological material or otherwise present hygiene or health risks. Buyers acknowledge the nature of the products being purchased and are responsible for deciding whether and how to handle or use them. Nothing in this clause excludes any right or remedy that cannot lawfully be excluded.' },
+      { type: 'heading', title: '13.3. No Medical Advice', text: 'Panty Post does not provide medical advice or health screening. Users should seek advice from an appropriately qualified health professional if they have concerns about the health implications of handling or using a product.' },
+      { type: 'heading', title: '13.4. Prohibited Hazardous Items', text: 'Sellers must not knowingly list or send any product that contains blood, faecal matter, hazardous substances or other material that would make its sale, possession, handling or shipment unlawful or unreasonably dangerous. Sellers must comply with applicable postal, courier, biosecurity and transport requirements.' },
+      { type: 'heading', title: '13.5. Seller Responsibility', text: 'Sellers must accurately describe the condition of products and must not make false or misleading health, hygiene or safety claims. Panty Post does not conduct health screening of sellers and approval of a listing does not constitute any health or safety certification.' }
     ]
   },
   {
@@ -184,12 +185,12 @@ export const TERMS_SECTIONS: TermsSection[] = [
   },
   {
     id: 'dispute-resolution',
-    title: 'Dispute Resolution and Arbitration',
+    title: 'Dispute Resolution',
     number: '17',
     content: [
-      { type: 'heading', title: '17.1. Mandatory Arbitration', text: 'In the event of a legal dispute between users and Panty Post, the parties agree to first attempt resolution through binding arbitration rather than in court. Any arbitration will take place in New South Wales, Australia, and the decision of the arbitrator will be final and binding. Each party is responsible for its own legal costs unless otherwise determined by the arbitrator. Nothing in this clause prevents either party from seeking urgent injunctive relief, or from exercising any right that cannot lawfully be subject to arbitration.' },
-      { type: 'heading', title: '17.2. Class Action Waiver', text: 'To the extent permitted by law, users agree to resolve any disputes individually and waive their right to participate in any class-action lawsuit against Panty Post.' },
-      { type: 'heading', title: '17.3. Complaints', text: 'Disputes about specific content, including requests for its removal, should be raised through our Complaints & Content Removal process rather than under this section. That process is open to anyone, whether or not they hold an account, and complaints are investigated and resolved within five business days.' }
+      { type: 'heading', title: '17.1. Resolution of Disputes', text: 'If a dispute arises between a user and Panty Post, the parties should first attempt to resolve it in good faith through our support or complaints process. Either party may seek independent legal advice and may exercise any right or remedy available under applicable law.' },
+      { type: 'heading', title: '17.2. Informal Resolution', text: 'Before commencing court proceedings, a party should, where reasonable, give the other party written notice of the dispute and allow a reasonable opportunity to resolve it. This does not prevent a party from seeking urgent or interlocutory relief, making a complaint to a regulator or exercising a right that cannot lawfully be restricted.' },
+      { type: 'heading', title: '17.3. Complaints', text: 'Disputes about specific content, including requests for its removal, should be raised through our Complaints & Content Removal process. That process is open to anyone, whether or not they hold an account, and complaints are handled in accordance with the timeframes stated in that policy.' }
     ]
   },
   {
@@ -205,7 +206,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Limited Liability',
     number: '19',
     content: [
-      { type: 'heading', title: '19.1. Liability Cap', text: 'To the maximum extent permitted by law, Panty Post\'s total liability to any user for any claim arising out of or relating to the use of the platform is limited to the total amount paid by the user to Panty Post over the preceding 12 months, or AUD 500, whichever is lower.' },
+      { type: 'heading', title: '19.1. Liability', text: 'To the maximum extent permitted by law, Panty Post is not liable for loss that was not reasonably foreseeable, or for indirect or consequential loss arising from use of the platform. Any limitation in these Terms is subject to clause 19.3 and does not exclude, restrict or modify any liability, guarantee, right or remedy that cannot lawfully be excluded or limited.' },
       { type: 'heading', title: '19.2. Exclusion of Certain Damages', text: 'In no event shall Panty Post be liable for any indirect, incidental, punitive, or consequential damages arising out of or in connection with the use of the platform, even if Panty Post has been advised of the possibility of such damages.' },
       { type: 'heading', title: '19.3. Australian Consumer Law', text: 'Nothing in these Terms excludes, restricts or modifies any consumer guarantee, right or remedy conferred by the Competition and Consumer Act 2010 (Cth) or any other applicable law that cannot lawfully be excluded or limited.' }
     ]
@@ -259,10 +260,11 @@ export const TERMS_SECTIONS: TermsSection[] = [
           'Using the platform for money laundering or other financial crimes',
           'Engaging in any form of prostitution, solicitation, or escort services',
           'Attempting to circumvent age assurance, identity verification or content review',
-          'Uploading content depicting a person under 18, or any person who has not consented'
+          'Uploading content depicting a person under 18, or any person who has not consented',
+          'Using Panty Post messaging, listings or other platform features to solicit, arrange or complete an off-platform transaction for goods or services where the buyer and seller connected through Panty Post, except where Panty Post expressly permits it'
         ]
       },
-      { type: 'heading', title: '23.2. Breach of Terms', text: 'Any violation of these prohibited uses will result in immediate termination of the user\'s account and potential legal action by Panty Post. Panty Post reserves the right to cooperate with law enforcement agencies and provide any necessary information to assist in investigations. Content involving a person under 18 is reported to the relevant authorities proactively.' }
+      { type: 'heading', title: '23.2. Breach of Terms', text: 'A breach of these prohibited-use rules may result in content removal, transaction restrictions, suspension or termination depending on the nature and seriousness of the conduct. Serious matters including suspected exploitation, content involving a minor, fraud, trafficking or other unlawful activity may result in immediate suspension and referral to relevant authorities where required or appropriate.' }
     ]
   },
   {
@@ -279,8 +281,8 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Termination of Accounts',
     number: '25',
     content: [
-      { type: 'heading', title: '25.1. Right to Terminate', text: 'Panty Post reserves the right to terminate or suspend any user\'s account at its discretion, without prior notice, if the user violates these Terms and Conditions or engages in behavior that harms the platform\'s reputation or operation.' },
-      { type: 'heading', title: '25.2. Effect of Termination', text: 'If a user\'s account is terminated, they will lose access to the platform and any pending or in-process transactions will be canceled. Panty Post is not responsible for any loss of data, listings, or communications as a result of account termination.' },
+      { type: 'heading', title: '25.1. Right to Suspend or Terminate', text: 'Panty Post may suspend, restrict or terminate an account where we reasonably believe the user has breached these Terms or our policies, engaged in unlawful or fraudulent conduct, created a safety or security risk, or where action is reasonably required by law, a regulator or a payment provider.' },
+      { type: 'heading', title: '25.2. Effect of Suspension or Termination', text: 'Suspension or termination may prevent access to listings, messages and other platform features. Pending transactions, wallet balances, seller proceeds, refunds, disputes and chargebacks will be handled in accordance with applicable law, these Terms and the requirements of our payment provider. Where lawful, undisputed funds owed to a user will not be forfeited solely because their account has been terminated. Panty Post may retain records where reasonably necessary for legal, fraud-prevention, financial, safety or regulatory purposes.' },
       { type: 'heading', title: '25.3. Survival of Terms', text: 'Provisions related to intellectual property, limitation of liability, indemnification, and dispute resolution shall survive the termination of the user\'s account.' }
     ]
   },
@@ -324,7 +326,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
     title: 'Modifications to the Platform',
     number: '30',
     content: [
-      { type: 'heading', title: '30.1. Changes to the Service', text: 'Panty Post reserves the right to modify, update, or discontinue any aspect of the platform at any time without notice. Panty Post will not be held liable for any losses or damages resulting from changes to or the termination of services.' }
+      { type: 'heading', title: '30.1. Changes to the Service', text: 'Panty Post may modify, update, suspend or discontinue features of the platform from time to time. Where a change materially affects an ongoing paid service, existing transaction or significant user right, we will provide reasonable notice where practicable. We may make immediate changes where reasonably necessary for security, safety, legal, regulatory or payment-processor reasons.' }
     ]
   },
   {
@@ -342,11 +344,11 @@ export const TERMS_SECTIONS: TermsSection[] = [
     number: '32',
     content: [
       { type: 'heading', title: '32.1. Agreement to Terms', text: 'By accessing or using Panty Post, users confirm that they have read, understood, and agree to be bound by these Terms and Conditions, as well as any other policies or guidelines that may be posted on the platform. This agreement constitutes a legally binding contract between the user and Panty Post.' },
-      { type: 'heading', title: '32.2. Continued Use', text: 'Continued use of the platform after any updates or modifications to these Terms and Conditions will constitute acceptance of the revised terms. It is the user\'s responsibility to review these Terms regularly to stay informed of any changes.' },
+      { type: 'heading', title: '32.2. Continued Use', text: 'Where these Terms are updated, the revised Terms will apply from their stated effective date. We will provide notice of material changes where required or reasonably practicable. Continued use of Panty Post after the effective date may constitute acceptance of the revised Terms, subject to applicable law.' },
       { type: 'heading', title: '32.3. Electronic Signature', text: 'Users acknowledge that by clicking "Agree," "Sign Up," or similar buttons indicating acceptance, they are providing an electronic signature that is legally equivalent to a handwritten signature and constitutes acceptance of these Terms and Conditions.' },
-      { type: 'heading', title: '32.4. Withdrawal of Consent', text: 'If a user does not agree with these Terms and Conditions or any future updates, they must immediately cease using Panty Post and may request the deletion of their account by contacting support@pantypost.com. Continued use of the platform implies consent to all terms and policies.' }
+      { type: 'heading', title: '32.4. Ending Your Use', text: 'If you do not agree to these Terms or a future material update, you may stop using Panty Post and request closure of your account. Account closure and deletion requests remain subject to transaction completion, dispute handling, legal record-retention requirements and our Privacy Policy.' }
     ]
   }
 ];
 
-export const LAST_UPDATED = 'August 2, 2026';
+export const LAST_UPDATED = 'August 28, 2026';
