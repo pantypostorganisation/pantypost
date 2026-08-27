@@ -1,394 +1,253 @@
 // src/app/sellers/verify/page.tsx
+//
+// Seller verification is now Didit, and only Didit.
+//
+// This page used to collect a photo of the seller holding a written
+// code plus front/back images of their ID, store those files on our
+// own server, and wait for an admin to approve them by eye. That meant
+// PantyPost held a folder of other people's identity documents -- the
+// single most sensitive thing a marketplace can hold, and a liability
+// with no upside once a real provider is in place.
+//
+// Didit already runs a live face check against a real document and
+// returns a verdict. The backend now grants the seller badge on that
+// verdict (see applySellerVerification in ageVerification.routes.js),
+// so this page's only job is: show status, and hand off to Didit.
+// No uploads, no admin queue, no documents on our disk.
+
 'use client';
 
-// Force dynamic rendering and no cache
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import BanCheck from '@/components/BanCheck';
-import { useAuth } from '@/context/AuthContext';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { verificationService } from '@/services/verification.service';
+import { ShieldCheck, BadgeCheck, Clock, XCircle, Loader2, ArrowRight, Lock } from 'lucide-react';
+import BanCheck from '@/components/BanCheck';
+import RequireAuth from '@/components/RequireAuth';
+import { useAuth } from '@/context/AuthContext';
+import { apiCall } from '@/services/api.config';
 
-// Verification components
-import ImageViewerModal from '@/components/seller-verification/ImageViewerModal';
-import VerifiedState from '@/components/seller-verification/states/VerifiedState';
-import PendingState from '@/components/seller-verification/states/PendingState';
-import RejectedState from '@/components/seller-verification/states/RejectedState';
-import UnverifiedState from '@/components/seller-verification/states/UnverifiedState';
-import type { ImageViewData } from '@/components/seller-verification/utils/types';
-import { generateVerificationCode, getTimeAgo } from '@/components/seller-verification/utils/verificationHelpers';
-
-// Client-only login button (prevents SSR router usage)
-const LoginButton = () => {
-  const router = useRouter();
-  const isMountedRef = useRef(false);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  const handleClick = useCallback(() => {
-    if (isMountedRef.current) router.push('/login');
-  }, [router]);
-
-  return (
-    <button
-      onClick={handleClick}
-      className="mt-6 px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-primary-hover transition w-full"
-    >
-      Log In
-    </button>
-  );
-};
+type AgeStatus = 'not_started' | 'pending' | 'approved' | 'declined' | 'expired';
 
 export default function SellerVerifyPage() {
-  const { user, isAuthReady, refreshSession } = useAuth();
   const router = useRouter();
-  const isMountedRef = useRef(false);
+  const { user, isAuthReady, refreshSession } = useAuth();
 
-  // State for verification status and documents
-  const [verificationStatus, setVerificationStatus] = useState<'unverified' | 'pending' | 'verified' | 'rejected'>('unverified');
-  const [code, setCode] = useState('');
-  const [codePhoto, setCodePhoto] = useState<string | null>(null);
-  const [idFront, setIdFront] = useState<string | null>(null);
-  const [idBack, setIdBack] = useState<string | null>(null);
-  const [passport, setPassport] = useState<string | null>(null);
-  const [rejectionReason, setRejectionReason] = useState<string>('');
-  const [currentImage, setCurrentImage] = useState<ImageViewData | null>(null);
+  const [status, setStatus] = useState<AgeStatus>('not_started');
   const [isLoading, setIsLoading] = useState(true);
+  const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
 
-  // Mount tracking
   useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
-  // Load verification status from backend
-  const loadVerificationStatus = useCallback(async () => {
-    if (!user || !isMountedRef.current) {
-      setIsLoading(false);
-      return;
-    }
-
-    console.log('[VerifyPage] Loading verification status for user:', user.username);
-
+  const loadStatus = useCallback(async () => {
     try {
-      // CRITICAL: Use the backend user verification status from AuthContext
-      // The User model has these fields: isVerified, verificationStatus
-      const backendStatus = user.verificationStatus || 'unverified';
-      const isVerified = user.isVerified || false;
-
-      console.log('[VerifyPage] User verification data:', {
-        verificationStatus: backendStatus,
-        isVerified: isVerified
-      });
-
-      // Determine the actual status to display
-      let displayStatus: 'unverified' | 'pending' | 'verified' | 'rejected' = 'unverified';
-
-      // Priority order: isVerified flag takes precedence
-      if (isVerified) {
-        displayStatus = 'verified';
-      } else if (backendStatus === 'pending') {
-        displayStatus = 'pending';
-      } else if (backendStatus === 'rejected') {
-        displayStatus = 'rejected';
-      } else {
-        displayStatus = 'unverified';
-      }
-
-      console.log('[VerifyPage] Display status:', displayStatus);
-
-      // Get detailed status from verification service
-      const result = await verificationService.getVerificationStatus();
-      
-      if (result.success && result.data) {
-        console.log('[VerifyPage] Verification service data:', result.data);
-        
-        // FIXED: Only use service status if user is NOT verified
-        // If isVerified is true, always show verified state regardless of service response
-        if (!isVerified) {
-          const serviceStatus = result.data.status as 'unverified' | 'pending' | 'verified' | 'rejected';
-          
-          // Map 'approved' to 'verified' for compatibility
-          const mappedStatus = serviceStatus === 'approved' as any ? 'verified' : serviceStatus;
-          
-          if (isMountedRef.current) {
-            setVerificationStatus(mappedStatus || displayStatus);
-            
-            if (result.data.rejectionReason) {
-              setRejectionReason(result.data.rejectionReason);
-            }
-          }
-        } else {
-          // User is verified, use the display status (which is 'verified')
-          if (isMountedRef.current) {
-            setVerificationStatus(displayStatus);
-            
-            // Still get rejection reason if available (for history)
-            if (result.data.rejectionReason) {
-              setRejectionReason(result.data.rejectionReason);
-            }
-          }
-        }
-      } else {
-        // Fallback to user's status from AuthContext
-        if (isMountedRef.current) {
-          setVerificationStatus(displayStatus);
-        }
-      }
-
-      // Generate or retrieve verification code
-      const storedCode = localStorage.getItem(`verification_code_${user.username}`);
-      let nextCode: string;
-      
-      if (displayStatus === 'rejected' || !storedCode) {
-        // Generate new code if rejected or no existing code
-        nextCode = generateVerificationCode(user.username);
-        localStorage.setItem(`verification_code_${user.username}`, nextCode);
-      } else {
-        nextCode = storedCode;
-      }
-      
-      if (isMountedRef.current) {
-        setCode(nextCode);
-      }
-
-      // Load stored documents if in pending/verified/rejected state
-      if (displayStatus !== 'unverified') {
-        const storedDocs = localStorage.getItem(`verification_docs_${user.username}`);
-        if (storedDocs) {
-          try {
-            const docs = JSON.parse(storedDocs);
-            if (isMountedRef.current) {
-              setCodePhoto(docs.codePhoto || null);
-              setIdFront(docs.idFront || null);
-              setIdBack(docs.idBack || null);
-              setPassport(docs.passport || null);
-            }
-          } catch (parseError) {
-            console.error('[VerifyPage] Error parsing stored docs:', parseError);
-          }
-        }
+      const response = await apiCall<any>('/age-verification/status');
+      if (!mountedRef.current) return;
+      if (response.success && response.data) {
+        setStatus((response.data.status as AgeStatus) || 'not_started');
       }
     } catch (err) {
-      console.error('[VerifyPage] Error loading verification status:', err);
-      if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : 'Failed to load verification status');
-      }
+      if (mountedRef.current) setError('Could not load your verification status.');
     } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-      }
+      if (mountedRef.current) setIsLoading(false);
     }
-  }, [user]);
+  }, []);
 
-  // Initialize verification status when auth is ready and user is available
   useEffect(() => {
-    if (!isAuthReady) {
-      return;
-    }
+    if (isAuthReady && user) loadStatus();
+  }, [isAuthReady, user, loadStatus]);
 
-    if (!user) {
-      setIsLoading(false);
-      return;
-    }
+  /* The user comes back from Didit in the same tab, so re-check on
+     focus: the webhook usually lands before they do, and this turns a
+     stale "pending" into the badge without a manual refresh. */
+  useEffect(() => {
+    const onFocus = () => {
+      if (status === 'pending' || status === 'not_started') loadStatus();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [status, loadStatus]);
 
-    loadVerificationStatus();
-  }, [isAuthReady, user, loadVerificationStatus]);
-
-  // Submit handler for unverified and rejected states
-  const handleSubmit = useCallback(
-    async (docs: any) => {
-      if (!isMountedRef.current || !user) return;
-
-      console.log('[VerifyPage] Submitting verification documents...');
-
-      try {
-        if (!docs || typeof docs !== 'object') throw new Error('Invalid verification documents');
-        if (!docs.code || typeof docs.code !== 'string') throw new Error('Verification code is required');
-
-        // Store documents locally for display
-        localStorage.setItem(`verification_docs_${user.username}`, JSON.stringify(docs));
-        
-        // Submit to backend
-        const result = await verificationService.submitVerification(docs);
-        
-        if (result.success) {
-          console.log('[VerifyPage] Verification submitted successfully');
-          
-          // Update local state
-          setVerificationStatus('pending');
-          setCodePhoto(docs.codePhoto);
-          setIdFront(docs.idFront || null);
-          setIdBack(docs.idBack || null);
-          setPassport(docs.passport || null);
-          
-          // Refresh user session to get updated verification status
+  const startVerification = useCallback(async () => {
+    setIsStarting(true);
+    setError(null);
+    try {
+      const response = await apiCall<any>('/age-verification/start', { method: 'POST' });
+      if (response.success && response.data) {
+        if (response.data.alreadyVerified) {
           await refreshSession();
-          
-          // Redirect to profile after short delay
-          setTimeout(() => {
-            if (isMountedRef.current) {
-              router.push('/sellers/profile');
-            }
-          }, 2000);
-        } else {
-          throw new Error(result.error?.message || 'Failed to submit verification');
+          setStatus('approved');
+          setIsStarting(false);
+          return;
         }
-      } catch (err) {
-        console.error('[VerifyPage] Error submitting verification:', err);
-        if (isMountedRef.current) {
-          setError(err instanceof Error ? err.message : 'Failed to submit verification');
+        if (response.data.sessionUrl) {
+          window.location.href = response.data.sessionUrl;
+          return;
         }
-        throw err; // Re-throw to let the component handle it
       }
-    },
-    [user, router, refreshSession]
-  );
+      setError('Could not start verification. Please try again in a moment.');
+      setIsStarting(false);
+    } catch (err) {
+      setError('Could not start verification. Please try again in a moment.');
+      setIsStarting(false);
+    }
+  }, [refreshSession]);
 
-  // View image fullscreen
-  const viewImage = useCallback((type: string, url: string | null) => {
-    if (!url || typeof url !== 'string' || !isMountedRef.current) return;
-    setCurrentImage({ type, url });
-  }, []);
-
-  const safeSetCurrentImage = useCallback((image: ImageViewData | null) => {
-    if (isMountedRef.current) setCurrentImage(image);
-  }, []);
-
-  // Loading state
   if (!isAuthReady || isLoading) {
     return (
       <BanCheck>
-        <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800">
-            <Loader2 className="w-8 h-8 text-[#ff950e] animate-spin mx-auto mb-4" />
-            <p className="text-gray-400 text-center">Loading verification page...</p>
+        <RequireAuth role="seller">
+          <div className="flex min-h-screen items-center justify-center bg-black">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
           </div>
-        </div>
+        </RequireAuth>
       </BanCheck>
     );
   }
 
-  // Error state
-  if (error) {
-    return (
-      <BanCheck>
-        <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800">
-            <Shield className="w-12 h-12 text-red-500 mb-4 mx-auto" />
-            <h1 className="text-2xl font-bold mb-4 text-center">Error</h1>
-            <p className="text-gray-400 text-center mb-4">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-primary-hover transition"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      </BanCheck>
-    );
-  }
+  const isVerified = status === 'approved' || user?.isVerified;
 
-  // Not logged in
-  if (!user) {
-    return (
-      <BanCheck>
-        <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800">
-            <Shield className="w-12 h-12 text-[#ff950e] mb-4 mx-auto" />
-            <h1 className="text-2xl font-bold mb-4">Seller Verification</h1>
-            <p className="text-gray-400">You must be logged in as a seller to access this page.</p>
-            <LoginButton />
-          </div>
-        </div>
-      </BanCheck>
-    );
-  }
-
-  // Logged in but wrong role
-  if (user.role !== 'seller') {
-    return (
-      <BanCheck>
-        <div className="min-h-screen bg-black text-white py-10 px-4 sm:px-6 flex items-center justify-center">
-          <div className="bg-[#121212] rounded-lg shadow-xl p-8 max-w-md w-full border border-gray-800 text-center">
-            <Shield className="w-12 h-12 text-yellow-500 mb-4 mx-auto" />
-            <h1 className="text-2xl font-bold mb-2">Sellers Only</h1>
-            <p className="text-gray-400 mb-6">
-              This page is for sellers who want to verify their account.
-            </p>
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center px-4 py-2 bg-[#ff950e] text-black font-bold rounded-lg hover:bg-primary-hover transition"
-            >
-              Go Home
-            </Link>
-          </div>
-        </div>
-      </BanCheck>
-    );
-  }
-
-  console.log('[VerifyPage] Rendering state:', verificationStatus);
-
-  // VERIFIED STATE
-  if (verificationStatus === 'verified') {
-    return (
-      <BanCheck>
-        <VerifiedState user={user} code={code} />
-      </BanCheck>
-    );
-  }
-
-  // PENDING STATE
-  if (verificationStatus === 'pending') {
-    return (
-      <BanCheck>
-        <PendingState
-          user={user}
-          code={code}
-          codePhoto={codePhoto || undefined}
-          idFront={idFront || undefined}
-          idBack={idBack || undefined}
-          passport={passport || undefined}
-          getTimeAgo={getTimeAgo}
-        />
-        {currentImage && (
-          <ImageViewerModal imageData={currentImage} onClose={() => safeSetCurrentImage(null)} />
-        )}
-      </BanCheck>
-    );
-  }
-
-  // REJECTED STATE
-  if (verificationStatus === 'rejected') {
-    return (
-      <BanCheck>
-        <RejectedState 
-          user={{
-            ...user,
-            verificationRejectionReason: rejectionReason
-          }} 
-          code={code} 
-          onSubmit={handleSubmit} 
-        />
-      </BanCheck>
-    );
-  }
-
-  // DEFAULT - UNVERIFIED STATE (First time)
   return (
     <BanCheck>
-      <UnverifiedState user={user} code={code} onSubmit={handleSubmit} />
+      <RequireAuth role="seller">
+        <main className="min-h-screen bg-black px-4 py-12 text-white">
+          <div className="mx-auto max-w-2xl">
+            <header className="mb-8 text-center">
+              <span className="inline-flex items-center gap-2 rounded-sm border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                <ShieldCheck className="h-4 w-4" /> Seller Verification
+              </span>
+              <h1 className="mt-4 text-3xl font-bold">Get verified</h1>
+              <p className="mt-3 text-gray-400">
+                Verification is handled by Didit, an independent identity provider. It takes about a
+                minute on your phone.
+              </p>
+            </header>
+
+            {isVerified ? (
+              <section className="rounded-lg border border-green-500/30 bg-green-500/10 p-8 text-center">
+                <BadgeCheck className="mx-auto h-12 w-12 text-green-400" />
+                <h2 className="mt-4 text-2xl font-bold">You are verified</h2>
+                <p className="mt-2 text-gray-300">
+                  Your verified badge is live on your profile and listings, and you can now post up
+                  to 25 listings.
+                </p>
+                <Link
+                  href="/sellers/profile"
+                  className="mt-6 inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary-hover"
+                >
+                  Go to your profile <ArrowRight className="h-4 w-4" />
+                </Link>
+              </section>
+            ) : status === 'pending' ? (
+              <section className="rounded-lg border border-white/10 bg-surface-raised p-8 text-center">
+                <Clock className="mx-auto h-12 w-12 text-primary" />
+                <h2 className="mt-4 text-2xl font-bold">Check in progress</h2>
+                <p className="mt-2 text-gray-300">
+                  Didit is finishing your check. This usually takes a few seconds. This page updates
+                  itself when the result arrives.
+                </p>
+                <button
+                  type="button"
+                  onClick={loadStatus}
+                  className="mt-6 rounded-md border border-white/20 bg-white/10 px-6 py-3 font-semibold text-white transition-colors hover:bg-white/20"
+                >
+                  Check again
+                </button>
+              </section>
+            ) : (
+              <section className="space-y-6">
+                {status === 'declined' && (
+                  <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+                    <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-400" />
+                    <p className="text-sm text-gray-300">
+                      Your last check was not approved. You can try again below - make sure your
+                      document is fully in frame and well lit.
+                    </p>
+                  </div>
+                )}
+                {status === 'expired' && (
+                  <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-surface-raised p-4">
+                    <Clock className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                    <p className="text-sm text-gray-300">
+                      Your last verification link expired before it was finished. Start a new one
+                      below.
+                    </p>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-white/10 bg-surface-raised p-6">
+                  <h2 className="text-lg font-semibold">What verified sellers get</h2>
+                  <ul className="mt-4 space-y-3 text-sm text-gray-300">
+                    <li className="flex items-start gap-3">
+                      <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      A verified badge on your profile and every listing
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      Up to 25 live listings instead of 2
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      More buyer trust, which is what actually drives sales
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="rounded-lg border border-white/10 bg-surface-raised p-6">
+                  <h2 className="flex items-center gap-2 text-lg font-semibold">
+                    <Lock className="h-4 w-4 text-primary" /> Your documents stay with Didit
+                  </h2>
+                  <p className="mt-3 text-sm text-gray-300">
+                    You will scan your ID and take a quick live photo on Didit&apos;s own secure
+                    page. Panty Post never receives or stores your identity document - we are only
+                    told whether the check passed. See our{' '}
+                    <Link href="/privacy" className="text-primary hover:underline">
+                      privacy policy
+                    </Link>
+                    .
+                  </p>
+                </div>
+
+                {error && (
+                  <p className="text-center text-sm text-red-400" role="alert">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={startVerification}
+                  disabled={isStarting}
+                  className="flex w-full items-center justify-center gap-2 rounded-md bg-primary px-6 py-4 text-lg font-semibold text-black transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isStarting ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" /> Opening Didit...
+                    </>
+                  ) : (
+                    <>
+                      Start verification <ArrowRight className="h-5 w-5" />
+                    </>
+                  )}
+                </button>
+
+                <p className="text-center text-xs text-gray-500">
+                  You must be 18 or over to sell on Panty Post.
+                </p>
+              </section>
+            )}
+          </div>
+        </main>
+      </RequireAuth>
     </BanCheck>
   );
 }
-

@@ -21,6 +21,27 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://pantypost.com';
  * GET /api/age-verification/status
  * Where the current user stands. Used by the gate on page load.
  * ===================================================================== */
+
+/* Didit is now the ONLY verification path. A Didit approval proves the
+   person is a real, live adult holding a real document -- which is
+   exactly what the seller badge used to assert after a human squinted
+   at uploaded ID photos. So an approval grants the badge directly, and
+   PantyPost never stores an identity document at all. Keeping these
+   two fields in step is what lets the rest of the app (listing limits,
+   badges, browse filters) keep reading isVerified as it always has. */
+function applySellerVerification(user, status) {
+  if (status === AGE_STATUS.APPROVED) {
+    user.isVerified = true;
+    user.verificationStatus = 'verified';
+    if (!user.verificationData) user.verificationData = {};
+    user.verificationData.provider = providerName();
+    user.verificationData.verifiedAt = new Date();
+  } else if (status === AGE_STATUS.DECLINED) {
+    user.isVerified = false;
+    user.verificationStatus = 'rejected';
+  }
+}
+
 router.get('/status', authMiddleware, async (req, res) => {
   try {
     const user = await User.findOne({ username: req.user.username })
@@ -190,6 +211,8 @@ router.post('/webhook', async (req, res) => {
       user.ageVerification.verifiedAt = new Date();
     }
 
+    applySellerVerification(user, result.status);
+
     await user.save();
 
     console.log(
@@ -254,6 +277,8 @@ router.post('/refresh', authMiddleware, async (req, res) => {
       user.ageVerification.verifiedAt = new Date();
     }
 
+    applySellerVerification(user, result.status);
+
     await user.save();
 
     return res.json({
@@ -270,3 +295,4 @@ router.post('/refresh', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
