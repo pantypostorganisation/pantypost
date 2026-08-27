@@ -23,7 +23,7 @@ export const fetchCache = 'force-no-store';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ShieldCheck, BadgeCheck, Clock, XCircle, Loader2, ArrowRight, Lock } from 'lucide-react';
+import { BadgeCheck, Clock, XCircle, Loader2, ArrowRight, Lock } from 'lucide-react';
 import BanCheck from '@/components/BanCheck';
 import RequireAuth from '@/components/RequireAuth';
 import { useAuth } from '@/context/AuthContext';
@@ -121,31 +121,69 @@ export default function SellerVerifyPage() {
       <RequireAuth role="seller">
         <main className="min-h-screen bg-black px-4 py-12 text-white">
           <div className="mx-auto max-w-2xl">
-            <header className="mb-8 text-center">
-              <span className="inline-flex items-center gap-2 rounded-sm border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <ShieldCheck className="h-4 w-4" /> Seller Verification
-              </span>
-              <h1 className="mt-4 text-3xl font-bold">Get verified</h1>
-              <p className="mt-3 text-gray-400">
-                Verification is handled by Didit, an independent identity provider. It takes about a
-                minute on your phone.
-              </p>
-            </header>
+            {/* The header only exists for people who still have work to
+                do. Once verified, the page is a confirmation, not a
+                pitch -- repeating "Get verified" to a verified seller
+                reads like the site forgot. */}
+            {!isVerified && (
+              <header className="mb-10 text-center">
+                <h1 className="text-3xl font-bold">
+                  {status === 'pending' ? 'Almost there' : 'Get verified'}
+                </h1>
+                <p className="mt-3 text-gray-400">
+                  {status === 'pending'
+                    ? 'Your check is with Didit now.'
+                    : 'Verification is handled by Didit, an independent identity provider. It takes about a minute on your phone.'}
+                </p>
+              </header>
+            )}
 
             {isVerified ? (
-              <section className="rounded-lg border border-green-500/30 bg-green-500/10 p-8 text-center">
-                <BadgeCheck className="mx-auto h-12 w-12 text-green-400" />
-                <h2 className="mt-4 text-2xl font-bold">You are verified</h2>
-                <p className="mt-2 text-gray-300">
-                  Your verified badge is live on your profile and listings, and you can now post up
-                  to 25 listings.
+              <section className="flex flex-col items-center py-8 text-center">
+                {/* No container: the badge IS the content. A card here
+                    just draws a box around a full stop. */}
+                <div className="relative">
+                  <span
+                    className="absolute inset-0 rounded-full bg-green-500/20 blur-2xl"
+                    aria-hidden="true"
+                  />
+                  <BadgeCheck
+                    className="relative h-20 w-20 text-green-400"
+                    strokeWidth={1.5}
+                    aria-hidden="true"
+                  />
+                </div>
+
+                <h1 className="mt-6 text-3xl font-bold">You are verified</h1>
+                <p className="mt-3 max-w-md text-gray-400">
+                  Your badge is live on your profile and every listing you post.
                 </p>
-                <Link
-                  href="/sellers/profile"
-                  className="mt-6 inline-flex items-center gap-2 rounded-md bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary-hover"
-                >
-                  Go to your profile <ArrowRight className="h-4 w-4" />
-                </Link>
+
+                <div className="mt-8 flex w-full max-w-sm flex-col gap-3 text-left">
+                  <div className="flex items-center gap-3 rounded-md border border-white/10 bg-surface-raised px-4 py-3">
+                    <BadgeCheck className="h-4 w-4 shrink-0 text-green-400" aria-hidden="true" />
+                    <span className="text-sm text-gray-300">Verified badge active</span>
+                  </div>
+                  <div className="flex items-center gap-3 rounded-md border border-white/10 bg-surface-raised px-4 py-3">
+                    <BadgeCheck className="h-4 w-4 shrink-0 text-green-400" aria-hidden="true" />
+                    <span className="text-sm text-gray-300">25 listings unlocked</span>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Link
+                    href="/sellers/my-listings"
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary-hover"
+                  >
+                    Create a listing <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    href="/sellers/profile"
+                    className="inline-flex items-center justify-center rounded-md border border-white/20 bg-white/5 px-6 py-3 font-semibold text-white transition-colors hover:bg-white/10"
+                  >
+                    View profile
+                  </Link>
+                </div>
               </section>
             ) : status === 'pending' ? (
               <section className="rounded-lg border border-white/10 bg-surface-raised p-8 text-center">
