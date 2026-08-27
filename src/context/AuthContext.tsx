@@ -92,6 +92,15 @@ function safeNow(): number {
   }
 }
 
+/* Admin sessions end at midnight tonight, no matter what "remember
+   me" says. An admin panel left open on a shared or stolen machine is
+   a far worse outcome than an admin re-entering a 2FA code tomorrow. */
+function endOfLocalDay(): number {
+  const midnight = new Date();
+  midnight.setHours(23, 59, 59, 999);
+  return midnight.getTime();
+}
+
 function deriveExpiry(expiresIn: unknown, defaultMs: number): number {
   const now = safeNow();
   if (typeof expiresIn === 'number' && Number.isFinite(expiresIn)) {
@@ -621,10 +630,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return false;
           }
 
-          const expiresAt = deriveExpiry(
+          const rawExpiresAt = deriveExpiry(
             response.data.expiresIn ?? response.data.tokenExpiresIn,
             31 * 24 * 60 * 60 * 1000
           );
+          const expiresAt =
+            response.data.user?.role === 'admin'
+              ? Math.min(rawExpiresAt, endOfLocalDay())
+              : rawExpiresAt;
 
           const tokens: AuthTokens = {
             token: response.data.token,
@@ -718,9 +731,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           code,
         });
         if (response.success && response.data) {
-          const expiresAt = deriveExpiry(
-            response.data.expiresIn ?? response.data.tokenExpiresIn,
-            31 * 24 * 60 * 60 * 1000
+          const expiresAt = Math.min(
+            deriveExpiry(
+              response.data.expiresIn ?? response.data.tokenExpiresIn,
+              31 * 24 * 60 * 60 * 1000
+            ),
+            endOfLocalDay()
           );
           const tokens: AuthTokens = {
             token: response.data.token,
