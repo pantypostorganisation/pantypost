@@ -144,11 +144,11 @@ export default function SellerVerifyPage() {
                     just draws a box around a full stop. */}
                 <div className="relative">
                   <span
-                    className="absolute inset-0 rounded-full bg-green-500/20 blur-2xl"
+                    className="absolute inset-0 rounded-full bg-primary/25 blur-2xl"
                     aria-hidden="true"
                   />
                   <BadgeCheck
-                    className="relative h-20 w-20 text-green-400"
+                    className="relative h-20 w-20 text-primary"
                     strokeWidth={1.5}
                     aria-hidden="true"
                   />
@@ -161,11 +161,11 @@ export default function SellerVerifyPage() {
 
                 <div className="mt-8 flex w-full max-w-sm flex-col gap-3 text-left">
                   <div className="flex items-center gap-3 rounded-md border border-white/10 bg-surface-raised px-4 py-3">
-                    <BadgeCheck className="h-4 w-4 shrink-0 text-green-400" aria-hidden="true" />
+                    <BadgeCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                     <span className="text-sm text-gray-300">Verified badge active</span>
                   </div>
                   <div className="flex items-center gap-3 rounded-md border border-white/10 bg-surface-raised px-4 py-3">
-                    <BadgeCheck className="h-4 w-4 shrink-0 text-green-400" aria-hidden="true" />
+                    <BadgeCheck className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                     <span className="text-sm text-gray-300">25 listings unlocked</span>
                   </div>
                 </div>
