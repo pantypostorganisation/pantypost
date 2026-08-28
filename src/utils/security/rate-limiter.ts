@@ -178,14 +178,24 @@ export const RATE_LIMITS = {
     blockDuration: 30 * 60 * 1000, // Block for 30 minutes
   },
   SIGNUP: {
-    maxAttempts: 3,
+    /* Was 3 per hour with a 1 hour block, which locked real sellers out
+       of signing up: every failed attempt counts, so three typos in the
+       form -- a taken username, a weak password, a mistyped email --
+       banned them for an hour on their first visit. That is the single
+       worst moment in the product to add friction. The backend still
+       enforces its own per-IP signup limit, so bot floods remain
+       capped; this client-side check only exists to stop someone
+       hammering the button. */
+    maxAttempts: 30,
     windowMs: 60 * 60 * 1000, // 1 hour
-    blockDuration: 60 * 60 * 1000, // Block for 1 hour
+    blockDuration: 2 * 60 * 1000, // Block for 2 minutes
   },
   PASSWORD_RESET: {
-    maxAttempts: 3,
+    // Same reasoning as SIGNUP: a locked-out password reset is a lost
+    // user. The backend limiter is the real protection here.
+    maxAttempts: 10,
     windowMs: 60 * 60 * 1000, // 1 hour
-    blockDuration: 60 * 60 * 1000, // Block for 1 hour
+    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
   },
 
   // User actions
@@ -379,3 +389,5 @@ export function getRateLimitMessage(result: ReturnType<ActionRateLimiter['check'
 
   return 'Rate limit exceeded. Please try again later.';
 }
+
+

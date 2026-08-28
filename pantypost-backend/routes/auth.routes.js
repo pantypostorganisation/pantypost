@@ -28,8 +28,12 @@ const loginLimiter = rateLimit({
 });
 
 const signupLimiter = rateLimit({
+  /* 10/hour/IP was too tight in practice: mobile carriers put many
+     users behind one address (CGNAT), so a handful of sellers signing
+     up from the same network could exhaust it for everyone else on
+     that carrier. 60 still stops a scripted flood cold. */
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
+  max: 60,
   message: { success: false, error: { code: 'RATE_LIMITED', message: 'Too many signup attempts. Please try again later.' } },
   standardHeaders: true,
   legacyHeaders: false,
