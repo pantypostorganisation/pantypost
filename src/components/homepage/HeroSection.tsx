@@ -166,12 +166,16 @@ export default function HeroSection() {
       <div className="relative max-w-7xl mx-auto px-6 sm:px-8 flex flex-col md:flex-row items-center justify-between min-h-[70vh] md:min-h-[75vh] z-10">
         {/* LEFT: Info/CTA */}
         <div className="w-full md:w-1/2 lg:w-[48%] xl:w-[45%] relative">
-          <motion.div
-            className="flex flex-col items-center md:items-start text-center md:text-left justify-center z-20"
-            initial="hidden"
-            whileInView="visible"
-            viewport={VIEWPORT_CONFIG}
-            variants={containerVariants}
+          {/* CSS animation, not framer-motion.
+              These elements were framer-motion nodes, which meant the
+              hero headline did not exist until the animation library
+              had downloaded, parsed and run -- Lighthouse measured the
+              h1 as the LCP element with 1.6s of render delay and a 7.1s
+              LCP on mobile. CSS keyframes run on first paint with no
+              JavaScript at all, so the text is on screen immediately
+              and the fade looks identical. */}
+          <div
+            className={`flex flex-col items-center md:items-start text-center md:text-left justify-center z-20 ${styles.heroReveal}`}
           >
             {/* Counters */}
             <div className="mb-4 md:mb-3 flex flex-col sm:flex-row items-center gap-2 sm:gap-4 justify-center md:justify-start">
@@ -180,30 +184,27 @@ export default function HeroSection() {
             </div>
 
             {/* Title */}
-            <motion.h1
-              className="text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-tight text-white mb-5 tracking-tighter"
-              variants={itemVariants}
+            <h1
+              className={`text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-tight text-white mb-5 tracking-tighter ${styles.heroItem}`}
             >
               {HERO_CONTENT.title}{' '}
               <span className="text-[#ff950e]">
                 {HERO_CONTENT.titleHighlight}
               </span>{' '}
               {HERO_CONTENT.titleEnd}
-            </motion.h1>
+            </h1>
 
             {/* Description */}
-            <motion.p
-              className="text-gray-400 text-base md:text-lg mb-8 max-w-xl font-medium"
-              variants={itemVariants}
+            <p
+              className={`text-gray-400 text-base md:text-lg mb-8 max-w-xl font-medium ${styles.heroItem} ${styles.heroItemDelay1}`}
             >
               {HERO_CONTENT.description}
-            </motion.p>
+            </p>
 
             {/* CTA Buttons */}
-            <motion.div
+            <div
               id="hero-ctas"
-              className={`flex gap-4 mb-8 flex-col sm:flex-row w-full md:w-auto justify-center md:justify-start ${styles.ctaGroup}`}
-              variants={itemVariants}
+              className={`flex gap-4 mb-8 flex-col sm:flex-row w-full md:w-auto justify-center md:justify-start ${styles.ctaGroup} ${styles.heroItem} ${styles.heroItemDelay2}`}
               role="group"
               aria-label="Primary navigation actions"
             >
@@ -240,11 +241,11 @@ export default function HeroSection() {
                   </span>
                 </span>
               </Button>
-            </motion.div>
+            </div>
 
             {/* Trust Badges */}
             <TrustBadges />
-          </motion.div>
+          </div>
         </div>
 
         {/* RIGHT: Phone Image */}
@@ -303,5 +304,7 @@ export default function HeroSection() {
     </section>
   );
 }
+
+
 
 
