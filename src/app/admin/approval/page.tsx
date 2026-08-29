@@ -15,8 +15,6 @@ import {
   CheckCircle2,
   CircleSlash,
   Clock3,
-  ShieldCheck,
-  Sparkles,
   FileText,
   Tag,
   UserCircle,
@@ -24,7 +22,9 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 
-type QueueFilter = 'all' | ContentType;
+/* The three image kinds are one bucket here: an admin triaging a
+   queue thinks "images", not "cover photos vs gallery images". */
+type QueueFilter = 'all' | 'listing' | 'post' | 'images';
 
 /** Visual treatment per content type, so reviewers can scan the queue. */
 const TYPE_STYLES: Record<string, { border: string; bg: string; chip: string }> = {
@@ -133,11 +133,15 @@ export default function AdminApprovalPage() {
 
   const isAdmin = useMemo(() => user?.role === 'admin', [user?.role]);
 
-  const loadPending = async (filter: QueueFilter = queueFilter) => {
+  /* Always fetches the FULL queue and filters in the browser. It used
+     to ask the server for one content type, which meant the counts in
+     the header were computed from an already-filtered list -- click
+     "Listings" and the posts and images counts both dropped to zero.
+     Fetching everything keeps every count honest and makes switching
+     filters instant. */
+  const loadPending = async () => {
     setLoadingPending(true);
-    const response = await approvalService.getPendingItems(
-      filter === 'all' ? undefined : filter
-    );
+    const response = await approvalService.getPendingItems();
     if (response.success && response.data) {
       setPendingItems(response.data);
     }
@@ -170,7 +174,7 @@ export default function AdminApprovalPage() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    loadPending(queueFilter);
+    loadPending();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queueFilter]);
 
@@ -496,14 +500,26 @@ export default function AdminApprovalPage() {
     );
   };
 
+  const isImage = (type: ContentType) =>
+    type === 'profile_pic' || type === 'cover_photo' || type === 'gallery_image';
+
   const listingCount = pendingItems.filter(i => i.contentType === 'listing').length;
   const postCount = pendingItems.filter(i => i.contentType === 'post').length;
-  const mediaCount = pendingItems.filter(
-    i =>
-      i.contentType === 'profile_pic' ||
-      i.contentType === 'cover_photo' ||
-      i.contentType === 'gallery_image'
-  ).length;
+  const mediaCount = pendingItems.filter(i => isImage(i.contentType)).length;
+
+  const visibleItems =
+    queueFilter === 'all'
+      ? pendingItems
+      : pendingItems.filter(i =>
+          queueFilter === 'images' ? isImage(i.contentType) : i.contentType === queueFilter
+        );
+
+  const queueTabs: { key: QueueFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'All', count: pendingItems.length },
+    { key: 'listing', label: listingCount === 1 ? 'Listing' : 'Listings', count: listingCount },
+    { key: 'post', label: postCount === 1 ? 'Post' : 'Posts', count: postCount },
+    { key: 'images', label: mediaCount === 1 ? 'Image' : 'Images', count: mediaCount },
+  ];
 
   return (
     <RequireAuth role="admin">
@@ -511,72 +527,73 @@ export default function AdminApprovalPage() {
         <div className="mx-auto max-w-6xl px-4 py-10">
           <header className="mb-8 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="inline-flex items-center gap-2 rounded-full border border-[#ff950e]/40 bg-[#ff950e]/10 px-3 py-1 text-xs font-semibold text-[#ff950e]">
-                <ShieldCheck className="h-4 w-4" /> Admin Control
-              </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-white">
-                Content Approvals
-              </h1>
+              <h1 className="text-3xl font-bold tracking-tight text-white">Content Approvals</h1>
               <p className="text-sm text-gray-400">
                 All listings and posts are reviewed here before they become publicly visible.
               </p>
             </div>
-            <div className="rounded-2xl border border-purple-500/30 bg-purple-500/10 px-4 py-3 text-sm text-purple-100 shadow-[0_0_25px_rgba(168,85,247,0.3)]">
-              <p className="font-semibold">Pending queue</p>
-              <p className="text-2xl font-bold">{pendingItems.length}</p>
-              <p className="text-xs text-purple-200/70">
-                {listingCount} listing{listingCount === 1 ? '' : 's'} · {postCount} post
-                {postCount === 1 ? '' : 's'} · {mediaCount} image{mediaCount === 1 ? '' : 's'}
-              </p>
+
+            {/* The queue is the filter. The breakdown used to be static
+                text under a big number; making each count the control
+                that filters to it removes a separate dropdown and one
+                whole step from triage. */}
+            <div className="rounded-lg border border-white/10 bg-[#0b0b0f] p-4">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-white">{pendingItems.length}</span>
+                <span className="text-sm text-gray-400">
+                  awaiting review
+                </span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {queueTabs.map(tab => {
+                  const isActive = queueFilter === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setQueueFilter(tab.key)}
+                      aria-pressed={isActive}
+                      className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        isActive
+                          ? 'border-[#ff950e] bg-[#ff950e] text-black'
+                          : 'border-white/10 text-gray-300 hover:border-[#ff950e]/60 hover:text-white'
+                      }`}
+                    >
+                      {tab.count} {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </header>
 
           <section className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-xl font-semibold text-white">
-                <Sparkles className="h-5 w-5 text-[#ff950e]" /> Awaiting Review
-              </h2>
-              <div className="flex items-center gap-2">
-                <select
-                  value={queueFilter}
-                  onChange={e => setQueueFilter(e.target.value as QueueFilter)}
-                  className="rounded-lg border border-white/10 bg-[#0b0b0f] px-3 py-2 text-sm text-white focus:border-[#ff950e]/60 focus:outline-none"
-                  aria-label="Filter queue by content type"
-                >
-                  <option value="all">All content</option>
-                  <option value="listing">Listings</option>
-                  <option value="post">Posts</option>
-                  <option value="profile_pic">Profile pictures</option>
-                  <option value="cover_photo">Cover photos</option>
-                  <option value="gallery_image">Gallery images</option>
-                </select>
-                <button
-                  onClick={() => loadPending()}
-                  className="text-xs rounded-full border border-white/10 px-3 py-1.5 text-gray-300 hover:border-[#ff950e]/60 hover:text-white"
-                >
-                  Refresh
-                </button>
-              </div>
+              <h2 className="text-xl font-semibold text-white">Awaiting Review</h2>
+              <button
+                onClick={() => loadPending()}
+                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:border-[#ff950e]/60 hover:text-white"
+              >
+                Refresh
+              </button>
             </div>
 
             {loadingPending ? (
               <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-6 text-center text-gray-400">
                 Loading pending content...
               </div>
-            ) : pendingItems.length === 0 ? (
+            ) : visibleItems.length === 0 ? (
               <div className="rounded-xl border border-white/5 bg-[#0b0b0f] p-8 text-center text-gray-400">
                 Nothing awaiting review. Enjoy the calm!
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4">{pendingItems.map(renderPendingCard)}</div>
+              <div className="grid grid-cols-1 gap-4">{visibleItems.map(renderPendingCard)}</div>
             )}
           </section>
 
           <section className="mt-10 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xl font-semibold text-white">
-                <Clock3 className="h-5 w-5 text-[#ff950e]" /> Decision History
-              </div>
+              <div className="text-xl font-semibold text-white">Decision History</div>
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={historyFilter}
