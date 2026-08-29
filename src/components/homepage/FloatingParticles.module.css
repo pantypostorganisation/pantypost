@@ -50,10 +50,19 @@
   50% { opacity: 0.4; }
 }
 
+/* animation-fill-mode: backwards is what stops every particle
+   flashing on at page load. Without it, an element waiting out its
+   animation-delay renders in its NORMAL state -- fully opaque -- so
+   all 55 dots appeared at once and then blinked out one by one as
+   their animations finally started. `backwards` applies the first
+   keyframe (opacity 0) during the delay instead, so each particle is
+   invisible until its moment arrives, which is how framer-motion
+   behaved. */
 .particle {
   animation-name: particleDrift;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
+  animation-fill-mode: backwards;
   will-change: transform, opacity;
 }
 
@@ -61,6 +70,7 @@
   animation-name: shimmerDrift;
   animation-timing-function: ease-out;
   animation-iteration-count: infinite;
+  animation-fill-mode: backwards;
   will-change: transform, opacity;
 }
 
