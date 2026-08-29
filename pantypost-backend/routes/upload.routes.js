@@ -16,6 +16,7 @@ const {
   deleteFile,
   getFileUrl,
 } = require('../config/upload.config');
+const { optimiseFile } = require('../utils/imageOptimizer');
 
 /* =======================================================
  * VERIFICATION GATE
@@ -119,6 +120,14 @@ router.post('/', authMiddleware, (req, res) => {
   uploadConfigs.single(req, res, async (err) => {
     if (err) return handleUploadError(err, req, res);
 
+    /* Shrink before anything reads a path or size: routes build the
+       public URL from req.file.path, and the optimiser rewrites it to
+       the .webp it just produced. */
+    if (req.file) await optimiseFile(req.file);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) await optimiseFile(f);
+    }
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -159,6 +168,14 @@ router.post('/', authMiddleware, (req, res) => {
 router.post('/single', authMiddleware, (req, res) => {
   uploadConfigs.single(req, res, async (err) => {
     if (err) return handleUploadError(err, req, res);
+
+    /* Shrink before anything reads a path or size: routes build the
+       public URL from req.file.path, and the optimiser rewrites it to
+       the .webp it just produced. */
+    if (req.file) await optimiseFile(req.file);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) await optimiseFile(f);
+    }
 
     if (!req.file) {
       return res.status(400).json({
@@ -201,6 +218,14 @@ router.post('/single', authMiddleware, (req, res) => {
 router.post('/profile-pic', authMiddleware, (req, res) => {
   uploadConfigs.profilePic(req, res, async (err) => {
     if (err) return handleUploadError(err, req, res);
+
+    /* Shrink before anything reads a path or size: routes build the
+       public URL from req.file.path, and the optimiser rewrites it to
+       the .webp it just produced. */
+    if (req.file) await optimiseFile(req.file);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) await optimiseFile(f);
+    }
 
     if (!req.file) {
       return res.status(400).json({
@@ -271,6 +296,14 @@ router.post('/cover-photo', authMiddleware, requireVerifiedSeller, (req, res) =>
 
   uploadConfigs.coverPhoto(req, res, async (err) => {
     if (err) return handleUploadError(err, req, res);
+
+    /* Shrink before anything reads a path or size: routes build the
+       public URL from req.file.path, and the optimiser rewrites it to
+       the .webp it just produced. */
+    if (req.file) await optimiseFile(req.file);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) await optimiseFile(f);
+    }
 
     if (!req.file) {
       return res.status(400).json({
@@ -407,6 +440,14 @@ router.post('/listing-images', authMiddleware, requireVerifiedSeller, (req, res)
   uploadConfigs.listingImages(req, res, async (err) => {
     if (err) return handleUploadError(err, req, res);
 
+    /* Shrink before anything reads a path or size: routes build the
+       public URL from req.file.path, and the optimiser rewrites it to
+       the .webp it just produced. */
+    if (req.file) await optimiseFile(req.file);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) await optimiseFile(f);
+    }
+
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, error: 'No files uploaded' });
     }
@@ -447,6 +488,14 @@ router.post('/verification', authMiddleware, (req, res) => {
 
   uploadConfigs.verification(req, res, async (err) => {
     if (err) return handleUploadError(err, req, res);
+
+    /* Shrink before anything reads a path or size: routes build the
+       public URL from req.file.path, and the optimiser rewrites it to
+       the .webp it just produced. */
+    if (req.file) await optimiseFile(req.file);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) await optimiseFile(f);
+    }
 
     if (!req.files || Object.keys(req.files).length === 0) {
       return res.status(400).json({ success: false, error: 'No files uploaded' });
@@ -490,6 +539,14 @@ router.post('/gallery', authMiddleware, requireVerifiedSeller, (req, res) => {
 
   uploadConfigs.gallery(req, res, async (err) => {
     if (err) return handleUploadError(err, req, res);
+
+    /* Shrink before anything reads a path or size: routes build the
+       public URL from req.file.path, and the optimiser rewrites it to
+       the .webp it just produced. */
+    if (req.file) await optimiseFile(req.file);
+    if (Array.isArray(req.files)) {
+      for (const f of req.files) await optimiseFile(f);
+    }
 
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, error: 'No files uploaded' });
@@ -621,3 +678,5 @@ router.delete('/gallery/:index', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
