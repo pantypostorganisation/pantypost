@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Clock } from 'lucide-react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
@@ -109,6 +109,33 @@ function BuyerWalletContent() {
           </div>
         )}
 
+        {/* Payments-pending notice. A banner rather than a modal on
+            purpose: a modal gets dismissed in half a second and the
+            buyer is back to staring at a card form that does not work,
+            with no explanation on screen. This sits above the form
+            every time until card payments are live.
+
+            Deliberately promises no date. We do not control the
+            processor's timeline, and a buyer told "a few hours" who
+            comes back tomorrow to the same message trusts the platform
+            less than one who was never given a number. */}
+        <div className="mb-5 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-4">
+          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+          <div className="text-sm">
+            <p className="font-semibold text-white">Card payments are coming very soon</p>
+            <p className="mt-1 text-ink-muted">
+              We are in the final stages of integrating with Segpay, our payment
+              processor, so you can top up your wallet by card. Everything else works
+              now: browse listings, follow sellers and message them directly. Check
+              back shortly, or{' '}
+              <a href="mailto:support@pantypost.com" className="text-primary hover:underline">
+                email us
+              </a>{' '}
+              and we will tell you the moment it is live.
+            </p>
+          </div>
+        </div>
+
         <AddFundsSection
           balance={displayBalance}
           amountToAdd={amountToAdd}
@@ -210,3 +237,4 @@ export default function BuyerWalletPage() {
  </BanCheck>
  );
 }
+
