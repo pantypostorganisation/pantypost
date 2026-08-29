@@ -46,6 +46,7 @@ interface ValidationState {
   price: { isValid: boolean; message: string };
   startingPrice: { isValid: boolean; message: string };
   reservePrice: { isValid: boolean; message: string };
+  buyNowPrice: { isValid: boolean; message: string };
   images: { isValid: boolean; message: string };
   tags: { isValid: boolean; message: string; count: number };
 }
@@ -116,6 +117,23 @@ export default function ListingForm({
           ? `Starting bid cannot exceed $${VALIDATION_REQUIREMENTS.price.max.toLocaleString()}`
           : 'Valid starting bid'
       },
+      buyNowPrice: {
+        isValid:
+          !formState.isAuction ||
+          !formState.buyNowPrice ||
+          (parseFloat(formState.buyNowPrice) > parseFloat(formState.startingPrice) &&
+            (!formState.reservePrice ||
+              parseFloat(formState.buyNowPrice) > parseFloat(formState.reservePrice))),
+        message:
+          formState.isAuction && formState.buyNowPrice
+            ? parseFloat(formState.buyNowPrice) <= parseFloat(formState.startingPrice)
+              ? 'Must be higher than the starting bid'
+              : formState.reservePrice &&
+                  parseFloat(formState.buyNowPrice) <= parseFloat(formState.reservePrice)
+                ? 'Must be higher than the reserve price'
+                : ''
+            : '',
+      },
       reservePrice: {
         isValid: !formState.isAuction || !formState.reservePrice || parseFloat(formState.reservePrice) >= parseFloat(formState.startingPrice),
         message: formState.isAuction && formState.reservePrice && parseFloat(formState.reservePrice) < parseFloat(formState.startingPrice)
@@ -162,6 +180,7 @@ export default function ListingForm({
            validation.price.isValid &&
            validation.startingPrice.isValid &&
            validation.reservePrice.isValid &&
+           validation.buyNowPrice.isValid &&
            validation.images.isValid &&
            validation.tags.isValid &&
            consentChoice !== 'none';
@@ -236,6 +255,9 @@ export default function ListingForm({
     if (formState.isAuction) {
       if (!validation.startingPrice.isValid) {
         newErrors.startingPrice = validation.startingPrice.message;
+      }
+      if (!validation.buyNowPrice.isValid) {
+        newErrors.buyNowPrice = validation.buyNowPrice.message;
       }
       if (!validation.reservePrice.isValid) {
         newErrors.reservePrice = validation.reservePrice.message;
@@ -355,6 +377,7 @@ export default function ListingForm({
             {!validation.price.isValid && touched.price && <li>{validation.price.message}</li>}
             {!validation.startingPrice.isValid && touched.startingPrice && <li>{validation.startingPrice.message}</li>}
             {!validation.reservePrice.isValid && touched.reservePrice && <li>{validation.reservePrice.message}</li>}
+            {!validation.buyNowPrice.isValid && touched.buyNowPrice && <li>{validation.buyNowPrice.message}</li>}
             {!validation.images.isValid && <li>{validation.images.message}</li>}
             {!validation.tags.isValid && touched.tags && <li>{validation.tags.message}</li>}
           </ul>
@@ -651,6 +674,38 @@ export default function ListingForm({
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-1">Minimum winning bid price (hidden from buyers)</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Buy Now Price ($) <span className="text-gray-500">- optional</span>
+                {!validation.buyNowPrice.isValid && (
+                  <span className="text-xs text-red-400 ml-2">{validation.buyNowPrice.message}</span>
+                )}
+              </label>
+              <div className="relative">
+                <SecureInput
+                  type="number"
+                  step="0.01"
+                  placeholder="e.g. 79.99"
+                  value={formState.buyNowPrice}
+                  onChange={(value) => {
+                    const sanitized = sanitizeCurrency(value);
+                    onFormChange({ buyNowPrice: sanitized.toString() });
+                  }}
+                  onBlur={() => handleFieldBlur('buyNowPrice')}
+                  min="0"
+                  max="9999.99"
+                  className={`w-full p-3 border rounded-lg bg-black text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition ${
+                    validation.buyNowPrice.isValid ? 'border-gray-700 focus:ring-purple-600' : 'border-red-600 focus:ring-red-500'
+                  }`}
+                />
+                {validation.buyNowPrice.isValid && formState.buyNowPrice && (
+                  <CheckCircle className="absolute right-3 top-3 w-5 h-5 text-green-400" />
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Let buyers skip the auction and buy instantly. Bids are capped below this price.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">Auction Duration</label>
@@ -1074,4 +1129,6 @@ export default function ListingForm({
     </SecureForm>
   );
 }
+
+
 

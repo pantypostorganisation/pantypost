@@ -49,6 +49,8 @@ export type AuctionSettings = {
   isAuction: boolean;
   startingPrice: number;
   reservePrice?: number;
+  /** Optional instant purchase price. Bids are capped below it. */
+  buyNowPrice?: number;
   endTime: string;
   bids: Bid[];
   highestBid?: number;
@@ -99,6 +101,8 @@ export type AddListingInput = NewListingInput;
 export type AuctionInput = {
   startingPrice: number;
   reservePrice?: number;
+  /** Optional instant purchase price. Bids are capped below it. */
+  buyNowPrice?: number;
   endTime: string;
 };
 
@@ -1413,4 +1417,6 @@ export const useListings = () => {
   if (!context) throw new Error('useListings must be used within a ListingProvider');
   return context;
 };
+
+
 

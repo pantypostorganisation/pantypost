@@ -207,6 +207,17 @@ const listingSchema = new mongoose.Schema({
       type: Number,
       min: 0
     },
+    /* Optional instant-purchase price. Bids are capped BELOW this
+       value (see the bid route), so buy-now and bidding can never
+       collide: there is no winning bidder to refund, because nobody
+       could ever have bid this high. A buy-now sale settles at the
+       direct-sale rate (90% to the seller), not the auction rate --
+       it is a fixed-price purchase that happens to sit on an auction
+       listing. */
+    buyNowPrice: {
+      type: Number,
+      min: 0
+    },
     currentBid: {
       type: Number,
       default: 0
@@ -354,3 +365,4 @@ listingSchema.methods.placeBid = async function(bidder, amount) {
 const Listing = mongoose.model('Listing', listingSchema);
 
 module.exports = Listing;
+

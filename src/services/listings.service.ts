@@ -32,6 +32,7 @@ export interface CreateListingRequest {
   auction?: {
     startingPrice: number;
     reservePrice?: number;
+    buyNowPrice?: number;
     endTime: string;
   };
   /** Create as a drop of N units (mutually exclusive with auction). */
@@ -133,6 +134,7 @@ interface BackendListing {
     isAuction: boolean;
     startingPrice: number;
     reservePrice?: number;
+    buyNowPrice?: number;
     currentBid: number;
     bidIncrement?: number;
     highestBidder?: string;
@@ -295,6 +297,8 @@ function convertBackendToFrontend(backendListing: BackendListing): Listing & {
       startingPrice: Math.floor(backendListing.auction.startingPrice || 0),
       reservePrice: backendListing.auction.reservePrice ? 
         Math.floor(backendListing.auction.reservePrice) : undefined,
+      buyNowPrice: backendListing.auction.buyNowPrice ?
+        Math.floor(backendListing.auction.buyNowPrice) : undefined,
       endTime: backendListing.auction.endTime,
       bids: backendListing.auction.bids.map(bid => ({
         id: uuidv4(), // Generate ID for frontend
@@ -336,6 +340,7 @@ function convertFrontendToBackend(frontendListing: CreateListingRequest): any {
     backendListing.isAuction = true;
     backendListing.startingPrice = frontendListing.auction.startingPrice;
     backendListing.reservePrice = frontendListing.auction.reservePrice;
+    backendListing.buyNowPrice = frontendListing.auction.buyNowPrice;
     backendListing.endTime = frontendListing.auction.endTime;
   } else {
     backendListing.price = frontendListing.price;
@@ -1952,4 +1957,6 @@ export class ListingsService {
 
 // Export singleton instance
 export const listingsService = new ListingsService();
+
+
 

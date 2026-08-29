@@ -13,6 +13,8 @@ export interface ListingFormState {
   isAuction: boolean;
   startingPrice: string;
   reservePrice: string;
+  /** Optional instant-purchase price for auctions. Bids are capped below it. */
+  buyNowPrice: string;
   auctionDuration: string;
   /** Drop mode: one listing sold as N numbered units. */
   isDrop: boolean;
@@ -118,4 +120,6 @@ export interface BulkActionsProps {
   onBulkUpdatePremium: (isPremium: boolean) => void;
   onBulkUpdatePrice: (priceChange: number) => void;
 }
+
+
 

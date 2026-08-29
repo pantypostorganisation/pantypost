@@ -405,7 +405,12 @@ export default function ListingClient({ initialListing }: { initialListing?: any
   const checkoutItem: CheckoutItem | null = useMemo(() => {
     if (!listing) return null;
 
-    const price = Number(listing.price) || 0;
+    /* Auction listings carry no `price` -- it is stripped at creation --
+       so a Buy Now checkout reads the auction's buyNowPrice instead.
+       The server derives the real charge the same way and ignores
+       anything the client sends, so this is display only. */
+    const buyNow = Number((listing.auction as { buyNowPrice?: number } | undefined)?.buyNowPrice) || 0;
+    const price = buyNow || Number(listing.price) || 0;
     const total = Number(listing.markedUpPrice) || Math.round(price * 1.1 * 100) / 100;
     const drop = (listing as { drop?: { isDrop?: boolean; unitsSold?: number; totalUnits?: number } }).drop;
 
@@ -615,6 +620,7 @@ export default function ListingClient({ initialListing }: { initialListing?: any
                   bidAmount={bidAmount}
                   onBidAmountChange={handleBidAmountChange}
                   onBidSubmit={handleBidSubmitWithAnalytics}
+                  onBuyNow={openCheckout}
                   onBidKeyPress={(e) => e.key === 'Enter' && handleBidSubmitWithAnalytics()}
                   isBidding={isBidding}
                   biddingEnabled={biddingEnabled}
@@ -828,3 +834,4 @@ export default function ListingClient({ initialListing }: { initialListing?: any
     </BanCheck>
   );
 }
+

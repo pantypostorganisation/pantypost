@@ -8,6 +8,9 @@ import { SecureInput } from '@/components/ui/SecureInput';
 import { sanitizeCurrency } from '@/utils/security/sanitization';
 
 interface ExtendedAuctionSectionProps extends AuctionSectionProps {
+  /** Fires when the buyer takes the Buy Now price. */
+  onBuyNow?: () => void;
+  isBuyingNow?: boolean;
   realtimeBids?: BidHistoryItem[];
   mergedBidsHistory?: BidHistoryItem[];
 }
@@ -21,6 +24,8 @@ export default function AuctionSection({
   bidAmount,
   onBidAmountChange,
   onBidSubmit,
+  onBuyNow,
+  isBuyingNow = false,
   onBidKeyPress,
   isBidding,
   biddingEnabled,
@@ -47,6 +52,13 @@ export default function AuctionSection({
   const canBid = !isAuctionEnded && userRole === 'buyer' && !isUserSeller; // admin/seller blocked
 
   // Check if reserve price exists and if it's met
+  /* Optional instant purchase. Bids are capped below this server-side,
+     so this button is always the fastest way to win the item and can
+     never be undercut by a higher bid. */
+  const buyNowPrice = (listing.auction as any)?.buyNowPrice
+    ? Math.floor(Number((listing.auction as any).buyNowPrice))
+    : null;
+
   const hasReserve = !!listing.auction?.reservePrice;
   const currentBid = listing.auction.highestBid || 0;
   const reserveMet = hasReserve ? currentBid >= (listing.auction.reservePrice || 0) : true;
@@ -226,6 +238,13 @@ export default function AuctionSection({
         </div>
       )}
 
+      {buyNowPrice && (
+        <div className="flex items-center justify-between rounded-sm border border-primary/30 bg-primary/10 px-3 py-2 text-sm">
+          <span className="text-ink-muted">Buy now price</span>
+          <span className="font-semibold text-primary">${buyNowPrice.toLocaleString()}</span>
+        </div>
+      )}
+
       {/* Reserve, stated ONCE. It previously appeared as a badge, a
           progress bar, a "$X more" line, a warning inside the payable
           box and a note in the seller box. */}
@@ -330,6 +349,17 @@ export default function AuctionSection({
             </button>
           </div>
 
+          {buyNowPrice && (
+            <button
+              type="button"
+              onClick={onBuyNow}
+              disabled={isBuyingNow}
+              className="h-10 w-full rounded-sm bg-primary text-sm font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isBuyingNow ? 'Purchasing...' : `Buy now for $${buyNowPrice.toLocaleString()}`}
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <span className="text-xs text-ink-faint">Quick</span>
             {[1, 5, 10].map((amount) => (
@@ -401,3 +431,4 @@ export default function AuctionSection({
     </div>
   );
 }
+

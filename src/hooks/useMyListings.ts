@@ -31,6 +31,7 @@ const listingFormSchema = z.object({
   isAuction: z.boolean(),
   startingPrice: z.string().optional(),
   reservePrice: z.string().optional(),
+  buyNowPrice: z.string().optional(),
   auctionDuration: z.string()
 });
 
@@ -44,6 +45,7 @@ function sanitizeFormState(formState: ListingFormState): ListingFormState {
     price: formState.price, // Keep as string for form
     startingPrice: formState.startingPrice,
     reservePrice: formState.reservePrice,
+    buyNowPrice: formState.buyNowPrice,
     auctionDuration: formState.auctionDuration
   };
 }
@@ -430,6 +432,25 @@ export const useMyListings = () => {
         errors.startingPrice = 'Starting bid must be between $0.01 and $10,000';
       }
       
+      /* Buy Now must sit above BOTH the starting bid and the reserve,
+         or the auction is unwinnable and the listing is a trap. The
+         server refuses these too -- this is just the friendlier copy. */
+      if (formState.buyNowPrice.trim() !== '') {
+        const buyNow = parseFloat(formState.buyNowPrice);
+        const startBid = parseFloat(formState.startingPrice);
+        if (Number.isNaN(buyNow) || buyNow <= 0) {
+          errors.buyNowPrice = 'Enter a valid Buy Now price';
+        } else if (!Number.isNaN(startBid) && buyNow <= startBid) {
+          errors.buyNowPrice = 'Buy Now price must be higher than the starting bid';
+        } else if (
+          formState.reservePrice.trim() !== '' &&
+          !Number.isNaN(parseFloat(formState.reservePrice)) &&
+          buyNow <= parseFloat(formState.reservePrice)
+        ) {
+          errors.buyNowPrice = 'Buy Now price must be higher than the reserve price';
+        }
+      }
+
       if (formState.reservePrice.trim() !== '') {
         const reserveBid = parseFloat(formState.reservePrice);
         if (isNaN(reserveBid) || reserveBid < startingBid) {
@@ -466,7 +487,7 @@ export const useMyListings = () => {
       return;
     }
     
-    const { title, description, imageUrls, isAuction, startingPrice, reservePrice, auctionDuration, price, tags, hoursWorn, isPremium, isDrop, dropUnits, dropScheduledFor } = formState;
+    const { title, description, imageUrls, isAuction, startingPrice, reservePrice, buyNowPrice, auctionDuration, price, tags, hoursWorn, isPremium, isDrop, dropUnits, dropScheduledFor } = formState;
 
     // Timestamped attestation, recorded against this specific listing
     // so the seller's declaration is evidenced per item rather than
@@ -513,9 +534,15 @@ export const useMyListings = () => {
           consentAttestation,
         };
 
+        let buyNowBid: number | undefined = undefined;
+        if (buyNowPrice.trim() !== '') {
+          buyNowBid = sanitizeNumber(buyNowPrice, startingBid, 10000);
+        }
+
         const auctionSettings = {
           startingPrice: startingBid,
           reservePrice: reserveBid,
+          buyNowPrice: buyNowBid,
           endTime: calculateAuctionEndTime(auctionDuration)
         };
 
@@ -641,6 +668,7 @@ export const useMyListings = () => {
       isAuction: !!listing.auction,
       startingPrice: listing.auction?.startingPrice.toString() || '',
       reservePrice: listing.auction?.reservePrice?.toString() || '',
+      buyNowPrice: (listing.auction as { buyNowPrice?: number } | undefined)?.buyNowPrice?.toString() || '',
       auctionDuration: listing.auction ? '1' : '1',
       isDrop: Boolean((listing as { drop?: { isDrop?: boolean } }).drop?.isDrop),
       dropUnits: String((listing as { drop?: { totalUnits?: number } }).drop?.totalUnits ?? ''),
@@ -772,3 +800,4 @@ export const useMyListings = () => {
     handleDrop,
   };
 };
+

@@ -627,6 +627,7 @@ router.post('/', authMiddleware, async (req, res) => {
         isAuction: true,
         startingPrice: Math.floor(listingData.startingPrice || 0),
         reservePrice: listingData.reservePrice ? Math.floor(listingData.reservePrice) : undefined,
+        buyNowPrice: listingData.buyNowPrice ? Math.floor(listingData.buyNowPrice) : undefined,
         endTime: new Date(listingData.endTime),
         currentBid: 0,
         highestBid: 0,  // Initialize highestBid
@@ -636,9 +637,29 @@ router.post('/', authMiddleware, async (req, res) => {
         bidIncrement: 1  // Always use $1 increments
       };
       
+      /* A buy-now below the starting price or the reserve would make
+         the auction unwinnable and the listing nonsense, so refuse it
+         at creation rather than letting a seller publish a trap. */
+      const bnp = listingData.auction.buyNowPrice;
+      if (bnp !== undefined) {
+        if (bnp <= listingData.auction.startingPrice) {
+          return res.status(400).json({
+            success: false,
+            error: 'Buy Now price must be higher than the starting price'
+          });
+        }
+        if (listingData.auction.reservePrice && bnp <= listingData.auction.reservePrice) {
+          return res.status(400).json({
+            success: false,
+            error: 'Buy Now price must be higher than the reserve price'
+          });
+        }
+      }
+
       delete listingData.isAuction;
       delete listingData.startingPrice;
       delete listingData.reservePrice;
+      delete listingData.buyNowPrice;
       delete listingData.endTime;
       delete listingData.price;
     }
@@ -1139,6 +1160,20 @@ router.post('/:id/bid', authMiddleware, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: `Minimum bid is $${minimumBid}`
+      });
+    }
+
+    /* The cap that makes buy-now safe. Bidding can approach the
+       buy-now price but never reach it, so there is never a bidder
+       holding a bid worth more than an instant purchase, and buy-now
+       never has to cancel someone else's winning position. */
+    const buyNowPrice = listing.auction.buyNowPrice
+      ? Math.floor(listing.auction.buyNowPrice)
+      : null;
+    if (buyNowPrice && bidAmount >= buyNowPrice) {
+      return res.status(400).json({
+        success: false,
+        error: `Bids must stay under the Buy Now price of $${buyNowPrice}. Use Buy Now to purchase this item instantly.`
       });
     }
     
@@ -1660,3 +1695,4 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+

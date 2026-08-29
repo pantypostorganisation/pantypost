@@ -1,6 +1,7 @@
 // pantypost-backend/routes/order.routes.js
 const express = require('express');
 const router = express.Router();
+const AuctionSettlementService = require('../services/auctionSettlement');
 const Order = require('../models/Order');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
@@ -160,11 +161,35 @@ router.post('/', authMiddleware, async (req, res) => {
         });
       }
 
+      /* Auctions normally settle through bidding. The exception is a
+         Buy Now price: bids are capped below it (see the bid route),
+         so nobody can be holding a winning bid worth more, and an
+         instant purchase cannot cancel anyone's position. Routing it
+         through THIS endpoint rather than a bespoke one is deliberate
+         -- buy-now then uses exactly the same money path as any other
+         direct sale: 10% buyer markup, 90% to the seller plus tier
+         bonus, referral commission, atomic listing claim. No second
+         implementation of the payment maths to drift out of step. */
       if (sourceListing.auction && sourceListing.auction.isAuction) {
-        return res.status(400).json({
-          success: false,
-          error: 'Auction listings settle through the bid system.'
-        });
+        const buyNow = Number(sourceListing.auction.buyNowPrice) || 0;
+        if (!buyNow) {
+          return res.status(400).json({
+            success: false,
+            error: 'Auction listings settle through the bid system.'
+          });
+        }
+        if (sourceListing.auction.status !== 'active') {
+          return res.status(400).json({
+            success: false,
+            error: 'This auction has already ended.'
+          });
+        }
+        if (sourceListing.auction.endTime && new Date() >= new Date(sourceListing.auction.endTime)) {
+          return res.status(400).json({
+            success: false,
+            error: 'This auction has already ended.'
+          });
+        }
       }
 
       if (sourceListing.seller === buyer) {
@@ -223,7 +248,16 @@ router.post('/', authMiddleware, async (req, res) => {
     const sellerTier = sellerUser.tier || 'Tease';
     const tierInfo = TIER_CONFIG.getTierByName(sellerTier);
 
-    const actualPrice = sourceListing ? (Number(sourceListing.price) || 0) : (Number(price) || 0);
+    /* Auction listings carry no `price` -- it is deleted at creation --
+       so a buy-now purchase reads its price from the auction block. */
+    const isBuyNowPurchase = Boolean(
+      sourceListing && sourceListing.auction && sourceListing.auction.isAuction
+    );
+    const actualPrice = sourceListing
+      ? (isBuyNowPurchase
+          ? (Number(sourceListing.auction.buyNowPrice) || 0)
+          : (Number(sourceListing.price) || 0))
+      : (Number(price) || 0);
     // Marked-up price is ALWAYS derived: the client's copy is display-only.
     const actualMarkedUpPrice = Math.round(actualPrice * 1.1 * 100) / 100;
 
@@ -328,9 +362,16 @@ router.post('/', authMiddleware, async (req, res) => {
     // gets a clean "just sold" instead of a duplicate order.
     let claimedListing = false;
     if (sourceListing) {
+      const claimUpdate = { status: 'sold', soldAt: new Date(), soldTo: buyer };
+      /* A bought-out auction must also be closed, or the settlement job
+         will come along later and try to settle an auction on a listing
+         that is already sold. */
+      if (isBuyNowPurchase) {
+        claimUpdate['auction.status'] = 'ended';
+      }
       const claimed = await Listing.findOneAndUpdate(
         { _id: sourceListing._id, status: 'active' },
-        { $set: { status: 'sold', soldAt: new Date(), soldTo: buyer } }
+        { $set: claimUpdate }
       );
       if (!claimed) {
         return res.status(409).json({
@@ -339,6 +380,32 @@ router.post('/', authMiddleware, async (req, res) => {
         });
       }
       claimedListing = true;
+
+      /* Bids hold real money -- the bid route withdraws from the
+         bidder's wallet when they bid. The price cap means nobody can
+         be holding a bid worth more than this purchase, but whoever
+         held the top bid still needs their funds back the moment the
+         auction is bought out. `claimed` is the pre-update document, so
+         it carries the bidder as they were at the instant we won the
+         claim; and because only one request can win that claim, this
+         refund cannot run twice. */
+      if (isBuyNowPurchase && claimed.auction && claimed.auction.highestBidder) {
+        const heldAmount = Math.floor(
+          claimed.auction.highestBid || claimed.auction.currentBid || 0
+        );
+        if (heldAmount > 0) {
+          try {
+            await AuctionSettlementService.refundBidder(
+              claimed.auction.highestBidder,
+              heldAmount,
+              claimed._id,
+              `Auction "${claimed.title}" was purchased with Buy Now - your bid has been refunded`
+            );
+          } catch (refundError) {
+            console.error('[Order] Buy Now bidder refund failed:', refundError);
+          }
+        }
+      }
     }
 
     const previousBuyerBalance = buyerWallet.balance;
@@ -2333,3 +2400,4 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
 // Export the router
 module.exports = router;
+

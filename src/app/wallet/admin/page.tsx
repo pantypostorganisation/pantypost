@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useListings } from '@/context/ListingContext';
 import { useWallet } from '@/context/WalletContext';
 import RequireAuth from '@/components/RequireAuth';
-import { AlertCircle, BarChart3, Loader2, RefreshCw, Bitcoin } from 'lucide-react';
+import { AlertCircle, BarChart3, Loader2, RefreshCw } from 'lucide-react';
 
 // Import split components
 import AdminMetrics from '@/components/admin/wallet/AdminMetrics';
@@ -14,7 +14,6 @@ import AdminRevenueChart from '@/components/admin/wallet/AdminRevenueChart';
 import AdminHealthSection from '@/components/admin/wallet/AdminHealthSection';
 import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
-import CryptoDepositsManager from '@/components/admin/wallet/CryptoDepositsManager'; // NEW!
 import { getTimeFilteredData } from '@/utils/admin/walletHelpers';
 
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
@@ -42,7 +41,6 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
 
   const [isReloading, setIsReloading] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'analytics' | 'crypto'>('analytics'); // NEW TAB STATE
   
   // Use a ref to track loading state for the guard check
   const isReloadingRef = useRef(false);
@@ -257,18 +255,12 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
           <div className="space-y-2">
             <h1 className="text-3xl font-semibold text-white flex items-center gap-3">
               <span className="inline-flex h-12 w-12 items-center justify-center rounded-lg bg-[#ff950e]/10">
-                {activeTab === 'crypto' ? (
-                  <Bitcoin className="h-6 w-6 text-[#ff950e]" />
-                ) : (
-                  <BarChart3 className="h-6 w-6 text-[#ff950e]" />
-                )}
+                <BarChart3 className="h-6 w-6 text-[#ff950e]" />
               </span>
               <span className="leading-tight">
-                {activeTab === 'crypto' ? 'Crypto Deposits' : 'Platform Analytics'}
+                Platform Analytics
                 <span className="block text-sm font-normal text-gray-400">
-                  {activeTab === 'crypto' 
-                    ? 'Manage direct wallet deposits' 
-                    : 'Real-time overview of PantyPost revenue performance.'}
+                  Real-time overview of PantyPost revenue performance.
                 </span>
               </span>
             </h1>
@@ -276,33 +268,10 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
 
           {/* Tab Controls & Time Filter */}
           <div className="flex flex-col gap-3">
-            {/* Tab Buttons */}
-            <div className="flex rounded-md border border-[#1f1f1f] bg-[#101010] p-1">
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap rounded-[6px] ${
-                  activeTab === 'analytics'
-                    ? 'bg-[#ff950e] text-black'
-                    : 'text-gray-300 hover:text-white hover:bg-[#1c1c1c]'
-                }`}
-              >
-                Analytics
-              </button>
-              <button
-                onClick={() => setActiveTab('crypto')}
-                className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap rounded-[6px] ${
-                  activeTab === 'crypto'
-                    ? 'bg-[#ff950e] text-black'
-                    : 'text-gray-300 hover:text-white hover:bg-[#1c1c1c]'
-                }`}
-              >
-                Crypto Deposits
-              </button>
-            </div>
-
-            {/* Time Filter (only show for analytics tab) */}
-            {activeTab === 'analytics' && (
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Crypto was removed from the product; with it went the
+                only reason this page had tabs. One view now, so the
+                time filter is always shown rather than gated on a tab. */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="flex rounded-md border border-[#1f1f1f] bg-[#101010] p-1">
                   {[
                     { value: 'today', label: 'Today' },
@@ -334,12 +303,11 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
                   <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin' : ''}`} />
                   {isReloading ? 'Reloading...' : 'Force Reload'}
                 </button>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
-        {walletInitialized && activeTab === 'analytics' && (
+        {walletInitialized && (
           <div className="rounded-lg border border-[#1f1f1f] bg-[#101010] px-4 py-3 text-xs text-gray-400">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-gray-300">
@@ -355,12 +323,8 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
           </div>
         )}
 
-        {/* Conditional Content Based on Tab */}
-        {activeTab === 'crypto' ? (
-          // Crypto Deposits Manager
-          <CryptoDepositsManager />
-        ) : (
-          // Original Analytics Content
+        {/* Analytics content */}
+        {(
           <>
             {adminBalance !== undefined && (
               <AdminMetrics
