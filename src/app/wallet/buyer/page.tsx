@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Check, ChevronDown, Clock } from 'lucide-react';
+import { Check, ChevronDown, Clock, X } from 'lucide-react';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
@@ -36,6 +36,12 @@ function BuyerWalletContent() {
  const router = useRouter();
  const [showBanner, setShowBanner] = useState(false);
  const [depositHistory, setDepositHistory] = useState<any[]>([]);
+
+ /* Card payments are not live yet. Rather than dressing the page in
+    warning banners -- which makes a working product look broken -- the
+    deposit button intercepts once and explains. Delete this state, the
+    modal, and the intercept in onAddFunds when Segpay goes live. */
+ const [showPaymentsPending, setShowPaymentsPending] = useState(false);
 
  // decide which balance to show: prefer context (backend) if available
  const contextBalance =
@@ -109,33 +115,6 @@ function BuyerWalletContent() {
           </div>
         )}
 
-        {/* Payments-pending notice. A banner rather than a modal on
-            purpose: a modal gets dismissed in half a second and the
-            buyer is back to staring at a card form that does not work,
-            with no explanation on screen. This sits above the form
-            every time until card payments are live.
-
-            Deliberately promises no date. We do not control the
-            processor's timeline, and a buyer told "a few hours" who
-            comes back tomorrow to the same message trusts the platform
-            less than one who was never given a number. */}
-        <div className="mb-5 flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-4">
-          <Clock className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-          <div className="text-sm">
-            <p className="font-semibold text-white">Card payments are coming very soon</p>
-            <p className="mt-1 text-ink-muted">
-              We are in the final stages of integrating with Segpay, our payment
-              processor, so you can top up your wallet by card. Everything else works
-              now: browse listings, follow sellers and message them directly. Check
-              back shortly, or{' '}
-              <a href="mailto:support@pantypost.com" className="text-primary hover:underline">
-                email us
-              </a>{' '}
-              and we will tell you the moment it is live.
-            </p>
-          </div>
-        </div>
-
         <AddFundsSection
           balance={displayBalance}
           amountToAdd={amountToAdd}
@@ -145,11 +124,7 @@ function BuyerWalletContent() {
           onAmountChange={handleAmountChange}
           onKeyPress={handleKeyPress}
           onAddFunds={async () => {
-            await handleAddFunds();
-            if (user?.username) {
-              void reloadData();
-              void loadDepositHistory();
-            }
+            setShowPaymentsPending(true);
           }}
           onQuickAmountSelect={handleQuickAmountSelect}
         />
@@ -179,6 +154,66 @@ function BuyerWalletContent() {
           </div>
         </details>
       </div>
+
+      {showPaymentsPending && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payments-pending-title"
+          onClick={() => setShowPaymentsPending(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-lg border border-white/10 bg-surface-raised p-6 text-center"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowPaymentsPending(false)}
+              aria-label="Close"
+              className="absolute right-3 top-3 rounded-sm p-1 text-ink-muted transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="relative mx-auto w-fit">
+              <span
+                className="absolute inset-0 rounded-full bg-primary/25 blur-2xl"
+                aria-hidden="true"
+              />
+              <Clock
+                className="relative h-12 w-12 text-primary"
+                strokeWidth={1.5}
+                aria-hidden="true"
+              />
+            </div>
+
+            <h2 id="payments-pending-title" className="mt-4 text-xl font-bold text-white">
+              Card payments are almost here
+            </h2>
+            <p className="mt-3 text-sm text-ink-muted">
+              We are in the final stages of integrating with Segpay, our payment
+              processor, so you can top up your wallet by card. Everything else works
+              right now - browse listings, follow sellers and message them directly.
+            </p>
+            <p className="mt-3 text-sm text-ink-muted">
+              Want to know the moment it goes live?{' '}
+              <a href="mailto:support@pantypost.com" className="text-primary hover:underline">
+                Email us
+              </a>{' '}
+              and we will tell you first.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setShowPaymentsPending(false)}
+              className="mt-6 w-full rounded-md bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary-hover"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
