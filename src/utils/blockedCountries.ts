@@ -34,7 +34,13 @@ export function hasShippingWarning(code?: string | null): boolean {
   return !!code && shippingSet.has(code.toUpperCase());
 }
 
-/** Drop blocked countries from any list of { code } options. */
-export function filterAllowedCountries<T extends { code: string }>(options: T[]): T[] {
+/** Drop blocked countries from any list of { code } options.
+    Takes a readonly array and returns a mutable one: the country list
+    it is used on is declared `as const`, and the original signature
+    both refused that input and widened each item to just { code },
+    which threw away the `name` every caller renders. */
+export function filterAllowedCountries<T extends { code: string }>(
+  options: readonly T[]
+): T[] {
   return options.filter((option) => !isCountryBlocked(option.code));
 }
