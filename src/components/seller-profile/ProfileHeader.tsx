@@ -34,7 +34,7 @@ interface ProfileHeaderProps {
   reviewCount: number;
   totalSales: number;
   listingCount: number;
-  /* ISO date. Rendered as "X years on Panty Post". */
+  /* ISO date. Rendered as days, months or years on Panty Post. */
   memberSince?: string | null;
   /* Only pass this when the seller has location sharing switched on --
      the component does not know about the privacy flag. */
@@ -57,23 +57,31 @@ interface ProfileHeaderProps {
   onTip?: () => void;
 }
 
-/** Whole years, or a month count for anything under a year. */
+/* Days, then months, then years -- in that order.
+   The previous version floored to months with a Math.max(1, ...), so
+   an account created five minutes ago announced "1 month on Panty
+   Post". On a marketplace whose entire pitch is that nothing here is
+   fabricated, a stat that rounds a brand new seller up to a month is
+   exactly the wrong thing to get wrong. */
 function membershipLabel(memberSince?: string | null): string | null {
   if (!memberSince) return null;
 
   const joined = new Date(memberSince);
   if (Number.isNaN(joined.getTime())) return null;
 
-  const years = Math.floor((Date.now() - joined.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+  const elapsed = Date.now() - joined.getTime();
+  if (elapsed < 0) return null;
 
-  if (years < 1) {
-    const months = Math.max(
-      1,
-      Math.floor((Date.now() - joined.getTime()) / (30.44 * 24 * 60 * 60 * 1000))
-    );
-    return `${months} ${months === 1 ? 'month' : 'months'} on Panty Post`;
-  }
+  const DAY = 24 * 60 * 60 * 1000;
+  const days = Math.floor(elapsed / DAY);
 
+  if (days < 1) return 'Joined today';
+  if (days < 30) return `${days} ${days === 1 ? 'day' : 'days'} on Panty Post`;
+
+  const months = Math.floor(days / 30.44);
+  if (months < 12) return `${months} ${months === 1 ? 'month' : 'months'} on Panty Post`;
+
+  const years = Math.floor(days / 365.25);
   return `${years} ${years === 1 ? 'year' : 'years'} on Panty Post`;
 }
 
@@ -149,7 +157,15 @@ export default function ProfileHeader({
       {/* --- Identity --- */}
       <div className="mx-auto max-w-6xl px-4">
         <div className="-mt-12 flex flex-col gap-5 pb-6 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex items-end gap-4">
+          {/* Mobile stacks the name and stats BELOW the avatar; only
+              from sm up do they sit beside it, bottom-aligned.
+              Bottom-aligning on a phone was the bug: the stats row
+              wraps to two or three lines on a narrow screen, and
+              because the block grows upward from its baseline, the
+              extra height pushed the username and the first stats line
+              up behind the cover photo. Desktop never showed it because
+              the stats fit on one line there. */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div className="relative shrink-0">
               <div className="h-24 w-24 overflow-hidden rounded-lg border-4 border-surface bg-surface-overlay sm:h-28 sm:w-28">
                 {showAvatar ? (
@@ -177,7 +193,7 @@ export default function ProfileHeader({
               )}
             </div>
 
-            <div className="min-w-0 pb-1">
+            <div className="min-w-0 sm:pb-1">
               <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-ink sm:text-3xl">
                 <span className="truncate">{safeUsername}</span>
                 {isVerified && (
