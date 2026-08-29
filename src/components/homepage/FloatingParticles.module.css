@@ -1,0 +1,83 @@
+/* FloatingParticles.module.css
+ *
+ * These animations used to be framer-motion, which meant roughly 55
+ * decorative dots were driven by JavaScript on the main thread on
+ * every frame of every homepage visit. Lighthouse attributed 3.3s of
+ * CPU time and 1.6s of script evaluation to the homepage.
+ *
+ * As CSS keyframes they run on the compositor instead, which costs
+ * effectively nothing and cannot block the page from painting. Each
+ * particle passes its own drift, timing and target opacity in as
+ * custom properties, so the movement stays as varied as it was.
+ */
+
+@keyframes particleDrift {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.8);
+  }
+  25% {
+    opacity: var(--peak-opacity, 0.5);
+    transform: translate3d(var(--drift-x, 0), calc(var(--drift-y, 0) * 0.25), 0) scale(1.1);
+  }
+  75% {
+    opacity: var(--peak-opacity, 0.5);
+    transform: translate3d(0, calc(var(--drift-y, 0) * 0.75), 0) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, var(--drift-y, 0), 0) scale(0.8);
+  }
+}
+
+@keyframes shimmerDrift {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    opacity: var(--peak-opacity, 0.5);
+    transform: translate3d(var(--drift-x, 0), calc(var(--drift-y, 0) * 0.5), 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, var(--drift-y, 0), 0);
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.4; }
+}
+
+.particle {
+  animation-name: particleDrift;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+.shimmer {
+  animation-name: shimmerDrift;
+  animation-timing-function: ease-out;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+.glow {
+  animation: glowPulse 10s ease-in-out infinite;
+  will-change: opacity;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+/* Decoration is the first thing to drop for anyone who has asked
+   their device to reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  .particle,
+  .shimmer,
+  .glow {
+    animation: none;
+    opacity: var(--peak-opacity, 0.3);
+  }
+}

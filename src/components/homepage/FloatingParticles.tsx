@@ -1,8 +1,15 @@
 // src/components/homepage/FloatingParticles.tsx
 'use client';
 
-import { motion } from 'framer-motion';
+/* No framer-motion here on purpose.
+   Every particle used to be a motion.div, so ~55 decorative dots were
+   animated by JavaScript on the main thread, every frame, forever.
+   Lighthouse measured 3.3s of CPU time on the homepage with 1.6s of
+   script evaluation. These are now CSS keyframe animations: the
+   compositor runs them off the main thread, the cost is close to zero,
+   and they look the same. */
 import { useMemo, useState, useEffect } from 'react';
+import styles from './FloatingParticles.module.css';
 
 // Enhanced reduced motion detection with error handling
 const useReducedMotion = () => {
@@ -166,9 +173,9 @@ export default function FloatingParticles() {
     >
       {/* Main particles */}
       {particles.map((particle) => (
-        <motion.div
+        <div
           key={`particle-${particle.id}`}
-          className={`absolute rounded-full ${particle.size}`}
+          className={`absolute rounded-full ${styles.particle} ${particle.size}`}
           style={{
             left: `${particle.left}%`,
             top: `${particle.top}%`,
@@ -180,71 +187,42 @@ export default function FloatingParticles() {
               0 0 12px hsla(${39 + particle.hue}, 100%, 60%, ${particle.opacity * 0.15})
             `,
             filter: `blur(${PARTICLE_CONFIG.blurAmount}px)`,
-            willChange: 'transform, opacity',
-          }}
-          animate={{
-            y: [0, particle.verticalDrift],
-            x: [0, particle.horizontalDrift, 0],
-            opacity: [0, particle.opacity, particle.opacity, 0],
-            scale: [0.8, 1.1, 0.8],
-          }}
-          transition={{
-            duration: particle.duration,
-            delay: particle.delay,
-            repeat: Infinity,
-            ease: "easeInOut",
-            scale: {
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }
+            // Per-particle motion is passed to CSS as custom properties,
+            // so every dot keeps its own drift, timing and offset.
+            ['--drift-y' as string]: `${particle.verticalDrift}px`,
+            ['--drift-x' as string]: `${particle.horizontalDrift}px`,
+            ['--peak-opacity' as string]: particle.opacity,
+            animationDuration: `${particle.duration}s`,
+            animationDelay: `${particle.delay}s`,
           }}
         />
       ))}
       
       {/* Shimmer particles (even smaller) */}
       {shimmerParticles.map((particle) => (
-        <motion.div
+        <div
           key={`shimmer-${particle.id}`}
-          className="absolute w-0.5 h-0.5 rounded-full"
+          className={`absolute w-0.5 h-0.5 rounded-full ${styles.shimmer}`}
           style={{
             left: `${particle.left}%`,
             top: `${particle.top}%`,
             background: `rgba(255, 255, 255, ${particle.shimmerIntensity})`,
             boxShadow: `0 0 3px rgba(255, 255, 255, ${particle.shimmerIntensity * 0.5})`,
-            willChange: 'transform, opacity',
-          }}
-          animate={{
-            y: [0, particle.verticalDrift * 0.6],
-            x: [0, particle.horizontalDrift * 0.4, 0],
-            opacity: [0, particle.shimmerIntensity, 0],
-          }}
-          transition={{
-            duration: particle.duration * 0.7,
-            delay: particle.delay + 0.5,
-            repeat: Infinity,
-            ease: "easeOut",
+            ['--drift-y' as string]: `${particle.verticalDrift * 0.6}px`,
+            ['--drift-x' as string]: `${particle.horizontalDrift * 0.4}px`,
+            ['--peak-opacity' as string]: particle.shimmerIntensity,
+            animationDuration: `${particle.duration * 0.7}s`,
+            animationDelay: `${particle.delay + 0.5}s`,
           }}
         />
       ))}
 
       {/* Background glow */}
-      <motion.div
-        className="absolute inset-0 bg-gradient-radial from-[#ff950e]/3 via-transparent to-transparent"
-        animate={{
-          opacity: [0.2, 0.4, 0.2],
-        }}
-        transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        style={{ 
-          willChange: 'opacity',
-          backfaceVisibility: 'hidden',
-          transform: 'translateZ(0)'
-        }}
+      <div
+        className={`absolute inset-0 bg-gradient-radial from-[#ff950e]/3 via-transparent to-transparent ${styles.glow}`}
       />
     </div>
   );
 }
+
+
