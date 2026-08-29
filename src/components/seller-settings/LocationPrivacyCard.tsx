@@ -3,6 +3,7 @@
 
 import { useMemo } from 'react';
 import { countriesWithFlags } from '@/utils/countries';
+import { filterAllowedCountries } from '@/utils/blockedCountries';
 import { sanitizeStrict } from '@/utils/security/sanitization';
 
 interface LocationPrivacyCardProps {
@@ -20,11 +21,12 @@ export default function LocationPrivacyCard({
   onLocationVisibilityChange,
   error,
 }: LocationPrivacyCardProps) {
-  const countryOptions = useMemo(() => countriesWithFlags, []);
+  // Same allow-list as signup -- see blockedCountries.ts.
+  const countryOptions = useMemo(() => filterAllowedCountries(countriesWithFlags), []);
   const sanitizedError = error ? sanitizeStrict(error) : null;
 
   return (
-    <div className="rounded-[26px] bg-surface-raised p-6 text-white">
+    <div className="rounded-lg bg-surface-raised p-6 text-white">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-primary/70">Privacy</p>

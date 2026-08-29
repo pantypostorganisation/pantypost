@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { CountryFieldProps } from '@/types/signup';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 import { countriesWithFlags, getCountryCode } from '@/utils/countries';
+import { filterAllowedCountries } from '@/utils/blockedCountries';
 
 // Small helper to render a PNG flag from a CDN using ISO country code
 const FlagIcon = ({ countryName }: { countryName: string }) => {
@@ -34,11 +35,18 @@ export default function CountrySelect({ country, error, onChange }: CountryField
   const searchInputRef = useRef<HTMLInputElement>(null);
   const errorId = error ? 'country-error' : undefined;
 
+  /* Countries we cannot serve are removed from the list entirely
+     rather than shown greyed out. A disabled row invites the question
+     "why me?", and in several of these places the honest answer is
+     something a user should not have to read on a screen someone else
+     might see. The server rejects these countries independently. */
+  const allowedCountries = filterAllowedCountries(countriesWithFlags);
+
   // Get selected country data
-  const selectedCountry = countriesWithFlags.find((c) => c.name === country);
+  const selectedCountry = allowedCountries.find((c) => c.name === country);
 
   // Filter countries based on search
-  const filteredCountries = countriesWithFlags.filter((c) =>
+  const filteredCountries = allowedCountries.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
@@ -221,3 +229,5 @@ export default function CountrySelect({ country, error, onChange }: CountryField
     </div>
   );
 }
+
+

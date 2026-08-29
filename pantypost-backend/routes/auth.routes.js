@@ -10,6 +10,7 @@ const { ERROR_CODES } = require('../utils/constants');
 const { sendEmail, emailTemplates } = require('../config/email');
 const crypto = require('crypto');
 const AdminTwoFactor = require('../models/AdminTwoFactor');
+const { isSignupBlocked } = require('../config/blockedCountries');
 const webSocketService = require('../config/websocket');
 const publicWebSocketService = require('../config/publicWebsocket');
 
@@ -111,6 +112,20 @@ function signToken(user) {
 
 // POST /api/auth/signup - FIXED: Only emit stats:users to prevent double-counting
 router.post('/signup', signupLimiter, async (req, res) => {
+  /* Second gate, after the IP-level hard block. This one covers the
+     signup-blocked tier: the site is browsable there, but an account
+     is not. Checked server-side because the dropdown restriction in
+     the UI is a convenience, not a control. */
+  if (isSignupBlocked(req.geoCountry)) {
+    return res.status(451).json({
+      success: false,
+      error: {
+        code: 'REGION_UNAVAILABLE',
+        message: 'Accounts are not available in your region. If you believe this is a mistake, contact support@pantypost.com.'
+      }
+    });
+  }
+
   try {
     const raw = req.body || {};
     const username = cleanUsername(raw.username);
