@@ -27,7 +27,38 @@ export class ActionRateLimiter {
 
   constructor() {
     this.loadFromStorage();
+    this.clearStaleSignupBlocks();
     this.cleanupExpired();
+  }
+
+  /* Blocks are stored with an absolute expiry timestamp, so a seller
+     locked out under the OLD one-hour signup rule stays locked out for
+     the full hour even after the rule is relaxed -- the fix does not
+     reach the block already sitting in their browser.
+
+     Signup and password reset are the two places where an inherited
+     lockout costs a real user, so any block on those longer than their
+     current maximum is dropped on load. Financial and messaging limits
+     are left alone. */
+  private clearStaleSignupBlocks(): void {
+    const now = Date.now();
+    const maxBlock: Record<string, number> = {
+      SIGNUP: RATE_LIMITS.SIGNUP.blockDuration,
+      PASSWORD_RESET: RATE_LIMITS.PASSWORD_RESET.blockDuration,
+    };
+
+    let changed = false;
+    this.limits.forEach((entry, key) => {
+      const action = key.split(':')[0];
+      const limit = maxBlock[action];
+      if (!limit || !entry.blockedUntil) return;
+      if (entry.blockedUntil - now > limit) {
+        this.limits.delete(key);
+        changed = true;
+      }
+    });
+
+    if (changed) this.saveToStorage();
   }
 
   /**

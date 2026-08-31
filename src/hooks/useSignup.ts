@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { sanitizeUsername, sanitizeEmail } from '@/utils/security/sanitization';
 import { CSRFTokenManager } from '@/utils/security/validation';
-import { useRateLimit } from '@/utils/security/rate-limiter';
+import { useRateLimit, RATE_LIMITS } from '@/utils/security/rate-limiter';
 import { authSchemas } from '@/utils/validation/schemas';
 import { SignupState, SignupFormData, FormErrors, UserRole } from '@/types/signup';
 import { validateForm, calculatePasswordStrength } from '@/utils/signupUtils';
@@ -18,10 +18,21 @@ export const useSignup = () => {
   // Security features
   const [csrfManager] = useState(() => new CSRFTokenManager());
   const [csrfToken, setCsrfToken] = useState('');
-  const { checkLimit: checkSignupLimit, resetLimit: resetSignupLimit } = useRateLimit('SIGNUP', {
-    maxAttempts: 3,
-    windowMs: 60 * 60 * 1000 // 1 hour
-  });
+  /* This hook used to pass its OWN limit here -- 3 attempts, 1 hour
+     window -- which silently overrode RATE_LIMITS.SIGNUP. Loosening the
+     shared config therefore changed nothing, and real sellers were
+     still being locked out for an hour after three typos in the form.
+     A taken username, a weak password and a mistyped email is three.
+
+     It now uses the shared config, which allows 30 attempts and blocks
+     for 2 minutes. The backend enforces its own per-IP cap (60/hour),
+     and that is the limit that actually stops abuse -- anything in the
+     browser is trivially bypassed anyway, so making it strict costs
+     real signups and buys nothing. */
+  const { checkLimit: checkSignupLimit, resetLimit: resetSignupLimit } = useRateLimit(
+    'SIGNUP',
+    RATE_LIMITS.SIGNUP
+  );
   
   const [state, setState] = useState<SignupState>({
     username: '',
