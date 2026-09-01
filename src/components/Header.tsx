@@ -770,10 +770,17 @@ export default function Header(): React.ReactElement | null {
       {/* Increased z-index for menu content */}
       <div
         ref={mobileMenuRef}
-        className={`fixed top-0 right-0 w-80 max-w-[85vw] h-full bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-primary-line z-[100] lg:hidden transform transition-transform duration-300 ease-in-out ${
+        className={`fixed top-0 right-0 flex w-80 max-w-[85vw] flex-col bg-gradient-to-b from-[#1a1a1a] to-[#111] border-l border-primary-line z-[100] lg:hidden transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
-        style={{ touchAction: 'pan-y' }}
+        /* h-[100dvh] with a 100vh fallback, not h-full.
+           On mobile browsers 100vh is the height with the URL bar
+           HIDDEN, so a full-height drawer runs off the bottom of the
+           screen and the last items -- notifications, log out -- sit
+           under the browser chrome where they cannot be reached. The
+           dynamic viewport unit tracks the URL bar as it shows and
+           hides, so the drawer always ends where the screen does. */
+        style={{ touchAction: 'pan-y', height: '100vh', maxHeight: '100dvh' }}
       >
         {showMobileNotifications && role === 'seller' ? (
           <MobileNotificationsPanel />
@@ -865,7 +872,16 @@ export default function Header(): React.ReactElement | null {
               </div>
             )}
 
-            <nav className="p-4 space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 240px)' }}>
+            {/* flex-1 + min-h-0 instead of a calc() guess.
+                The old maxHeight subtracted a fixed 240px for the
+                header and search box, which is only correct on the one
+                device it was measured on -- taller headers pushed the
+                list past the bottom, and the user could see the last
+                items but never scroll to them. Letting flexbox measure
+                the leftover space works on every screen size, and
+                overscroll-contain stops the scroll chaining to the
+                page underneath and bouncing back. */}
+            <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-2">
               {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
               {renderMobileLink('/explore', <Compass className="w-5 h-5" />, 'Explore')}
 
@@ -1508,4 +1524,6 @@ export default function Header(): React.ReactElement | null {
     </>
   );
 }
+
+
 
