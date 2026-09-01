@@ -7,6 +7,7 @@ import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/seller/WalletHeader';
 import WithdrawSection from '@/components/wallet/seller/WithdrawSection';
+import PayoutDetailsCard from '@/components/wallet/seller/PayoutDetailsCard';
 import RecentWithdrawals from '@/components/wallet/seller/RecentWithdrawals';
 import EmptyState from '@/components/wallet/seller/EmptyState';
 import WithdrawConfirmModal from '@/components/wallet/seller/WithdrawConfirmModal';
@@ -67,6 +68,14 @@ function SellerWalletContent() {
               recentWithdrawalsCount={recentArray.length}
               remainingDailyLimit={remainingDailyLimit}
             />
+          </section>
+
+          {/* Payout details sit ABOVE the withdraw form on purpose:
+              a withdrawal is refused without them, so asking after the
+              fact would be a dead end the seller only discovers on
+              submit. */}
+          <section className="mb-6">
+            <PayoutDetailsCard />
           </section>
 
           <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
@@ -163,3 +172,4 @@ export default function SellerWalletPage() {
     </BanCheck>
   );
 }
+

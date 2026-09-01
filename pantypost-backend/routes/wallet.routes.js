@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const PayoutDetails = require('../models/PayoutDetails');
 const Order = require('../models/Order');
 const User = require('../models/User');
 const Subscription = require('../models/Subscription');
@@ -464,6 +465,102 @@ router.post('/deposit', authMiddleware, async (req, res) => {
 });
 
 // POST /api/wallet/withdraw - Take money out (sellers only)
+/* ------------------------------------------------------------------
+   Payout details.
+
+   Until a payout provider is live, sellers are paid by manual bank
+   transfer, which means somebody has to know the account number. The
+   seller enters it once here; an admin sees it only on the payout
+   screen at the moment of paying. Everywhere else -- lists, receipts,
+   transaction records -- shows the last four digits only.
+   ------------------------------------------------------------------ */
+
+// GET /api/wallet/payout-details -- the caller's own, masked
+router.get('/payout-details', authMiddleware, async (req, res) => {
+  try {
+    const details = await PayoutDetails.findOne({ username: req.user.username });
+    res.json({ success: true, data: details ? details.toMasked() : null });
+  } catch (error) {
+    console.error('[Wallet] Payout details read error:', error);
+    res.status(500).json({ success: false, error: 'Could not load payout details' });
+  }
+});
+
+// PUT /api/wallet/payout-details -- create or replace
+router.put('/payout-details', authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'seller' && !isAdminUser(req.user)) {
+      return res.status(403).json({ success: false, error: 'Sellers only' });
+    }
+
+    const b = req.body || {};
+    const method = ['bank_au', 'bank_intl', 'paxum'].includes(b.method) ? b.method : null;
+    if (!method) {
+      return res.status(400).json({ success: false, error: 'Choose a payout method' });
+    }
+    if (!b.accountName || !String(b.accountName).trim()) {
+      return res.status(400).json({ success: false, error: 'Account name is required' });
+    }
+
+    /* Each method needs different fields, and a half-filled record is
+       worse than none -- it looks payable and is not. */
+    if (method === 'bank_au' && (!b.bsb || !b.accountNumber)) {
+      return res.status(400).json({ success: false, error: 'BSB and account number are required' });
+    }
+    if (method === 'bank_intl' && !(b.iban || b.accountNumber)) {
+      return res.status(400).json({ success: false, error: 'IBAN or account number is required' });
+    }
+    if (method === 'paxum' && !b.walletEmail) {
+      return res.status(400).json({ success: false, error: 'Paxum email is required' });
+    }
+
+    const saved = await PayoutDetails.findOneAndUpdate(
+      { username: req.user.username },
+      {
+        $set: {
+          username: req.user.username,
+          method,
+          accountName: String(b.accountName).trim(),
+          bsb: b.bsb,
+          accountNumber: b.accountNumber,
+          iban: b.iban,
+          swift: b.swift,
+          bankName: b.bankName,
+          bankAddress: b.bankAddress,
+          country: b.country,
+          walletEmail: b.walletEmail,
+          updatedBy: req.user.username
+        }
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    res.json({ success: true, data: saved.toMasked() });
+  } catch (error) {
+    console.error('[Wallet] Payout details save error:', error);
+    res.status(400).json({ success: false, error: 'Could not save payout details' });
+  }
+});
+
+// GET /api/wallet/admin/payout-details/:username -- FULL details, admin
+// only. The one place unmasked banking data is returned, because an
+// admin cannot make a transfer without it.
+router.get('/admin/payout-details/:username', authMiddleware, async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+    const details = await PayoutDetails.findOne({ username: String(req.params.username).toLowerCase() });
+    if (!details) {
+      return res.status(404).json({ success: false, error: 'This seller has not added payout details yet' });
+    }
+    res.json({ success: true, data: details.toObject() });
+  } catch (error) {
+    console.error('[Wallet] Admin payout details error:', error);
+    res.status(500).json({ success: false, error: 'Could not load payout details' });
+  }
+});
+
 router.post('/withdraw', authMiddleware, async (req, res) => {
   try {
     const { amount, accountDetails } = req.body;
@@ -506,7 +603,20 @@ router.post('/withdraw', authMiddleware, async (req, res) => {
         });
       }
     }
-    
+
+    /* No payout details, no withdrawal. Approving a request with
+       nowhere to send the money just creates a debited wallet and a
+       support conversation. */
+    if (!isAdminUser(req.user)) {
+      const payoutDetails = await PayoutDetails.findOne({ username });
+      if (!payoutDetails) {
+        return res.status(400).json({
+          success: false,
+          error: 'Add your payout details before requesting a withdrawal.'
+        });
+      }
+    }
+
     // Store previous balance for WebSocket event
     const previousBalance = wallet.balance;
 
