@@ -262,4 +262,94 @@ router.get('/:id/draft', async (req, res) => {
   }
 });
 
+/* ------------------------------------------------------------------
+   POST /api/outreach/extract
+
+   Paste a bio, a link-in-bio page, or a profile blurb; get back the
+   fields the form needs, plus a judgement on whether the page looks
+   like the real creator or an impersonation.
+
+   That second part is not optional padding. Fake link-in-bio pages
+   are endemic in this space -- a page claiming to be a well-known
+   creator, with a "contact@" address nobody real reads and an
+   "OnlyFans" link pointing at a static site. Automated collection
+   cannot tell those apart, which is precisely why every extraction
+   comes back with a confidence note for a human to overrule.
+   ------------------------------------------------------------------ */
+router.post('/extract', async (req, res) => {
+  const raw = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+  if (!raw) {
+    return res.status(400).json({ success: false, error: 'Paste some text to extract from.' });
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(503).json({
+      success: false,
+      error: 'Extraction is not configured (ANTHROPIC_API_KEY missing).'
+    });
+  }
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+    const prompt = [
+      'You are helping build an outreach list for a legitimate marketplace.',
+      'From the pasted text below, extract contact and profile details.',
+      '',
+      'Return ONLY a JSON object, no preamble, no markdown fences, with these keys:',
+      '  name          - the person or agency name, best guess',
+      '  type          - one of "creator", "manager", "agency"',
+      '  email         - a business/contact email if one is present, else ""',
+      '  handle        - primary social handle including @, else ""',
+      '  profileUrl    - their main profile URL, else ""',
+      '  manages       - who they represent, if an agency or manager, else ""',
+      '  audienceSize  - follower count or size indication if stated, else ""',
+      '  personalNote  - ONE specific, factual observation about them drawn from',
+      '                  the text that could open an email. Not a compliment.',
+      '                  Something true and particular. Empty string if the text',
+      '                  gives you nothing specific.',
+      '  legitimacy    - "likely_real", "uncertain", or "likely_fake"',
+      '  legitimacyReason - one short sentence explaining the legitimacy call',
+      '',
+      'For legitimacy, treat these as warning signs: a handle that does not match',
+      'the claimed name, links to static site hosts (github.io, blogspot, weebly)',
+      'presented as official platform links, generic contact addresses on a page',
+      'for a well-known person, or a page that reads as assembled to impersonate',
+      'someone. Say "uncertain" when there is not enough to judge.',
+      '',
+      'TEXT:',
+      raw.slice(0, 12000)
+    ].join('\n');
+
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const text = (message.content || [])
+      .filter(block => block.type === 'text')
+      .map(block => block.text)
+      .join('')
+      .replace(/```json|```/g, '')
+      .trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseError) {
+      console.error('[Outreach] Extract returned non-JSON:', text.slice(0, 300));
+      return res.status(502).json({
+        success: false,
+        error: 'Could not read the extraction result. Try pasting less text.'
+      });
+    }
+
+    res.json({ success: true, data: parsed });
+  } catch (error) {
+    console.error('[Outreach] Extract error:', error.message);
+    res.status(502).json({ success: false, error: 'Extraction failed. Please try again.' });
+  }
+});
+
 module.exports = router;

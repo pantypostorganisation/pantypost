@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Users, Plus, Mail, Copy, Trash2, ExternalLink, Check, X, Loader2, AlertCircle,
+  Wand2, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import { apiCall } from '@/services/api.config';
 
@@ -64,6 +65,12 @@ export default function OutreachPipeline() {
   const [draft, setDraft] = useState<{ id: string; subject: string; body: string; to: string; warning: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Paste-to-fill: bio or link-in-bio text in, form fields out.
+  const [pasteText, setPasteText] = useState('');
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [legitimacy, setLegitimacy] = useState<{ verdict: string; reason: string } | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -78,6 +85,47 @@ export default function OutreachPipeline() {
   }, [stageFilter]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const extract = async () => {
+    if (!pasteText.trim()) return;
+    setExtracting(true);
+    setExtractError(null);
+    setLegitimacy(null);
+    try {
+      const res = await apiCall<any>('/outreach/extract', {
+        method: 'POST',
+        body: JSON.stringify({ text: pasteText }),
+      });
+      if (res.success && res.data) {
+        const d = res.data;
+        setForm({
+          name: d.name || '',
+          type: (['creator', 'manager', 'agency'].includes(d.type) ? d.type : 'creator') as ProspectType,
+          email: d.email || '',
+          handle: d.handle || '',
+          profileUrl: d.profileUrl || '',
+          sourceUrl: '',
+          manages: d.manages || '',
+          audienceSize: d.audienceSize || '',
+          personalNote: d.personalNote || '',
+        });
+        if (d.legitimacy) {
+          setLegitimacy({ verdict: d.legitimacy, reason: d.legitimacyReason || '' });
+        }
+      } else {
+        // res.error is an ApiError object, not a string.
+        const message =
+          typeof res.error === 'string'
+            ? res.error
+            : res.error?.message || 'Could not extract details.';
+        setExtractError(message);
+      }
+    } catch {
+      setExtractError('Extraction failed. Try again.');
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const addProspect = async () => {
     if (!form.name.trim()) return;
@@ -143,7 +191,59 @@ export default function OutreachPipeline() {
       </div>
 
       {showForm && (
-        <div className="mt-4 grid gap-3 rounded-md border border-gray-800 bg-black/40 p-4 sm:grid-cols-2">
+        <div className="mt-4 rounded-md border border-gray-800 bg-black/40 p-4">
+          {/* Paste anything about them -- a bio, a link-in-bio page, a
+              profile blurb -- and let the model fill the form. It also
+              rates whether the page looks like the real person, since
+              impersonation pages are common enough in this space that
+              a scraped list would be half fiction. */}
+          <label className="mb-1 block text-xs text-gray-400">
+            Paste their bio or link-in-bio page
+          </label>
+          <textarea
+            value={pasteText}
+            onChange={e => setPasteText(e.target.value)}
+            rows={4}
+            placeholder="Paste the whole page or bio here, then hit Extract."
+            className="w-full rounded-md border border-gray-700 bg-black px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-[#ff950e] focus:outline-none"
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={extract}
+              disabled={extracting || !pasteText.trim()}
+              className="flex items-center gap-2 rounded-md bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+            >
+              {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              {extracting ? 'Reading...' : 'Extract details'}
+            </button>
+            {extractError && <span className="text-xs text-red-400">{extractError}</span>}
+          </div>
+
+          {legitimacy && (
+            <div
+              className={`mt-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs ${
+                legitimacy.verdict === 'likely_fake'
+                  ? 'border-red-600/40 bg-red-600/10 text-red-300'
+                  : legitimacy.verdict === 'uncertain'
+                    ? 'border-yellow-600/40 bg-yellow-600/10 text-yellow-300'
+                    : 'border-green-600/40 bg-green-600/10 text-green-300'
+              }`}
+            >
+              {legitimacy.verdict === 'likely_real'
+                ? <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                : <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />}
+              <span>
+                <strong className="capitalize">{legitimacy.verdict.replace('_', ' ')}</strong>
+                {legitimacy.reason ? ` - ${legitimacy.reason}` : ''}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {showForm && (
+        <div className="mt-3 grid gap-3 rounded-md border border-gray-800 bg-black/40 p-4 sm:grid-cols-2">
           {[
             ['name', 'Name *'],
             ['email', 'Business email'],
@@ -195,7 +295,7 @@ export default function OutreachPipeline() {
             </button>
             <button
               type="button"
-              onClick={() => { setShowForm(false); setForm(EMPTY); }}
+              onClick={() => { setShowForm(false); setForm(EMPTY); setPasteText(''); setLegitimacy(null); setExtractError(null); }}
               className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300"
             >
               Cancel
