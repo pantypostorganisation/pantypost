@@ -215,14 +215,19 @@ export default function LoginPage() {
   }, [username, clearError]);
 
   const handleVerifyCode = useCallback(
-    async (e?: React.FormEvent) => {
+    /* Takes the code as an argument rather than reading state.
+       Auto-submit fires from inside the onChange handler, where the
+       state update has not been applied yet -- reading twoFactorCode
+       there would submit the previous five digits every time. */
+    async (e?: React.FormEvent, codeOverride?: string) => {
       if (e) e.preventDefault();
-      if (!twoFactorCode.trim() || isLoading) return;
+      const code = (codeOverride ?? twoFactorCode).trim();
+      if (!code || isLoading) return;
       setIsLoading(true);
       setError('');
       setErrorData(null);
       try {
-        const ok = await verifyAdminCode(username.trim(), twoFactorCode.trim(), rememberMe);
+        const ok = await verifyAdminCode(username.trim(), code, rememberMe);
         if (!ok) {
           setError('Incorrect code. Check the email and try again.');
           setIsLoading(false);
@@ -507,7 +512,18 @@ export default function LoginPage() {
                     autoComplete="one-time-code"
                     maxLength={6}
                     value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/[^0-9]/g, ''))}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                      setTwoFactorCode(digits);
+                      /* Six digits is the whole code, and it has nothing
+                         left to validate -- making someone press a button
+                         to confirm what they just finished typing is a
+                         step for the sake of a step. Pasting the code
+                         from the email now signs you straight in. */
+                      if (digits.length === 6 && !isLoading) {
+                        void handleVerifyCode(undefined, digits);
+                      }
+                    }}
                     placeholder="000000"
                     autoFocus
                     className="w-full rounded-lg border border-white/10 bg-black/40 px-4 py-3 text-center text-2xl tracking-[0.5em] text-white placeholder-gray-600 focus:border-primary focus:outline-none"
@@ -547,6 +563,8 @@ export default function LoginPage() {
     </div>
   );
 }
+
+
 
 
 

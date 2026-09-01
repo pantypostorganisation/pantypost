@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import RequireAuth from '@/components/RequireAuth';
+import OutreachPipeline from '@/components/admin/OutreachPipeline';
 import { useAuth } from '@/context/AuthContext';
 import {
   trafficService,
@@ -474,8 +475,14 @@ export default function AdminTrafficPage() {
               </div>
             </div>
           )}
+
+          {/* Outreach pipeline. Lives on the traffic page because the
+              two questions are the same one: who is arriving, and who
+              are we still trying to reach. */}
+          <OutreachPipeline />
         </div>
       </main>
     </RequireAuth>
   );
 }
+

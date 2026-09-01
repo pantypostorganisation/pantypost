@@ -295,6 +295,7 @@ app.use('/api/profilebuyer', profileBuyerRoutes);
 
 // NEW: referral system routes
 app.use('/api/referral', referralRoutes);
+app.use('/api/outreach', require('./routes/outreach.routes')); // admin-only creator/agency pipeline
 
 // ---------------------- Storage API Routes ----------------------
 // SECURITY: storage keys are embedded in Mongo update paths (`storage.<key>`),
@@ -1602,3 +1603,4 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
 });
+
