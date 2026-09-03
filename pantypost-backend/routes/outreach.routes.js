@@ -250,10 +250,7 @@ router.get('/:id/draft', async (req, res) => {
       success: true,
       data: {
         ...draft,
-        to: p.email || '',
-        /* Surfaced rather than enforced: a draft without a personal
-           note still sends, it just converts like a template. */
-        warning: p.personalNote ? null : 'No personal note set - this will read like a template.'
+        to: p.email || ''
       }
     });
   } catch (error) {
@@ -353,3 +350,4 @@ router.post('/extract', async (req, res) => {
 });
 
 module.exports = router;
+

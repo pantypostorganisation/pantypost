@@ -15,8 +15,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Users, Plus, Mail, Copy, Trash2, ExternalLink, Check, X, Loader2, AlertCircle,
-  Wand2, ShieldAlert, ShieldCheck,
+  Users, Plus, Mail, Copy, Trash2, ExternalLink, Check, X, Loader2,
+  Wand2, ShieldAlert, ShieldCheck, Pencil, AlertTriangle,
 } from 'lucide-react';
 import { apiCall } from '@/services/api.config';
 
@@ -70,6 +70,10 @@ export default function OutreachPipeline() {
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [legitimacy, setLegitimacy] = useState<{ verdict: string; reason: string } | null>(null);
+
+  // Editing an existing prospect, and the delete confirmation.
+  const [editing_id, setEditingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Prospect | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,19 +131,53 @@ export default function OutreachPipeline() {
     }
   };
 
+  /* One save path for both new and existing prospects: creating POSTs,
+     editing PATCHes the id being edited. Keeping them as one function
+     means the form, its validation and its reset can never drift apart
+     between the two cases. */
   const addProspect = async () => {
     if (!form.name.trim()) return;
     setSaving(true);
     try {
-      const res = await apiCall<any>('/outreach', { method: 'POST', body: JSON.stringify(form) });
+      const res = editing_id
+        ? await apiCall<any>(`/outreach/${editing_id}`, { method: 'PATCH', body: JSON.stringify(form) })
+        : await apiCall<any>('/outreach', { method: 'POST', body: JSON.stringify(form) });
       if (res.success) {
-        setForm(EMPTY);
-        setShowForm(false);
+        closeForm();
         void load();
       }
     } finally {
       setSaving(false);
     }
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(EMPTY);
+    setPasteText('');
+    setLegitimacy(null);
+    setExtractError(null);
+  };
+
+  const startEdit = (p: Prospect) => {
+    setForm({
+      name: p.name || '',
+      type: p.type,
+      email: p.email || '',
+      handle: p.handle || '',
+      profileUrl: p.profileUrl || '',
+      sourceUrl: p.sourceUrl || '',
+      manages: p.manages || '',
+      audienceSize: p.audienceSize || '',
+      personalNote: p.personalNote || '',
+    });
+    setEditingId(p._id);
+    setShowForm(true);
+    setPasteText('');
+    setLegitimacy(null);
+    setExtractError(null);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const setStage = async (id: string, stage: Stage) => {
@@ -149,6 +187,7 @@ export default function OutreachPipeline() {
 
   const remove = async (id: string) => {
     await apiCall<any>(`/outreach/${id}`, { method: 'DELETE' });
+    setConfirmDelete(null);
     void load();
   };
 
@@ -183,14 +222,17 @@ export default function OutreachPipeline() {
         </div>
         <button
           type="button"
-          onClick={() => setShowForm(v => !v)}
+          onClick={() => (showForm ? closeForm() : setShowForm(true))}
           className="flex items-center gap-2 rounded-md bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black transition-opacity hover:opacity-90"
         >
-          <Plus className="h-4 w-4" /> Add prospect
+          <Plus className="h-4 w-4" /> {showForm ? 'Close' : 'Add prospect'}
         </button>
       </div>
 
-      {showForm && (
+      {/* The paste-to-fill box only makes sense when adding someone new.
+          When editing, the fields already hold their data and running
+          an extraction would overwrite it. */}
+      {showForm && !editing_id && (
         <div className="mt-4 rounded-md border border-gray-800 bg-black/40 p-4">
           {/* Paste anything about them -- a bio, a link-in-bio page, a
               profile blurb -- and let the model fill the form. It also
@@ -243,7 +285,11 @@ export default function OutreachPipeline() {
       )}
 
       {showForm && (
-        <div className="mt-3 grid gap-3 rounded-md border border-gray-800 bg-black/40 p-4 sm:grid-cols-2">
+        <div className="mt-3 rounded-md border border-gray-800 bg-black/40 p-4">
+          <p className="mb-3 text-sm font-semibold text-white">
+            {editing_id ? 'Edit prospect' : 'New prospect'}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
           {[
             ['name', 'Name *'],
             ['email', 'Business email'],
@@ -291,15 +337,16 @@ export default function OutreachPipeline() {
               disabled={saving || !form.name.trim()}
               className="rounded-md bg-[#ff950e] px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
             >
-              {saving ? 'Saving...' : 'Save'}
+              {saving ? 'Saving...' : editing_id ? 'Update' : 'Save'}
             </button>
             <button
               type="button"
-              onClick={() => { setShowForm(false); setForm(EMPTY); setPasteText(''); setLegitimacy(null); setExtractError(null); }}
+              onClick={closeForm}
               className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300"
             >
               Cancel
             </button>
+            </div>
           </div>
         </div>
       )}
@@ -354,12 +401,8 @@ export default function OutreachPipeline() {
                     )}
                   </div>
                   {p.email && <p className="mt-0.5 text-xs text-gray-400">{p.email}</p>}
-                  {p.personalNote ? (
+                  {p.personalNote && (
                     <p className="mt-1 text-xs text-gray-500">{p.personalNote}</p>
-                  ) : (
-                    <p className="mt-1 flex items-center gap-1 text-xs text-yellow-500/80">
-                      <AlertCircle className="h-3 w-3" /> No personal note
-                    </p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -372,6 +415,14 @@ export default function OutreachPipeline() {
                   </select>
                   <button
                     type="button"
+                    onClick={() => startEdit(p)}
+                    title="Edit"
+                    className="rounded-md border border-gray-700 p-2 text-gray-300 hover:border-[#ff950e] hover:text-[#ff950e]"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => openDraft(p)}
                     title="Draft email"
                     className="rounded-md border border-gray-700 p-2 text-gray-300 hover:border-[#ff950e] hover:text-[#ff950e]"
@@ -380,7 +431,7 @@ export default function OutreachPipeline() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => remove(p._id)}
+                    onClick={() => setConfirmDelete(p)}
                     title="Delete"
                     className="rounded-md border border-gray-700 p-2 text-gray-500 hover:border-red-500 hover:text-red-400"
                   >
@@ -392,6 +443,47 @@ export default function OutreachPipeline() {
           ))
         )}
       </div>
+
+      {/* Deleting is one click next to buttons you press all day, so it
+          asks first and names who is about to go. */}
+      {confirmDelete && (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center bg-black/85 p-4"
+          onClick={() => setConfirmDelete(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="w-full max-w-sm rounded-lg border border-gray-800 bg-[#111] p-5 text-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="mx-auto w-fit rounded-full bg-red-500/10 p-3">
+              <AlertTriangle className="h-6 w-6 text-red-400" aria-hidden="true" />
+            </div>
+            <h3 className="mt-3 text-lg font-semibold text-white">Delete this prospect?</h3>
+            <p className="mt-2 text-sm text-gray-400">
+              <span className="font-medium text-white">{confirmDelete.name}</span> will be removed
+              from the pipeline. This cannot be undone.
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                className="flex-1 rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(confirmDelete._id)}
+                className="flex-1 rounded-md bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {draft && (
         <div
@@ -408,12 +500,6 @@ export default function OutreachPipeline() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-
-            {draft.warning && (
-              <p className="mt-3 flex items-center gap-2 rounded-md border border-yellow-600/40 bg-yellow-600/10 px-3 py-2 text-xs text-yellow-400">
-                <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {draft.warning}
-              </p>
-            )}
 
             <div className="mt-3 space-y-2 text-sm">
               {draft.to && <p className="text-gray-400">To: <span className="text-white">{draft.to}</span></p>}
@@ -447,3 +533,5 @@ export default function OutreachPipeline() {
     </div>
   );
 }
+
+
