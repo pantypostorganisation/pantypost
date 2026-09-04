@@ -56,8 +56,8 @@ const isListingActive = (listing: Listing): boolean => {
   return isListingActiveUtil(normalizeListing(listing));
 };
 
-const getDisplayPrice = (listing: Listing) => {
-  return getDisplayPriceUtil(normalizeListing(listing));
+const getDisplayPrice = (listing: Listing, viewerRole?: string | null) => {
+  return getDisplayPriceUtil(normalizeListing(listing), viewerRole);
 };
 
 export const useBrowseListings = () => {
@@ -642,4 +642,6 @@ export const useBrowseListings = () => {
     PAGE_SIZE
   };
 };
+
+
 

@@ -47,7 +47,16 @@ export const isListingActive = (listing: Listing): boolean => {
 };
 
 // Get display price for a listing
-export const getDisplayPrice = (listing: Listing): { price: string; label: string } => {
+/* The marked-up price is what a BUYER pays: listed price plus the
+   platform fee. Showing it to everyone meant sellers saw their own
+   items priced higher than they set them, and guests compared an
+   inflated number against other sites. Buyers still see exactly what
+   they will be charged; everyone else sees the seller's listed price.
+   `viewerRole` is undefined for guests. */
+export const getDisplayPrice = (
+  listing: Listing,
+  viewerRole?: string | null
+): { price: string; label: string } => {
   try {
     if (isAuctionListing(listing)) {
       const hasActiveBids = listing.auction.bids && listing.auction.bids.length > 0;
@@ -66,8 +75,12 @@ export const getDisplayPrice = (listing: Listing): { price: string; label: strin
         };
       }
     } else {
+      const isBuyer = viewerRole === 'buyer';
+      const shown = isBuyer
+        ? (listing.markedUpPrice ?? listing.price)
+        : listing.price;
       return {
-        price: listing.markedUpPrice?.toFixed(2) ?? listing.price.toFixed(2),
+        price: shown.toFixed(2),
         label: 'Buy Now'
       };
     }
