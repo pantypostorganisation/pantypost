@@ -15,7 +15,6 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
 const authMiddleware = require('../middleware/auth.middleware');
-const { sendEmail, emailTemplates } = require('../config/email');
 const { markApproved, markDenied } = require('../utils/moderation');
 
 const router = express.Router();
@@ -226,8 +225,13 @@ const MEDIA_TYPES = {
   gallery_image: { label: 'Gallery image', decide: decideGalleryImage },
 };
 
+/* Moderators exist to work this queue, so they pass the same gate as
+   admins here -- and ONLY here. Every other admin surface (wallets,
+   bans, withdrawals, analytics) keeps its own role check and stays
+   admin-only. */
 function ensureAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'admin') {
+  const role = req.user && req.user.role;
+  if (role !== 'admin' && role !== 'moderator') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
   return next();
@@ -421,36 +425,6 @@ router.get('/counts', authMiddleware, ensureAdmin, async (req, res) => {
  * POST /api/admin/approval/approve
  * Body: { listingId | contentId, contentType? }
  * ===================================================================== */
-/* Emails the seller about a listing decision.
-   Only fires for listings -- a rejected profile picture does not need
-   an email, and posts have their own notification path. Never throws:
-   a mail failure must not roll back an approval that already happened,
-   so it logs and moves on. */
-async function emailListingDecision(owner, doc, approved, reason) {
-  try {
-    const user = await User.findOne({ username: owner });
-    if (!user || !user.email) return;
-
-    const title = doc.title || 'Your listing';
-    const template = approved
-      ? emailTemplates.listingApproved(
-          owner,
-          title,
-          `https://pantypost.com/browse/${String(doc._id)}`
-        )
-      : emailTemplates.listingRejected(owner, title, reason);
-
-    await sendEmail({
-      to: user.email,
-      subject: template.subject,
-      html: template.html,
-      text: template.text
-    });
-  } catch (error) {
-    console.error('[Approval] Listing decision email failed:', error.message);
-  }
-}
-
 router.post('/approve', authMiddleware, ensureAdmin, async (req, res) => {
   try {
     const body = req.body || {};
@@ -500,10 +474,6 @@ router.post('/approve', authMiddleware, ensureAdmin, async (req, res) => {
 
     const owner = doc[config.ownerField];
     const typeKey = body.contentType || 'listing';
-
-    if (typeKey === 'listing') {
-      await emailListingDecision(owner, doc, true);
-    }
 
     await notifyOwner(owner, {
       type: 'content_approved',
@@ -579,10 +549,6 @@ router.post('/deny', authMiddleware, ensureAdmin, async (req, res) => {
 
     markDenied(doc, req.user.username, reason);
     await doc.save();
-
-    if ((body.contentType || 'listing') === 'listing') {
-      await emailListingDecision(doc[config.ownerField], doc, false, reason);
-    }
 
     await notifyOwner(doc[config.ownerField], {
       type: 'content_denied',
