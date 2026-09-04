@@ -15,7 +15,7 @@ import { storageService } from '@/services';
 import { SecureMessageDisplay, SecureImage } from '@/components/ui/SecureMessageDisplay';
 import { sanitizeStrict, sanitizeUrl } from '@/utils/security/sanitization';
 import { resolveApiUrl } from '@/utils/url';
-import { isAdmin } from '@/utils/security/permissions';
+import { isAdmin, canModerateContent } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
 import { approvalService } from '@/services/approval.service';
 import dynamic from 'next/dynamic';
@@ -151,6 +151,11 @@ export default function Header(): React.ReactElement | null {
 
   // OPTIMIZED: Memoize computed values to prevent re-calculations
   const isAdminUser = useMemo(() => isAdmin(user), [user]);
+  /* Moderators get the approvals link and nothing else in the nav.
+     Rendering the full admin bar for them would be links to pages the
+     server refuses to answer, which reads as broken rather than
+     restricted. */
+  const canModerate = useMemo(() => canModerateContent(user), [user]);
   const role = useMemo(() => user?.role ?? null, [user?.role]);
   const isSellerVerified = useMemo(
     () => user?.role === 'seller' && (user?.isVerified === true || user?.verificationStatus === 'verified'),
@@ -503,7 +508,7 @@ export default function Header(): React.ReactElement | null {
   }, [checkEndedAuctions]);
 
   const updateReportCount = useCallback(() => {
-    if (!isAdminUser || !isMountedRef.current) return;
+    if (!canModerate || !isMountedRef.current) return;
     try {
       const count = getReportCount();
       setReportCount(typeof count === 'number' && !isNaN(count) && count >= 0 ? count : 0);
@@ -520,7 +525,7 @@ export default function Header(): React.ReactElement | null {
   // fancier, but a 60s-stale count on a moderation badge is fine and
   // this cannot break when the socket does.
   const refreshApprovalCount = useCallback(async () => {
-    if (!isAdminUser || !isMountedRef.current) return;
+    if (!canModerate || !isMountedRef.current) return;
     try {
       const resp = await approvalService.getPendingCounts();
       if (isMountedRef.current && resp.success && resp.data) {
@@ -530,10 +535,10 @@ export default function Header(): React.ReactElement | null {
     } catch {
       // Best-effort: keep the last known count rather than flashing 0.
     }
-  }, [isAdminUser]);
+  }, [canModerate]);
 
   useEffect(() => {
-    if (!isAdminUser) {
+    if (!canModerate) {
       setApprovalCount(0);
       return;
     }
@@ -885,6 +890,18 @@ export default function Header(): React.ReactElement | null {
               {renderMobileLink('/browse', <ShoppingBag className="w-5 h-5" />, 'Browse')}
               {renderMobileLink('/explore', <Compass className="w-5 h-5" />, 'Explore')}
 
+              {/* Moderator drawer: the approval queue and nothing else.
+                  Admins get it inside the full panel below instead. */}
+              {canModerate && !isAdminUser && (
+                <>
+                  <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/20 rounded-lg mt-4 mb-2">
+                    <ClipboardCheck className="w-4 h-4 text-purple-400" />
+                    <span className="text-purple-300 font-bold text-sm">MODERATION</span>
+                  </div>
+                  {renderMobileLink('/admin/approval', <ClipboardCheck className="w-5 h-5" />, 'Approval', approvalCount)}
+                </>
+              )}
+
               {isAdminUser && (
                 <>
                   <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/20 rounded-lg mt-4 mb-2">
@@ -1077,6 +1094,24 @@ export default function Header(): React.ReactElement | null {
             <Compass className="w-3.5 h-3.5 transition-colors duration-300 group-hover:text-primary" />
             <span className="sr-only xl:not-sr-only xl:inline">Explore</span>
           </Link>
+
+          {/* Moderators see only this. Admins get it inside the full
+              admin bar below, so it is not rendered twice. */}
+          {canModerate && !isAdminUser && (
+            <Link
+              href="/admin/approval"
+              title="Approvals"
+              className="relative flex items-center gap-1.5 whitespace-nowrap bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-sm transition-all duration-300 border border-line hover:border-primary-line text-xs"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5 text-purple-300" />
+              <span className="sr-only xl:not-sr-only xl:inline">Approvals</span>
+              {approvalCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-[18px] rounded-full border-2 border-white bg-primary px-1.5 py-0.5 text-center text-[10px] font-bold text-black">
+                  {approvalCount > 99 ? '99+' : approvalCount}
+                </span>
+              )}
+            </Link>
+          )}
 
           {isAdminUser && (
             <>
@@ -1524,6 +1559,7 @@ export default function Header(): React.ReactElement | null {
     </>
   );
 }
+
 
 
 
