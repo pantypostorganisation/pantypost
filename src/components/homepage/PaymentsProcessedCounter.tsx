@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import MoneyBillWave from '@/components/icons/MoneyBillWave';
+import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -326,11 +326,17 @@ export default function PaymentsProcessedCounter({
       transition={{ duration: 0.5 }}
       aria-label="Payments processed"
     >
-      {/* Solid wave banknote, paired with the solid-filled person on the
-          users counter. Solid + solid is the point: a filled glyph next
-          to a 2px outline is the weight mismatch this row started with.
-          If either icon changes, change both or match their weights. */}
-      <MoneyBillWave className={iconClasses} />
+      {/* Custom card artwork, paired with the people icon on the users
+          counter. Both are solid orange fills of the same weight -- if
+          either changes, change both. */}
+      <Image
+        src="/icons/payments-icon.png"
+        alt=""
+        width={20}
+        height={20}
+        className={`${iconClasses} object-contain`}
+        aria-hidden="true"
+      />
       <span className={textClasses}>
         Payments processed{' '}
         <span className="relative inline-block">
@@ -372,4 +378,5 @@ export default function PaymentsProcessedCounter({
     </motion.div>
   );
 }
+
 
