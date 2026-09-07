@@ -84,6 +84,10 @@ export default function ListingsGrid(props: ListingsGridProps) {
 
             // Price formatting - robust against undefined/NaN
             const basePrice =
+              /* A seller viewing their own shop was seeing every item
+                 priced above what they set it at. Only buyers, who
+                 actually pay the marked-up figure, see it. */
+              user?.role === 'buyer' &&
               typeof listing.markedUpPrice === 'number' && Number.isFinite(listing.markedUpPrice)
                 ? listing.markedUpPrice
                 : listing.price;
@@ -193,3 +197,4 @@ export default function ListingsGrid(props: ListingsGridProps) {
     </div>
   );
 }
+

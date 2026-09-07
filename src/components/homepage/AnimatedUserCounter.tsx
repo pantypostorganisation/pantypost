@@ -301,7 +301,7 @@ export default function AnimatedUserCounter({
           alt=""
           width={20}
           height={20}
-          className="h-3.5 w-3.5 sm:h-5 sm:w-5 animate-pulse-slow flex-shrink-0 object-contain"
+          className="h-3.5 w-3.5 sm:h-5 sm:w-5 flex-shrink-0 object-contain"
           aria-hidden="true"
         />
         <span className="text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap">
@@ -416,6 +416,8 @@ export default function AnimatedUserCounter({
     </motion.div>
   );
 }
+
+
 
 
 

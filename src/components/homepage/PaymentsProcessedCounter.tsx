@@ -307,8 +307,8 @@ export default function PaymentsProcessedCounter({
     : `flex items-center gap-3 relative ${className}`;
     
   const iconClasses = compact
-    ? 'h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0'
-    : 'h-5 w-5 text-[#ff950e] animate-pulse-slow';
+    ? 'h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] flex-shrink-0'
+    : 'h-5 w-5 text-[#ff950e]';
     
   const textClasses = compact
     ? 'text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap'
@@ -378,5 +378,7 @@ export default function PaymentsProcessedCounter({
     </motion.div>
   );
 }
+
+
 
 
