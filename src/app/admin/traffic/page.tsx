@@ -163,17 +163,28 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
      the chart unreadable on phones. */
   const [touchedBarIndex, setTouchedBarIndex] = useState<number | null>(null);
 
+  /* Which number the bars represent. Defaults to unique visitors:
+     pageviews flatter the chart because one person browsing ten
+     listings looks like ten of something, and the question this chart
+     is usually asked is "how many people came", not "how many pages
+     did they open". */
+  const [metric, setMetric] = useState<'visitors' | 'pageviews'>('visitors');
+
   const handleTouchStart = (index: number) => setTouchedBarIndex(index);
   const handleTouchEnd = () => setTouchedBarIndex(null);
   const handleTouchCancel = () => setTouchedBarIndex(null);
 
-  const max = Math.max(...series.map((p) => p.pageviews), 1);
-  const totalViews = series.reduce((sum, p) => sum + p.pageviews, 0);
+  const valueOf = (p: { pageviews: number; visitors: number }) =>
+    metric === 'visitors' ? p.visitors : p.pageviews;
+
+  const max = Math.max(...series.map(valueOf), 1);
+  const total = series.reduce((sum, p) => sum + valueOf(p), 0);
   const peak = series.reduce(
-    (best, p) => (p.pageviews > best.pageviews ? p : best),
+    (best, p) => (valueOf(p) > valueOf(best) ? p : best),
     series[0] || { date: '', pageviews: 0, visitors: 0 }
   );
-  const average = series.length ? Math.round(totalViews / series.length) : 0;
+  const average = series.length ? Math.round(total / series.length) : 0;
+  const metricLabel = metric === 'visitors' ? 'Unique visitors' : 'Pageviews';
 
   const formatDate = (date: string) =>
     new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
@@ -203,7 +214,23 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
           <BarChart3 className="w-5 h-5 text-[#ff950e]" />
           <h3 className="text-lg font-bold text-white">Traffic Trend</h3>
         </div>
-        <span className="text-sm text-gray-500">Pageviews per day</span>
+        <div className="flex items-center gap-1 rounded-md border border-gray-800 bg-black/40 p-1">
+          {(['visitors', 'pageviews'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setMetric(option)}
+              aria-pressed={metric === option}
+              className={`rounded-sm px-3 py-1.5 text-xs font-semibold transition-colors ${
+                metric === option
+                  ? 'bg-[#ff950e] text-black'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {option === 'visitors' ? 'Visitors' : 'Pageviews'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Horizontal scroll so a 90-day range stays legible rather than
@@ -216,7 +243,7 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
           <div className="relative h-80">
             <div className="absolute inset-x-3 bottom-3 top-6 flex items-end justify-between gap-2 pr-6">
               {series.map((point, index) => {
-                const heightPx = Math.max((point.pageviews / max) * 200, 4);
+                const heightPx = Math.max((valueOf(point) / max) * 200, 4);
                 const isActive = touchedBarIndex === index;
 
                 return (
@@ -258,11 +285,17 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 pt-5 sm:grid-cols-3 border-t border-[#1f1f1f] mt-6">
+      {/* Says which number is on screen -- "Peak Day 189" means nothing
+          without knowing whether that is people or page opens. */}
+      <p className="mt-6 text-center text-xs uppercase tracking-wider text-gray-600">
+        {metricLabel} per day
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 pt-5 sm:grid-cols-3 border-t border-[#1f1f1f] mt-3">
         <div className="text-center">
           <p className="text-xs uppercase tracking-wider text-gray-500">Peak Day</p>
           <p className="mt-1 text-lg font-bold text-green-400">
-            {peak.pageviews.toLocaleString()}
+            {valueOf(peak).toLocaleString()}
           </p>
         </div>
         <div className="text-center">
@@ -272,7 +305,7 @@ function TrendChart({ series }: { series: TrafficReport['series'] }) {
         <div className="text-center">
           <p className="text-xs uppercase tracking-wider text-gray-500">Total Period</p>
           <p className="mt-1 text-lg font-bold text-[#ff950e]">
-            {totalViews.toLocaleString()}
+            {total.toLocaleString()}
           </p>
         </div>
       </div>
@@ -485,4 +518,5 @@ export default function AdminTrafficPage() {
     </RequireAuth>
   );
 }
+
 

@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import Link from 'next/link';
 import { Package, Star } from 'lucide-react';
 import { listingsService } from '@/services/listings.service';
@@ -26,8 +27,10 @@ interface RelatedItem {
   sellerProfile?: { rating?: number; reviewCount?: number };
 }
 
-function priceOf(listing: RelatedItem): string {
-  const value = listing.markedUpPrice ?? listing.price ?? 0;
+function priceOf(listing: RelatedItem, isBuyer: boolean): string {
+  /* Buyers see what they will be charged; sellers and guests see the
+     seller's listed price. */
+  const value = isBuyer ? (listing.markedUpPrice ?? listing.price ?? 0) : (listing.price ?? 0);
   return `$${String(Number(value).toFixed(2)).replace(/\.00$/, '')}`;
 }
 
@@ -37,7 +40,7 @@ function priceOf(listing: RelatedItem): string {
  * auction timer, favourite and admin controls, which do not belong in a
  * secondary row. No border or background: the photo defines the tile.
  */
-function RelatedTile({ listing }: { listing: RelatedItem }) {
+function RelatedTile({ listing, isBuyer }: { listing: RelatedItem; isBuyer: boolean }) {
   const rating = listing.sellerProfile?.rating;
   const reviewCount = listing.sellerProfile?.reviewCount;
   const hasRating = typeof rating === 'number' && rating > 0;
@@ -80,7 +83,7 @@ function RelatedTile({ listing }: { listing: RelatedItem }) {
         )}
 
         <span className="truncate text-xs text-ink-faint">{listing.seller}</span>
-        <p className="mt-0.5 text-sm font-semibold text-ink">{priceOf(listing)}</p>
+        <p className="mt-0.5 text-sm font-semibold text-ink">{priceOf(listing, isBuyer)}</p>
       </div>
     </Link>
   );
@@ -90,10 +93,12 @@ function Row({
   heading,
   action,
   listings,
+  isBuyer,
 }: {
   heading: string;
   action?: { label: string; href: string };
   listings: RelatedItem[];
+  isBuyer: boolean;
 }) {
   if (listings.length === 0) return null;
 
@@ -113,7 +118,7 @@ function Row({
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 lg:gap-6">
         {listings.map((listing) => (
-          <RelatedTile key={listing.id} listing={listing} />
+          <RelatedTile key={listing.id} listing={listing} isBuyer={isBuyer} />
         ))}
       </div>
     </section>
@@ -126,6 +131,8 @@ export default function RelatedListings({
   tags,
   limit = 4,
 }: RelatedListingsProps) {
+  const { user } = useAuth();
+  const isBuyer = user?.role === 'buyer';
   const safeSeller = sanitizeUsername(seller);
 
   const [fromSeller, setFromSeller] = useState<RelatedItem[]>([]);
@@ -186,11 +193,14 @@ export default function RelatedListings({
   return (
     <div className="mt-10 space-y-8">
       <Row
+        isBuyer={isBuyer}
         heading={`More from ${safeSeller}`}
         action={{ label: 'Visit shop', href: `/sellers/${safeSeller}` }}
         listings={fromSeller}
       />
-      <Row heading="You may also like" listings={similar} />
+      <Row heading="You may also like" listings={similar} isBuyer={isBuyer} />
     </div>
   );
 }
+
+

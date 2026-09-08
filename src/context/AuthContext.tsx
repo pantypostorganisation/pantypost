@@ -95,6 +95,17 @@ function safeNow(): number {
 /* Admin sessions end at midnight tonight, no matter what "remember
    me" says. An admin panel left open on a shared or stolen machine is
    a far worse outcome than an admin re-entering a 2FA code tomorrow. */
+/* Session ceilings by role.
+   Admins end at midnight -- an admin panel left open on a shared or
+   stolen machine is a worse outcome than re-entering a code. Moderators
+   only reach the approval queue, so 48 hours is a reasonable trade for
+   somebody working through a review backlog across a couple of days. */
+function sessionCeiling(role?: string | null): number | null {
+  if (role === 'admin') return endOfLocalDay();
+  if (role === 'moderator') return Date.now() + 48 * 60 * 60 * 1000;
+  return null;
+}
+
 function endOfLocalDay(): number {
   const midnight = new Date();
   midnight.setHours(23, 59, 59, 999);
@@ -645,10 +656,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             response.data.expiresIn ?? response.data.tokenExpiresIn,
             31 * 24 * 60 * 60 * 1000
           );
-          const expiresAt =
-            response.data.user?.role === 'admin'
-              ? Math.min(rawExpiresAt, endOfLocalDay())
-              : rawExpiresAt;
+          const ceiling = sessionCeiling(response.data.user?.role);
+          const expiresAt = ceiling ? Math.min(rawExpiresAt, ceiling) : rawExpiresAt;
 
           const tokens: AuthTokens = {
             token: response.data.token,
@@ -742,13 +751,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           code,
         });
         if (response.success && response.data) {
-          const expiresAt = Math.min(
-            deriveExpiry(
-              response.data.expiresIn ?? response.data.tokenExpiresIn,
-              31 * 24 * 60 * 60 * 1000
-            ),
-            endOfLocalDay()
+          /* Same ceiling rules as a normal login -- this is the path a
+             moderator actually arrives through, since every sign-in
+             needs the emailed code. */
+          const rawExpiry = deriveExpiry(
+            response.data.expiresIn ?? response.data.tokenExpiresIn,
+            31 * 24 * 60 * 60 * 1000
           );
+          const ceiling = sessionCeiling(response.data.user?.role);
+          const expiresAt = ceiling ? Math.min(rawExpiry, ceiling) : rawExpiry;
           const tokens: AuthTokens = {
             token: response.data.token,
             refreshToken: response.data.refreshToken,
@@ -876,4 +887,6 @@ export const getGlobalAuthToken = (): string | null => {
 
   return null;
 };
+
+
 

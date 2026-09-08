@@ -3,6 +3,7 @@
 
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
+import { thumbnailUrl } from '@/utils/imageUrls';
 import {
   Crown, Clock, Lock, Gavel, Eye, Package, Heart,
   ChevronLeft, ChevronRight, BadgeCheck, Star, Trash2, X,
@@ -34,6 +35,28 @@ export default function ListingCard({
   isGuest = false
 }: ExtendedListingCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  /* Preload the neighbouring images.
+     Only the visible image was ever requested, so clicking to the next
+     photo started a cold download of a file the browser had never seen
+     -- on a phone that is a visible wait every single time. Fetching
+     the next and previous alongside the current one means the swap is
+     instant. Browsers dedupe these against the real <img> request, so
+     nothing is downloaded twice, and lazy-loading below still keeps
+     off-screen cards cheap. */
+  useEffect(() => {
+    const urls = listing.imageUrls;
+    if (!urls || urls.length < 2) return;
+    const neighbours = [
+      urls[(currentImageIndex + 1) % urls.length],
+      urls[(currentImageIndex - 1 + urls.length) % urls.length],
+    ];
+    neighbours.forEach(url => {
+      if (!url) return;
+      const img = new Image();
+      img.src = thumbnailUrl(url);
+    });
+  }, [currentImageIndex, listing.imageUrls]);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [removing, setRemoving] = useState(false);
   // profilePic URLs can point at files that no longer exist (the DB row
@@ -155,13 +178,23 @@ export default function ListingCard({
         {listing.imageUrls && listing.imageUrls.length > 0 ? (
           <>
             <img
-              src={listing.imageUrls[currentImageIndex]}
+              src={thumbnailUrl(listing.imageUrls[currentImageIndex])}
               alt={listing.title}
+              loading="lazy"
+              decoding="async"
               className={`h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04] ${
                 isGuest ? 'blur-[10px] scale-105' : isLockedPremium ? 'blur-xl scale-105' : ''
               }`}
               onError={(e) => {
+                /* Images uploaded before thumbnails existed have no
+                   thumbs/ file, so fall back to the full-size one
+                   before giving up on the placeholder. */
                 const target = e.currentTarget;
+                const full = listing.imageUrls?.[currentImageIndex];
+                if (full && target.src !== full) {
+                  target.src = full;
+                  return;
+                }
                 target.src = '/placeholder-panty.png';
                 target.onerror = null;
               }}
@@ -398,4 +431,6 @@ export default function ListingCard({
     </article>
   );
 }
+
+
 

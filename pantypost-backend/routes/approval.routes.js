@@ -225,8 +225,13 @@ const MEDIA_TYPES = {
   gallery_image: { label: 'Gallery image', decide: decideGalleryImage },
 };
 
+/* Moderators exist to work this queue, so they pass the same gate as
+   admins here -- and ONLY here. Every other admin surface (wallets,
+   bans, withdrawals, analytics) keeps its own role check and stays
+   admin-only. */
 function ensureAdmin(req, res, next) {
-  if (!req.user || req.user.role !== 'admin') {
+  const role = req.user && req.user.role;
+  if (role !== 'admin' && role !== 'moderator') {
     return res.status(403).json({ success: false, error: 'Admin access required' });
   }
   return next();
@@ -629,3 +634,5 @@ router.get('/history', authMiddleware, ensureAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
+

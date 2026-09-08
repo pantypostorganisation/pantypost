@@ -24,9 +24,14 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 6
   },
+  /* 'moderator' reviews the approval queue and nothing else. It exists
+     so content review can be delegated without handing over wallets,
+     bans, payouts and analytics, which is everything an admin can
+     reach. Kept as a distinct role rather than a flag on admin so the
+     permission checks stay readable. */
   role: {
     type: String,
-    enum: ['buyer', 'seller', 'admin'],
+    enum: ['buyer', 'seller', 'admin', 'moderator'],
     default: 'buyer'
   },
   
@@ -582,3 +587,4 @@ userSchema.methods.hasDeliveryAddress = function () {
 const User = mongoose.model('User', userSchema);
 
 module.exports = User;
+

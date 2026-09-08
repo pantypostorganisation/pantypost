@@ -34,7 +34,7 @@ const ListingSkeleton = React.memo(() => (
 ListingSkeleton.displayName = 'ListingSkeleton';
 
 // Optimized ListingCard component with regular img tag (like it was before)
-const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
+const ListingCard = React.memo(({ listing, isBuyer }: { listing: Listing; isBuyer: boolean }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [sellerPicFailed, setSellerPicFailed] = useState(false);
@@ -67,13 +67,18 @@ const ListingCard = React.memo(({ listing }: { listing: Listing }) => {
     if (isAuction) {
       return listing.auction?.highestBid || listing.auction?.startingPrice || 0;
     }
-    // Use markedUpPrice if available, otherwise calculate it
+    /* Only a buyer sees the marked-up price, because only a buyer pays
+       it. A seller looking at the homepage was seeing their own item
+       listed above what they set, and a signed-out visitor was
+       comparing an inflated figure against other sites. */
+    if (!isBuyer) {
+      return listing.price;
+    }
     if ((listing as any).markedUpPrice) {
       return (listing as any).markedUpPrice;
     }
-    // Fallback: calculate 10% markup manually
     return Math.round(listing.price * 1.1 * 100) / 100;
-  }, [isAuction, listing]);
+  }, [isAuction, listing, isBuyer]);
 
   // Format time remaining for auctions
   const formatTimeRemaining = useMemo(() => {
@@ -389,9 +394,11 @@ export default function FeaturedRandom() {
           ? // Show skeletons while loading
             Array.from({ length: skeletonCount }).map((_, index) => <ListingSkeleton key={`skeleton-${index}`} />)
           : // Show actual listings
-            listings.map((listing) => <ListingCard key={listing.id} listing={listing} />)}
+            listings.map((listing) => <ListingCard key={listing.id} listing={listing} isBuyer={user?.role === 'buyer'} />)}
       </div>
     </section>
   );
 }
+
+
 

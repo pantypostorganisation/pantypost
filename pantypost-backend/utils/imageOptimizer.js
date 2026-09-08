@@ -24,6 +24,24 @@ const fs = require('fs').promises;
 const MAX_EDGE = parseInt(process.env.IMAGE_MAX_EDGE || '1600', 10);
 const QUALITY = parseInt(process.env.IMAGE_WEBP_QUALITY || '85', 10);
 
+/* Browse cards display images at roughly 320px wide, but were being
+   served the full 1600px file -- twenty-five times the pixels needed,
+   for every card, on every page load. On a phone the cards rendered as
+   black boxes while the images crawled in.
+   A 400px thumbnail covers the card at 2x for retina and lands around
+   20-40KB instead of 200-400KB. The full-size image is untouched and
+   is still what the listing detail page loads, so nothing is lost
+   where quality actually matters. */
+const THUMB_EDGE = parseInt(process.env.IMAGE_THUMB_EDGE || '400', 10);
+const THUMB_QUALITY = parseInt(process.env.IMAGE_THUMB_QUALITY || '80', 10);
+
+/** Thumbnail path for a full-size upload URL or path. */
+function thumbPathFor(fullPath) {
+  const dir = path.dirname(fullPath);
+  const base = path.basename(fullPath, path.extname(fullPath));
+  return path.join(dir, 'thumbs', base + '.webp');
+}
+
 let sharp = null;
 try {
   sharp = require('sharp');
@@ -67,6 +85,21 @@ async function optimiseFile(file) {
     await fs.mkdir(originalsDir, { recursive: true });
     await fs.rename(file.path, path.join(originalsDir, file.filename)).catch(() => {});
 
+    /* Thumbnail, written into a thumbs/ subfolder beside the original.
+       Generated from the already-rotated pipeline source rather than
+       the output file, so it does not inherit the full-size encode. */
+    try {
+      const thumbDir = path.join(dir, 'thumbs');
+      await fs.mkdir(thumbDir, { recursive: true });
+      await sharp(outPath)
+        .resize(THUMB_EDGE, THUMB_EDGE, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: THUMB_QUALITY })
+        .toFile(path.join(thumbDir, base + '.webp'));
+    } catch (thumbError) {
+      // A missing thumbnail is a slower card, not a broken upload.
+      console.error('[ImageOptimizer] Thumbnail failed for', base, '-', thumbError.message);
+    }
+
     const stat = await fs.stat(outPath);
     file.path = outPath;
     file.filename = base + '.webp';
@@ -101,4 +134,15 @@ async function optimizeUploads(req, res, next) {
   return next();
 }
 
-module.exports = { optimiseFile, optimizeUploads, MAX_EDGE, QUALITY, isSharpAvailable: () => !!sharp };
+module.exports = {
+  optimiseFile,
+  optimizeUploads,
+  thumbPathFor,
+  MAX_EDGE,
+  QUALITY,
+  THUMB_EDGE,
+  THUMB_QUALITY,
+  isSharpAvailable: () => !!sharp
+};
+
+

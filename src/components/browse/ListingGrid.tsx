@@ -6,8 +6,17 @@ import ListingCard from './ListingCard';
 import { ListingGridProps } from '@/types/browse';
 import { SecureMessageDisplay } from '@/components/ui/SecureMessageDisplay';
 
-interface ExtendedListingGridProps extends ListingGridProps {
+interface ExtendedListingGridProps extends Omit<ListingGridProps, 'getDisplayPrice'> {
   isGuest?: boolean;
+  /* Widened from the shared type: the price shown now depends on who
+     is looking, since buyers see the marked-up price they will be
+     charged while sellers and guests see the listed price. Overridden
+     here rather than in types/browse.ts so no other consumer of
+     ListingGridProps has to change. */
+  getDisplayPrice: (
+    listing: Parameters<ListingGridProps['getDisplayPrice']>[0],
+    viewerRole?: string | null
+  ) => ReturnType<ListingGridProps['getDisplayPrice']>;
 }
 
 export default function ListingGrid({
@@ -48,7 +57,9 @@ export default function ListingGrid({
         try {
           const isLockedPremium =
             listing.isPremium && (!user?.username || !isSubscribed(user?.username, listing.seller));
-          const displayPrice = getDisplayPrice(listing);
+          // Buyers see the marked-up price they will be charged;
+          // sellers and guests see the seller's listed price.
+          const displayPrice = getDisplayPrice(listing, user?.role);
 
           return (
             <ListingCard
@@ -75,5 +86,7 @@ export default function ListingGrid({
     </div>
   );
 }
+
+
 
 

@@ -9,7 +9,6 @@ const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
-const { incrementPaymentStats } = require('../utils/paymentStats');
 
 const JWT_SECRET = process.env.JWT_SECRET; // server.js fail-fasts on boot if missing
 
@@ -244,11 +243,11 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
       webSocketService.emitTransaction(paymentTransaction);
       webSocketService.emitTransaction(feeTransaction);
 
-      try {
-        await incrementPaymentStats(finalPrice);
-      } catch (statsError) {
-        console.error('[Subscription] Failed to increment payment stats:', statsError);
-      }
+      /* Payments-processed counts DEPOSITS only -- money entering the
+         platform through the payment processor. Counting this as well
+         would count the same dollar twice: once arriving, again when
+         it moves between wallets. Incrementing here is left out on
+         purpose; see utils/paymentStats.js. */
 
       res.json({
         success: true,
@@ -460,3 +459,5 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+

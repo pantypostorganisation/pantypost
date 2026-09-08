@@ -127,6 +127,60 @@ const sendEmail = async (options) => {
 
 // Email templates
 const emailTemplates = {
+  /* Listing decisions.
+     Sellers previously found out their listing was live only by
+     checking the site, and found out it was rejected the same way --
+     which for someone waiting to make their first sale is a silent
+     dead end. Both outcomes now get an email; the rejection carries
+     the reason so it can be fixed and resubmitted rather than guessed
+     at. */
+  listingApproved: (username, listingTitle, listingUrl) => ({
+    subject: 'Your listing is live on Panty Post',
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0e0e0e;color:#ffffff;">
+        <h1 style="margin:0 0 8px;font-size:22px;color:#ff950e;">Your listing is live</h1>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          Hi ${username}, your listing has been reviewed and is now visible to buyers.
+        </p>
+        <div style="background:#161616;border:1px solid #262626;border-radius:8px;padding:16px;margin-bottom:24px;">
+          <p style="margin:0;font-size:16px;font-weight:bold;color:#ffffff;">${listingTitle}</p>
+        </div>
+        <a href="${listingUrl}" style="display:inline-block;background:#ff950e;color:#000000;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:6px;font-size:15px;">
+          View your listing
+        </a>
+        <p style="margin:24px 0 0;color:#888888;font-size:13px;line-height:1.5;">
+          Listings with several clear photos and an honest description sell more often.
+          You can add more listings any time from your dashboard.
+        </p>
+      </div>`,
+    text: `Hi ${username}, your listing "${listingTitle}" has been approved and is now live on Panty Post.\n\nView it here: ${listingUrl}`
+  }),
+
+  listingRejected: (username, listingTitle, reason) => ({
+    subject: 'Your listing needs a change',
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0e0e0e;color:#ffffff;">
+        <h1 style="margin:0 0 8px;font-size:22px;color:#ff950e;">Your listing was not approved</h1>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          Hi ${username}, we reviewed your listing and could not publish it as submitted.
+        </p>
+        <div style="background:#161616;border:1px solid #262626;border-radius:8px;padding:16px;margin-bottom:20px;">
+          <p style="margin:0 0 8px;font-size:16px;font-weight:bold;color:#ffffff;">${listingTitle}</p>
+          ${reason ? `<p style="margin:0;color:#cccccc;font-size:14px;line-height:1.5;">${reason}</p>` : ''}
+        </div>
+        <p style="margin:0 0 24px;color:#cccccc;font-size:15px;line-height:1.5;">
+          You are welcome to edit it and submit again. Most listings are approved on a second look.
+        </p>
+        <a href="https://pantypost.com/sellers/my-listings" style="display:inline-block;background:#ff950e;color:#000000;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:6px;font-size:15px;">
+          Edit your listing
+        </a>
+        <p style="margin:24px 0 0;color:#888888;font-size:13px;">
+          If you are not sure why, reply to this email and we will explain.
+        </p>
+      </div>`,
+    text: `Hi ${username}, your listing "${listingTitle}" was not approved.${reason ? '\n\nReason: ' + reason : ''}\n\nYou can edit and resubmit it: https://pantypost.com/sellers/my-listings`
+  }),
+
   // EMAIL VERIFICATION TEMPLATE (NEW)
   emailVerification: (username, verificationLink, verificationCode) => ({
     subject: 'Verify Your Email - PantyPost',

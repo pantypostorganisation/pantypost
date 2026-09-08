@@ -6,7 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
-const VALID_ROLES = ['buyer', 'seller', 'admin'] as const;
+const VALID_ROLES = ['buyer', 'seller', 'admin', 'moderator'] as const;
 type ValidRole = (typeof VALID_ROLES)[number];
 
 const RoleSchema = z.enum(VALID_ROLES);
@@ -55,7 +55,13 @@ export default function RequireAuth({
     // NEW: strict role matching — no admin override for buyer/seller routes
     let hasAccess = false;
     if (parsed.data === 'admin') {
-      hasAccess = userRole === 'admin';
+      /* Moderators reach admin-guarded pages, but only the approval
+         queue: every other admin surface (wallets, bans, withdrawals,
+         analytics) enforces its own admin-only check on the server, so
+         a moderator landing on one gets an empty page rather than
+         access. Gating here rather than adding a second guard keeps
+         the approval page from needing special handling. */
+      hasAccess = userRole === 'admin' || userRole === 'moderator';
     } else {
       hasAccess = userRole === parsed.data; // admin can't view buyer/seller pages
     }
@@ -90,3 +96,5 @@ export default function RequireAuth({
 
   return <>{children}</>;
 }
+
+

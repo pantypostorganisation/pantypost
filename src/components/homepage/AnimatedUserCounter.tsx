@@ -4,7 +4,8 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
-import { UserRound, Users, TrendingUp } from 'lucide-react';
+import { Users, TrendingUp } from 'lucide-react';
+import Image from 'next/image';
 import { userStatsService } from '@/services/userStats.service';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
@@ -290,12 +291,19 @@ export default function AnimatedUserCounter({
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        {/* Was the circled tick -- a tick says "task complete", not
-            "people". Stroked outline, next to the SOLID wave banknote on
-            the payments counter -- reviewed live and chosen deliberately
-            (19 Aug 2026): the contrast reads as intentional on the real
-            page. Do not "fix" this into a matched pair without asking. */}
-        <UserRound className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] animate-pulse-slow flex-shrink-0" aria-hidden="true" />
+        {/* Custom artwork rather than a lucide glyph, matched with the
+            card on the payments counter -- both are solid orange fills
+            of the same weight, which is what the earlier outline-vs-
+            solid pairing kept failing to achieve. If either changes,
+            change both. */}
+        <Image
+          src="/icons/users-icon.png"
+          alt=""
+          width={20}
+          height={20}
+          className="h-3.5 w-3.5 sm:h-5 sm:w-5 flex-shrink-0 object-contain"
+          aria-hidden="true"
+        />
         <span className="text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap">
           Trusted by{' '}
           <span className="relative inline-block">
@@ -408,4 +416,8 @@ export default function AnimatedUserCounter({
     </motion.div>
   );
 }
+
+
+
+
 

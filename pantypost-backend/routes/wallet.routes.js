@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const { incrementPaymentStats } = require('../utils/paymentStats');
 const PayoutDetails = require('../models/PayoutDetails');
 const Order = require('../models/Order');
 const User = require('../models/User');
@@ -332,6 +333,19 @@ router.post('/deposit/system', async (req, res) => {
         'deposit'
       );
       global.webSocketService.emitTransaction(transaction);
+    }
+
+    /* The homepage "payments processed" figure counts DEPOSITS, which
+       is the money the payment processor actually handled. It used to
+       increment on purchases, tips, subscriptions and auction wins
+       instead -- counting the same dollar again every time it moved
+       between wallets, so the total ran far ahead of anything real.
+       Never fails the deposit: a broken counter is not worth losing a
+       credited payment over. */
+    try {
+      await incrementPaymentStats(amount);
+    } catch (statsError) {
+      console.error('[Wallet] Failed to increment payment stats:', statsError.message);
     }
 
     return res.json({
@@ -1766,3 +1780,4 @@ router.get('/admin/revenue-chart', authMiddleware, async (req, res) => {
 
 // Export the router
 module.exports = router;
+

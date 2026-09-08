@@ -845,6 +845,11 @@ router.post('/login', loginLimiter, async (req, res) => {
       });
     }
 
+    /* Moderators sign in through the Administrator option. There is no
+       separate Moderator button -- the role stays unadvertised, and a
+       moderator picking Buyer or Seller is refused the same way an
+       admin would be. Permissions still come from the account, not the
+       selection. */
     if (role) {
       if (user.role === 'admin' && role !== 'admin') {
         return res.status(403).json({
@@ -855,7 +860,16 @@ router.post('/login', loginLimiter, async (req, res) => {
           }
         });
       }
-      if (user.role !== 'admin' && role === 'admin') {
+      if (user.role === 'moderator' && role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: {
+            code: ERROR_CODES.AUTH_INSUFFICIENT_PERMISSIONS,
+            message: 'This is a staff account. Select "Administrator" to login.'
+          }
+        });
+      }
+      if (user.role !== 'admin' && user.role !== 'moderator' && role === 'admin') {
         return res.status(403).json({
           success: false,
           error: {
@@ -864,7 +878,7 @@ router.post('/login', loginLimiter, async (req, res) => {
           }
         });
       }
-      if (user.role !== 'admin' && role !== user.role) {
+      if (user.role !== 'admin' && user.role !== 'moderator' && role !== user.role) {
         const correctRole = user.role === 'seller' ? 'Seller' : 'Buyer';
         const wrongRole = role === 'seller' ? 'Seller' : 'Buyer';
         return res.status(401).json({
@@ -880,7 +894,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     /* Admin accounts require a second factor on EVERY sign-in: a
        6-digit code emailed to the account address. No token is issued
        here -- an admin session only exists after /verify-admin-2fa. */
-    if (user.role === 'admin') {
+    /* Moderators get the same emailed code as admins: they act on
+       other people's content, so the account is worth protecting to
+       the same standard. */
+    if (user.role === 'admin' || user.role === 'moderator') {
       const code = crypto.randomInt(100000, 1000000).toString();
       const codeHash = crypto.createHash('sha256').update(code).digest('hex');
       await AdminTwoFactor.deleteMany({ username: user.username });
@@ -970,7 +987,7 @@ router.post('/verify-admin-2fa', adminTwoFactorLimiter, async (req, res) => {
     }
 
     const user = await User.findOne({ username });
-    if (!user || user.role !== 'admin') {
+    if (!user || (user.role !== 'admin' && user.role !== 'moderator')) {
       return res.status(401).json({
         success: false,
         error: { code: ERROR_CODES.AUTH_INVALID_CREDENTIALS, message: 'Invalid code. Please sign in again.' }
@@ -1239,7 +1256,7 @@ router.post('/admin/bootstrap', authMiddleware, async (req, res) => {
       });
     }
 
-    if (dbUser.role === 'admin') {
+    if (dbUser.role === 'admin' || dbUser.role === 'moderator') {
       const token = signToken(dbUser);
       return res.json({
         success: true,
@@ -1550,5 +1567,7 @@ router.post('/reset-password', codeVerifyLimiter, async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 
