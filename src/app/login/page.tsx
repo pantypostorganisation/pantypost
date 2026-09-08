@@ -58,31 +58,34 @@ export default function LoginPage() {
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(false);
 
-  // Role options configuration
-  const roleOptions = [
-    {
-      key: 'buyer',
-      label: 'Buyer',
-      description: 'Browse and purchase items',
-      icon: ShoppingBag,
-    },
-    {
-      key: 'seller',
-      label: 'Seller',
-      description: 'List and manage products',
-      icon: User,
-    },
-    ...(showAdminMode
-      ? [
-          {
-            key: 'admin',
-            label: 'Administrator',
-            description: 'Full system access',
-            icon: Shield,
-          },
-        ]
-      : []),
-  ];
+  /* Admin mode REPLACES the role list rather than adding to it.
+     Somebody who has found the hidden toggle is signing in as staff,
+     and leaving Buyer and Seller on screen alongside Administrator
+     just invites the wrong pick -- staff accounts are refused those
+     options by the server anyway, so the choice was never real. */
+  const roleOptions = showAdminMode
+    ? [
+        {
+          key: 'admin',
+          label: 'Administrator',
+          description: 'Full system access',
+          icon: Shield,
+        },
+      ]
+    : [
+        {
+          key: 'buyer',
+          label: 'Buyer',
+          description: 'Browse and purchase items',
+          icon: ShoppingBag,
+        },
+        {
+          key: 'seller',
+          label: 'Seller',
+          description: 'List and manage products',
+          icon: User,
+        },
+      ];
 
   // Mounted state
   useEffect(() => {
@@ -405,9 +408,18 @@ export default function LoginPage() {
   }, [clearError]);
 
   const handleCrownClick = useCallback(() => {
-    setShowAdminMode((prev) => !prev);
-    if (showAdminMode && role === 'admin') {
-      setRole('buyer');
+    const turningOn = !showAdminMode;
+    setShowAdminMode(turningOn);
+
+    /* Clear any selection the toggle just hid. Without this, turning
+       admin mode ON leaves a Seller role selected but invisible, and
+       turning it OFF leaves Administrator selected with no button to
+       show it -- either way the form submits a role the person cannot
+       see. */
+    if (turningOn) {
+      if (role !== 'admin') setRole(null);
+    } else if (role === 'admin') {
+      setRole(null);
     }
   }, [showAdminMode, role]);
 
@@ -563,6 +575,7 @@ export default function LoginPage() {
     </div>
   );
 }
+
 
 
 
