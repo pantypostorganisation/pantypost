@@ -11,7 +11,6 @@ const Notification = require('../models/Notification');
 const Subscription = require('../models/Subscription');
 // CRITICAL FIX: Import Referral correctly from the module that exports both Referral and ReferralCommission
 const { Referral, ReferralCommission } = require('../models/Referral');
-const { incrementPaymentStats } = require('../utils/paymentStats');
 const authMiddleware = require('../middleware/auth.middleware');
 const tierService = require('../services/tierService');
 const TIER_CONFIG = require('../config/tierConfig');
@@ -709,11 +708,11 @@ router.post('/', authMiddleware, async (req, res) => {
       }
 
       // FIXED: Track the marked-up price that the buyer actually pays
-      try {
-        await incrementPaymentStats(actualMarkedUpPrice);
-      } catch (statsError) {
-        console.error('[Order] Failed to increment payment stats:', statsError);
-      }
+      /* Payments-processed counts DEPOSITS only -- money entering the
+         platform through the payment processor. Counting a purchase
+         here as well would count the same dollar twice: once when the
+         buyer funded their wallet, again when they spent it. See
+         utils/paymentStats.js. */
 
       res.json({
         success: true,
@@ -1278,11 +1277,11 @@ router.post('/drop', authMiddleware, async (req, res) => {
         }
       }
 
-      try {
-        await incrementPaymentStats(actualMarkedUpPrice);
-      } catch (statsError) {
-        console.error('[DropOrder] Failed to increment payment stats:', statsError);
-      }
+      /* Payments-processed counts DEPOSITS only -- money entering the
+         platform through the payment processor. Counting a purchase
+         here as well would count the same dollar twice: once when the
+         buyer funded their wallet, again when they spent it. See
+         utils/paymentStats.js. */
 
       return res.json({
         success: true,
@@ -1789,11 +1788,11 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
       }
 
       // FIXED: Track the marked-up price that the buyer actually pays
-      try {
-        await incrementPaymentStats(actualMarkedUpPrice);
-      } catch (statsError) {
-        console.error('[Order] Failed to increment payment stats:', statsError);
-      }
+      /* Payments-processed counts DEPOSITS only -- money entering the
+         platform through the payment processor. Counting a purchase
+         here as well would count the same dollar twice: once when the
+         buyer funded their wallet, again when they spent it. See
+         utils/paymentStats.js. */
 
       res.json({
         success: true,
@@ -2400,4 +2399,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
 // Export the router
 module.exports = router;
+
+
 

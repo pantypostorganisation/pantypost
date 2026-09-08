@@ -7,7 +7,6 @@ const User = require('../models/User');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
 const { body, validationResult } = require('express-validator');
-const { incrementPaymentStats } = require('../utils/paymentStats');
 
 // ✅ Use the initialized singleton websocket service
 const webSocketService = require('../config/websocket');
@@ -131,11 +130,11 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
         );
       } catch (_) {}
 
-      try {
-        await incrementPaymentStats(amount);
-      } catch (statsError) {
-        console.error('[Tip] Failed to increment payment stats:', statsError);
-      }
+      /* Payments-processed counts DEPOSITS only -- money entering the
+         platform through the payment processor. Counting this as well
+         would count the same dollar twice: once arriving, again when
+         it moves between wallets. Incrementing here is left out on
+         purpose; see utils/paymentStats.js. */
 
       return res.json({
         success: true,
@@ -273,3 +272,5 @@ router.get('/stats/:username', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
