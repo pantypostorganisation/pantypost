@@ -9,7 +9,16 @@ const PATTERNS = {
   username: /^[a-zA-Z0-9_-]{3,30}$/,
   email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
   // Password: minimum 8 chars, at least 1 uppercase, 1 lowercase, 1 number
-  password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/,
+  /* Requires lower, upper and a digit -- and nothing more.
+     This used to end in [a-zA-Z\d@$!%*?&]{8,}, a WHITELIST of allowed
+     characters, which silently rejected any password containing a
+     letter outside plain ASCII or a symbol outside those seven. A
+     Spanish-speaking seller using "Contrasena123" with an n-tilde was
+     told her password "was not strong enough", four times, with no
+     indication of what was wrong. Same for #, _, -, . and spaces.
+     Restricting which characters a password MAY contain reduces the
+     search space; it never adds security. */
+  password: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/,
   // Allow letters, numbers, spaces, and common punctuation
   safeText: /^[a-zA-Z0-9\s\-.,!?'"()]+$/,
   // Price pattern: positive numbers with up to 2 decimal places
@@ -62,7 +71,7 @@ export const authSchemas = {
     .max(100, 'Password is too long')
     .regex(
       PATTERNS.password,
-      'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+      'Password needs at least one uppercase letter, one lowercase letter and one number'
     ),
 
   confirmPassword: z.string().min(1, 'Please confirm your password'),
@@ -89,7 +98,7 @@ export const authSchemas = {
       .min(8, 'Password must be at least 8 characters')
       .regex(
         PATTERNS.password,
-        'Password must contain at least one uppercase letter, one lowercase letter, and one number'
+        'Password needs at least one uppercase letter, one lowercase letter and one number'
       ),
     confirmPassword: z.string().min(1, 'Please confirm your password'),
     country: z
@@ -525,3 +534,5 @@ export function validateField<T>(
     return 'Validation failed';
   }
 }
+
+
