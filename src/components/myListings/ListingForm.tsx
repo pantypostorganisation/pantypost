@@ -51,6 +51,25 @@ interface ValidationState {
   tags: { isValid: boolean; message: string; count: number };
 }
 
+/* Durations are fractional days, so "0.125 days" needs turning back
+   into "3 hours" for the summary line. The old inline expression only
+   knew about the 1-minute test value and whole days, so every hour
+   option would have read as "0.125 days". */
+function formatAuctionDuration(value: string): string {
+  const days = parseFloat(value);
+  if (!Number.isFinite(days) || days <= 0) return 'an unknown time';
+  if (days < 1 / 24) {
+    const minutes = Math.round(days * 24 * 60);
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  }
+  if (days < 1) {
+    const hours = Math.round(days * 24);
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
+  }
+  const whole = Math.round(days);
+  return `${whole} day${whole === 1 ? '' : 's'}`;
+}
+
 export default function ListingForm({
   formState,
   isEditing,
@@ -715,6 +734,15 @@ export default function ListingForm({
                 className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white focus:outline-none focus:ring-2 focus:ring-purple-600"
               >
                 <option value="0.000694">1 Minute (Testing)</option>
+                {/* Hour-length auctions exist for live streams: a creator
+                    can open an auction on camera and close it in the same
+                    session, which is where the bidding competition
+                    actually happens. Stored as fractional days because
+                    calculateAuctionEndTime already parses floats. */}
+                <option value="0.041667">1 Hour</option>
+                <option value="0.125">3 Hours</option>
+                <option value="0.25">6 Hours</option>
+                <option value="0.5">12 Hours</option>
                 <option value="1">1 Day</option>
                 <option value="3">3 Days</option>
                 <option value="5">5 Days</option>
@@ -990,7 +1018,7 @@ export default function ListingForm({
                 <h4 className="font-medium text-purple-300 mb-1">Auction Information</h4>
                 <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
                   <li>
-                    Auctions run for {formState.auctionDuration === '0.000694' ? '1 minute' : `${formState.auctionDuration} day${parseInt(formState.auctionDuration) !== 1 ? 's' : ''}`} from the time you create the listing
+                    Auctions run for {formatAuctionDuration(formState.auctionDuration)} from the time you create the listing
                   </li>
                   <li>Bidders must have sufficient funds in their wallet to place a bid</li>
                   <li>If the reserve price is met, the highest bidder automatically purchases the item when the auction ends</li>
@@ -1129,6 +1157,8 @@ export default function ListingForm({
     </SecureForm>
   );
 }
+
+
 
 
 
