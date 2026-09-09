@@ -243,7 +243,7 @@ export default function ContentPolicyPage() {
               so it is properly logged and tracked.
             </p>
             <p className="mt-3 text-xs text-gray-500">
-              Operated by G Dykyj &amp; O.S Richards, trading as Panty Post · ABN 16 501 428 474 · Australia
+              Operated by PantyPost Pty Ltd · ACN 702 133 042 · ABN 55 702 133 042 · Australia
             </p>
           </section>
         </div>
@@ -251,4 +251,6 @@ export default function ContentPolicyPage() {
     </main>
   );
 }
+
+
 

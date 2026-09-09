@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { Lock, Database, Share2, UserCheck, Trash2 } from 'lucide-react';
 
-const LAST_UPDATED = '2 August 2026';
+const LAST_UPDATED = '9 September 2026';
 
 export default function PrivacyPolicyPage() {
   return (
@@ -28,9 +28,20 @@ export default function PrivacyPolicyPage() {
           <section>
             <h2 className="mb-3 text-xl font-semibold text-white">1. Who we are</h2>
             <p>
-              Panty Post is operated by G Dykyj &amp; O.S Richards, trading as Panty Post
-              (ABN 16 501 428 474), an Australian partnership. We are the data controller for the
+              Panty Post is operated by PantyPost Pty Ltd (ACN 702 133 042,
+              ABN 55 702 133 042), an Australian proprietary limited company. We are the data controller for the
               information described in this policy.
+            </p>
+            <p className="mt-3">
+              {/* Users who signed up before September 2026 agreed to a
+                  policy naming the partnership that previously ran the
+                  site. Saying so plainly is both fairer and easier to
+                  defend than quietly swapping the name. */}
+              Panty Post was previously operated by G Dykyj &amp; O.S Richards, an Australian
+              partnership. On 7 September 2026 the business was incorporated as PantyPost Pty
+              Ltd, which now operates the platform and is responsible for the information
+              described in this policy. Nothing about how we handle your information has changed
+              as a result.
             </p>
             <p className="mt-3">
               Contact:{' '}
@@ -268,7 +279,7 @@ export default function PrivacyPolicyPage() {
               </a>
             </p>
             <p className="mt-3 text-xs text-gray-500">
-              Operated by G Dykyj &amp; O.S Richards, trading as Panty Post · ABN 16 501 428 474 · Australia
+              Operated by PantyPost Pty Ltd · ACN 702 133 042 · ABN 55 702 133 042 · Australia
             </p>
           </section>
         </div>
@@ -276,4 +287,5 @@ export default function PrivacyPolicyPage() {
     </main>
   );
 }
+
 

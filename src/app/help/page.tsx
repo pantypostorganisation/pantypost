@@ -497,7 +497,7 @@ export default function HelpPage() {
 
           <p className="mt-4 flex items-start gap-2 text-xs text-ink-faint">
             <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            Operated by G Dykyj &amp; O.S Richards, trading as Panty Post · ABN 16 501 428 474 ·
+            Operated by PantyPost Pty Ltd · ACN 702 133 042 · ABN 55 702 133 042 ·
             Australia
           </p>
         </section>
@@ -505,3 +505,5 @@ export default function HelpPage() {
     </main>
   );
 }
+
+

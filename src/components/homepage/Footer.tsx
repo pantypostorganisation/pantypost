@@ -198,8 +198,12 @@ export default function Footer() {
             block on the page. Muted, but present on every page. */}
         <div className="mt-8 space-y-2 border-t border-line pt-6 text-xs leading-relaxed text-ink-faint">
           <p>
-            &copy; {currentYear} Panty Post (PantyPost). All rights reserved. Operated by G Dykyj
-            &amp; O.S Richards, trading as Panty Post &middot; ABN 16 501 428 474 &middot; Australia
+            {/* The operating entity, not the founders. Naming two
+                individuals under an adult marketplace put their legal
+                names on every page of a public site; the company is
+                what actually operates it. */}
+            &copy; {currentYear} Panty Post (PantyPost). All rights reserved.
+            &middot; Operated by PantyPost Pty Ltd &middot; ACN 702 133 042 &middot; ABN 55 702 133 042 &middot; Australia
             &middot;{' '}
             <a
               href="mailto:support@pantypost.com"
@@ -222,3 +226,5 @@ export default function Footer() {
     </footer>
   );
 }
+
+
