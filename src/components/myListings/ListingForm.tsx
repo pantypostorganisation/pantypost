@@ -51,6 +51,18 @@ interface ValidationState {
   tags: { isValid: boolean; message: string; count: number };
 }
 
+/* Common lengths, so the sliders are for precision rather than for
+   everyone. 1 hour is the floor: zero days and zero hours would create
+   an auction that has already ended. */
+const AUCTION_PRESETS = [
+  { label: '1 hour', days: 1 / 24 },
+  { label: '3 hours', days: 3 / 24 },
+  { label: '12 hours', days: 0.5 },
+  { label: '1 day', days: 1 },
+  { label: '3 days', days: 3 },
+  { label: '7 days', days: 7 },
+];
+
 /* Durations are fractional days, so "0.125 days" needs turning back
    into "3 hours" for the summary line. The old inline expression only
    knew about the 1-minute test value and whole days, so every hour
@@ -88,6 +100,41 @@ export default function ListingForm({
   saveError,
   fieldErrors
 }: ListingFormProps) {
+  /* The stored value is a single fractional-day number; the two
+     sliders are just a friendlier way to enter it. Splitting it here
+     rather than holding separate state avoids the two drifting apart
+     when a preset is clicked. */
+  const durationParts = useMemo(() => {
+    const total = parseFloat(formState.auctionDuration);
+    if (!Number.isFinite(total) || total <= 0) return { days: 0, hours: 1 };
+    const days = Math.floor(total);
+    const hours = Math.round((total - days) * 24);
+    if (hours === 24) return { days: days + 1, hours: 0 };
+    return { days, hours };
+  }, [formState.auctionDuration]);
+
+  const setDuration = useCallback(
+    (days: number, hours: number) => {
+      // Never let both reach zero: an auction must have a future end.
+      const safeHours = days === 0 && hours === 0 ? 1 : hours;
+      onFormChange({ auctionDuration: String(days + safeHours / 24) });
+    },
+    [onFormChange]
+  );
+
+  const auctionEndsAt = useMemo(() => {
+    const total = parseFloat(formState.auctionDuration);
+    if (!Number.isFinite(total) || total <= 0) return '-';
+    const end = new Date(Date.now() + total * 24 * 60 * 60 * 1000);
+    return end.toLocaleString(undefined, {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }, [formState.auctionDuration]);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -726,29 +773,85 @@ export default function ListingForm({
                 Let buyers skip the auction and buy instantly. Bids are capped below this price.
               </p>
             </div>
-            <div>
+            {/* Duration is chosen, not picked from a list.
+                A dropdown of fixed lengths cannot cover a live stream,
+                which is the case that prompted this: a creator running
+                an auction on camera needs it to end when her stream
+                does, not at whichever preset happens to be closest.
+                Presets still sit on top because most sellers want a
+                common length and should not have to drag for it. The
+                end time is shown as a real date so nobody has to do the
+                arithmetic in their head. */}
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-300 mb-1">Auction Duration</label>
-              <select
-                value={formState.auctionDuration}
-                onChange={(e) => onFormChange({ auctionDuration: e.target.value })}
-                className="w-full p-3 border border-gray-700 rounded-lg bg-black text-white focus:outline-none focus:ring-2 focus:ring-purple-600"
-              >
-                <option value="0.000694">1 Minute (Testing)</option>
-                {/* Hour-length auctions exist for live streams: a creator
-                    can open an auction on camera and close it in the same
-                    session, which is where the bidding competition
-                    actually happens. Stored as fractional days because
-                    calculateAuctionEndTime already parses floats. */}
-                <option value="0.041667">1 Hour</option>
-                <option value="0.125">3 Hours</option>
-                <option value="0.25">6 Hours</option>
-                <option value="0.5">12 Hours</option>
-                <option value="1">1 Day</option>
-                <option value="3">3 Days</option>
-                <option value="5">5 Days</option>
-                <option value="7">7 Days</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">How long the auction will last</p>
+
+              <div className="rounded-lg border border-gray-700 bg-black/40 p-4">
+                <div className="flex flex-wrap gap-2">
+                  {AUCTION_PRESETS.map((preset) => {
+                    const isActive = Math.abs(parseFloat(formState.auctionDuration) - preset.days) < 0.0001;
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => onFormChange({ auctionDuration: String(preset.days) })}
+                        aria-pressed={isActive}
+                        className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                          isActive
+                            ? 'border-[#ff950e] bg-[#ff950e] text-black'
+                            : 'border-gray-700 text-gray-300 hover:border-[#ff950e]/60 hover:text-white'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <div className="mb-1 flex items-baseline justify-between">
+                      <span className="text-xs text-gray-400">Days</span>
+                      <span className="text-sm font-semibold text-white">{durationParts.days}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={7}
+                      step={1}
+                      value={durationParts.days}
+                      onChange={(e) => setDuration(Number(e.target.value), durationParts.hours)}
+                      className="w-full accent-[#ff950e]"
+                      aria-label="Auction length in days"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex items-baseline justify-between">
+                      <span className="text-xs text-gray-400">Hours</span>
+                      <span className="text-sm font-semibold text-white">{durationParts.hours}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={23}
+                      step={1}
+                      value={durationParts.hours}
+                      onChange={(e) => setDuration(durationParts.days, Number(e.target.value))}
+                      className="w-full accent-[#ff950e]"
+                      aria-label="Auction length in hours"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t border-gray-800 pt-3">
+                  <span className="text-xs text-gray-400">
+                    Runs for {formatAuctionDuration(formState.auctionDuration)}
+                  </span>
+                  <span className="text-xs text-gray-300">
+                    Ends <span className="font-semibold text-[#ff950e]">{auctionEndsAt}</span>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
