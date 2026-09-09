@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Users, Plus, Mail, Copy, Trash2, ExternalLink, Check, X, Loader2,
+  Users, Plus, Mail, Copy, Trash2, ExternalLink, Check, X, Loader2, ChevronDown,
   Wand2, ShieldAlert, ShieldCheck, Pencil, AlertTriangle,
 } from 'lucide-react';
 import { apiCall } from '@/services/api.config';
@@ -74,6 +74,20 @@ export default function OutreachPipeline() {
   // Editing an existing prospect, and the delete confirmation.
   const [editing_id, setEditingId] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Prospect | null>(null);
+
+  /* Which rows are open. A set rather than a single id so several can
+     be compared side by side -- the usual reason to open one is to
+     weigh it against another. */
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -390,6 +404,17 @@ export default function OutreachPipeline() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpanded(p._id)}
+                      aria-expanded={expanded.has(p._id)}
+                      aria-label={expanded.has(p._id) ? 'Hide details' : 'Show details'}
+                      className="rounded-sm p-0.5 text-gray-500 transition-colors hover:text-[#ff950e]"
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${expanded.has(p._id) ? 'rotate-180' : ''}`}
+                      />
+                    </button>
                     <span className="font-semibold text-white">{p.name}</span>
                     <span className="rounded-sm border border-gray-700 px-1.5 py-0.5 text-[10px] uppercase text-gray-400">
                       {p.type}
@@ -435,10 +460,64 @@ export default function OutreachPipeline() {
                     title="Delete"
                     className="rounded-md border border-gray-700 p-2 text-gray-500 hover:border-red-500 hover:text-red-400"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
+
+              {/* Everything captured about them, shown only on demand.
+                  Putting audience size and roster in the collapsed row
+                  made every row three lines tall and the list harder to
+                  scan, which is the opposite of what a pipeline is for. */}
+              {expanded.has(p._id) && (
+                <dl className="mt-3 grid gap-x-6 gap-y-2 border-t border-gray-800 pt-3 text-xs sm:grid-cols-2">
+                  {[
+                    ['Audience size', p.audienceSize],
+                    ['Handle', p.handle],
+                    ['Manages', p.manages],
+                    ['Type', p.type],
+                    ['Stage', STAGES.find(x => x.key === p.stage)?.label],
+                    ['Times contacted', p.followUpCount ? String(p.followUpCount) : '0'],
+                    ['Added', p.createdAt ? new Date(p.createdAt).toLocaleDateString() : undefined],
+                  ]
+                    .filter(([, value]) => value)
+                    .map(([label, value]) => (
+                      <div key={String(label)} className="flex gap-2">
+                        <dt className="shrink-0 text-gray-500">{label}:</dt>
+                        <dd className="min-w-0 break-words text-gray-300">{value}</dd>
+                      </div>
+                    ))}
+
+                  {p.profileUrl && (
+                    <div className="flex gap-2 sm:col-span-2">
+                      <dt className="shrink-0 text-gray-500">Profile:</dt>
+                      <dd className="min-w-0 break-all">
+                        <a href={p.profileUrl} target="_blank" rel="noreferrer" className="text-[#ff950e] hover:underline">
+                          {p.profileUrl}
+                        </a>
+                      </dd>
+                    </div>
+                  )}
+
+                  {p.sourceUrl && (
+                    <div className="flex gap-2 sm:col-span-2">
+                      <dt className="shrink-0 text-gray-500">Contact found at:</dt>
+                      <dd className="min-w-0 break-all">
+                        <a href={p.sourceUrl} target="_blank" rel="noreferrer" className="text-[#ff950e] hover:underline">
+                          {p.sourceUrl}
+                        </a>
+                      </dd>
+                    </div>
+                  )}
+
+                  {p.notes && (
+                    <div className="flex gap-2 sm:col-span-2">
+                      <dt className="shrink-0 text-gray-500">Notes:</dt>
+                      <dd className="min-w-0 whitespace-pre-wrap break-words text-gray-300">{p.notes}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
             </div>
           ))
         )}
@@ -533,5 +612,6 @@ export default function OutreachPipeline() {
     </div>
   );
 }
+
 
 
