@@ -176,6 +176,41 @@ export default function AnimatedUserCounter({
     fetchStatsRef.current = fetchStats;
   }, [fetchStats]);
 
+  /* Returning to a backgrounded tab used to make the counter sail past
+     the real figure and drift back down from a few hundred.
+
+     The count is a physics spring, and browsers stop delivering
+     animation frames to hidden tabs. On return the spring integrates
+     one enormous time step, overshoots wildly, then settles -- which
+     reads as the number counting DOWN, the opposite of what a counter
+     should ever appear to do.
+
+     Snapping the spring to its current resting value the moment the
+     tab becomes visible skips that catch-up frame entirely. The
+     refetch afterwards still animates any genuine increase, so a real
+     jump in signups while you were away is still shown. */
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible' || !mountedRef.current) return;
+
+      const settled = previousCountRef.current;
+      if (typeof (springValue as any).jump === 'function') {
+        (springValue as any).jump(settled);
+      } else {
+        springValue.set(settled);
+      }
+
+      fetchStatsRef.current();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('pageshow', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pageshow', handleVisibility);
+    };
+  }, [springValue]);
+
   // Initial fetch
   useEffect(() => {
     mountedRef.current = true;
@@ -301,7 +336,7 @@ export default function AnimatedUserCounter({
           alt=""
           width={20}
           height={20}
-          className="h-3.5 w-3.5 sm:h-5 sm:w-5 flex-shrink-0 object-contain"
+          className="h-3.5 w-3.5 sm:h-5 sm:w-5 animate-pulse-slow flex-shrink-0 object-contain"
           aria-hidden="true"
         />
         <span className="text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap">
