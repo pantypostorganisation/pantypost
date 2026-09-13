@@ -16,18 +16,13 @@ import { useAuth } from '@/context/AuthContext';
 import { apiCall } from '@/services/api.config';
 
 function BuyerWalletContent() {
- // old hook that powers the manual add-funds UI
+ /* The amount, the input handlers and the submit all moved into the
+    crypto modal, so only the balance and purchase list are still read
+    from here. Leaving the rest destructured would imply this page
+    still owns a deposit form; it does not. */
  const {
  balance: localBalance,
- amountToAdd,
- message,
- messageType,
- isLoading,
  buyerPurchases,
- handleAddFunds,
- handleAmountChange,
- handleKeyPress,
- handleQuickAmountSelect,
  } = useBuyerWallet();
 
  // new: pull from global wallet context (this one will get the backend value)
@@ -135,18 +130,14 @@ function BuyerWalletContent() {
           </div>
         )}
 
+        {/* The amount is chosen inside the modal now, so this panel
+            only shows the balance and opens it. The old props carried a
+            card form that no processor backs. */}
         <AddFundsSection
           balance={displayBalance}
-          amountToAdd={amountToAdd}
-          message={message}
-          messageType={messageType}
-          isLoading={isLoading}
-          onAmountChange={handleAmountChange}
-          onKeyPress={handleKeyPress}
-          onAddFunds={async () => {
-            setShowCrypto(true);
-          }}
-          onQuickAmountSelect={handleQuickAmountSelect}
+          onAddFunds={() => setShowCrypto(true)}
+          minDeposit={cryptoConfig?.min}
+          maxDeposit={cryptoConfig?.max}
         />
 
         {/* Transactions on demand. Native <details> so it works without
