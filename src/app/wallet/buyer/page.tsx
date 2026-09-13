@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Check, ChevronDown, Clock, X } from 'lucide-react';
+import CryptoTopUpModal from '@/components/wallet/buyer/CryptoTopUpModal';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
@@ -37,11 +38,30 @@ function BuyerWalletContent() {
  const [showBanner, setShowBanner] = useState(false);
  const [depositHistory, setDepositHistory] = useState<any[]>([]);
 
- /* Card payments are not live yet. Rather than dressing the page in
-    warning banners -- which makes a working product look broken -- the
-    deposit button intercepts once and explains. Delete this state, the
-    modal, and the intercept in onAddFunds when Segpay goes live. */
- const [showPaymentsPending, setShowPaymentsPending] = useState(false);
+ /* Crypto is the live deposit rail while card acquiring is still
+    being arranged. The modal handles both kinds of buyer: those who
+    already hold crypto, and those who need telling how to get some. */
+ const [showCrypto, setShowCrypto] = useState(false);
+ const [cryptoConfig, setCryptoConfig] = useState<{
+   currencies: { code: string; label: string; network: string; note: string }[];
+   min: number;
+   max: number;
+   enabled: boolean;
+ } | null>(null);
+
+ useEffect(() => {
+   let cancelled = false;
+   (async () => {
+     try {
+       const res = await apiCall<any>('/wallet/crypto/currencies');
+       if (!cancelled && res.success) setCryptoConfig(res.data);
+     } catch {
+       // Leaving this null just hides the option rather than breaking
+       // the page.
+     }
+   })();
+   return () => { cancelled = true; };
+ }, []);
 
  // decide which balance to show: prefer context (backend) if available
  const contextBalance =
@@ -124,7 +144,7 @@ function BuyerWalletContent() {
           onAmountChange={handleAmountChange}
           onKeyPress={handleKeyPress}
           onAddFunds={async () => {
-            setShowPaymentsPending(true);
+            setShowCrypto(true);
           }}
           onQuickAmountSelect={handleQuickAmountSelect}
         />
@@ -155,65 +175,41 @@ function BuyerWalletContent() {
         </details>
       </div>
 
-      {showPaymentsPending && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="payments-pending-title"
-          onClick={() => setShowPaymentsPending(false)}
-        >
-          <div
-            className="relative w-full max-w-md rounded-lg border border-white/10 bg-surface-raised p-6 text-center"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setShowPaymentsPending(false)}
-              aria-label="Close"
-              className="absolute right-3 top-3 rounded-sm p-1 text-ink-muted transition-colors hover:bg-white/10 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <div className="relative mx-auto w-fit">
-              <span
-                className="absolute inset-0 rounded-full bg-primary/25 blur-2xl"
-                aria-hidden="true"
-              />
-              <Clock
-                className="relative h-12 w-12 text-primary"
-                strokeWidth={1.5}
-                aria-hidden="true"
-              />
-            </div>
-
-            <h2 id="payments-pending-title" className="mt-4 text-xl font-bold text-white">
-              Card payments are almost here
-            </h2>
-            <p className="mt-3 text-sm text-ink-muted">
-              We are in the final stages of integrating with Segpay, our payment
-              processor, so you can top up your wallet by card. Everything else works
-              right now - browse listings, follow sellers and message them directly.
-            </p>
-            <p className="mt-3 text-sm text-ink-muted">
-              Want to know the moment it goes live?{' '}
-              <a href="mailto:support@pantypost.com" className="text-primary hover:underline">
-                Email us
-              </a>{' '}
-              and we will tell you first.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setShowPaymentsPending(false)}
-              className="mt-6 w-full rounded-md bg-primary px-6 py-3 font-semibold text-black transition-colors hover:bg-primary-hover"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
+      {cryptoConfig?.enabled && (
+        <CryptoTopUpModal
+          open={showCrypto}
+          onClose={() => setShowCrypto(false)}
+          currencies={cryptoConfig.currencies}
+          min={cryptoConfig.min}
+          max={cryptoConfig.max}
+          onCreate={async (value, currency) => {
+            const res = await apiCall<any>('/wallet/crypto/create', {
+              method: 'POST',
+              body: JSON.stringify({ amount: value, currency }),
+            });
+            if (!res.success) {
+              /* res.error is an ApiError object, not a string -- passing
+                 it straight to Error() gives "[object Object]" on screen
+                 as well as a type error. */
+              const message =
+                typeof res.error === 'string'
+                  ? res.error
+                  : res.error?.message || 'Could not start the deposit.';
+              throw new Error(message);
+            }
+            return res.data;
+          }}
+          onCheckStatus={async (paymentId) => {
+            const res = await apiCall<any>(`/wallet/crypto/status/${paymentId}`);
+            if (!res.success) throw new Error('Could not check the deposit.');
+            return res.data;
+          }}
+          onCredited={() => {
+            void reloadData();
+          }}
+        />
       )}
+
     </main>
   );
 }
@@ -272,4 +268,6 @@ export default function BuyerWalletPage() {
  </BanCheck>
  );
 }
+
+
 

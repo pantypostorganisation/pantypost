@@ -8,6 +8,7 @@ const Transaction = require('../models/Transaction');
 const Listing = require('../models/Listing');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const { sendEmail, emailTemplates } = require('../config/email');
 const Subscription = require('../models/Subscription');
 // CRITICAL FIX: Import Referral correctly from the module that exports both Referral and ReferralCommission
 const { Referral, ReferralCommission } = require('../models/Referral');
@@ -83,6 +84,34 @@ async function isUserSubscribedToSeller(buyer, seller) {
 }
 
 // POST /api/orders - Create new order with proper fee tracking and TIER SUPPORT
+
+/* Emails a seller that one of their listings sold.
+   Never throws: an order is already paid for by the time this runs, so
+   a mail failure must not roll it back. Logs and moves on. */
+async function emailSaleToSeller(sellerUsername, buyerUsername, order, earnings) {
+  try {
+    const seller = await User.findOne({ username: sellerUsername });
+    if (!seller || !seller.email) return;
+
+    const template = emailTemplates.orderReceived(
+      sellerUsername,
+      buyerUsername,
+      order.title || 'your listing',
+      earnings,
+      'https://pantypost.com/sellers/my-orders'
+    );
+
+    await sendEmail({
+      to: seller.email,
+      subject: template.subject,
+      html: template.html,
+      text: template.text
+    });
+  } catch (error) {
+    console.error('[Order] Sale email failed:', error.message);
+  }
+}
+
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const {
@@ -572,6 +601,8 @@ router.post('/', authMiddleware, async (req, res) => {
         _id: order._id, 
         title: order.title 
       }, actualMarkedUpPrice);
+
+      await emailSaleToSeller(effSeller, buyer, order, order.sellerEarnings);
 
       const purchaseTransaction = new Transaction({
         type: 'purchase',
@@ -1118,6 +1149,8 @@ router.post('/drop', authMiddleware, async (req, res) => {
         title: `${order.title} — unit #${unitNumber} of ${totalUnits}`
       }, actualMarkedUpPrice);
 
+      await emailSaleToSeller(seller, buyer, order, order.sellerEarnings);
+
       const purchaseTransaction = new Transaction({
         type: 'purchase',
         amount: actualMarkedUpPrice,
@@ -1642,6 +1675,10 @@ router.post('/custom-request', authMiddleware, async (req, res) => {
         title,
         amount: actualMarkedUpPrice
       });
+
+      // A paid custom request is a sale like any other -- the seller
+      // still has an item to make and post.
+      await emailSaleToSeller(seller, buyer, order, order.sellerEarnings);
 
       const Message = require('../models/Message');
       const { v4: uuidv4 } = require('uuid');
@@ -2399,6 +2436,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
 // Export the router
 module.exports = router;
+
+
 
 
 

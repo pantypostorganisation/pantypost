@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
+const CryptoDeposit = require('../models/CryptoDeposit');
+const nowpayments = require('../utils/nowpayments');
 const { incrementPaymentStats } = require('../utils/paymentStats');
 const PayoutDetails = require('../models/PayoutDetails');
 const Order = require('../models/Order');
@@ -1779,5 +1781,252 @@ router.get('/admin/revenue-chart', authMiddleware, async (req, res) => {
 });
 
 // Export the router
+
+/* ============================================================
+   Crypto wallet top-ups (NOWPayments, non-custodial)
+   ============================================================
+   Card acquiring is still being arranged, so this is the rail that
+   needs nobody's approval to switch on. Funds go straight to our own
+   wallet; NOWPayments only watches the chain and calls the webhook.
+
+   Defaults to USDT on Tron: a stablecoin so the buyer's $50 is still
+   $50 tomorrow, on a network where the fee is about a cent rather than
+   the several dollars Ethereum would cost on a $45 deposit.
+   ============================================================ */
+
+const CRYPTO_MIN_AUD = Number(process.env.CRYPTO_MIN_DEPOSIT || 20);
+const CRYPTO_MAX_AUD = Number(process.env.CRYPTO_MAX_DEPOSIT || 2000);
+
+/* Deliberately short. Longer lists look generous but mean more ways to
+   send to the wrong network and lose the money. */
+const CRYPTO_CURRENCIES = [
+  { code: 'usdttrc20', label: 'USDT', network: 'Tron (TRC20)', note: 'Lowest fees. Recommended.' },
+  { code: 'usdtsol',   label: 'USDT', network: 'Solana',       note: 'Fast, very low fees.' },
+  { code: 'usdcsol',   label: 'USDC', network: 'Solana',       note: 'Fast, very low fees.' },
+  { code: 'btc',       label: 'Bitcoin', network: 'Bitcoin',   note: 'Slower, higher network fee.' },
+  { code: 'ltc',       label: 'Litecoin', network: 'Litecoin', note: 'Fast and cheap.' },
+];
+
+/** Which coins we accept, and the limits. */
+router.get('/crypto/currencies', (req, res) => {
+  return res.json({
+    success: true,
+    data: {
+      currencies: CRYPTO_CURRENCIES,
+      min: CRYPTO_MIN_AUD,
+      max: CRYPTO_MAX_AUD,
+      enabled: nowpayments.isConfigured()
+    }
+  });
+});
+
+/** Creates a deposit and returns the address to send to. */
+router.post('/crypto/create', authMiddleware, async (req, res) => {
+  try {
+    if (!nowpayments.isConfigured()) {
+      return res.status(503).json({ success: false, error: 'Crypto deposits are not available right now.' });
+    }
+
+    const username = req.user.username;
+    const amountAud = Math.round(Number(req.body.amount) * 100) / 100;
+    const payCurrency = String(req.body.currency || 'usdttrc20').toLowerCase();
+
+    if (!Number.isFinite(amountAud) || amountAud < CRYPTO_MIN_AUD || amountAud > CRYPTO_MAX_AUD) {
+      return res.status(400).json({
+        success: false,
+        error: `Enter an amount between $${CRYPTO_MIN_AUD} and $${CRYPTO_MAX_AUD}.`
+      });
+    }
+    if (!CRYPTO_CURRENCIES.some(c => c.code === payCurrency)) {
+      return res.status(400).json({ success: false, error: 'Unsupported currency.' });
+    }
+
+    const orderId = `pp_${username}_${Date.now()}`;
+    const payment = await nowpayments.createPayment({
+      amountAud,
+      payCurrency,
+      orderId,
+      orderDescription: 'PantyPost wallet top-up',
+      callbackUrl: `${process.env.API_BASE_URL || 'https://api.pantypost.com'}/api/wallet/crypto/webhook`
+    });
+
+    const deposit = await CryptoDeposit.create({
+      username,
+      amountAud,
+      paymentId: String(payment.payment_id),
+      payAmount: payment.pay_amount,
+      payCurrency: payment.pay_currency,
+      payAddress: payment.pay_address,
+      payinExtraId: payment.payin_extra_id || null,
+      status: payment.payment_status || 'waiting'
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        paymentId: deposit.paymentId,
+        amountAud: deposit.amountAud,
+        payAmount: deposit.payAmount,
+        payCurrency: deposit.payCurrency,
+        payAddress: deposit.payAddress,
+        payinExtraId: deposit.payinExtraId,
+        expiresAt: deposit.expiresAt,
+        status: deposit.status
+      }
+    });
+  } catch (err) {
+    console.error('[Crypto] create failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not start the deposit. Please try again.' });
+  }
+});
+
+/** Polled by the deposit screen so the buyer sees it land. */
+router.get('/crypto/status/:paymentId', authMiddleware, async (req, res) => {
+  try {
+    const deposit = await CryptoDeposit.findOne({
+      paymentId: req.params.paymentId,
+      username: req.user.username
+    }).lean();
+
+    if (!deposit) return res.status(404).json({ success: false, error: 'Not found.' });
+
+    return res.json({
+      success: true,
+      data: {
+        status: deposit.status,
+        credited: Boolean(deposit.creditedAt),
+        creditedAmountAud: deposit.creditedAmountAud,
+        actuallyPaid: deposit.actuallyPaid
+      }
+    });
+  } catch (err) {
+    console.error('[Crypto] status failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not check the deposit.' });
+  }
+});
+
+/**
+ * NOWPayments IPN callback.
+ *
+ * No authMiddleware: this is called by NOWPayments, not a signed-in
+ * user. Authenticity comes from the HMAC signature instead, which is
+ * why an unverified request is rejected outright rather than merely
+ * logged -- otherwise anyone who guessed the URL could credit wallets.
+ */
+router.post('/crypto/webhook', async (req, res) => {
+  try {
+    const signature = req.headers['x-nowpayments-sig'];
+    if (!nowpayments.verifyWebhook(req.body, signature)) {
+      console.error('[Crypto] webhook signature failed');
+      return res.status(401).json({ success: false });
+    }
+
+    const { payment_id: paymentId, payment_status: status, actually_paid: actuallyPaid, price_amount: priceAmount } = req.body;
+
+    const deposit = await CryptoDeposit.findOne({ paymentId: String(paymentId) });
+    if (!deposit) {
+      // Acknowledge unknown ids so NOWPayments stops retrying them.
+      console.warn('[Crypto] webhook for unknown payment', paymentId);
+      return res.json({ success: true });
+    }
+
+    deposit.status = status || deposit.status;
+    deposit.actuallyPaid = Number(actuallyPaid) || deposit.actuallyPaid;
+    deposit.lastWebhook = req.body;
+
+    const settled = status === 'finished' || status === 'confirmed';
+    const partial = status === 'partially_paid';
+
+    /* Credit exactly once. The webhook fires repeatedly through a
+       payment's life and can be retried, so creditedAt is the guard:
+       once set, later callbacks only update status. */
+    if ((settled || partial) && !deposit.creditedAt) {
+      let creditAud = deposit.amountAud;
+
+      /* Underpayments credit what actually arrived rather than the
+         quoted amount -- crediting the full figure for a short payment
+         would be a free top-up for anyone who noticed. */
+      if (partial && deposit.payAmount > 0) {
+        const ratio = deposit.actuallyPaid / deposit.payAmount;
+        creditAud = Math.round(deposit.amountAud * ratio * 100) / 100;
+      }
+
+      if (creditAud > 0) {
+        await Wallet.findOneAndUpdate(
+          { username: deposit.username },
+          { $setOnInsert: { username: deposit.username, role: 'buyer' } },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+        const wallet = await Wallet.creditAtomic(deposit.username, creditAud);
+
+        const transaction = await Transaction.create({
+          type: 'deposit',
+          amount: creditAud,
+          to: deposit.username,
+          description: `Crypto top-up (${deposit.payCurrency.toUpperCase()})`,
+          status: 'completed',
+          completedAt: new Date(),
+          metadata: {
+            method: 'crypto',
+            paymentId: deposit.paymentId,
+            payCurrency: deposit.payCurrency,
+            actuallyPaid: deposit.actuallyPaid,
+            quotedAud: deposit.amountAud
+          }
+        });
+
+        deposit.creditedAt = new Date();
+        deposit.creditedAmountAud = creditAud;
+        deposit.transactionId = transaction._id;
+
+        try {
+          await incrementPaymentStats(creditAud);
+        } catch (statsError) {
+          console.error('[Crypto] payment stats failed:', statsError.message);
+        }
+
+        try {
+          if (global.webSocketService) {
+            global.webSocketService.emitBalanceUpdate(
+              deposit.username, 'buyer', (wallet?.balance || 0) - creditAud, wallet?.balance || 0, 'deposit'
+            );
+            global.webSocketService.emitTransaction(transaction);
+          }
+        } catch (wsError) {
+          console.error('[Crypto] websocket notify failed:', wsError.message);
+        }
+
+        console.log(`[Crypto] credited ${deposit.username} $${creditAud} (${deposit.paymentId})`);
+      }
+    }
+
+    await deposit.save();
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[Crypto] webhook failed:', err);
+    // 200 regardless: a 500 makes NOWPayments retry a callback that
+    // may already have credited, and the guard above is what protects
+    // us -- but there is no reason to invite the retry storm.
+    return res.json({ success: true });
+  }
+});
+
+/** Buyer's own crypto deposit history. */
+router.get('/crypto/mine', authMiddleware, async (req, res) => {
+  try {
+    const deposits = await CryptoDeposit.find({ username: req.user.username })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('-lastWebhook')
+      .lean();
+    return res.json({ success: true, data: deposits });
+  } catch (err) {
+    console.error('[Crypto] history failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not load your deposits.' });
+  }
+});
+
 module.exports = router;
+
+
 

@@ -134,6 +134,39 @@ const emailTemplates = {
      dead end. Both outcomes now get an email; the rejection carries
      the reason so it can be fixed and resubmitted rather than guessed
      at. */
+  /* A sale happened.
+     Sellers were only finding out by opening the site, which for
+     somebody waiting on their first sale means checking all day and
+     -- worse -- means an item can sit unposted because nobody knew it
+     sold. The email leads with what the seller has to DO, not with
+     congratulations, because shipping promptly is the whole point. */
+  orderReceived: (sellerUsername, buyerUsername, itemTitle, earnings, orderUrl) => ({
+    subject: `You sold ${itemTitle}`,
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0e0e0e;color:#ffffff;">
+        <h1 style="margin:0 0 8px;font-size:22px;color:#ff950e;">You made a sale</h1>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          Hi ${sellerUsername}, ${buyerUsername} just bought one of your listings.
+        </p>
+        <div style="background:#161616;border:1px solid #262626;border-radius:8px;padding:16px;margin-bottom:20px;">
+          <p style="margin:0 0 6px;font-size:16px;font-weight:bold;color:#ffffff;">${itemTitle}</p>
+          <p style="margin:0;font-size:15px;color:#ff950e;font-weight:bold;">You earn $${Number(earnings).toFixed(2)}</p>
+        </div>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          <strong style="color:#ffffff;">Next step:</strong> post the item, then mark it as shipped so
+          your buyer knows it is on the way. Buyers who are kept informed leave better
+          reviews and come back.
+        </p>
+        <a href="${orderUrl}" style="display:inline-block;background:#ff950e;color:#000000;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:6px;font-size:15px;">
+          View the order
+        </a>
+        <p style="margin:24px 0 0;color:#888888;font-size:13px;line-height:1.5;">
+          Remember to pack discreetly, with no personal details on the parcel.
+        </p>
+      </div>`,
+    text: `Hi ${sellerUsername}, ${buyerUsername} just bought "${itemTitle}". You earn $${Number(earnings).toFixed(2)}.\n\nPost the item and mark it as shipped: ${orderUrl}`
+  }),
+
   listingApproved: (username, listingTitle, listingUrl) => ({
     subject: 'Your listing is live on Panty Post',
     html: `
@@ -1158,3 +1191,4 @@ module.exports = {
   sendEmail,
   emailTemplates
 };
+

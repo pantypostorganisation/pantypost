@@ -47,13 +47,18 @@ export default function PaymentsProcessedCounter({
   const lastTargetRef = useRef(0);
   const subscriptionRef = useRef<(() => void) | undefined>(undefined);
 
+  /* Whole dollars only. Cents on a headline figure read as a till
+     receipt rather than a milestone, and during the count-up animation
+     they churn through two meaningless digits. The stored value keeps
+     its cents -- this rounds for display only, so the accounting is
+     unaffected. */
   const formatCurrency = useCallback((value: number) => {
-    const normalized = Math.max(0, Math.round(Number(value || 0) * 100) / 100);
+    const normalized = Math.max(0, Math.round(Number(value || 0)));
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(normalized);
   }, []);
 
@@ -299,7 +304,8 @@ export default function PaymentsProcessedCounter({
   const formattedValue = isLoading && !hasInitialLoad ? 'Loading...' : formatCurrency(displayValue);
   const formattedIncrement = useMemo(() => {
     if (incrementAmount <= 0) return '';
-    return `+$${incrementAmount.toFixed(2)}`;
+    // Matches the main figure: whole dollars, no cents.
+    return `+$${Math.round(incrementAmount).toLocaleString('en-US')}`;
   }, [incrementAmount]);
   
   const containerClasses = compact
@@ -378,6 +384,7 @@ export default function PaymentsProcessedCounter({
     </motion.div>
   );
 }
+
 
 
 
