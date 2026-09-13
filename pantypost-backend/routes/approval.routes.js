@@ -633,6 +633,117 @@ router.get('/history', authMiddleware, ensureAdmin, async (req, res) => {
   }
 });
 
+
+/* =====================================================================
+ * POST /api/admin/approval/reconsider
+ * Body: { contentId, contentType?, decision: 'approve' | 'deny', reason? }
+ *
+ * Changes a decision already made.
+ *
+ * A first review is a judgement on limited information: the queue shows
+ * a photo and a title, not the seller's explanation. When somebody
+ * writes in and clarifies what an item actually is, the honest outcome
+ * is to change the decision rather than make them relist and wait
+ * again.
+ *
+ * Every reversal is recorded -- who did it, when, and what it was
+ * before. A moderation system that quietly rewrites its own history is
+ * worth very little to a payment processor asking how decisions get
+ * made, and the audit trail costs nothing to keep.
+ * ===================================================================== */
+router.post('/reconsider', authMiddleware, ensureAdmin, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const contentId = body.contentId || body.listingId;
+    const decision = body.decision === 'deny' ? 'deny' : 'approve';
+
+    if (!isValidObjectId(contentId)) {
+      return res.status(400).json({ success: false, error: 'Invalid contentId' });
+    }
+
+    const config = resolveContentType(body.contentType);
+    if (!config) {
+      return res.status(400).json({ success: false, error: 'Unknown contentType' });
+    }
+
+    const doc = await config.model.findById(contentId);
+    if (!doc) {
+      return res.status(404).json({ success: false, error: `${config.label} not found` });
+    }
+
+    const previous = doc.approvalStatus;
+    if (previous !== 'approved' && previous !== 'denied') {
+      return res.status(400).json({
+        success: false,
+        error: 'This item has not been reviewed yet. Use the pending queue.'
+      });
+    }
+    if (previous === (decision === 'approve' ? 'approved' : 'denied')) {
+      return res.status(400).json({ success: false, error: `Already ${previous}.` });
+    }
+
+    const owner = doc[config.ownerField];
+    const typeKey = body.contentType || 'listing';
+    const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) : '';
+
+    if (decision === 'approve') {
+      markApproved(doc, req.user.username);
+    } else {
+      markDenied(doc, req.user.username, reason || 'Reviewed again and removed');
+    }
+
+    /* Append rather than overwrite: the point of a reversal log is that
+       it shows the sequence, not just the latest state. */
+    doc.moderationHistory = Array.isArray(doc.moderationHistory) ? doc.moderationHistory : [];
+    doc.moderationHistory.push({
+      from: previous,
+      to: decision === 'approve' ? 'approved' : 'denied',
+      by: req.user.username,
+      at: new Date(),
+      reason: reason || undefined,
+    });
+
+    await doc.save();
+
+    await notifyOwner(owner, decision === 'approve' ? {
+      type: 'content_approved',
+      title: `${config.label} approved`,
+      message: `We took another look at your ${config.label.toLowerCase()} and it is now live.`,
+      data: { contentType: typeKey, contentId: String(doc._id) },
+      relatedId: String(doc._id),
+      relatedType: typeKey,
+    } : {
+      type: 'content_denied',
+      title: `${config.label} removed`,
+      message: reason || `Your ${config.label.toLowerCase()} has been removed after a further review.`,
+      data: { contentType: typeKey, contentId: String(doc._id) },
+      relatedId: String(doc._id),
+      relatedType: typeKey,
+    });
+
+    // An approved post still owes its subscribers an announcement.
+    if (decision === 'approve' && typeKey === 'post') {
+      await notifySubscribersOfPost(doc);
+    }
+
+    if (typeKey === 'listing') {
+      await emailListingDecision(owner, doc, decision === 'approve', reason);
+    }
+
+    console.log(
+      `[Approval] ${config.label} ${contentId} changed from ${previous} to ` +
+      `${decision === 'approve' ? 'approved' : 'denied'} by ${req.user.username}`
+    );
+
+    return res.json({ success: true, data: doc });
+  } catch (error) {
+    console.error('[Approval] Error reconsidering content:', error);
+    return res.status(500).json({ success: false, error: 'Failed to change the decision' });
+  }
+});
+
 module.exports = router;
+
+
 
 

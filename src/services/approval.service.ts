@@ -54,6 +54,17 @@ export interface ModeratedItem {
   deniedBy?: string;
   denialReason?: string;
   moderationNote?: string;
+
+  /* Every reversal, in order. A moderation system that silently
+     rewrites its own history is worth little when a payment processor
+     asks how decisions get made. */
+  moderationHistory?: {
+    from: ApprovalStatus;
+    to: ApprovalStatus;
+    by: string;
+    at: string;
+    reason?: string;
+  }[];
 }
 
 export interface ApprovalHistoryResponse {
@@ -135,6 +146,33 @@ class ApprovalService {
     return response;
   }
 
+  /**
+   * Changes a decision already made.
+   *
+   * Separate from approve/deny on purpose: those act on the pending
+   * queue, this acts on something already reviewed, and the backend
+   * records the reversal in the item's moderation history. Keeping the
+   * two apart means an accidental call to the wrong one fails loudly
+   * rather than quietly rewriting a decision.
+   */
+  async reconsider(
+    contentId: string,
+    contentType: ContentType = 'listing',
+    decision: 'approve' | 'deny' = 'approve',
+    reason?: string
+  ) {
+    const response = await apiCall<any>('/admin/approval/reconsider', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentId, listingId: contentId, contentType, decision, reason }),
+    });
+
+    if (response.success && response.data) {
+      return { ...response, data: normalizeItem(response.data) };
+    }
+    return response;
+  }
+
   /** Older method names, kept so nothing else breaks. */
   async approveListing(listingId: string) {
     return this.approve(listingId, 'listing');
@@ -168,3 +206,4 @@ class ApprovalService {
 }
 
 export const approvalService = new ApprovalService();
+

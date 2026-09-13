@@ -457,6 +457,44 @@ export default function AdminApprovalPage() {
     );
   };
 
+  /* Changes a decision already made.
+     A first review sees a photo and a title; it does not see the
+     seller's explanation. When somebody writes in and clarifies what
+     an item is, reversing the call is better than making them relist
+     and queue again. Confirmed first, because this is visible to the
+     seller either way. */
+  const [reconsidering, setReconsidering] = useState<string | null>(null);
+
+  const handleReconsider = async (item: ModeratedItem, decision: 'approve' | 'deny') => {
+    const wasDenied = item.approvalStatus === 'denied';
+    const verb = decision === 'approve' ? 'approve' : 'remove';
+    if (!window.confirm(
+      `${decision === 'approve' ? 'Approve' : 'Remove'} "${item.displayTitle}"?\n\n` +
+      `It is currently ${item.approvalStatus}. ${item.owner} will be notified.`
+    )) return;
+
+    let reason = '';
+    if (decision === 'deny') {
+      const entered = window.prompt('Reason (the seller will see this):', '');
+      if (entered === null) return;
+      reason = entered;
+    }
+
+    const key = `${item.contentType}-${item.id}`;
+    setReconsidering(key);
+    try {
+      const response = await approvalService.reconsider(item.id, item.contentType, decision, reason);
+      if (response.success) {
+        await loadHistory();
+        await loadPending();
+      } else {
+        window.alert(`Could not ${verb} this item. ${wasDenied ? '' : ''}`.trim());
+      }
+    } finally {
+      setReconsidering(null);
+    }
+  };
+
   const renderHistoryRow = (item: ModeratedItem) => {
     const isApproved = item.approvalStatus === 'approved';
     const isDenied = item.approvalStatus === 'denied';
@@ -495,6 +533,23 @@ export default function AdminApprovalPage() {
         </div>
         <div className="text-xs text-gray-400 sm:text-right">
           <p>Created {formatDate(createdAt)}</p>
+
+          {/* Reversing a decision. Only the opposite action is offered,
+              so there is no button that does nothing. */}
+          <button
+            type="button"
+            disabled={reconsidering === `${item.contentType}-${item.id}`}
+            onClick={() => handleReconsider(item, isDenied ? 'approve' : 'deny')}
+            className={`mt-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+              isDenied
+                ? 'border-emerald-600/50 text-emerald-300 hover:bg-emerald-600 hover:text-white'
+                : 'border-red-600/50 text-red-300 hover:bg-red-600 hover:text-white'
+            }`}
+          >
+            {reconsidering === `${item.contentType}-${item.id}`
+              ? 'Working...'
+              : isDenied ? 'Approve after all' : 'Remove'}
+          </button>
         </div>
       </div>
     );
@@ -643,3 +698,4 @@ export default function AdminApprovalPage() {
     </RequireAuth>
   );
 }
+
