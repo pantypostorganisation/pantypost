@@ -138,6 +138,7 @@ function BuyerWalletContent() {
           onAddFunds={() => setShowCrypto(true)}
           minDeposit={cryptoConfig?.min}
           maxDeposit={cryptoConfig?.max}
+          username={user?.username}
         />
 
         {/* Transactions on demand. Native <details> so it works without
