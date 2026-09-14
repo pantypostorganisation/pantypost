@@ -2026,6 +2026,142 @@ router.get('/crypto/mine', authMiddleware, async (req, res) => {
   }
 });
 
+
+/**
+ * Reconciles a deposit against NOWPayments directly.
+ *
+ * Webhooks fail. They arrive before a URL is saved, get dropped in
+ * transit, or fail verification after a change at either end -- and
+ * when that happens the money has genuinely arrived but the buyer's
+ * balance does not move, with no way to fix it from the UI.
+ *
+ * This asks NOWPayments what the payment's status actually is and
+ * credits it if settled. Same creditedAt guard as the webhook, so a
+ * payment already credited by either path cannot be credited twice.
+ */
+async function settleDeposit(deposit) {
+  const remote = await nowpayments.getPayment(deposit.paymentId);
+
+  deposit.status = remote.payment_status || deposit.status;
+  deposit.actuallyPaid = Number(remote.actually_paid) || deposit.actuallyPaid;
+
+  const settled = deposit.status === 'finished' || deposit.status === 'confirmed';
+  const partial = deposit.status === 'partially_paid';
+
+  if (!(settled || partial) || deposit.creditedAt) {
+    await deposit.save();
+    return { credited: false, status: deposit.status };
+  }
+
+  let creditAud = deposit.amountAud;
+
+  /* Underpayments credit pro rata. NOWPayments marks a short payment
+     'finished' once it settles, so the amount has to be checked
+     regardless of status rather than only when it says partial. */
+  if (deposit.payAmount > 0 && deposit.actuallyPaid > 0 && deposit.actuallyPaid < deposit.payAmount) {
+    creditAud = Math.round(deposit.amountAud * (deposit.actuallyPaid / deposit.payAmount) * 100) / 100;
+  }
+
+  if (creditAud <= 0) {
+    await deposit.save();
+    return { credited: false, status: deposit.status };
+  }
+
+  await Wallet.findOneAndUpdate(
+    { username: deposit.username },
+    { $setOnInsert: { username: deposit.username, role: 'buyer' } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  const wallet = await Wallet.creditAtomic(deposit.username, creditAud);
+
+  const transaction = await Transaction.create({
+    type: 'deposit',
+    amount: creditAud,
+    to: deposit.username,
+    description: `Crypto top-up (${(deposit.payCurrency || '').toUpperCase()})`,
+    status: 'completed',
+    completedAt: new Date(),
+    metadata: {
+      method: 'crypto',
+      paymentId: deposit.paymentId,
+      payCurrency: deposit.payCurrency,
+      actuallyPaid: deposit.actuallyPaid,
+      quotedAud: deposit.amountAud,
+      reconciled: true
+    }
+  });
+
+  deposit.creditedAt = new Date();
+  deposit.creditedAmountAud = creditAud;
+  deposit.transactionId = transaction._id;
+  await deposit.save();
+
+  try {
+    await incrementPaymentStats(creditAud);
+  } catch (statsError) {
+    console.error('[Crypto] payment stats failed:', statsError.message);
+  }
+
+  try {
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
+        deposit.username, 'buyer', (wallet?.balance || 0) - creditAud, wallet?.balance || 0, 'deposit'
+      );
+      global.webSocketService.emitTransaction(transaction);
+    }
+  } catch (wsError) {
+    console.error('[Crypto] websocket notify failed:', wsError.message);
+  }
+
+  console.log(`[Crypto] reconciled ${deposit.username} $${creditAud} (${deposit.paymentId})`);
+  return { credited: true, status: deposit.status, creditedAmountAud: creditAud };
+}
+
+/** Buyer asks us to re-check one of their own deposits. */
+router.post('/crypto/:paymentId/reconcile', authMiddleware, async (req, res) => {
+  try {
+    const deposit = await CryptoDeposit.findOne({
+      paymentId: req.params.paymentId,
+      username: req.user.username
+    });
+    if (!deposit) return res.status(404).json({ success: false, error: 'Not found.' });
+
+    const result = await settleDeposit(deposit);
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('[Crypto] reconcile failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not check that payment.' });
+  }
+});
+
+/** Admin sweep: re-checks every uncredited deposit. */
+router.post('/crypto/admin/reconcile-all', authMiddleware, async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+
+    const pending = await CryptoDeposit.find({ creditedAt: null }).limit(100);
+    const results = [];
+
+    for (const deposit of pending) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await settleDeposit(deposit);
+        results.push({ paymentId: deposit.paymentId, username: deposit.username, ...result });
+      } catch (err) {
+        results.push({ paymentId: deposit.paymentId, error: err.message });
+      }
+    }
+
+    const credited = results.filter(r => r.credited).length;
+    return res.json({ success: true, data: { checked: results.length, credited, results } });
+  } catch (err) {
+    console.error('[Crypto] bulk reconcile failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not reconcile deposits.' });
+  }
+});
+
 module.exports = router;
 
 

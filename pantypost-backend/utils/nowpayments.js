@@ -81,20 +81,39 @@ async function getPayment(paymentId) {
 }
 
 /**
+ * Recursively sorts object keys.
+ *
+ * JSON.stringify's replacer-array trick only sorts the TOP level and
+ * silently drops keys from nested objects, so a payload containing any
+ * nested structure hashes differently from NOWPayments' version and
+ * every callback fails verification. That failure looks exactly like
+ * "deposits never credit" and took a live payment to find.
+ */
+function sortDeep(value) {
+  if (Array.isArray(value)) return value.map(sortDeep);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((acc, key) => {
+      acc[key] = sortDeep(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+}
+
+/**
  * Verifies an IPN callback.
  *
- * Keys must be sorted before hashing -- NOWPayments sorts them their
- * end, and an unsorted stringify gives a different digest.
+ * HMAC-SHA512 over the payload with keys sorted at every level, which
+ * is what NOWPayments hashes their end.
  */
 function verifyWebhook(payload, signature) {
   if (!IPN_SECRET || !signature) return false;
 
-  const sorted = JSON.stringify(payload, Object.keys(payload).sort());
+  const sorted = JSON.stringify(sortDeep(payload));
   const expected = crypto.createHmac('sha512', IPN_SECRET).update(sorted).digest('hex');
 
-  // Constant-time compare; lengths must match or timingSafeEqual throws.
   const a = Buffer.from(expected, 'utf8');
-  const b = Buffer.from(String(signature), 'utf8');
+  const b = Buffer.from(String(signature).trim(), 'utf8');
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
 }
