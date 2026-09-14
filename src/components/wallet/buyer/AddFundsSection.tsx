@@ -27,6 +27,8 @@ interface AddFundsSectionProps {
   maxDeposit?: number;
   /** Shown on the card. */
   username?: string;
+  /** Changes the copy: card first when it is available, crypto when not. */
+  cardEnabled?: boolean;
 }
 
 export default function AddFundsSection({
@@ -35,6 +37,7 @@ export default function AddFundsSection({
   minDeposit = 20,
   maxDeposit = 2000,
   username,
+  cardEnabled = false,
 }: AddFundsSectionProps) {
   const [hovered, setHovered] = useState(false);
 
@@ -91,8 +94,9 @@ export default function AddFundsSection({
         <div>
           <h2 className="text-base font-semibold text-white">Add funds</h2>
           <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-            Top up your wallet with crypto, then buy from any seller without
-            entering payment details again.
+            {cardEnabled
+              ? 'Top up by card or crypto, then buy from any seller without entering payment details again.'
+              : 'Top up your wallet with crypto, then buy from any seller without entering payment details again.'}
           </p>
 
           <button
@@ -122,9 +126,11 @@ export default function AddFundsSection({
             <div className="flex gap-2.5">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
               <div>
-                <p className="text-sm font-medium text-white">Private</p>
+                <p className="text-sm font-medium text-white">Discreet</p>
                 <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">
-                  Nothing about your purchase appears on a card statement.
+                  {cardEnabled
+                    ? 'Card statements show our billing name, never what you bought.'
+                    : 'Nothing about your purchase appears on a card statement.'}
                 </p>
               </div>
             </div>
@@ -132,7 +138,7 @@ export default function AddFundsSection({
 
           <p className="mt-4 text-xs text-ink-faint">
             Minimum ${minDeposit}, maximum ${maxDeposit.toLocaleString()} per top-up.
-            No crypto yet? We&apos;ll show you how.
+            {!cardEnabled && ' No crypto yet? We\u2019ll show you how.'}
           </p>
         </div>
       </div>

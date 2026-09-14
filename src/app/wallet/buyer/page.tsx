@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Check, ChevronDown, Clock, X } from 'lucide-react';
-import CryptoTopUpModal from '@/components/wallet/buyer/CryptoTopUpModal';
+import TopUpModal from '@/components/wallet/buyer/TopUpModal';
 import RequireAuth from '@/components/RequireAuth';
 import BanCheck from '@/components/BanCheck';
 import WalletHeader from '@/components/wallet/buyer/WalletHeader';
@@ -36,7 +36,8 @@ function BuyerWalletContent() {
  /* Crypto is the live deposit rail while card acquiring is still
     being arranged. The modal handles both kinds of buyer: those who
     already hold crypto, and those who need telling how to get some. */
- const [showCrypto, setShowCrypto] = useState(false);
+ const [showTopUp, setShowTopUp] = useState(false);
+ const [cardConfig, setCardConfig] = useState<{ enabled: boolean; min: number; max: number } | null>(null);
  const [cryptoConfig, setCryptoConfig] = useState<{
    currencies: { code: string; label: string; network: string; note: string }[];
    min: number;
@@ -48,8 +49,13 @@ function BuyerWalletContent() {
    let cancelled = false;
    (async () => {
      try {
-       const res = await apiCall<any>('/wallet/crypto/currencies');
-       if (!cancelled && res.success) setCryptoConfig(res.data);
+       const [cryptoRes, cardRes] = await Promise.all([
+         apiCall<any>('/wallet/crypto/currencies'),
+         apiCall<any>('/wallet/card/config'),
+       ]);
+       if (cancelled) return;
+       if (cryptoRes.success) setCryptoConfig(cryptoRes.data);
+       if (cardRes.success) setCardConfig(cardRes.data);
      } catch {
        // Leaving this null just hides the option rather than breaking
        // the page.
@@ -135,9 +141,10 @@ function BuyerWalletContent() {
             card form that no processor backs. */}
         <AddFundsSection
           balance={displayBalance}
-          onAddFunds={() => setShowCrypto(true)}
-          minDeposit={cryptoConfig?.min}
-          maxDeposit={cryptoConfig?.max}
+          onAddFunds={() => setShowTopUp(true)}
+          minDeposit={cardConfig?.enabled ? cardConfig.min : cryptoConfig?.min}
+          maxDeposit={cardConfig?.enabled ? cardConfig.max : cryptoConfig?.max}
+          cardEnabled={cardConfig?.enabled}
           username={user?.username}
         />
 
@@ -167,40 +174,51 @@ function BuyerWalletContent() {
         </details>
       </div>
 
-      {cryptoConfig?.enabled && (
-        <CryptoTopUpModal
-          open={showCrypto}
-          onClose={() => setShowCrypto(false)}
-          currencies={cryptoConfig.currencies}
-          min={cryptoConfig.min}
-          max={cryptoConfig.max}
-          onCreate={async (value, currency) => {
-            const res = await apiCall<any>('/wallet/crypto/create', {
-              method: 'POST',
-              body: JSON.stringify({ amount: value, currency }),
-            });
-            if (!res.success) {
-              /* res.error is an ApiError object, not a string -- passing
-                 it straight to Error() gives "[object Object]" on screen
-                 as well as a type error. */
-              const message =
-                typeof res.error === 'string'
-                  ? res.error
-                  : res.error?.message || 'Could not start the deposit.';
-              throw new Error(message);
-            }
-            return res.data;
-          }}
-          onCheckStatus={async (paymentId) => {
-            const res = await apiCall<any>(`/wallet/crypto/status/${paymentId}`);
-            if (!res.success) throw new Error('Could not check the deposit.');
-            return res.data;
-          }}
-          onCredited={() => {
-            void reloadData();
-          }}
-        />
-      )}
+      {/* Returning from the hosted card page carries ?topup=<orderId>,
+          which reopens the modal straight into its confirming state so
+          nobody is left wondering whether the payment worked. */}
+      <TopUpModal
+        open={showTopUp || Boolean(searchParams?.get('topup'))}
+        onClose={() => setShowTopUp(false)}
+        card={cardConfig}
+        crypto={cryptoConfig}
+        resumeOrderId={searchParams?.get('topup') ?? null}
+        onCreateCard={async (value) => {
+          const res = await apiCall<any>('/wallet/card/create', {
+            method: 'POST',
+            body: JSON.stringify({ amount: value }),
+          });
+          if (!res.success) {
+            const message =
+              typeof res.error === 'string' ? res.error : res.error?.message;
+            throw new Error(message || 'Could not start the payment.');
+          }
+          return res.data;
+        }}
+        onCheckCard={async (clientOrderId) => {
+          const res = await apiCall<any>(`/wallet/card/status/${clientOrderId}`);
+          if (!res.success) throw new Error('Could not check that payment.');
+          return res.data;
+        }}
+        onCreateCrypto={async (value, currency) => {
+          const res = await apiCall<any>('/wallet/crypto/create', {
+            method: 'POST',
+            body: JSON.stringify({ amount: value, currency }),
+          });
+          if (!res.success) {
+            const message =
+              typeof res.error === 'string' ? res.error : res.error?.message;
+            throw new Error(message || 'Could not start the deposit.');
+          }
+          return res.data;
+        }}
+        onCheckCrypto={async (paymentId) => {
+          const res = await apiCall<any>(`/wallet/crypto/status/${paymentId}`);
+          if (!res.success) throw new Error('Could not check the deposit.');
+          return res.data;
+        }}
+        onCredited={() => { void reloadData(); }}
+      />
 
     </main>
   );

@@ -5,6 +5,8 @@ const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const CryptoDeposit = require('../models/CryptoDeposit');
 const nowpayments = require('../utils/nowpayments');
+const CardDeposit = require('../models/CardDeposit');
+const inqud = require('../utils/inqud');
 const { incrementPaymentStats } = require('../utils/paymentStats');
 const PayoutDetails = require('../models/PayoutDetails');
 const Order = require('../models/Order');
@@ -2159,6 +2161,288 @@ router.post('/crypto/admin/reconcile-all', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('[Crypto] bulk reconcile failed:', err.message);
     return res.status(500).json({ success: false, error: 'Could not reconcile deposits.' });
+  }
+});
+
+
+/* ============================================================
+   Card top-ups via Inqud on-ramp
+   ============================================================
+   The buyer pays by card on Inqud's hosted page; Inqud converts and
+   credits USDC to our account balance. Card details never touch our
+   servers and we are not the merchant of record for the card leg.
+
+   Everything here credits from an API lookup, never from a webhook
+   payload. A callback is only a nudge to go and check. That is the
+   lesson from the last integration, where crediting from webhook
+   contents meant a signature-format mismatch silently swallowed every
+   deposit.
+   ============================================================ */
+
+const CARD_MIN_USD = Number(process.env.CARD_MIN_DEPOSIT || 20);
+const CARD_MAX_USD = Number(process.env.CARD_MAX_DEPOSIT || 2000);
+
+/** Is card top-up available, and within what limits. */
+router.get('/card/config', (req, res) => {
+  return res.json({
+    success: true,
+    data: {
+      enabled: inqud.isConfigured(),
+      min: CARD_MIN_USD,
+      max: CARD_MAX_USD,
+      currency: 'USD'
+    }
+  });
+});
+
+/** Creates a checkout and returns the URL to send the buyer to. */
+router.post('/card/create', authMiddleware, async (req, res) => {
+  try {
+    if (!inqud.isConfigured()) {
+      return res.status(503).json({ success: false, error: 'Card payments are not available right now.' });
+    }
+
+    const username = req.user.username;
+    const amountUsd = Math.round(Number(req.body.amount) * 100) / 100;
+    const cardBrand = req.body.cardBrand === 'VISA' ? 'VISA' : 'MC';
+
+    if (!Number.isFinite(amountUsd) || amountUsd < CARD_MIN_USD || amountUsd > CARD_MAX_USD) {
+      return res.status(400).json({
+        success: false,
+        error: `Enter an amount between $${CARD_MIN_USD} and $${CARD_MAX_USD}.`
+      });
+    }
+
+    const clientOrderId = `pp_${username}_${Date.now()}`;
+    const deposit = await CardDeposit.create({ username, amountUsd, clientOrderId });
+
+    let checkout;
+    try {
+      checkout = await inqud.createCheckout({
+        amountUsd,
+        clientOrderId,
+        cardBrand,
+        name: 'PantyPost top-up',
+        returnUrl: `${process.env.FRONTEND_URL || 'https://pantypost.com'}/wallet/buyer?topup=${clientOrderId}`
+      });
+    } catch (err) {
+      // Do not leave an orphan row implying a payment that never began.
+      await CardDeposit.deleteOne({ _id: deposit._id });
+      throw err;
+    }
+
+    deposit.checkoutId = checkout.id;
+    deposit.onRampUrl = checkout.onRampUrl || '';
+    deposit.status = checkout.status || 'NEW';
+    if (checkout.expiresAt) deposit.expiresAt = new Date(checkout.expiresAt);
+    await deposit.save();
+
+    return res.json({
+      success: true,
+      data: {
+        clientOrderId: deposit.clientOrderId,
+        checkoutId: deposit.checkoutId,
+        onRampUrl: deposit.onRampUrl,
+        amountUsd: deposit.amountUsd,
+        expiresAt: deposit.expiresAt
+      }
+    });
+  } catch (err) {
+    console.error('[Card] create failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not start the payment. Please try again.' });
+  }
+});
+
+/**
+ * Asks Inqud what really happened, and credits if settled.
+ *
+ * The single place a card deposit can move a balance. Webhook, buyer
+ * polling and admin sweep all funnel through here, and creditedAt
+ * means only the first one through does anything.
+ */
+async function settleCardDeposit(deposit) {
+  if (!deposit.checkoutId) return { credited: false, status: deposit.status };
+
+  const checkout = await inqud.getCheckout(deposit.checkoutId);
+
+  deposit.status = checkout.status || deposit.status;
+  deposit.targetAmount = checkout.targetAmount ?? deposit.targetAmount;
+  deposit.targetCurrency = checkout.targetCurrency || deposit.targetCurrency;
+  deposit.platformFee = checkout.platformFee ?? deposit.platformFee;
+
+  if (deposit.status !== 'SUCCESS' || deposit.creditedAt) {
+    await deposit.save();
+    return { credited: false, status: deposit.status };
+  }
+
+  /* Credit what the buyer asked for. Inqud quotes the card amount in
+     USD and settles USDC roughly 1:1, so sourceAmount is the honest
+     figure to credit -- not the crypto amount after conversion, which
+     would silently shave the fee off the buyer rather than us. */
+  const creditUsd = Math.round((checkout.sourceAmount ?? deposit.amountUsd) * 100) / 100;
+  if (!Number.isFinite(creditUsd) || creditUsd <= 0) {
+    await deposit.save();
+    return { credited: false, status: deposit.status };
+  }
+
+  await Wallet.findOneAndUpdate(
+    { username: deposit.username },
+    { $setOnInsert: { username: deposit.username, role: 'buyer' } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  const wallet = await Wallet.creditAtomic(deposit.username, creditUsd);
+
+  const transaction = await Transaction.create({
+    type: 'deposit',
+    amount: creditUsd,
+    to: deposit.username,
+    description: 'Card top-up',
+    status: 'completed',
+    completedAt: new Date(),
+    metadata: {
+      method: 'card',
+      provider: 'inqud',
+      checkoutId: deposit.checkoutId,
+      clientOrderId: deposit.clientOrderId,
+      settledCurrency: deposit.targetCurrency,
+      settledAmount: deposit.targetAmount
+    }
+  });
+
+  deposit.creditedAt = new Date();
+  deposit.creditedAmountUsd = creditUsd;
+  deposit.transactionId = transaction._id;
+  await deposit.save();
+
+  try {
+    await incrementPaymentStats(creditUsd);
+  } catch (statsError) {
+    console.error('[Card] payment stats failed:', statsError.message);
+  }
+
+  try {
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
+        deposit.username, 'buyer', (wallet?.balance || 0) - creditUsd, wallet?.balance || 0, 'deposit'
+      );
+      global.webSocketService.emitTransaction(transaction);
+    }
+  } catch (wsError) {
+    console.error('[Card] websocket notify failed:', wsError.message);
+  }
+
+  console.log(`[Card] credited ${deposit.username} $${creditUsd} (${deposit.checkoutId})`);
+  return { credited: true, status: deposit.status, creditedAmountUsd: creditUsd };
+}
+
+/** Polled by the wallet page while a payment is in flight. */
+router.get('/card/status/:clientOrderId', authMiddleware, async (req, res) => {
+  try {
+    const deposit = await CardDeposit.findOne({
+      clientOrderId: req.params.clientOrderId,
+      username: req.user.username
+    });
+    if (!deposit) return res.status(404).json({ success: false, error: 'Not found.' });
+
+    // Already done: answer from our own record rather than calling out.
+    if (deposit.creditedAt) {
+      return res.json({
+        success: true,
+        data: { credited: true, status: deposit.status, creditedAmountUsd: deposit.creditedAmountUsd }
+      });
+    }
+
+    const result = await settleCardDeposit(deposit);
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('[Card] status failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not check that payment.' });
+  }
+});
+
+/**
+ * Inqud checkout callback.
+ *
+ * Deliberately thin. The payload is not trusted and not credited from;
+ * it only tells us which checkout to go and verify. Always answers 200
+ * so Inqud does not retry a callback we have already acted on.
+ */
+router.post('/card/webhook', async (req, res) => {
+  try {
+    if (!inqud.looksAuthentic(req.headers)) {
+      console.warn('[Card] webhook rejected: shared secret mismatch');
+      return res.status(401).json({ success: false });
+    }
+
+    const body = req.body || {};
+    const checkoutId = body.id || body.checkoutId || body?.data?.id;
+    const clientOrderId = body.clientOrderId || body?.data?.clientOrderId;
+
+    const deposit = await CardDeposit.findOne(
+      checkoutId ? { checkoutId } : { clientOrderId }
+    );
+
+    if (!deposit) {
+      console.warn('[Card] webhook for unknown checkout', checkoutId || clientOrderId);
+      return res.json({ success: true });
+    }
+
+    deposit.lastWebhook = body;
+    await deposit.save();
+
+    await settleCardDeposit(deposit);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[Card] webhook failed:', err.message);
+    return res.json({ success: true });
+  }
+});
+
+/** Admin sweep for anything a callback missed. */
+router.post('/card/admin/reconcile-all', authMiddleware, async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+
+    const pending = await CardDeposit.find({
+      creditedAt: null,
+      checkoutId: { $ne: null }
+    }).limit(100);
+
+    const results = [];
+    for (const deposit of pending) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await settleCardDeposit(deposit);
+        results.push({ clientOrderId: deposit.clientOrderId, username: deposit.username, ...result });
+      } catch (err) {
+        results.push({ clientOrderId: deposit.clientOrderId, error: err.message });
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: { checked: results.length, credited: results.filter(r => r.credited).length, results }
+    });
+  } catch (err) {
+    console.error('[Card] bulk reconcile failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not reconcile deposits.' });
+  }
+});
+
+/** Buyer's own card top-up history. */
+router.get('/card/mine', authMiddleware, async (req, res) => {
+  try {
+    const deposits = await CardDeposit.find({ username: req.user.username })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .select('-lastWebhook')
+      .lean();
+    return res.json({ success: true, data: deposits });
+  } catch (err) {
+    console.error('[Card] history failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not load your top-ups.' });
   }
 });
 
