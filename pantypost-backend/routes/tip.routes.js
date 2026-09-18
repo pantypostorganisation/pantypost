@@ -10,6 +10,7 @@ const { body, validationResult } = require('express-validator');
 
 // ✅ Use the initialized singleton websocket service
 const webSocketService = require('../config/websocket');
+const { sendEmail, emailTemplates } = require('../config/email');
 
 // Validation middleware for tip amount
 const validateTip = [
@@ -113,6 +114,30 @@ router.post('/send', authMiddleware, validateTip, async (req, res) => {
       // 4) DB notification (persists) - THIS AUTOMATICALLY EMITS notification:new via the model
       await Notification.createTipNotification(recipientUsername, senderUsername, amount);
       console.log('[Tip] DB notification created for', recipientUsername);
+
+      /* Email as well as the in-app notification. A seller who only
+         finds out by opening the site may not find out for days, and a
+         tip that goes unacknowledged rarely happens twice. Never
+         throws: the money has already moved. */
+      try {
+        const recipient = await User.findOne({ username: recipientUsername });
+        if (recipient?.email) {
+          const template = emailTemplates.tipReceived(
+            recipientUsername,
+            senderUsername,
+            amount,
+            'https://pantypost.com/wallet/seller'
+          );
+          await sendEmail({
+            to: recipient.email,
+            subject: template.subject,
+            html: template.html,
+            text: template.text
+          });
+        }
+      } catch (emailError) {
+        console.error('[Tip] Email failed:', emailError.message);
+      }
 
       // REMOVED DUPLICATE EMISSIONS - The DB notification already handles WebSocket emission
       // The Notification.createTipNotification method in the model already calls:
@@ -272,5 +297,7 @@ router.get('/stats/:username', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 

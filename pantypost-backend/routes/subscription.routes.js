@@ -7,6 +7,7 @@ const User = require('../models/User');
 const Wallet = require('../models/Wallet');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
+const { sendEmail, emailTemplates } = require('../config/email');
 const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
 
@@ -228,6 +229,30 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
 
       // Notifications + WS
       await Notification.createSubscriptionNotification(seller, buyer);
+
+      /* First subscription only. Renewals are deliberately silent:
+         fifty subscribers would mean fifty emails a month for money
+         the seller already expects, which is how a useful notification
+         turns into one people filter out. */
+      try {
+        const sellerUser = await User.findOne({ username: seller });
+        if (sellerUser?.email) {
+          const template = emailTemplates.newSubscriber(
+            seller,
+            buyer,
+            finalPrice,
+            `https://pantypost.com/sellers/${seller}`
+          );
+          await sendEmail({
+            to: sellerUser.email,
+            subject: template.subject,
+            html: template.html,
+            text: template.text
+          });
+        }
+      } catch (emailError) {
+        console.error('[Subscription] Email failed:', emailError.message);
+      }
 
       webSocketService.emitNewSubscription({
         id: subscription._id,
@@ -459,5 +484,7 @@ router.post('/process-renewals', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 

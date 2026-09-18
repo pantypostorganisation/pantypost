@@ -167,6 +167,60 @@ const emailTemplates = {
     text: `Hi ${sellerUsername}, ${buyerUsername} just bought "${itemTitle}". You earn $${Number(earnings).toFixed(2)}.\n\nPost the item and mark it as shipped: ${orderUrl}`
   }),
 
+  /* Somebody tipped.
+     Unprompted money is the nicest email a seller can get, and it is
+     also the one that prompts a thank-you back to the buyer -- which
+     is what turns a one-off tip into a regular one. No action needed,
+     so this stays short. */
+  tipReceived: (sellerUsername, buyerUsername, amount, walletUrl) => ({
+    subject: `${buyerUsername} tipped you $${Number(amount).toFixed(2)}`,
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0e0e0e;color:#ffffff;">
+        <h1 style="margin:0 0 8px;font-size:22px;color:#ff950e;">You got a tip</h1>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          Hi ${sellerUsername}, ${buyerUsername} sent you a tip.
+        </p>
+        <div style="background:#161616;border:1px solid #262626;border-radius:8px;padding:16px;margin-bottom:20px;">
+          <p style="margin:0;font-size:24px;font-weight:bold;color:#ff950e;">$${Number(amount).toFixed(2)}</p>
+          <p style="margin:6px 0 0;font-size:13px;color:#888888;">Already in your balance</p>
+        </div>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          Nothing to do. A quick thank you goes a long way though.
+        </p>
+        <a href="${walletUrl}" style="display:inline-block;background:#ff950e;color:#000000;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:6px;font-size:15px;">
+          View your wallet
+        </a>
+      </div>`,
+    text: `Hi ${sellerUsername}, ${buyerUsername} tipped you $${Number(amount).toFixed(2)}. It is already in your balance.\n\n${walletUrl}`
+  }),
+
+  /* A new subscriber.
+     Sent on the FIRST payment only, not on renewals -- a seller with
+     fifty subscribers would otherwise get fifty emails a month for
+     money they already expect, and that is how a useful notification
+     becomes one people filter. */
+  newSubscriber: (sellerUsername, buyerUsername, amount, profileUrl) => ({
+    subject: `${buyerUsername} subscribed to you`,
+    html: `
+      <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;background:#0e0e0e;color:#ffffff;">
+        <h1 style="margin:0 0 8px;font-size:22px;color:#ff950e;">New subscriber</h1>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          Hi ${sellerUsername}, ${buyerUsername} just subscribed at $${Number(amount).toFixed(2)} a month.
+        </p>
+        <p style="margin:0 0 20px;color:#cccccc;font-size:15px;line-height:1.5;">
+          They can now see your subscriber-only posts. Posting regularly is what keeps
+          people subscribed, so it is worth giving them something to come back for.
+        </p>
+        <a href="${profileUrl}" style="display:inline-block;background:#ff950e;color:#000000;text-decoration:none;font-weight:bold;padding:13px 26px;border-radius:6px;font-size:15px;">
+          Add a post
+        </a>
+        <p style="margin:24px 0 0;color:#888888;font-size:13px;line-height:1.5;">
+          We will not email you about renewals, only new subscribers.
+        </p>
+      </div>`,
+    text: `Hi ${sellerUsername}, ${buyerUsername} subscribed at $${Number(amount).toFixed(2)}/month. They can now see your subscriber-only posts.\n\n${profileUrl}`
+  }),
+
   listingApproved: (username, listingTitle, listingUrl) => ({
     subject: 'Your listing is live on Panty Post',
     html: `
@@ -1191,4 +1245,5 @@ module.exports = {
   sendEmail,
   emailTemplates
 };
+
 
