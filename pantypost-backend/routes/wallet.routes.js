@@ -2446,7 +2446,292 @@ router.get('/card/mine', authMiddleware, async (req, res) => {
   }
 });
 
+
+/* ============================================================
+   Crypto top-ups via Inqud
+   ============================================================
+   Replaces the NOWPayments flow above. The difference that matters:
+   Inqud accumulates deposits on our balance instead of forwarding
+   each one on-chain, so the network fee is paid once per withdrawal
+   rather than once per deposit. At a $20-50 ticket that was the
+   whole business -- forwarding took 25-60% of every payment.
+
+   Everything credits from an API lookup, never from a webhook
+   payload. A callback only says which request to go and verify.
+   ============================================================ */
+
+const INQUD_MIN_USD = Number(process.env.INQUD_MIN_DEPOSIT || 20);
+const INQUD_MAX_USD = Number(process.env.INQUD_MAX_DEPOSIT || 2000);
+
+/** What buyers can pay with, and the limits. */
+router.get('/crypto/inqud/config', (req, res) => {
+  return res.json({
+    success: true,
+    data: {
+      enabled: inqud.isConfigured(),
+      currencies: inqud.CURRENCIES,
+      min: INQUD_MIN_USD,
+      max: INQUD_MAX_USD,
+      currency: 'USD'
+    }
+  });
+});
+
+/** Creates a deposit request and returns the address to pay to. */
+router.post('/crypto/inqud/create', authMiddleware, async (req, res) => {
+  try {
+    if (!inqud.isConfigured()) {
+      return res.status(503).json({ success: false, error: 'Crypto deposits are not available right now.' });
+    }
+
+    const username = req.user.username;
+    const amountUsd = Math.round(Number(req.body.amount) * 100) / 100;
+    const cryptoCurrency = String(req.body.currency || 'TRON_USDT');
+
+    if (!Number.isFinite(amountUsd) || amountUsd < INQUD_MIN_USD || amountUsd > INQUD_MAX_USD) {
+      return res.status(400).json({
+        success: false,
+        error: `Enter an amount between $${INQUD_MIN_USD} and $${INQUD_MAX_USD}.`
+      });
+    }
+    if (!inqud.CURRENCIES.some(c => c.code === cryptoCurrency)) {
+      return res.status(400).json({ success: false, error: 'Unsupported currency.' });
+    }
+
+    const clientOrderId = `pp_${username}_${Date.now()}`;
+    const deposit = await CryptoDeposit.create({
+      username,
+      amountAud: amountUsd,      // USD now; field name predates the switch
+      paymentId: clientOrderId,  // replaced with Inqud's id below
+      payCurrency: cryptoCurrency,
+      status: 'waiting'
+    });
+
+    let request;
+    try {
+      request = await inqud.createDepositRequest({ amountUsd, cryptoCurrency, clientOrderId });
+    } catch (err) {
+      // Never leave a row implying a payment that never started.
+      await CryptoDeposit.deleteOne({ _id: deposit._id });
+      throw err;
+    }
+
+    deposit.paymentId = request.id;
+    deposit.payAddress = request.address || '';
+    deposit.payAmount = request.payAmount ?? null;
+    deposit.payinExtraId = request.memo || request.tag || null;
+    deposit.status = 'waiting';
+    if (request.expiresAt) deposit.expiresAt = new Date(request.expiresAt);
+    await deposit.save();
+
+    return res.json({
+      success: true,
+      data: {
+        paymentId: deposit.paymentId,
+        clientOrderId,
+        amountUsd: deposit.amountAud,
+        payAmount: deposit.payAmount,
+        payCurrency: request.currency || cryptoCurrency,
+        payAddress: deposit.payAddress,
+        payinExtraId: deposit.payinExtraId,
+        blockchain: request.blockchain || '',
+        expiresAt: deposit.expiresAt
+      }
+    });
+  } catch (err) {
+    console.error('[Inqud] create failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not start the deposit. Please try again.' });
+  }
+});
+
+/**
+ * Asks Inqud what really happened, and credits if settled.
+ *
+ * The only place an Inqud deposit moves a balance. Webhook, buyer
+ * polling and admin sweep all come through here, and creditedAt means
+ * only the first one through does anything.
+ */
+async function settleInqudDeposit(deposit) {
+  const request = await inqud.getDepositRequest(deposit.paymentId);
+
+  const paid = Number(request.paidAmount) || 0;
+  const expected = Number(request.payAmount) || Number(deposit.payAmount) || 0;
+
+  deposit.actuallyPaid = paid;
+  if (request.payAmount != null) deposit.payAmount = request.payAmount;
+
+  const state = request.paymentStatus || request.status || '';
+  const settled = state === 'SUCCESS';
+  const partial = state === 'PARTIAL_SUCCESS';
+
+  deposit.status = settled ? 'finished' : partial ? 'partially_paid' : 'waiting';
+
+  if (!(settled || partial) || deposit.creditedAt) {
+    await deposit.save();
+    return { credited: false, status: deposit.status };
+  }
+
+  /* Credit what arrived. An underpayment credits pro rata rather than
+     the quoted figure, or a short payment would be a free top-up for
+     anyone who noticed. */
+  let creditUsd = deposit.amountAud;
+  if (expected > 0 && paid > 0 && paid < expected) {
+    creditUsd = Math.round(deposit.amountAud * (paid / expected) * 100) / 100;
+  }
+
+  if (!Number.isFinite(creditUsd) || creditUsd <= 0) {
+    await deposit.save();
+    return { credited: false, status: deposit.status };
+  }
+
+  await Wallet.findOneAndUpdate(
+    { username: deposit.username },
+    { $setOnInsert: { username: deposit.username, role: 'buyer' } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  const wallet = await Wallet.creditAtomic(deposit.username, creditUsd);
+
+  const transaction = await Transaction.create({
+    type: 'deposit',
+    amount: creditUsd,
+    to: deposit.username,
+    description: `Crypto top-up (${(deposit.payCurrency || '').replace('_', ' ')})`,
+    status: 'completed',
+    completedAt: new Date(),
+    metadata: {
+      method: 'crypto',
+      provider: 'inqud',
+      requestId: deposit.paymentId,
+      payCurrency: deposit.payCurrency,
+      paidAmount: paid,
+      quotedUsd: deposit.amountAud
+    }
+  });
+
+  deposit.creditedAt = new Date();
+  deposit.creditedAmountAud = creditUsd;
+  deposit.transactionId = transaction._id;
+  await deposit.save();
+
+  try {
+    await incrementPaymentStats(creditUsd);
+  } catch (statsError) {
+    console.error('[Inqud] payment stats failed:', statsError.message);
+  }
+
+  try {
+    if (global.webSocketService) {
+      global.webSocketService.emitBalanceUpdate(
+        deposit.username, 'buyer', (wallet?.balance || 0) - creditUsd, wallet?.balance || 0, 'deposit'
+      );
+      global.webSocketService.emitTransaction(transaction);
+    }
+  } catch (wsError) {
+    console.error('[Inqud] websocket notify failed:', wsError.message);
+  }
+
+  console.log(`[Inqud] credited ${deposit.username} $${creditUsd} (${deposit.paymentId})`);
+  return { credited: true, status: deposit.status, creditedAmountUsd: creditUsd };
+}
+
+/** Polled by the deposit screen while a payment is in flight. */
+router.get('/crypto/inqud/status/:requestId', authMiddleware, async (req, res) => {
+  try {
+    const deposit = await CryptoDeposit.findOne({
+      paymentId: req.params.requestId,
+      username: req.user.username
+    });
+    if (!deposit) return res.status(404).json({ success: false, error: 'Not found.' });
+
+    if (deposit.creditedAt) {
+      return res.json({
+        success: true,
+        data: { credited: true, status: deposit.status, creditedAmountUsd: deposit.creditedAmountAud }
+      });
+    }
+
+    const result = await settleInqudDeposit(deposit);
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error('[Inqud] status failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not check that deposit.' });
+  }
+});
+
+/**
+ * Inqud request callback.
+ *
+ * Thin by design. The payload is not trusted and not credited from --
+ * it only names the request to verify. Always answers 200 so Inqud
+ * does not retry something already handled.
+ */
+router.post('/crypto/inqud-webhook', async (req, res) => {
+  try {
+    if (!inqud.looksAuthentic(req.headers)) {
+      console.warn('[Inqud] webhook rejected: shared secret mismatch');
+      return res.status(401).json({ success: false });
+    }
+
+    const body = req.body || {};
+    const requestId = body.id || body.requestId || body?.data?.id;
+    const clientOrderId = body.clientOrderId || body?.data?.clientOrderId;
+
+    const deposit = await CryptoDeposit.findOne(
+      requestId ? { paymentId: requestId } : { paymentId: clientOrderId }
+    );
+
+    if (!deposit) {
+      console.warn('[Inqud] webhook for unknown request', requestId || clientOrderId);
+      return res.json({ success: true });
+    }
+
+    deposit.lastWebhook = body;
+    await deposit.save();
+
+    await settleInqudDeposit(deposit);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[Inqud] webhook failed:', err.message);
+    return res.json({ success: true });
+  }
+});
+
+/** Admin sweep for anything a callback missed. */
+router.post('/crypto/inqud/admin/reconcile-all', authMiddleware, async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+
+    const pending = await CryptoDeposit.find({
+      creditedAt: null,
+      paymentId: { $regex: '^CAPD-' }
+    }).limit(100);
+
+    const results = [];
+    for (const deposit of pending) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const result = await settleInqudDeposit(deposit);
+        results.push({ requestId: deposit.paymentId, username: deposit.username, ...result });
+      } catch (err) {
+        results.push({ requestId: deposit.paymentId, error: err.message });
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: { checked: results.length, credited: results.filter(r => r.credited).length, results }
+    });
+  } catch (err) {
+    console.error('[Inqud] bulk reconcile failed:', err.message);
+    return res.status(500).json({ success: false, error: 'Could not reconcile deposits.' });
+  }
+});
+
 module.exports = router;
+
+
 
 
 

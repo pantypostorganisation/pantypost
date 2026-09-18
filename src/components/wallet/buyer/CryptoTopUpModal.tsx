@@ -27,7 +27,7 @@ type Currency = { code: string; label: string; network: string; note: string };
 
 type Payment = {
   paymentId: string;
-  amountAud: number;
+  amountUsd: number;
   payAmount: number;
   payCurrency: string;
   payAddress: string;
@@ -43,8 +43,16 @@ interface Props {
   min: number;
   max: number;
   onCreate: (amount: number, currency: string) => Promise<Payment>;
-  onCheckStatus: (paymentId: string) => Promise<{ credited: boolean; status: string; creditedAmountAud: number | null }>;
+  onCheckStatus: (paymentId: string) => Promise<{ credited: boolean; status: string; creditedAmountUsd: number | null }>;
   onCredited: () => void;
+}
+
+/* Inqud returns codes like TRON_USDT. The network is already shown
+   beside the amount, so repeating it in the ticker is noise. */
+function formatCurrencyCode(code: string): string {
+  if (!code) return '';
+  const parts = code.split('_');
+  return (parts[parts.length - 1] || code).toUpperCase();
 }
 
 const QUICK_AMOUNTS = [25, 50, 100, 200];
@@ -107,7 +115,7 @@ export default function CryptoTopUpModal({
   open, onClose, currencies, min, max, onCreate, onCheckStatus, onCredited,
 }: Props) {
   const [amount, setAmount] = useState('');
-  const [currency, setCurrency] = useState(currencies[0]?.code || 'usdttrc20');
+  const [currency, setCurrency] = useState(currencies[0]?.code || 'TRON_USDT');
   const [payment, setPayment] = useState<Payment | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -134,7 +142,7 @@ export default function CryptoTopUpModal({
       try {
         const result = await onCheckStatus(payment.paymentId);
         if (result.credited) {
-          setCredited(result.creditedAmountAud ?? payment.amountAud);
+          setCredited(result.creditedAmountUsd ?? payment.amountUsd);
           stopPolling();
           onCredited();
         }
@@ -389,10 +397,10 @@ export default function CryptoTopUpModal({
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-ink-faint">Send exactly</p>
             <p className="mt-1 text-2xl font-semibold text-white">
-              {payment.payAmount} <span className="text-lg text-ink-muted">{payment.payCurrency.toUpperCase()}</span>
+              {payment.payAmount} <span className="text-lg text-ink-muted">{formatCurrencyCode(payment.payCurrency)}</span>
             </p>
             <p className="mt-1 text-sm text-ink-muted">
-              for ${payment.amountAud.toFixed(2)} of credit
+              for ${payment.amountUsd.toFixed(2)} of credit
             </p>
 
             {selected && (
@@ -415,7 +423,7 @@ export default function CryptoTopUpModal({
               />
               <Field
                 label="Amount"
-                value={`${payment.payAmount} ${payment.payCurrency.toUpperCase()}`}
+                value={`${payment.payAmount} ${formatCurrencyCode(payment.payCurrency)}`}
                 mono
                 onCopy={() => copy(String(payment.payAmount), 'amount')}
                 copied={copied === 'amount'}
@@ -469,3 +477,4 @@ function Field({
     </div>
   );
 }
+

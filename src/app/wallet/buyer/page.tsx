@@ -50,7 +50,7 @@ function BuyerWalletContent() {
    (async () => {
      try {
        const [cryptoRes, cardRes] = await Promise.all([
-         apiCall<any>('/wallet/crypto/currencies'),
+         apiCall<any>('/wallet/crypto/inqud/config'),
          apiCall<any>('/wallet/card/config'),
        ]);
        if (cancelled) return;
@@ -201,7 +201,7 @@ function BuyerWalletContent() {
           return res.data;
         }}
         onCreateCrypto={async (value, currency) => {
-          const res = await apiCall<any>('/wallet/crypto/create', {
+          const res = await apiCall<any>('/wallet/crypto/inqud/create', {
             method: 'POST',
             body: JSON.stringify({ amount: value, currency }),
           });
@@ -213,7 +213,7 @@ function BuyerWalletContent() {
           return res.data;
         }}
         onCheckCrypto={async (paymentId) => {
-          const res = await apiCall<any>(`/wallet/crypto/status/${paymentId}`);
+          const res = await apiCall<any>(`/wallet/crypto/inqud/status/${paymentId}`);
           if (!res.success) throw new Error('Could not check the deposit.');
           return res.data;
         }}
@@ -278,6 +278,8 @@ export default function BuyerWalletPage() {
  </BanCheck>
  );
 }
+
+
 
 
 
