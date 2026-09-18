@@ -103,9 +103,15 @@ async function createDepositRequest({ amountUsd, cryptoCurrency, clientOrderId }
   });
 }
 
-/** The authoritative state of a request. This is what we credit on. */
+/**
+ * The authoritative state of a request. This is what we credit on.
+ *
+ * The path is scoped to the project. The unscoped
+ * /crypto-acquiring/requests/{id} returns a 404 HTML page rather than
+ * a JSON error, which is a confusing way to find out.
+ */
 async function getDepositRequest(requestId) {
-  return request(`/v1/user/crypto-acquiring/requests/${requestId}`);
+  return request(`/v1/user/crypto-acquiring/${PROJECT_ID}/requests/${requestId}`);
 }
 
 /** Account balances, for the admin view. */
