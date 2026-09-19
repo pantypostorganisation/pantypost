@@ -14,8 +14,7 @@ import {
   BadgeCheck,
   MessageCircle,
   MessageSquarePlus,
-  Plus
-} from 'lucide-react';
+  Plus, ArrowLeft } from 'lucide-react';
 import ImagePreviewModal from '@/components/messaging/ImagePreviewModal';
 import { Message } from '@/types/message';
 import EmojiPicker from './EmojiPicker';
@@ -42,6 +41,10 @@ interface ChatContentProps {
   onReport: () => void;
   onStartNewConversation: () => void;
   username: string;
+  /* Mobile only. The buyer and seller pages give the conversation a
+     way back to the thread list; admin had none, so once a thread was
+     open the only escape was the browser's back button. */
+  onBack?: () => void;
 }
 
 export default function ChatContent({
@@ -58,6 +61,7 @@ export default function ChatContent({
   onBlockToggle,
   onReport,
   onStartNewConversation,
+  onBack,
   username
 }: ChatContentProps) {
   const [isImageLoading, setIsImageLoading] = useState(false);
@@ -179,6 +183,17 @@ export default function ChatContent({
       {/* Header */}
       <div className="px-4 py-3 flex items-center justify-between border-b border-gray-800 bg-[#1a1a1a]">
         <div className="flex items-center">
+          {/* Hidden on desktop, where both columns are visible anyway. */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to conversations"
+              className="mr-2 -ml-1 rounded-md p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-white md:hidden"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          )}
           <div className="relative w-10 h-10 rounded-full bg-[#333] flex items-center justify-center text-white font-bold mr-3 overflow-hidden shadow-md">
             {userProfiles[activeThread]?.pic ? (
               <SecureImage
@@ -482,3 +497,4 @@ export default function ChatContent({
     </div>
   );
 }
+
