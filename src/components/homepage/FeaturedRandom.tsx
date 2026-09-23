@@ -298,7 +298,12 @@ ListingCard.displayName = 'ListingCard';
  * five, move it to a `featured` field on the listing model. */
 const PINNED_LISTINGS: { id: string; position: number }[] = [
   { id: '6ab2970b0363672d9cd29022', position: 1 },
+  { id: '6ab410430363672d9cd5e867', position: 2 },
+  { id: '6ab40f700363672d9cd5e6b9', position: 3 },
   { id: '6ab3dd890363672d9cd50b2c', position: 4 },
+  // Position 5 sits on the second row on mobile, so this one is
+  // effectively desktop-only.
+  { id: '6a9210c045200fefdeca5093', position: 5 },
 ];
 
 export default function FeaturedRandom() {

@@ -18,6 +18,21 @@ const ListingSchema = z.object({
   isPremium: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   hoursWorn: z.number().int().nonnegative().optional(),
+
+  /* Auctions were rendering as $0.00 here while browse showed them
+     correctly. The cause was this schema: it did not declare `auction`,
+     so Zod stripped it, and `price` -- which an auction listing does
+     not set -- fell through its .catch(0) to zero. The grid was
+     displaying a field auctions never populate. */
+  auction: z
+    .object({
+      isAuction: z.boolean().optional(),
+      startingPrice: z.number().nonnegative().optional(),
+      currentBid: z.number().nonnegative().optional(),
+      highestBid: z.number().nonnegative().optional(),
+      bidCount: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
 });
 
 const UserSchema = z
@@ -82,16 +97,32 @@ export default function ListingsGrid(props: ListingsGridProps) {
             const sanitizedDescription = sanitizeStrict(listing.description);
             const imageSrc = safeImageSrc(listing.imageUrls?.[0], { placeholder: '/placeholder-image.png' });
 
+            const isAuction = Boolean(listing.auction?.isAuction);
+
+            /* An auction's price is whatever it currently stands at:
+               the highest bid if anyone has bid, otherwise the starting
+               price. No markup either way -- an auction winner pays
+               exactly their bid. */
+            const auctionPrice =
+              listing.auction?.highestBid ||
+              listing.auction?.currentBid ||
+              listing.auction?.startingPrice ||
+              0;
+
             // Price formatting - robust against undefined/NaN
-            const basePrice =
-              /* A seller viewing their own shop was seeing every item
-                 priced above what they set it at. Only buyers, who
-                 actually pay the marked-up figure, see it. */
-              user?.role === 'buyer' &&
-              typeof listing.markedUpPrice === 'number' && Number.isFinite(listing.markedUpPrice)
+            const basePrice = isAuction
+              ? auctionPrice
+              : /* A seller viewing their own shop was seeing every item
+                   priced above what they set it at. Only buyers, who
+                   actually pay the marked-up figure, see it. */
+                user?.role === 'buyer' &&
+                  typeof listing.markedUpPrice === 'number' &&
+                  Number.isFinite(listing.markedUpPrice)
                 ? listing.markedUpPrice
                 : listing.price;
+
             const priceLabel = formatCurrency(basePrice);
+            const bidCount = listing.auction?.bidCount ?? 0;
 
             return (
               <div
@@ -167,7 +198,19 @@ export default function ListingsGrid(props: ListingsGridProps) {
                   )}
 
                   <div className="flex justify-between items-center mt-auto pt-3 border-t border-line">
-                    <p className="text-primary font-bold text-xl">{priceLabel}</p>
+                    <div>
+                      {/* Auctions say what the figure means. "$40" on an
+                          auction is ambiguous: a shopper cannot tell a
+                          starting price from a live bid without it. */}
+                      {isAuction && (
+                        <p className="text-xs text-ink-muted">
+                          {bidCount > 0
+                            ? `Current bid · ${bidCount} bid${bidCount === 1 ? '' : 's'}`
+                            : 'Starting bid'}
+                        </p>
+                      )}
+                      <p className="text-primary font-bold text-xl">{priceLabel}</p>
+                    </div>
 
                     {(!listing.isPremium || hasAccess) && (
                       <Link
@@ -197,4 +240,6 @@ export default function ListingsGrid(props: ListingsGridProps) {
     </div>
   );
 }
+
+
 
