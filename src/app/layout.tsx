@@ -224,6 +224,51 @@ export default function RootLayout({
             surfaces -- via `other: { rating: 'adult', ... }`. Do not put
             them back here. */}
 
+        {/* Organisation, as its own top-level node.
+         *
+         * This used to exist only as `publisher` nested inside the
+         * WebSite node below. Google reads a nested publisher for
+         * attribution but wants a standalone Organization -- with an
+         * @id it can resolve -- before it will use the logo in search
+         * results. Without one it picks an image itself, usually from
+         * the manifest or whichever icon it likes, which is why the
+         * logo shown was not the one we chose.
+         *
+         * The logo must also be square, at least 112x112, and read
+         * correctly on WHITE: Google's results page has no dark mode
+         * for this. A transparent PNG whose mark is light or whose
+         * shape relies on a dark backdrop disappears there. */}
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              '@id': `${BASE_URL}/#organization`,
+              name: 'PantyPost',
+              legalName: 'PANTYPOST PTY LTD',
+              url: BASE_URL,
+              logo: {
+                '@type': 'ImageObject',
+                /* A dedicated file, not one of the app icons. Those are
+                   transparent, which is correct for a browser tab and
+                   for an Android home screen where the OS draws the
+                   backdrop -- and wrong here, where Google renders on
+                   white. Built by scripts/generate-search-logo.js. */
+                url: `${BASE_URL}/icons/search-logo-512.png`,
+                width: 512,
+                height: 512,
+              },
+              description:
+                'Marketplace for worn intimate apparel. Every seller is identity and age verified, and every listing is reviewed before publication.',
+              foundingDate: '2026',
+              email: 'support@pantypost.com',
+              sameAs: ['https://twitter.com/pantypost', 'https://www.instagram.com/pantypost'],
+            }),
+          }}
+        />
+
         {/* Structured Data */}
         <script
           type="application/ld+json"
@@ -243,15 +288,11 @@ export default function RootLayout({
                 },
                 'query-input': 'required name=search_term_string',
               },
-              publisher: {
-                '@type': 'Organization',
-                name: 'PantyPost',
-                url: BASE_URL,
-                // Google reads this for the knowledge panel; it wants a
-                // real image, not a 32px .ico.
-                logo: `${BASE_URL}/icons/icon-512x512.png`,
-                sameAs: ['https://twitter.com/pantypost', 'https://www.instagram.com/pantypost'],
-              },
+              /* Refers to the Organization node above rather than
+                 repeating it. Two Organization objects describing the
+                 same company is how a crawler ends up unsure which
+                 logo is authoritative. */
+              publisher: { '@id': `${BASE_URL}/#organization` },
             }),
           }}
         />
@@ -262,5 +303,6 @@ export default function RootLayout({
     </html>
   );
 }
+
 
 
