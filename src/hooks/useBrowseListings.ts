@@ -113,8 +113,17 @@ export const useBrowseListings = () => {
       // Clear the listings service cache to force fresh data
       listingsService.clearCache();
       
-      // Fetch fresh listings directly from API
-      const result = await listingsService.getListings({ isActive: true });
+      /* Ask for the lot. The API defaults to 20 per page, which is
+         why browse showed 20 no matter how many existed -- the grid
+         was paginating a set that had already been truncated by the
+         server. 100 is the API's own ceiling (it applies
+         Math.min(limit, 100)), so this asks for as much as it will
+         give in one call.
+
+         When the catalogue outgrows 100, this needs to page the API
+         itself rather than raise the number, since the cap is
+         enforced server-side and a larger limit is silently ignored. */
+      const result = await listingsService.getListings({ isActive: true, limit: 100 });
       
       if (result.success && result.data && mountedRef.current) {
         setFreshListings(result.data);
