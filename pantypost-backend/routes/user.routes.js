@@ -231,7 +231,9 @@ router.get('/me/profile', authMiddleware, async (req, res) => {
               .map(i => ({ id: String(i._id), url: i.url, submittedAt: i.submittedAt }))
           : [],
         country: user.country || user?.settings?.country,
-        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true,
+        shippingScope: user.shippingScope || 'worldwide',
+        shipsToCountries: user.shipsToCountries || []
       }
     });
   } catch (error) {
@@ -253,7 +255,7 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
       });
     }
 
-    const { bio, profilePic, country, isLocationPublic } = req.body || {};
+    const { bio, profilePic, country, isLocationPublic, shippingScope, shipsToCountries } = req.body || {};
 
     // Validate bio
     if (typeof bio !== 'undefined') {
@@ -323,6 +325,41 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
       user.isLocationPublic = isLocationPublic;
     }
 
+    /* Where the seller is willing to post. Validated rather than
+       trusted: the scope is an enum and the country list is capped, so
+       a malformed client cannot write junk that later breaks the
+       shipsTo() comparison at checkout. */
+    if (typeof shippingScope !== 'undefined') {
+      if (!['domestic', 'worldwide', 'selected'].includes(shippingScope)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid shipping scope' }
+        });
+      }
+      user.shippingScope = shippingScope;
+    }
+
+    if (typeof shipsToCountries !== 'undefined') {
+      if (!Array.isArray(shipsToCountries)) {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid country list' }
+        });
+      }
+      const cleaned = shipsToCountries
+        .map((entry) => String(entry).trim())
+        .filter(Boolean)
+        .slice(0, 60);
+      user.shipsToCountries = Array.from(new Set(cleaned));
+    }
+
+    /* "Selected" with an empty list would silently block every buyer,
+       so fall back to domestic -- the nearest sensible reading of what
+       the seller meant. */
+    if (user.shippingScope === 'selected' && (user.shipsToCountries || []).length === 0) {
+      user.shippingScope = 'domestic';
+    }
+
     await user.save();
 
     const profilePicPendingReview =
@@ -351,7 +388,9 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           user.pendingCoverPhoto?.url && user.pendingCoverPhoto.status === 'pending'
         ),
         country: user.country || user?.settings?.country,
-        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true
+        isLocationPublic: typeof user.isLocationPublic === 'boolean' ? user.isLocationPublic : true,
+        shippingScope: user.shippingScope || 'worldwide',
+        shipsToCountries: user.shipsToCountries || []
       }
     });
   } catch (error) {
@@ -1146,3 +1185,5 @@ router.get('/:username/activity', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+

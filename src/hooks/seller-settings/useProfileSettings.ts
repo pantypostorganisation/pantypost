@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useProfileData } from './useProfileData';
 import { useProfileSave } from './useProfileSave';
 import { useTierCalculation } from './useTierCalculation';
-import { API_BASE_URL, buildApiUrl } from '@/services/api.config';
+import { API_BASE_URL, buildApiUrl, apiCall } from '@/services/api.config';
 import { sanitizeUrl } from '@/utils/security/sanitization';
 import { securityService } from '@/services/security.service';
 import { getRateLimiter, RATE_LIMITS } from '@/utils/security/rate-limiter';
@@ -38,6 +38,8 @@ const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp
 type AllowedMime = typeof ALLOWED_IMAGE_TYPES[number];
 const isAllowed = (t: string): t is AllowedMime => (ALLOWED_IMAGE_TYPES as readonly string[]).includes(t);
 
+type ShippingScope = 'domestic' | 'worldwide' | 'selected';
+
 export function useProfileSettings() {
   const { user, token } = useAuth();
   const rateLimiter = getRateLimiter();
@@ -59,6 +61,33 @@ export function useProfileSettings() {
 
   const [selectedTierDetails, setSelectedTierDetails] = useState<any>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+
+  /* Shipping reach.
+     Held here rather than in useProfileData because it is written only
+     from this screen and read only by the save payload -- threading it
+     through the shared profile hook would widen that hook's surface
+     for one card's benefit. Hydrated once on mount from the same
+     profile endpoint the rest of the form uses. */
+  const [shippingScope, setShippingScope] = useState<ShippingScope>('worldwide');
+  const [shipsToCountries, setShipsToCountries] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiCall<any>('/users/me/profile');
+        if (cancelled || !response?.success) return;
+        const data = response.data || {};
+        if (data.shippingScope) setShippingScope(data.shippingScope);
+        if (Array.isArray(data.shipsToCountries)) setShipsToCountries(data.shipsToCountries);
+      } catch {
+        /* Defaults stand. Worldwide is what every seller had before
+           this field existed, so failing to load leaves behaviour
+           unchanged rather than silently narrowing their reach. */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ---- Cover photo ----
   // Uploaded and moderated exactly like the profile picture: the POST
@@ -541,12 +570,16 @@ export function useProfileSettings() {
       subscriptionPrice: string;
       country: string;
       isLocationPublic: boolean;
+      shippingScope: ShippingScope;
+      shipsToCountries: string[];
       profilePic?: string | null;
     } = {
       bio: profileData.bio,
       subscriptionPrice: profileData.subscriptionPrice,
       country: sanitizedCountry,
       isLocationPublic: profileData.isLocationPublic ?? true,
+      shippingScope,
+      shipsToCountries,
     };
 
     if (profileData.profilePicRemoved) {
@@ -561,6 +594,12 @@ export function useProfileSettings() {
   return {
     // User
     user,
+
+    // Shipping reach
+    shippingScope,
+    setShippingScope,
+    shipsToCountries,
+    setShipsToCountries,
 
     // Profile data
     bio: profileData.bio,
@@ -624,5 +663,6 @@ export function useProfileSettings() {
     locationError
   };
 }
+
 
 

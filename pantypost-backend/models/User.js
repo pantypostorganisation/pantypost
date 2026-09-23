@@ -62,6 +62,38 @@ const userSchema = new mongoose.Schema({
   },
 
   // =====================================================================
+  // SHIPPING REACH
+  //
+  // Where a seller is willing to post. Set once in settings rather than
+  // per listing: asking on every listing is friction a seller comes to
+  // resent, and almost nobody varies it item by item.
+  //
+  //   domestic  - their own country only
+  //   worldwide - anywhere we are not geo-blocking (the default, since
+  //               it is what sellers did before this field existed and
+  //               changing behaviour under them would be wrong)
+  //   selected  - the countries listed in shipsToCountries
+  //
+  // Buyers are not prevented from SEEING a listing that cannot reach
+  // them. The listing says so and the buy button explains why. Hiding
+  // it instead would leave sellers wondering why their views fell and
+  // buyers wondering where something went.
+  // =====================================================================
+  shippingScope: {
+    type: String,
+    enum: ['domestic', 'worldwide', 'selected'],
+    default: 'worldwide'
+  },
+  shipsToCountries: {
+    type: [String],
+    default: [],
+    validate: {
+      validator: (list) => list.length <= 60,
+      message: 'Too many countries selected'
+    }
+  },
+
+  // =====================================================================
   // DELIVERY ADDRESS
   //
   // The buyer's shipping address, stored ON THE BUYER rather than per
@@ -586,5 +618,35 @@ userSchema.methods.hasDeliveryAddress = function () {
 
 const User = mongoose.model('User', userSchema);
 
+/**
+ * Can this seller post to the given country?
+ *
+ * Comparison is case-insensitive and trimmed because country strings
+ * arrive from three places -- the seller's profile, the buyer's
+ * delivery address and a dropdown -- and they do not always agree on
+ * capitalisation. An unknown buyer country returns true: we would
+ * rather let the order through and have the seller decline than block
+ * a sale over a missing field.
+ */
+userSchema.methods.shipsTo = function (buyerCountry) {
+  if (!buyerCountry) return true;
+
+  const target = String(buyerCountry).trim().toLowerCase();
+  if (!target) return true;
+
+  if (this.shippingScope === 'worldwide') return true;
+
+  if (this.shippingScope === 'domestic') {
+    const home = String(this.country || '').trim().toLowerCase();
+    return home ? home === target : true;
+  }
+
+  return (this.shipsToCountries || []).some(
+    (entry) => String(entry).trim().toLowerCase() === target
+  );
+};
+
 module.exports = User;
+
+
 
