@@ -24,6 +24,23 @@ interface SellerProfile {
   reviewCount?: number | null;
   totalSales?: number | null;
   isVerified?: boolean;
+  listingCount?: number | null;
+}
+
+/* Does this shop have anything on it?
+ *
+ * An empty shop is a page Google fetches, finds nothing on, and files
+ * as a soft 404 -- which it then holds against the rest of the site.
+ * Telling it not to index an empty shop is more honest than asking it
+ * to index nothing and better than letting it decide for itself.
+ *
+ * A bio counts. A seller who has written about themselves has put
+ * something on the page even if they have not listed yet. */
+function hasContent(seller: SellerProfile | null): boolean {
+  if (!seller) return false;
+  if ((seller.listingCount ?? 0) > 0) return true;
+  if ((seller.totalSales ?? 0) > 0) return true;
+  return Boolean((seller.bio || '').trim());
 }
 
 /* GET /api/users/:username/profile is public and needs no auth, which is
@@ -61,6 +78,8 @@ export async function generateMetadata({
       title: `${name} on Panty Post`,
       description: `Browse ${name}'s listings on Panty Post.`,
       alternates: { canonical },
+      // Nothing was fetched, so there is nothing worth indexing.
+      robots: { index: false, follow: true },
     /* SafeSearch: this page carries explicit imagery, so it is tagged
        adult HERE, per-page -- the tags were removed from the root layout
        where they were filtering the whole site including the blog. */
@@ -104,6 +123,10 @@ export async function generateMetadata({
     title: `${name} — worn underwear on Panty Post`,
     description,
     alternates: { canonical },
+    /* Empty shops are excluded from the index but still followed, so
+       a seller who lists later is crawled through normally rather than
+       having to be rediscovered. */
+    ...(hasContent(seller) ? {} : { robots: { index: false, follow: true } }),
     /* SafeSearch: this page carries explicit imagery, so it is tagged
        adult HERE, per-page -- the tags were removed from the root layout
        where they were filtering the whole site including the blog. */
@@ -141,4 +164,5 @@ export default async function SellerProfilePage({
 
   return <SellerClient initialSeller={seller ?? undefined} />;
 }
+
 

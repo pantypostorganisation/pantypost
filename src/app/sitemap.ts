@@ -108,6 +108,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getSellersForSitemap(),
   ]);
 
+  /* Sellers who have actually listed something.
+     Every registered seller used to go in here, including accounts that
+     had never posted. Google crawled those empty shops, found nothing
+     on them, and logged seven of them as soft 404s -- then stopped
+     bothering with the rest, which is most of the "discovered, not
+     indexed" pile. A shop with no stock is not a page worth asking
+     anyone to index. */
+  const sellersWithListings = new Set<string>(
+    listings
+      .map((listing) => listing?.seller || listing?.sellerUsername)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0)
+  );
+
   const staticPages: MetadataRoute.Sitemap = [
     { url: BASE_URL, lastModified: now, changeFrequency: 'daily', priority: 1.0 },
     { url: `${BASE_URL}/browse`, lastModified: now, changeFrequency: 'hourly', priority: 0.9 },
@@ -197,6 +210,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const sellerPages: MetadataRoute.Sitemap = sellers
     .map((seller) => seller?.username)
     .filter((username): username is string => typeof username === 'string' && username.length > 0)
+    .filter((username) => sellersWithListings.has(username))
     .map((username) => ({
       url: `${BASE_URL}/sellers/${encodeURIComponent(username)}`,
       lastModified: now,
@@ -206,4 +220,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [...staticPages, ...listingPages, ...sellerPages];
 }
+
+
 
