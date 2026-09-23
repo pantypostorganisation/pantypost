@@ -146,11 +146,44 @@ function ensureAdmin(req, res, next) {
   return next();
 }
 
-/** Resolve ?days= into a bounded range. Capped at the 90-day retention. */
+/* The timezone the dashboard reports in. Must match the model's
+   bucketing, or the range and the columns disagree at the edges. */
+const REPORTING_TIMEZONE = process.env.ANALYTICS_TIMEZONE || 'Australia/Sydney';
+
+/** Local midnight, as a UTC instant. */
+function startOfLocalDay(date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: REPORTING_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const get = (type) => parts.find((part) => part.type === type)?.value;
+  const localDate = `${get('year')}-${get('month')}-${get('day')}`;
+
+  /* Derive the zone's offset at that moment rather than assuming a
+     fixed one, so this stays correct across daylight saving. */
+  const guess = new Date(`${localDate}T00:00:00Z`);
+  const asLocal = new Date(guess.toLocaleString('en-US', { timeZone: REPORTING_TIMEZONE }));
+  const asUtc = new Date(guess.toLocaleString('en-US', { timeZone: 'UTC' }));
+  return new Date(guess.getTime() + (asUtc.getTime() - asLocal.getTime()));
+}
+
+/**
+ * Resolve ?days= into a bounded range. Capped at the 90-day retention.
+ *
+ * The window starts at local midnight N-1 days back and runs to now,
+ * so "7 days" means six whole local days plus today so far. Counting
+ * back 168 hours from the current moment instead left the oldest
+ * column a partial day and, combined with UTC bucketing, made this
+ * morning's traffic invisible until mid-morning.
+ */
 function resolveRange(query) {
   const days = Math.min(Math.max(parseInt(query.days) || 7, 1), 90);
   const until = new Date();
-  const since = new Date(until.getTime() - days * 24 * 60 * 60 * 1000);
+  const todayStart = startOfLocalDay(until);
+  const since = new Date(todayStart.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
   return { since, until, days };
 }
 
@@ -261,3 +294,4 @@ router.get('/events', authMiddleware, ensureAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
