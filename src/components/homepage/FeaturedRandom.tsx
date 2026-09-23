@@ -285,6 +285,22 @@ const ListingCard = React.memo(({ listing, isBuyer }: { listing: Listing; isBuye
 });
 ListingCard.displayName = 'ListingCard';
 
+/* Listings pinned to fixed positions on the homepage.
+ *
+ * `position` is 1-based and matches what a visitor sees, so "first"
+ * here means first on the page. A pinned listing that has sold, been
+ * removed or lost its images simply falls out of the eligible set and
+ * the grid closes up behind it -- nothing has to be unpinned by hand
+ * when an item sells.
+ *
+ * Hardcoded deliberately: at two or three entries a config array beats
+ * a database flag and an admin screen. If this list grows past about
+ * five, move it to a `featured` field on the listing model. */
+const PINNED_LISTINGS: { id: string; position: number }[] = [
+  { id: '6ab2970b0363672d9cd29022', position: 1 },
+  { id: '6ab3dd890363672d9cd50b2c', position: 4 },
+];
+
 export default function FeaturedRandom() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -324,18 +340,44 @@ export default function FeaturedRandom() {
             return isActive && hasImage && hasSeller && hasValidPrice && auctionNotEnded;
           });
 
-          // Random selection client-side
-          const shuffled = [...eligible].sort(() => Math.random() - 0.5);
+          /* Pinned listings first, then the rest shuffled around them.
+             Pinning is applied against `eligible`, so a sold or removed
+             listing is already gone and needs no special handling. */
+          const idOf = (listing: any) => String(listing.id ?? listing._id ?? '');
+          const pinnedIds = new Set(PINNED_LISTINGS.map((entry) => entry.id));
 
-          // Smart selection logic for rows
+          const unpinned = eligible.filter((listing: any) => !pinnedIds.has(idOf(listing)));
+          const shuffled = [...unpinned].sort(() => Math.random() - 0.5);
+
           let selectedCount: number;
-          if (shuffled.length <= 4) {
-            selectedCount = shuffled.length;
+          if (eligible.length <= 4) {
+            selectedCount = eligible.length;
           } else {
-            selectedCount = Math.min(8, shuffled.length);
+            selectedCount = Math.min(8, eligible.length);
           }
 
-          const selected = shuffled.slice(0, selectedCount);
+          /* Build the row by walking positions: a pinned listing claims
+             its slot, everything else fills in around it. Splicing into
+             a shuffled array instead would shift later pins by one for
+             each earlier one. */
+          const pinnedByPosition = new Map<number, any>();
+          PINNED_LISTINGS.forEach((entry) => {
+            const match = eligible.find((listing: any) => idOf(listing) === entry.id);
+            if (match) pinnedByPosition.set(entry.position, match);
+          });
+
+          const selected: any[] = [];
+          let fillIndex = 0;
+          for (let position = 1; selected.length < selectedCount; position += 1) {
+            const pinned = pinnedByPosition.get(position);
+            if (pinned) {
+              selected.push(pinned);
+              continue;
+            }
+            if (fillIndex >= shuffled.length) break;
+            selected.push(shuffled[fillIndex]);
+            fillIndex += 1;
+          }
 
           setListings(selected);
         } else {
@@ -399,6 +441,7 @@ export default function FeaturedRandom() {
     </section>
   );
 }
+
 
 
 
