@@ -365,7 +365,7 @@ export default function BrowseClient() {
         action: 'load_more',
         category: 'browse',
         label: 'infinite_scroll',
-        metadata: { depth: page + 2 }
+        value: page + 2
       });
     } catch (error) {
       console.error('Failed to track scroll depth:', error);
