@@ -7,7 +7,6 @@ import BanCheck from '@/components/BanCheck';
 import BrowseHeader from '@/components/browse/BrowseHeader';
 import BrowseFilters from '@/components/browse/BrowseFilters';
 import ListingGrid from '@/components/browse/ListingGrid';
-import PaginationControls from '@/components/browse/PaginationControls';
 import EmptyState from '@/components/browse/EmptyState';
 import PopularTags from '@/components/browse/PopularTags';
 import { useBrowseListings } from '@/hooks/useBrowseListings';
@@ -46,6 +45,8 @@ export default function BrowseClient() {
     sortBy,
     setSortBy,
     page,
+    hasMore,
+    loadMore,
     hoveredListing,
     listingErrors,
     forceUpdateTimer,
@@ -353,6 +354,24 @@ export default function BrowseClient() {
     }
   }, [page, trackEvent, handlePreviousPage, handleNextPage, handlePageClick]);
 
+  /* Tracks depth rather than clicks. With infinite scroll there is no
+     "next page" button to instrument, but how far people scroll is
+     the more useful number anyway -- it says whether the first twenty
+     are holding attention. */
+  const handleLoadMoreWithAnalytics = useCallback(() => {
+    loadMore();
+    try {
+      trackEvent({
+        action: 'load_more',
+        category: 'browse',
+        label: 'infinite_scroll',
+        metadata: { depth: page + 2 }
+      });
+    } catch (error) {
+      console.error('Failed to track scroll depth:', error);
+    }
+  }, [loadMore, page, trackEvent]);
+
   // Track filter reset
   const resetFiltersWithAnalytics = useCallback(() => {
     if (!isMountedRef.current) return;
@@ -441,18 +460,20 @@ export default function BrowseClient() {
                   listingErrors={listingErrors}
                   onListingError={handleListingError}
                   isGuest={isGuest}
+                  hasMore={hasMore}
+                  onLoadMore={handleLoadMoreWithAnalytics}
                 />
 
-                {totalPages > 1 && (
-                  <PaginationControls
-                    currentPage={page}
-                    totalPages={totalPages}
-                    filteredListingsCount={filteredListings.length}
-                    pageSize={PAGE_SIZE}
-                    onPreviousPage={() => handlePageChangeWithAnalytics(page - 1, 'previous')}
-                    onNextPage={() => handlePageChangeWithAnalytics(page + 1, 'next')}
-                    onPageClick={(newPage) => handlePageChangeWithAnalytics(newPage, 'direct')}
-                  />
+                {/* Page-number controls replaced by infinite scroll.
+                    A shopper browsing 20 items at a time was being
+                    asked to click through pages for something they
+                    scroll past in seconds. PaginationControls is now
+                    unused here; it stays in the codebase for any other
+                    consumer. */}
+                {!hasMore && paginatedListings.length > PAGE_SIZE && (
+                  <p className="py-8 text-center text-sm text-gray-600">
+                    That&apos;s everything for now.
+                  </p>
                 )}
               </>
             )}
@@ -462,5 +483,7 @@ export default function BrowseClient() {
     </BanCheck>
   );
 }
+
+
 
 

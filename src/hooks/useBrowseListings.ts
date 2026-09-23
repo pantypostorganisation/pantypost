@@ -472,18 +472,41 @@ export const useBrowseListings = () => {
         } as ListingWithProfile;
       });
 
-      // Then paginate
-      const start = page * PAGE_SIZE;
-      const end = start + PAGE_SIZE;
-      
-      
-      return listingsWithProfiles.slice(start, end);
+      /* Everything up to the current page, not just the current page.
+         Browse is an infinite scroll now: a shopper works down the
+         grid and more appears beneath them, so each page ADDS to what
+         is on screen rather than replacing it. The old slice(start,
+         end) showed a 20-item window and nothing above it. */
+      return listingsWithProfiles.slice(0, (page + 1) * PAGE_SIZE);
     } catch (error) {
       console.error('Error creating paginated listings:', error);
       return [];
     }
   }, [filteredListings, getSellerSalesCount, page]);
   
+  /* Is there anything left to show? The sentinel below the grid only
+     loads more while this is true, so the observer stops firing once
+     the shopper reaches the end rather than retrying forever. */
+  const hasMore = useMemo(() => {
+    try {
+      return (page + 1) * PAGE_SIZE < filteredListings.length;
+    } catch {
+      return false;
+    }
+  }, [page, filteredListings]);
+
+  /* Reveals the next page.
+     Deliberately synchronous: the listings are already in memory, so
+     "loading more" is a slice rather than a fetch and there is nothing
+     to wait for. The prefetching that matters happens in the images,
+     which the browser starts as soon as the cards mount. */
+  const loadMore = useCallback(() => {
+    setPage((current) => {
+      const next = current + 1;
+      return next * PAGE_SIZE < filteredListings.length + PAGE_SIZE ? next : current;
+    });
+  }, [filteredListings.length]);
+
   const totalPages = useMemo(() => {
     try {
       return Math.ceil(filteredListings.length / PAGE_SIZE);
@@ -605,6 +628,8 @@ export const useBrowseListings = () => {
     sortBy,
     setSortBy,
     page,
+    hasMore,
+    loadMore,
     hoveredListing,
     listingErrors,
     forceUpdateTimer,
@@ -642,6 +667,8 @@ export const useBrowseListings = () => {
     PAGE_SIZE
   };
 };
+
+
 
 
 
