@@ -602,7 +602,11 @@ export const useMyListings = () => {
         };
 
         const createdListing = await addListing(listingData);
-        if (createdListing?.approvalStatus === 'pending') {
+        if (!createdListing) {
+          setError('That drop could not be saved. Your details are still here — check the message above and try again.');
+          return;
+        }
+        if (createdListing.approvalStatus === 'pending') {
           toast?.info('Pending approval', 'Your drop is pending approval by Admins. All units go live together.');
         }
 
@@ -635,7 +639,23 @@ export const useMyListings = () => {
           }
         } else {
           const createdListing = await addListing(listingData);
-          if (createdListing?.approvalStatus === 'pending') {
+
+          /* addListing returns null on EVERY failure rather than
+             throwing -- validation, the listing cap, a network error,
+             a rejected response. The form used to reset regardless, so
+             a seller whose listing failed watched the form clear and
+             reasonably concluded it had worked. One seller lost two
+             listings this way before telling us.
+
+             A toast fires inside addListing, but toasts disappear and
+             the form clearing is the louder signal. Keep what they
+             typed and say so. */
+          if (!createdListing) {
+            setError('That listing could not be saved. Your details are still here — check the message above and try again.');
+            return;
+          }
+
+          if (createdListing.approvalStatus === 'pending') {
             toast?.info('Pending approval', 'Your listing is pending approval by Admins.');
           }
         }
@@ -800,4 +820,5 @@ export const useMyListings = () => {
     handleDrop,
   };
 };
+
 

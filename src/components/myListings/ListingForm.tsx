@@ -421,10 +421,21 @@ export default function ListingForm({
   }, []);
 
   return (
+    /* The limit counts ATTEMPTS, not listings created -- so a seller
+       whose first few submissions fail burns the budget on failures and
+       is then locked out for the rest of the hour, silently. One
+       verified seller lost two listings this way and concluded she had
+       done something wrong.
+
+       Raised to 30 an hour. A verified seller is capped at 25 live
+       listings anyway, so this no longer bites anyone doing ordinary
+       work, while still stopping automated abuse. The real fix was in
+       useMyListings, which now keeps the form filled and says what went
+       wrong instead of resetting as if it had worked. */
     <SecureForm 
       onSubmit={handleSecureSave}
       rateLimitKey="listing_create"
-      rateLimitConfig={{ maxAttempts: 10, windowMs: 60 * 60 * 1000 }}
+      rateLimitConfig={{ maxAttempts: 30, windowMs: 60 * 60 * 1000 }}
     >
       <h2 className="text-2xl font-bold mb-6 text-white">
         {isEditing ? 'Edit Listing' : 'Create New Listing'}
@@ -1260,6 +1271,8 @@ export default function ListingForm({
     </SecureForm>
   );
 }
+
+
 
 
 
