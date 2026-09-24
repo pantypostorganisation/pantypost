@@ -131,6 +131,14 @@ export default function AdminApprovalPage() {
   const [denyingId, setDenyingId] = useState<string | null>(null);
   const [denyReason, setDenyReason] = useState('');
 
+  /* Declared here with the others, NOT beside the handler that uses it.
+     It was below the `if (!isAdmin) return` guard further down, which
+     is a hooks-order violation: React saw a different number of hooks
+     depending on whether that branch fired and threw. It surfaced on
+     mobile because auth resolves more slowly there, so the component
+     rendered once as non-admin before `user` arrived. */
+  const [reconsidering, setReconsidering] = useState<string | null>(null);
+
   const isAdmin = useMemo(() => user?.role === 'admin', [user?.role]);
 
   /* Always fetches the FULL queue and filters in the browser. It used
@@ -463,8 +471,6 @@ export default function AdminApprovalPage() {
      an item is, reversing the call is better than making them relist
      and queue again. Confirmed first, because this is visible to the
      seller either way. */
-  const [reconsidering, setReconsidering] = useState<string | null>(null);
-
   const handleReconsider = async (item: ModeratedItem, decision: 'approve' | 'deny') => {
     const wasDenied = item.approvalStatus === 'denied';
     const verb = decision === 'approve' ? 'approve' : 'remove';
@@ -698,4 +704,5 @@ export default function AdminApprovalPage() {
     </RequireAuth>
   );
 }
+
 
