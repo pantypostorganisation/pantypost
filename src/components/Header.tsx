@@ -137,6 +137,12 @@ export default function Header(): React.ReactElement | null {
   const [reportCount, setReportCount] = useState(0);
   const [approvalCount, setApprovalCount] = useState(0);
   const webSocket = useWebSocket();
+  /* Held in a ref so effects can reach the live context without
+     depending on its identity. */
+  const webSocketRef = useRef(webSocket);
+  useEffect(() => {
+    webSocketRef.current = webSocket;
+  }, [webSocket]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
@@ -557,25 +563,52 @@ export default function Header(): React.ReactElement | null {
        APPROVAL_COUNT_CHANGED in app/admin/approval/page.tsx. */
     const onApprovalChange = () => void refreshApprovalCount();
 
-    /* And when somebody ELSE submits something.
-       The DOM event above only covers this tab acting. A seller
-       posting a listing right now is the case that actually matters,
-       and until this the badge waited up to a minute to notice. The
-       server broadcasts a content-free signal; we just refetch. */
-    const unsubscribe = webSocket?.subscribe?.(
-      'approval:queue_changed',
-      () => void refreshApprovalCount()
-    );
-
     window.addEventListener('focus', onFocus);
     window.addEventListener('pantypost:approval-count-changed', onApprovalChange);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('pantypost:approval-count-changed', onApprovalChange);
+    };
+  }, [isAdminUser, refreshApprovalCount]);
+
+  /* Somebody ELSE submitting something.
+     The DOM event above only covers this tab acting; a seller posting
+     right now is the case that matters, and the badge used to wait up
+     to a minute to notice.
+
+     In its own effect, keyed only on whether this user moderates.
+     Putting `webSocket` in a dependency array does not work here: the
+     context object is not identity-stable across provider re-renders,
+     so the effect tore down and resubscribed on every render and the
+     subscription was rarely alive when an event arrived. The same trap
+     is documented in the homepage counters. The callback is read
+     through a ref so the subscription itself never needs rebuilding. */
+  const refreshApprovalRef = useRef(refreshApprovalCount);
+  useEffect(() => {
+    refreshApprovalRef.current = refreshApprovalCount;
+  }, [refreshApprovalCount]);
+
+  useEffect(() => {
+    if (!isAdminUser) return;
+
+    let unsubscribe: (() => void) | undefined;
+
+    /* A short delay, because the socket may not have connected on the
+       first render after sign-in. The context queues subscriptions
+       made before it is ready, but only once it exists at all. */
+    const timer = setTimeout(() => {
+      unsubscribe = webSocketRef.current?.subscribe?.(
+        'approval:queue_changed',
+        () => void refreshApprovalRef.current()
+      );
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
       if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [isAdminUser, refreshApprovalCount, webSocket]);
+  }, [isAdminUser]);
 
   const handleClearOne = useCallback((notification: UINotification) => {
     if (notification.source === 'legacy') {
