@@ -1072,10 +1072,30 @@ export default function Header(): React.ReactElement | null {
         <div className="flex min-w-0 items-center gap-2 ml-auto">
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="flex md:hidden items-center justify-center w-10 h-10 bg-primary text-black rounded-sm hover:bg-primary-hover transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-            aria-label="Open menu"
+            className="relative flex md:hidden items-center justify-center w-10 h-10 bg-primary text-black rounded-sm hover:bg-primary-hover transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+            aria-label={
+              canModerate && approvalCount > 0
+                ? `Open menu, ${approvalCount} item${approvalCount === 1 ? '' : 's'} awaiting review`
+                : 'Open menu'
+            }
           >
             <Menu className="w-6 h-6" />
+
+            {/* The queue is invisible on mobile otherwise.
+                Desktop carries the count on the Approvals nav link, but
+                on a phone that link is behind the burger -- so a
+                moderator had to open the menu to discover anything was
+                waiting. Nothing publishes until someone reviews it, so
+                a queue nobody knows about is a seller wondering why
+                their listing never appeared. */}
+            {canModerate && approvalCount > 0 && (
+              <span
+                className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white ring-2 ring-black"
+                aria-hidden="true"
+              >
+                {approvalCount > 99 ? '99+' : approvalCount}
+              </span>
+            )}
           </button>
 
           <nav className="hidden md:flex items-center gap-x-1 xl:gap-x-2">
@@ -1559,6 +1579,7 @@ export default function Header(): React.ReactElement | null {
     </>
   );
 }
+
 
 
 
