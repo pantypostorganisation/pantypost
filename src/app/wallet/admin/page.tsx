@@ -1,3 +1,4 @@
+
 // src/app/wallet/admin/page.tsx
 'use client';
 
@@ -14,6 +15,7 @@ import AdminRevenueChart from '@/components/admin/wallet/AdminRevenueChart';
 import AdminHealthSection from '@/components/admin/wallet/AdminHealthSection';
 import AdminMoneyFlow from '@/components/admin/wallet/AdminMoneyFlow';
 import AdminRecentActivity from '@/components/admin/wallet/AdminRecentActivity';
+import HeroPaymentsCounterControl from '@/components/admin/wallet/HeroPaymentsCounterControl';
 import { getTimeFilteredData } from '@/utils/admin/walletHelpers';
 
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | 'year' | 'all';
@@ -323,6 +325,8 @@ const AdminProfitDashboardContent = memo(function AdminProfitDashboardContent() 
           </div>
         )}
 
+        <HeroPaymentsCounterControl />
+
         {/* Analytics content */}
         {(
           <>
@@ -398,5 +402,3 @@ export default function AdminProfitDashboard() {
     </RequireAuth>
   );
 }
-
-

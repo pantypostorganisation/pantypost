@@ -2,17 +2,49 @@
 
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import { useAuth } from '@/context/AuthContext';
 import { useWebSocket } from '@/context/WebSocketContext';
 import { usePublicWebSocket } from '@/hooks/usePublicWebSocket';
-import { paymentStatsService } from '@/services/paymentStats.service';
+import {
+  paymentStatsService,
+  type PaymentStats,
+} from '@/services/paymentStats.service';
 
 interface PaymentsProcessedCounterProps {
   className?: string;
   compact?: boolean;
+}
+
+function normalizeMoney(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+
+  return Math.max(0, Math.round(numeric * 100) / 100);
+}
+
+function getActualTotal(stats: PaymentStats) {
+  return normalizeMoney(
+    stats.actualPaymentsProcessed ?? stats.totalPaymentsProcessed
+  );
+}
+
+function getDisplayTotal(stats: PaymentStats) {
+  return normalizeMoney(
+    stats.displayedCounterTotal ??
+      stats.actualPaymentsProcessed ??
+      stats.totalPaymentsProcessed
+  );
 }
 
 export default function PaymentsProcessedCounter({
@@ -21,37 +53,29 @@ export default function PaymentsProcessedCounter({
 }: PaymentsProcessedCounterProps) {
   const { user } = useAuth();
   const authenticatedWebSocket = useWebSocket();
-  const publicWebSocket = usePublicWebSocket({ 
+  const publicWebSocket = usePublicWebSocket({
     autoConnect: !user,
     reconnection: true,
     reconnectionAttempts: 10,
-    reconnectionDelay: 1000
+    reconnectionDelay: 1000,
   });
 
   const [displayValue, setDisplayValue] = useState(0);
+  const [counterLabel, setCounterLabel] = useState('Payments processed');
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
   const [incrementAmount, setIncrementAmount] = useState(0);
   const [animationKey, setAnimationKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
-  /* Mirrors hasInitialLoad for use inside callbacks that outlive the
-     render they were created in. The 60s refresh interval captures
-     fetchStats once (its effect has an empty dep array), so reading the
-     state variable there returns false forever and the counter replays
-     from zero on every refresh. The ref is always current. */
-  const hasInitialLoadRef = useRef(false);
 
+  const hasInitialLoadRef = useRef(false);
   const mountedRef = useRef(true);
   const animationFrameRef = useRef<number | null>(null);
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTargetRef = useRef(0);
+  const lastActualRef = useRef(0);
   const subscriptionRef = useRef<(() => void) | undefined>(undefined);
 
-  /* Whole dollars only. Cents on a headline figure read as a till
-     receipt rather than a milestone, and during the count-up animation
-     they churn through two meaningless digits. The stored value keeps
-     its cents -- this rounds for display only, so the accounting is
-     unaffected. */
   const formatCurrency = useCallback((value: number) => {
     const normalized = Math.max(0, Math.round(Number(value || 0)));
     return new Intl.NumberFormat('en-US', {
@@ -62,45 +86,51 @@ export default function PaymentsProcessedCounter({
     }).format(normalized);
   }, []);
 
-  const animateValue = useCallback((from: number, to: number, duration: number = 1500) => {
-    if (!mountedRef.current) return;
-    
-    console.log('[PaymentsProcessedCounter] Animating:', { from, to });
-    
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    const startTime = Date.now();
-    const difference = to - from;
-
-    const easeOutCubic = (t: number): number => {
-      return 1 - Math.pow(1 - t, 3);
-    };
-
-    const animate = () => {
+  const animateValue = useCallback(
+    (from: number, to: number, duration: number = 1500) => {
       if (!mountedRef.current) return;
 
-      const currentTime = Date.now();
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      const easedProgress = easeOutCubic(progress);
-      const currentValue = from + (difference * easedProgress);
-      
-      setDisplayValue(currentValue);
+      console.log('[PaymentsProcessedCounter] Animating:', { from, to });
 
-      if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        setDisplayValue(to);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
         animationFrameRef.current = null;
       }
-    };
 
-    animationFrameRef.current = requestAnimationFrame(animate);
-  }, []);
+      if (duration <= 0) {
+        setDisplayValue(to);
+        return;
+      }
+
+      const startTime = Date.now();
+      const difference = to - from;
+
+      const easeOutCubic = (t: number): number =>
+        1 - Math.pow(1 - t, 3);
+
+      const animate = () => {
+        if (!mountedRef.current) return;
+
+        const currentTime = Date.now();
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easedProgress = easeOutCubic(progress);
+        const currentValue = from + difference * easedProgress;
+
+        setDisplayValue(currentValue);
+
+        if (progress < 1) {
+          animationFrameRef.current = requestAnimationFrame(animate);
+        } else {
+          setDisplayValue(to);
+          animationFrameRef.current = null;
+        }
+      };
+
+      animationFrameRef.current = requestAnimationFrame(animate);
+    },
+    []
+  );
 
   const triggerAnimation = useCallback((increment: number) => {
     if (increment <= 0) return;
@@ -120,102 +150,130 @@ export default function PaymentsProcessedCounter({
     }, 3000);
   }, []);
 
-  const updateValue = useCallback((newValue: number, animate: boolean = true) => {
-    if (!mountedRef.current || !Number.isFinite(newValue)) return;
-    
-    const normalized = Math.round(newValue * 100) / 100;
-    
-    console.log('[PaymentsProcessedCounter] Updating value:', { 
-      from: lastTargetRef.current, 
-      to: normalized,
-      animate 
-    });
-    
-    const increment = normalized - lastTargetRef.current;
-    
-    if (Math.abs(increment) > 0.01) {
-      animateValue(lastTargetRef.current, normalized, animate ? 1000 : 0);
-      
-      if (increment > 0 && animate && hasInitialLoadRef.current) {
-        triggerAnimation(increment);
+  const applyStats = useCallback(
+    (stats: PaymentStats, animate: boolean = true) => {
+      if (!mountedRef.current) return;
+
+      const displayTotal = getDisplayTotal(stats);
+      const actualTotal = getActualTotal(stats);
+      const genuineIncrement = actualTotal - lastActualRef.current;
+
+      setCounterLabel(
+        stats.counterLabel ||
+          (stats.heroDisplayAdjustmentEnabled
+            ? 'Promotional counter'
+            : 'Payments processed')
+      );
+
+      console.log('[PaymentsProcessedCounter] Updating stats:', {
+        actualTotal,
+        displayTotal,
+        fromDisplay: lastTargetRef.current,
+        genuineIncrement,
+      });
+
+      if (Math.abs(displayTotal - lastTargetRef.current) > 0.01) {
+        animateValue(
+          lastTargetRef.current,
+          displayTotal,
+          animate ? 1000 : 0
+        );
+      } else {
+        setDisplayValue(displayTotal);
       }
-      
-      lastTargetRef.current = normalized;
-      paymentStatsService.updateCachedStats({ totalPaymentsProcessed: normalized });
-    }
-  }, [animateValue, triggerAnimation]);
 
-  /* The subscription effect below used to depend on updateValue directly.
-     updateValue's identity changes whenever hasInitialLoad flips, and the
-     websocket context objects are NOT identity-stable across provider
-     re-renders -- so the effect tore down and rebuilt the subscription
-     repeatedly, each time waiting 1s before re-subscribing. Any stats
-     event arriving in those gaps was silently dropped.
+      // Only genuine processed-payment growth gets the green +$ animation.
+      // Applying/removing a display adjustment never masquerades as a payment.
+      if (
+        genuineIncrement > 0.01 &&
+        animate &&
+        hasInitialLoadRef.current
+      ) {
+        triggerAnimation(genuineIncrement);
+      }
 
-     Same lesson as the messaging typing indicator: read the live
-     callback through a ref at call time, and key the effect on what
-     actually identifies the subscription. */
+      lastTargetRef.current = displayTotal;
+      lastActualRef.current = actualTotal;
+      paymentStatsService.updateCachedStats(stats);
+    },
+    [animateValue, triggerAnimation]
+  );
+
   const fetchStatsRef = useRef<() => void>(() => {});
-  const updateValueRef = useRef(updateValue);
+  const applyStatsRef = useRef(applyStats);
+
   useEffect(() => {
-    updateValueRef.current = updateValue;
-  }, [updateValue]);
+    applyStatsRef.current = applyStats;
+  }, [applyStats]);
 
   const fetchStats = useCallback(async () => {
     try {
       console.log('[PaymentsProcessedCounter] Fetching stats...');
       const response = await paymentStatsService.getPaymentsProcessed();
-      
+
       if (response.success && response.data && mountedRef.current) {
-        const total = response.data.totalPaymentsProcessed ?? 0;
-        console.log('[PaymentsProcessedCounter] Stats fetched:', total);
-        
+        const data = response.data;
+        const displayTotal = getDisplayTotal(data);
+        const actualTotal = getActualTotal(data);
+
+        console.log('[PaymentsProcessedCounter] Stats fetched:', {
+          actualTotal,
+          displayTotal,
+          counterLabel: data.counterLabel,
+        });
+
+        setCounterLabel(
+          data.counterLabel ||
+            (data.heroDisplayAdjustmentEnabled
+              ? 'Promotional counter'
+              : 'Payments processed')
+        );
+
         if (!hasInitialLoadRef.current) {
-          // First paint only: count up from zero.
           hasInitialLoadRef.current = true;
           setDisplayValue(0);
-          lastTargetRef.current = total;
+          lastTargetRef.current = displayTotal;
+          lastActualRef.current = actualTotal;
+          paymentStatsService.updateCachedStats(data);
+
           setTimeout(() => {
             if (mountedRef.current) {
-              animateValue(0, total, 2000);
+              animateValue(0, displayTotal, 2000);
             }
           }, 100);
+
           setHasInitialLoad(true);
         } else {
-          // Update
-          updateValueRef.current(total, true);
+          applyStatsRef.current(data, true);
         }
-        
+
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('[PaymentsProcessedCounter] Failed to fetch stats:', error);
+      console.error(
+        '[PaymentsProcessedCounter] Failed to fetch stats:',
+        error
+      );
       setIsLoading(false);
-      
-      // Retry after 2 seconds
+
       if (!hasInitialLoadRef.current && mountedRef.current) {
         setTimeout(() => {
           if (mountedRef.current) {
-            fetchStats();
+            fetchStatsRef.current();
           }
         }, 2000);
       }
     }
-  }, [animateValue, updateValue]);
+  }, [animateValue]);
 
   useEffect(() => {
     fetchStatsRef.current = fetchStats;
   }, [fetchStats]);
 
-  // Initial fetch and periodic refresh
   useEffect(() => {
     mountedRef.current = true;
-    
-    // Fetch immediately
-    fetchStats();
-    
-    // Periodic refresh. Calls through a ref so it always runs the
-    // CURRENT fetchStats rather than the one captured at mount.
+    void fetchStats();
+
     const refreshInterval = setInterval(() => {
       if (mountedRef.current) {
         fetchStatsRef.current();
@@ -225,68 +283,88 @@ export default function PaymentsProcessedCounter({
     return () => {
       mountedRef.current = false;
       clearInterval(refreshInterval);
+
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
       }
     };
-  }, []);
+  }, [fetchStats]);
 
-  // WebSocket subscription
   useEffect(() => {
-    // Clean up previous subscription
     if (subscriptionRef.current) {
       subscriptionRef.current();
       subscriptionRef.current = undefined;
     }
 
-    const handleUpdate = (data: any) => {
-      console.log('[PaymentsProcessedCounter] Received stats:payments_processed event:', data);
-      
+    const handleUpdate = (data: PaymentStats) => {
+      console.log(
+        '[PaymentsProcessedCounter] Received stats:payments_processed event:',
+        data
+      );
+
       if (!mountedRef.current) return;
-      
-      const total = Number(data?.totalPaymentsProcessed);
-      if (Number.isFinite(total) && total >= 0) {
-        updateValueRef.current(total, true);
+
+      const actual = Number(
+        data?.actualPaymentsProcessed ?? data?.totalPaymentsProcessed
+      );
+      const displayed = Number(
+        data?.displayedCounterTotal ??
+          data?.actualPaymentsProcessed ??
+          data?.totalPaymentsProcessed
+      );
+
+      if (
+        Number.isFinite(actual) &&
+        actual >= 0 &&
+        Number.isFinite(displayed) &&
+        displayed >= 0
+      ) {
+        applyStatsRef.current(data, true);
       }
     };
 
     const setupSubscription = () => {
-      console.log('[PaymentsProcessedCounter] Setting up subscription...', {
-        isAuthenticated: !!user,
-        authWsConnected: authenticatedWebSocket?.isConnected,
-        publicWsConnected: publicWebSocket.isConnected
-      });
+      console.log(
+        '[PaymentsProcessedCounter] Setting up subscription...',
+        {
+          isAuthenticated: !!user,
+          authWsConnected: authenticatedWebSocket?.isConnected,
+          publicWsConnected: publicWebSocket.isConnected,
+        }
+      );
 
       if (user && authenticatedWebSocket) {
-        console.log('[PaymentsProcessedCounter] Subscribing via authenticated WebSocket');
-        subscriptionRef.current = authenticatedWebSocket.subscribe('stats:payments_processed', handleUpdate);
+        subscriptionRef.current = authenticatedWebSocket.subscribe(
+          'stats:payments_processed',
+          handleUpdate
+        );
       } else {
-        console.log('[PaymentsProcessedCounter] Subscribing via public WebSocket');
-        
         if (!publicWebSocket.isConnected) {
-          console.log('[PaymentsProcessedCounter] Public WebSocket not connected, connecting...');
           publicWebSocket.connect();
         }
-        
-        subscriptionRef.current = publicWebSocket.subscribe('stats:payments_processed', handleUpdate);
+
+        subscriptionRef.current = publicWebSocket.subscribe(
+          'stats:payments_processed',
+          handleUpdate
+        );
       }
     };
 
-    // Set up subscription with delay
-    const setupTimeout = setTimeout(() => {
-      setupSubscription();
-    }, 1000);
+    const setupTimeout = setTimeout(setupSubscription, 1000);
 
-    // Check connection periodically
     const connectionCheckInterval = setInterval(() => {
-      const shouldUseAuth = !!user && authenticatedWebSocket?.isConnected;
+      const shouldUseAuth =
+        !!user && Boolean(authenticatedWebSocket?.isConnected);
       const shouldUsePublic = !user && publicWebSocket.isConnected;
-      
-      if ((shouldUseAuth || shouldUsePublic) && !subscriptionRef.current) {
-        console.log('[PaymentsProcessedCounter] Connection detected, re-subscribing...');
+
+      if (
+        (shouldUseAuth || shouldUsePublic) &&
+        !subscriptionRef.current
+      ) {
         setupSubscription();
       }
     }, 2000);
@@ -294,32 +372,36 @@ export default function PaymentsProcessedCounter({
     return () => {
       clearTimeout(setupTimeout);
       clearInterval(connectionCheckInterval);
-      
+
       if (subscriptionRef.current) {
         subscriptionRef.current();
+        subscriptionRef.current = undefined;
       }
     };
-  }, [user, authenticatedWebSocket, publicWebSocket, updateValue]);
+  }, [user, authenticatedWebSocket, publicWebSocket]);
 
-  const formattedValue = isLoading && !hasInitialLoad ? 'Loading...' : formatCurrency(displayValue);
+  const formattedValue =
+    isLoading && !hasInitialLoad
+      ? 'Loading...'
+      : formatCurrency(displayValue);
+
   const formattedIncrement = useMemo(() => {
     if (incrementAmount <= 0) return '';
-    // Matches the main figure: whole dollars, no cents.
     return `+$${Math.round(incrementAmount).toLocaleString('en-US')}`;
   }, [incrementAmount]);
-  
+
   const containerClasses = compact
     ? `flex items-center gap-1 sm:gap-2 relative ${className}`
     : `flex items-center gap-3 relative ${className}`;
-    
+
   const iconClasses = compact
     ? 'h-3.5 w-3.5 sm:h-5 sm:w-5 text-[#ff950e] flex-shrink-0'
     : 'h-5 w-5 text-[#ff950e]';
-    
+
   const textClasses = compact
     ? 'text-[#ff950e] font-semibold text-[10px] sm:text-xs tracking-wider uppercase relative whitespace-nowrap'
     : 'text-[#ff950e] font-semibold text-sm tracking-wider uppercase relative';
-    
+
   const incrementClasses = compact
     ? 'absolute left-1/2 -translate-x-1/2 text-green-400 text-[9px] sm:text-xs font-bold uppercase tracking-wider whitespace-nowrap pointer-events-none'
     : 'absolute left-1/2 -translate-x-1/2 text-green-400 text-xs font-bold uppercase tracking-wider whitespace-nowrap pointer-events-none';
@@ -330,11 +412,8 @@ export default function PaymentsProcessedCounter({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      aria-label="Payments processed"
+      aria-label={counterLabel}
     >
-      {/* Custom card artwork, paired with the people icon on the users
-          counter. Both are solid orange fills of the same weight -- if
-          either changes, change both. */}
       <Image
         src="/icons/payments-icon.png"
         alt=""
@@ -343,15 +422,20 @@ export default function PaymentsProcessedCounter({
         className={`${iconClasses} object-contain`}
         aria-hidden="true"
       />
+
       <span className={textClasses}>
-        Payments processed{' '}
+        {counterLabel}{' '}
         <span className="relative inline-block">
           <motion.span
             className="font-bold"
-            animate={showUpdateAnimation ? {
-              scale: [1, 1.15, 1],
-              color: ['#ff950e', '#22c55e', '#ff950e']
-            } : {}}
+            animate={
+              showUpdateAnimation
+                ? {
+                    scale: [1, 1.15, 1],
+                    color: ['#ff950e', '#22c55e', '#ff950e'],
+                  }
+                : {}
+            }
             transition={{ duration: 0.5 }}
           >
             {formattedValue}
@@ -368,7 +452,11 @@ export default function PaymentsProcessedCounter({
                   y: [0, -6, -10, -14, -18, -20],
                 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 3, ease: 'easeOut', times: [0, 0.1, 0.2, 0.5, 0.8, 1] }}
+                transition={{
+                  duration: 3,
+                  ease: 'easeOut',
+                  times: [0, 0.1, 0.2, 0.5, 0.8, 1],
+                }}
               >
                 {formattedIncrement}
               </motion.span>
@@ -376,16 +464,22 @@ export default function PaymentsProcessedCounter({
           </AnimatePresence>
         </span>
       </span>
+
       {process.env.NODE_ENV === 'development' && compact && (
-        <span className={`ml-1 text-[8px] ${publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
-          {publicWebSocket.isConnected || authenticatedWebSocket?.isConnected ? '\u25CF' : '\u25CB'}
+        <span
+          className={`ml-1 text-[8px] ${
+            publicWebSocket.isConnected ||
+            authenticatedWebSocket?.isConnected
+              ? 'text-green-400'
+              : 'text-yellow-400'
+          }`}
+        >
+          {publicWebSocket.isConnected ||
+          authenticatedWebSocket?.isConnected
+            ? '\u25CF'
+            : '\u25CB'}
         </span>
       )}
     </motion.div>
   );
 }
-
-
-
-
-
