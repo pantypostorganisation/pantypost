@@ -149,13 +149,19 @@ export default function HeroPaymentsCounterControl() {
           </h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-gray-400">
             Add a temporary display-only amount to the homepage hero counter.
-            The genuine payments-processed total is never modified. While an
-            adjustment is active, the public label changes to
+            The genuine payments-processed total is never modified. The public
+            label remains
             {' '}
             <span className="font-medium text-gray-200">
-              Promotional counter
+              Payments processed
             </span>
-            .
+            . While an adjustment is active, a small visible
+            {' '}
+            <span className="font-medium text-gray-200">
+              (adjusted)
+            </span>
+            {' '}
+            qualifier appears beside the figure.
           </p>
         </div>
 

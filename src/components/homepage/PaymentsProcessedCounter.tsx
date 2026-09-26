@@ -62,6 +62,7 @@ export default function PaymentsProcessedCounter({
 
   const [displayValue, setDisplayValue] = useState(0);
   const [counterLabel, setCounterLabel] = useState('Payments processed');
+  const [hasDisplayAdjustment, setHasDisplayAdjustment] = useState(false);
   const [showUpdateAnimation, setShowUpdateAnimation] = useState(false);
   const [incrementAmount, setIncrementAmount] = useState(0);
   const [animationKey, setAnimationKey] = useState(0);
@@ -158,12 +159,8 @@ export default function PaymentsProcessedCounter({
       const actualTotal = getActualTotal(stats);
       const genuineIncrement = actualTotal - lastActualRef.current;
 
-      setCounterLabel(
-        stats.counterLabel ||
-          (stats.heroDisplayAdjustmentEnabled
-            ? 'Promotional counter'
-            : 'Payments processed')
-      );
+      setCounterLabel('Payments processed');
+      setHasDisplayAdjustment(Boolean(stats.heroDisplayAdjustmentEnabled));
 
       console.log('[PaymentsProcessedCounter] Updating stats:', {
         actualTotal,
@@ -222,12 +219,8 @@ export default function PaymentsProcessedCounter({
           counterLabel: data.counterLabel,
         });
 
-        setCounterLabel(
-          data.counterLabel ||
-            (data.heroDisplayAdjustmentEnabled
-              ? 'Promotional counter'
-              : 'Payments processed')
-        );
+        setCounterLabel('Payments processed');
+        setHasDisplayAdjustment(Boolean(data.heroDisplayAdjustmentEnabled));
 
         if (!hasInitialLoadRef.current) {
           hasInitialLoadRef.current = true;
@@ -463,6 +456,14 @@ export default function PaymentsProcessedCounter({
             )}
           </AnimatePresence>
         </span>
+        {hasDisplayAdjustment && (
+          <span
+            className="ml-1 text-[8px] sm:text-[9px] font-medium normal-case tracking-normal text-gray-500"
+            aria-label="Display adjustment active"
+          >
+            (adjusted)
+          </span>
+        )}
       </span>
 
       {process.env.NODE_ENV === 'development' && compact && (

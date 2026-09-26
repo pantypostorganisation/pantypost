@@ -64,11 +64,7 @@ function normalizePaymentStats(data: PaymentStats): PaymentStats {
     actualPaymentsProcessed,
     displayedCounterTotal,
     heroDisplayAdjustmentEnabled: Boolean(data.heroDisplayAdjustmentEnabled),
-    counterLabel:
-      data.counterLabel ||
-      (data.heroDisplayAdjustmentEnabled
-        ? 'Promotional counter'
-        : 'Payments processed'),
+    counterLabel: 'Payments processed',
   };
 }
 

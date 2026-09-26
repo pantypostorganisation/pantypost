@@ -10,8 +10,9 @@ const PaymentStatsSchema = new mongoose.Schema({
   },
 
   // Optional display-only adjustment for the homepage hero counter.
-  // When enabled, the public counter is relabelled "Promotional counter"
-  // so this amount is never presented as genuine processed payment volume.
+  // This field never changes totalPaymentsProcessed. The public counter keeps
+  // the existing "Payments processed" label; the UI visibly notes when a
+  // display adjustment is active.
   heroDisplayAdjustment: {
     type: Number,
     default: 0,

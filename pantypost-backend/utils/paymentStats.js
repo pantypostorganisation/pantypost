@@ -45,9 +45,7 @@ function buildPaymentStatsPayload(stats) {
     actualPaymentsProcessed,
     displayedCounterTotal,
     heroDisplayAdjustmentEnabled,
-    counterLabel: heroDisplayAdjustmentEnabled
-      ? 'Promotional counter'
-      : 'Payments processed',
+    counterLabel: 'Payments processed',
     updatedAt: stats?.updatedAt || new Date(),
     timestamp: new Date().toISOString(),
   };
