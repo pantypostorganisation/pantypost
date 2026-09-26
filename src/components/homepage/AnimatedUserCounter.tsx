@@ -3,7 +3,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Users, TrendingUp } from 'lucide-react';
 import Image from 'next/image';
 import { userStatsService } from '@/services/userStats.service';
@@ -48,37 +48,60 @@ export default function AnimatedUserCounter({
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const subscriptionRef = useRef<(() => void) | undefined>(undefined);
 
-  // Spring animation for smooth counting
-  /* Tuned to finish alongside PaymentsProcessedCounter, which runs a
-     fixed 2000ms eased count-up. This one is a spring, so it has no
-     duration to set -- the settle time comes from the physics.
+  /* A fixed eased count-up, matching PaymentsProcessedCounter exactly.
+   *
+   * This was a spring, tuned to LOOK like it finished at the same time.
+   * Two problems with that. A spring's settle time depends on the
+   * distance travelled, so the two counters drifted apart whenever the
+   * numbers differed in size -- which is most of the time, given one
+   * counts people and the other counts dollars. And the tuning sat at
+   * a damping ratio just under critical, which means it overshoots by
+   * design: 149 users animated up to 150 and fell back. That reads as
+   * a number briefly being wrong, which on a counter is the one thing
+   * it must never do.
+   *
+   * Same duration, same easing, no overshoot. Both counters now start
+   * and finish together regardless of how many digits each is
+   * counting. */
+  const COUNT_DURATION_MS = 2000;
 
-     A spring's period scales with 1/sqrt(stiffness), so quartering
-     stiffness (65 -> 16) roughly doubles the time to rest, taking it
-     from ~1s to ~2s. Damping drops with it (14 -> 7) to hold the same
-     damping ratio (~0.87, just under critical) -- otherwise the lower
-     stiffness would read as sluggish and over-damped rather than
-     slower. restDelta 0.5 stops it settling on fractions the display
-     rounds away anyway.
-
-     If you retime the payments counter, retune here too: they sit side
-     by side and finishing apart is what looked wrong. */
-  const springValue = useSpring(0, {
-    stiffness: 16,
-    damping: 7,
-    restDelta: 0.5,
-    mass: 1 
-  });
-
-  const displayCount = useTransform(springValue, (value) => Math.round(value));
   const [formattedCount, setFormattedCount] = useState('0');
+  const animationFrameRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    const unsubscribe = displayCount.on('change', (value) => {
-      setFormattedCount(value.toLocaleString());
-    });
-    return () => unsubscribe();
-  }, [displayCount]);
+  const animateCount = useCallback((from: number, to: number, duration: number) => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (duration <= 0 || from === to) {
+      setFormattedCount(Math.round(to).toLocaleString());
+      return;
+    }
+
+    const startTime = Date.now();
+    const difference = to - from;
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const step = () => {
+      if (!mountedRef.current) return;
+
+      const progress = Math.min((Date.now() - startTime) / duration, 1);
+      const value = from + difference * easeOutCubic(progress);
+
+      setFormattedCount(Math.round(value).toLocaleString());
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(step);
+      } else {
+        // Land on the exact figure, never a rounded approach to it.
+        setFormattedCount(Math.round(to).toLocaleString());
+        animationFrameRef.current = null;
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(step);
+  }, []);
 
   const triggerAnimation = useCallback((increment: number) => {
     if (animationTimeoutRef.current) {
@@ -108,14 +131,18 @@ export default function AnimatedUserCounter({
     const increment = newCount - previousCountRef.current;
     
     setTargetCount(newCount);
-    springValue.set(newCount);
+    animateCount(
+      previousCountRef.current,
+      newCount,
+      animate ? COUNT_DURATION_MS : 0
+    );
     
     if (increment > 0 && animate && hasInitialLoadRef.current) {
       triggerAnimation(increment);
     }
     
     previousCountRef.current = newCount;
-  }, [springValue, triggerAnimation]);
+  }, [animateCount, triggerAnimation]);
 
   /* The subscription effect below used to depend on updateCount directly.
      updateCount's identity changes whenever hasInitialLoad flips, and the
@@ -144,11 +171,13 @@ export default function AnimatedUserCounter({
         setNewUsersToday(response.data.newUsersToday || 0);
         
         if (!hasInitialLoadRef.current) {
-          // First paint only.
+          /* First paint: count up from zero, the same as the payments
+             counter does. Setting the value directly meant the number
+             simply appeared while the one beside it counted up. */
           hasInitialLoadRef.current = true;
-          springValue.set(response.data.totalUsers);
           previousCountRef.current = response.data.totalUsers;
           setTargetCount(response.data.totalUsers);
+          animateCount(0, response.data.totalUsers, COUNT_DURATION_MS);
           setHasInitialLoad(true);
         } else {
           // Update with animation
@@ -170,7 +199,7 @@ export default function AnimatedUserCounter({
         }, 2000);
       }
     }
-  }, [springValue, updateCount]);
+  }, [animateCount, updateCount]);
 
   useEffect(() => {
     fetchStatsRef.current = fetchStats;
@@ -193,12 +222,17 @@ export default function AnimatedUserCounter({
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible' || !mountedRef.current) return;
 
-      const settled = previousCountRef.current;
-      if (typeof (springValue as any).jump === 'function') {
-        (springValue as any).jump(settled);
-      } else {
-        springValue.set(settled);
+      /* Snap to the settled figure before refetching.
+         A tab in the background gets its animation frames throttled or
+         paused, so a count-up that was mid-flight resumes from
+         wherever it froze -- which looked like the number changing by
+         itself on tab return. Cancelling and landing on the real value
+         first means the refetch animates from the truth. */
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
+      setFormattedCount(Math.round(previousCountRef.current).toLocaleString());
 
       fetchStatsRef.current();
     };
@@ -209,7 +243,7 @@ export default function AnimatedUserCounter({
       document.removeEventListener('visibilitychange', handleVisibility);
       window.removeEventListener('pageshow', handleVisibility);
     };
-  }, [springValue]);
+  }, []);
 
   // Initial fetch
   useEffect(() => {
@@ -451,6 +485,7 @@ export default function AnimatedUserCounter({
     </motion.div>
   );
 }
+
 
 
 
