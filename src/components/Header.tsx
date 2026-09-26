@@ -18,6 +18,7 @@ import { resolveApiUrl } from '@/utils/url';
 import { isAdmin, canModerateContent } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
 import { approvalService } from '@/services/approval.service';
+import { useWebSocket } from '@/context/WebSocketContext';
 import dynamic from 'next/dynamic';
 
 // OPTIMIZED: Lazy load HeaderSearch to reduce initial bundle
@@ -135,6 +136,7 @@ export default function Header(): React.ReactElement | null {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [approvalCount, setApprovalCount] = useState(0);
+  const webSocket = useWebSocket();
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
@@ -555,14 +557,25 @@ export default function Header(): React.ReactElement | null {
        APPROVAL_COUNT_CHANGED in app/admin/approval/page.tsx. */
     const onApprovalChange = () => void refreshApprovalCount();
 
+    /* And when somebody ELSE submits something.
+       The DOM event above only covers this tab acting. A seller
+       posting a listing right now is the case that actually matters,
+       and until this the badge waited up to a minute to notice. The
+       server broadcasts a content-free signal; we just refetch. */
+    const unsubscribe = webSocket?.subscribe?.(
+      'approval:queue_changed',
+      () => void refreshApprovalCount()
+    );
+
     window.addEventListener('focus', onFocus);
     window.addEventListener('pantypost:approval-count-changed', onApprovalChange);
     return () => {
       clearInterval(interval);
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('pantypost:approval-count-changed', onApprovalChange);
+      if (typeof unsubscribe === 'function') unsubscribe();
     };
-  }, [isAdminUser, refreshApprovalCount]);
+  }, [isAdminUser, refreshApprovalCount, webSocket]);
 
   const handleClearOne = useCallback((notification: UINotification) => {
     if (notification.source === 'legacy') {

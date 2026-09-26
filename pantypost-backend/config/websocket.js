@@ -93,6 +93,22 @@ class WebSocketService {
     this.io.emit(event, data);
   }
 
+  /* Tells moderators something is waiting.
+   *
+   * Broadcast rather than targeted, because sockets do not carry a
+   * role here and adding role tracking for one badge is more machinery
+   * than the problem deserves. The payload is deliberately empty of
+   * anything about the content itself -- it is a nudge to refetch, not
+   * data. Clients without moderation rights ignore it.
+   *
+   * Without this the badge only refreshed on its 60-second poll, so a
+   * listing submitted at 12:00:01 sat invisible until 12:01. On a
+   * platform where nothing publishes until a human approves it, that
+   * minute is a seller watching an empty shop. */
+  emitApprovalQueueChanged() {
+    this.broadcast('approval:queue_changed', { at: new Date().toISOString() });
+  }
+
   // Small helper to safely emit a generic notification
   emitNotification(username, payload) {
     // Defensive: ensure minimal fields
@@ -809,3 +825,5 @@ class WebSocketService {
 }
 
 module.exports = new WebSocketService();
+
+

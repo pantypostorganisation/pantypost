@@ -732,6 +732,12 @@ router.post('/', authMiddleware, async (req, res) => {
     // Emit WebSocket event
     if (global.webSocketService) {
       global.webSocketService.emitNewListing(populatedListing);
+
+      /* A new listing enters the review queue, so the moderator badge
+         should move now rather than on its next poll. */
+      if (listing.approvalStatus === 'pending') {
+        global.webSocketService.emitApprovalQueueChanged();
+      }
     }
     
     res.json({
@@ -1695,4 +1701,5 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
 
