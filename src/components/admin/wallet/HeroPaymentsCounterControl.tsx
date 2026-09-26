@@ -155,13 +155,7 @@ export default function HeroPaymentsCounterControl() {
             <span className="font-medium text-gray-200">
               Payments processed
             </span>
-            . While an adjustment is active, a small visible
-            {' '}
-            <span className="font-medium text-gray-200">
-              (adjusted)
-            </span>
-            {' '}
-            qualifier appears beside the figure.
+            .
           </p>
         </div>
 
