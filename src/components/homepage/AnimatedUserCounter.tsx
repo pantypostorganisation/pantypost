@@ -222,6 +222,14 @@ export default function AnimatedUserCounter({
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible' || !mountedRef.current) return;
 
+      /* Not on first load. `pageshow` fires on an ordinary page load as
+         well as on a back-forward restore, so without this guard a
+         refresh cancelled the opening count-up and snapped straight to
+         the figure -- the number simply appeared while the payments
+         counter beside it animated. Only a genuine return to an
+         already-loaded tab needs the snap. */
+      if (!hasInitialLoadRef.current) return;
+
       /* Snap to the settled figure before refetching.
          A tab in the background gets its animation frames throttled or
          paused, so a count-up that was mid-flight resumes from
