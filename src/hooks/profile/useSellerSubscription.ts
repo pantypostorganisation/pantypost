@@ -135,7 +135,7 @@ export function useSellerSubscription(
         checkSubscriptionStatus();
       }
     };
-    document.addEventListener('visibilitychange', onVisible);
+    document.removeEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {
       document.removeEventListener('visibilitychange', onVisible);

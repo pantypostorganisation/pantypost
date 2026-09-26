@@ -554,6 +554,14 @@ export default function Header(): React.ReactElement | null {
     const interval = setInterval(() => void refreshApprovalCount(), 60_000);
     const onFocus = () => void refreshApprovalCount();
 
+    /* Mobile browsers throttle background tabs and fire `focus`
+       unreliably, so a socket event that arrived while the tab was
+       backgrounded could sit unprocessed. visibilitychange is the one
+       mobile actually honours. */
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshApprovalCount();
+    };
+
     /* Refresh the moment something is approved or denied.
        Polling every 60s and on focus covered another admin acting, or
        this tab being returned to -- but not the common case: the admin
