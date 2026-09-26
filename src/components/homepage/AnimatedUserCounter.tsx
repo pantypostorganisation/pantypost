@@ -63,7 +63,7 @@ export default function AnimatedUserCounter({
    * Same duration, same easing, no overshoot. Both counters now start
    * and finish together regardless of how many digits each is
    * counting. */
-  const COUNT_DURATION_MS = 2000;
+  const COUNT_DURATION_MS = 1500;
 
   const [formattedCount, setFormattedCount] = useState('0');
   const animationFrameRef = useRef<number | null>(null);

@@ -228,7 +228,7 @@ export default function PaymentsProcessedCounter({
 
           setTimeout(() => {
             if (mountedRef.current) {
-              animateValue(0, displayTotal, 2000);
+              animateValue(0, displayTotal, 1500);
             }
           }, 100);
 
