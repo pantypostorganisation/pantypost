@@ -4,6 +4,11 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  registerCounterStart,
+  unregisterCounterStart,
+  COUNTER_DURATION_MS,
+} from '@/utils/counterSync';
 import { Users, TrendingUp } from 'lucide-react';
 import Image from 'next/image';
 import { userStatsService } from '@/services/userStats.service';
@@ -63,7 +68,8 @@ export default function AnimatedUserCounter({
    * Same duration, same easing, no overshoot. Both counters now start
    * and finish together regardless of how many digits each is
    * counting. */
-  const COUNT_DURATION_MS = 1500;
+  /* Duration lives in counterSync so both counters cannot drift. */
+  const COUNT_DURATION_MS = COUNTER_DURATION_MS;
 
   const [formattedCount, setFormattedCount] = useState('0');
   const animationFrameRef = useRef<number | null>(null);
@@ -177,7 +183,16 @@ export default function AnimatedUserCounter({
           hasInitialLoadRef.current = true;
           previousCountRef.current = response.data.totalUsers;
           setTargetCount(response.data.totalUsers);
-          animateCount(0, response.data.totalUsers, COUNT_DURATION_MS);
+          /* Do not start yet. The payments counter beside this one is
+             still waiting on its own request, and starting the moment
+             our data lands is what made them finish a beat apart.
+             counterSync fires both on the same frame once each has its
+             number, with a timeout so a missing partner cannot stall
+             us. */
+          const total = response.data.totalUsers;
+          registerCounterStart('users', () => {
+            if (mountedRef.current) animateCount(0, total, COUNT_DURATION_MS);
+          });
           setHasInitialLoad(true);
         } else {
           // Update with animation
@@ -269,6 +284,7 @@ export default function AnimatedUserCounter({
 
     return () => {
       mountedRef.current = false;
+      unregisterCounterStart('users');
       clearInterval(refreshInterval);
       if (animationTimeoutRef.current) {
         clearTimeout(animationTimeoutRef.current);
@@ -493,6 +509,8 @@ export default function AnimatedUserCounter({
     </motion.div>
   );
 }
+
+
 
 
 

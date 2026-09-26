@@ -18,6 +18,11 @@ import {
   paymentStatsService,
   type PaymentStats,
 } from '@/services/paymentStats.service';
+import {
+  registerCounterStart,
+  unregisterCounterStart,
+  COUNTER_DURATION_MS,
+} from '@/utils/counterSync';
 
 interface PaymentsProcessedCounterProps {
   className?: string;
@@ -171,7 +176,9 @@ export default function PaymentsProcessedCounter({
         animateValue(
           lastTargetRef.current,
           displayTotal,
-          animate ? 1000 : 0
+          // Shared, so later updates match the user counter too --
+          // not only the opening count-up.
+          animate ? COUNTER_DURATION_MS : 0
         );
       } else {
         setDisplayValue(displayTotal);
@@ -226,11 +233,15 @@ export default function PaymentsProcessedCounter({
           lastActualRef.current = actualTotal;
           paymentStatsService.updateCachedStats(data);
 
-          setTimeout(() => {
+          /* Held until the user counter has its number too. The 100ms
+             delay this replaces was an attempt to line the two up by
+             hand; it could not work, because each was still starting
+             off its own fetch. */
+          registerCounterStart('payments', () => {
             if (mountedRef.current) {
-              animateValue(0, displayTotal, 1500);
+              animateValue(0, displayTotal, COUNTER_DURATION_MS);
             }
-          }, 100);
+          });
 
           setHasInitialLoad(true);
         } else {
@@ -272,6 +283,7 @@ export default function PaymentsProcessedCounter({
 
     return () => {
       mountedRef.current = false;
+      unregisterCounterStart('payments');
       clearInterval(refreshInterval);
 
       if (animationFrameRef.current) {
@@ -473,3 +485,4 @@ export default function PaymentsProcessedCounter({
     </motion.div>
   );
 }
+
