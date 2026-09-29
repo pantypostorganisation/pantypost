@@ -204,6 +204,19 @@ export default function ClientLayout({
     };
   }, []);
 
+  /* Clear the flag on navigation, whatever the messages page did.
+   *
+   * Hiding the header is only ever correct ON a messages page, so if
+   * we have navigated somewhere else the flag is stale by definition.
+   * Relying on each messages page to announce its own departure means
+   * one missed dispatch strands the header sitewide, which is exactly
+   * what happened. */
+  useEffect(() => {
+    if (!isMessagesPage && hasActiveThread) {
+      setHasActiveThread(false);
+    }
+  }, [pathname, isMessagesPage, hasActiveThread]);
+
   // Reset thread state when navigating away from messages pages
   useEffect(() => {
     if (!isMessagesPage) {
@@ -331,5 +344,6 @@ export default function ClientLayout({
     </>
   );
 }
+
 
 

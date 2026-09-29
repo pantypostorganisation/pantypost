@@ -105,11 +105,23 @@ export default function SellerMessagesPage() {
     [buyer: string]: UIThread['lastMessage'];
   };
 
-  /* ClientLayout hides the site header on mobile while a thread is open. */
+  /* ClientLayout hides the site header on mobile while a thread is open.
+   *
+   * The cleanup is the important half. Without it, leaving this page
+   * with a thread still open left hasActiveThread true FOREVER -- the
+   * header stayed hidden across the whole site, so a seller had no
+   * navigation anywhere and, in her words, could not back out into the
+   * site. */
   useEffect(() => {
     window.dispatchEvent(
       new CustomEvent('threadStateChange', { detail: { hasActiveThread: !!activeThread } })
     );
+
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent('threadStateChange', { detail: { hasActiveThread: false } })
+      );
+    };
   }, [activeThread]);
 
   /* ---- Requests, indexed and counted ---- */
@@ -259,3 +271,5 @@ export default function SellerMessagesPage() {
     </BanCheck>
   );
 }
+
+

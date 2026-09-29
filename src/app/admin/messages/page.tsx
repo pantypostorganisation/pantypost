@@ -52,6 +52,14 @@ export default function AdminMessagesPage() {
     window.dispatchEvent(
       new CustomEvent('threadStateChange', { detail: { hasActiveThread: !!activeThread } })
     );
+
+    /* Announce departure too. Leaving with a thread open otherwise
+       left the header hidden across the whole site. */
+    return () => {
+      window.dispatchEvent(
+        new CustomEvent('threadStateChange', { detail: { hasActiveThread: false } })
+      );
+    };
   }, [activeThread]);
 
   if (!isAdmin) {
