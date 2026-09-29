@@ -381,21 +381,27 @@ export default function ListingCard({
             <Link
               href={`/sellers/${listing.seller}`}
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 text-gray-500 transition-colors hover:text-gray-300 hover:underline"
+              className="inline-flex items-center gap-1.5 text-gray-500 transition-colors hover:text-gray-300 hover:underline"
             >
               {hasRating && <span className="text-gray-700">{'\u00B7'}</span>}
+              {/* 24px, up from 16. At 16 the avatar was smaller than
+                  the username beside it and read as a bullet point
+                  rather than a face -- which on a marketplace where
+                  people buy from a person, not a shop, is the wrong
+                  emphasis. 24 is recognisable at a glance without
+                  competing with the price below it. */}
               {resolvedSellerPic && !sellerPicFailed ? (
                 <img
                   src={resolvedSellerPic}
                   alt=""
                   loading="lazy"
                   onError={() => setSellerPicFailed(true)}
-                  className="h-4 w-4 shrink-0 rounded-full object-cover"
+                  className="h-6 w-6 shrink-0 rounded-full object-cover ring-1 ring-white/10"
                 />
               ) : (
                 <span
                   aria-hidden="true"
-                  className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-surface-overlay text-[9px] font-semibold text-ink-muted"
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-surface-overlay text-[11px] font-semibold text-ink-muted ring-1 ring-white/10"
                 >
                   {listing.seller?.charAt(0)?.toUpperCase()}
                 </span>
@@ -431,6 +437,7 @@ export default function ListingCard({
     </article>
   );
 }
+
 
 
 
