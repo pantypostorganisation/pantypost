@@ -186,6 +186,21 @@ export default function AdminApprovalPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queueFilter]);
 
+  /* Removes ONE queue entry.
+   *
+   * Filtering on id alone was wrong: a profile picture and a cover
+   * photo are both keyed by the user's id, not a document id, so a
+   * seller submitting both produced two entries sharing one id.
+   * Approving either removed both from the list, and the survivor
+   * reappeared on refresh because the server had never been told about
+   * it. The render already keys on contentType AND id for exactly this
+   * reason -- the filter just did not.
+   */
+  const removeFromQueue = (id: string, contentType: string) =>
+    setPendingItems(prev =>
+      prev.filter(i => !(i.id === id && i.contentType === contentType))
+    );
+
   const handleApprove = async (item: ModeratedItem) => {
     const id = item.id;
     setProcessingId(id);
@@ -193,7 +208,7 @@ export default function AdminApprovalPage() {
     const response = await approvalService.approve(id, item.contentType);
 
     if (response.success) {
-      setPendingItems(prev => prev.filter(i => i.id !== id));
+      removeFromQueue(id, item.contentType);
       toast.success(
         `${item.contentLabel} approved`,
         `The ${item.contentLabel.toLowerCase()} is now publicly visible.`
@@ -218,7 +233,7 @@ export default function AdminApprovalPage() {
     );
 
     if (response.success) {
-      setPendingItems(prev => prev.filter(i => i.id !== id));
+      removeFromQueue(id, item.contentType);
       toast.success(
         `${item.contentLabel} denied`,
         'The author has been notified and it remains hidden.'
@@ -704,5 +719,6 @@ export default function AdminApprovalPage() {
     </RequireAuth>
   );
 }
+
 
 

@@ -252,10 +252,19 @@ export const RATE_LIMITS = {
     windowMs: 15 * 60 * 1000, // 15 minutes
     blockDuration: 60 * 60 * 1000, // Block for 1 hour if exceeded
   },
+  /* A crypto deposit "attempt" is generating an address, not spending
+     money -- a buyer comparing networks or coming back later racks them
+     up without doing anything wrong. Ten of those bought a
+     THIRTY-MINUTE lockout, which is a long time to be told nothing
+     while trying to hand us money.
+
+     The count is unchanged; the punishment is not. Five minutes is
+     enough to stop a script and short enough that a real buyer waits
+     rather than leaves. */
   DEPOSIT: {
     maxAttempts: 10,
     windowMs: 60 * 60 * 1000, // 1 hour
-    blockDuration: 30 * 60 * 1000, // Block for 30 minutes
+    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
   },
   TIP: {
     maxAttempts: 20,
@@ -420,5 +429,7 @@ export function getRateLimitMessage(result: ReturnType<ActionRateLimiter['check'
 
   return 'Rate limit exceeded. Please try again later.';
 }
+
+
 
 
