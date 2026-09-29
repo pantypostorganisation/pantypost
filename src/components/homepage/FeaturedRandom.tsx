@@ -299,7 +299,7 @@ ListingCard.displayName = 'ListingCard';
 const PINNED_LISTINGS: { id: string; position: number }[] = [
   { id: '6ab2970b0363672d9cd29022', position: 1 },
   { id: '6ab410430363672d9cd5e867', position: 2 },
-  { id: '6ab40f700363672d9cd5e6b9', position: 3 },
+  { id: '6abbd9b15dd2a772c39596d6', position: 3 },
   { id: '6ab54a930363672d9cd9810a', position: 4 },
   // Position 5 sits on the second row on mobile, so this one is
   // effectively desktop-only.

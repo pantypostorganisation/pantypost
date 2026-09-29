@@ -275,6 +275,12 @@ function PostCard({
   );
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [comments, setComments] = useState<PostComment[]>(post.comments || []);
+
+  /* Admins and moderators, who can remove anyone's comment. Read from
+     the role rather than passed down, so it cannot drift out of step
+     with what the backend allows. */
+  const canModerate =
+    currentUser?.role === 'admin' || currentUser?.role === 'moderator';
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close menu when clicking outside
@@ -687,9 +693,16 @@ function PostCard({
                     <p className="text-sm text-ink-muted mt-1">{comment.content}</p>
                   </div>
 
-                  {(currentUser?.username === comment.author || isOwner) && (
+                  {/* Comments are the only content here that publishes
+                      without review -- everything else waits in the
+                      approval queue -- so removing one is the only
+                      control a moderator has over it. */}
+                  {(currentUser?.username === comment.author || isOwner || canModerate) && (
                     <button
                       onClick={() => handleDeleteComment(comment._id)}
+                      aria-label={canModerate && currentUser?.username !== comment.author
+                        ? 'Remove this comment'
+                        : 'Delete your comment'}
                       className="p-1 text-ink-faint hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all self-center"
                     >
                       <X className="w-4 h-4" />
@@ -1381,4 +1394,5 @@ export default function ExploreClient() {
     </div>
   );
 }
+
 
