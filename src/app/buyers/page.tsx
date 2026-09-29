@@ -147,15 +147,18 @@ function BuyersContent() {
 
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-white">{buyer.username}</p>
+                  {/* Presence, not purchase history. "No orders yet"
+                      marked out the newest buyers as the least worth
+                      messaging, which is backwards -- someone who has
+                      just joined is exactly who a seller wants to
+                      reach. Order count still shows on the profile,
+                      where it answers a different question. */}
                   <p className="mt-0.5 text-xs text-ink-muted">
-                    {buyer.orderCount > 0
-                      ? `${buyer.orderCount} order${buyer.orderCount === 1 ? '' : 's'}`
-                      : 'No orders yet'}
                     {buyer.isOnline
-                      ? ' · Online'
+                      ? 'Online now'
                       : buyer.lastActive
-                        ? ` · ${timeAgo(buyer.lastActive)}`
-                        : ''}
+                        ? `Active ${timeAgo(buyer.lastActive)}`
+                        : 'Not active recently'}
                   </p>
                 </div>
               </Link>
