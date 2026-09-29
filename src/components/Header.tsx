@@ -11,6 +11,7 @@ import { useRequests } from '@/context/RequestContext';
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import { Bell, ShoppingBag, MessageSquare, Users, User, LogOut, Package, ClipboardCheck, DollarSign, Crown, Shield, RotateCcw, Trash2, Ban, Menu, X, Compass, AlertTriangle, BarChart3, ShieldCheck,
   Eye,
+  Search,
 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { storageService } from '@/services';
@@ -987,7 +988,7 @@ export default function Header(): React.ReactElement | null {
                     <span className="text-xs text-gray-400 uppercase tracking-wider px-3">Seller Menu</span>
                   </div>
                   {renderMobileLink('/sellers/my-listings', <Package className="w-5 h-5" />, 'My Listings')}
-                  {renderMobileLink('/buyers', <Users className="w-5 h-5" />, 'Buyers')}
+                  {renderMobileLink('/buyers', <Search className="w-5 h-5" />, 'Find Buyers')}
                   {/* Her other request: see her own profile the way a
                       buyer sees it. The page already existed; she just
                       had no way to reach it. */}
@@ -1328,9 +1329,12 @@ export default function Header(): React.ReactElement | null {
 
               {/* Asked for by a seller, in her words, so she was "not
                   just waiting around" between sales. */}
+              {/* "Find Buyers" rather than "Buyers": the verb says what
+                  the page is for. A bare noun beside My Listings reads
+                  like a list of people who bought from you. */}
               <Link href="/buyers" className="group flex items-center gap-1.5 bg-surface-raised hover:bg-surface-hover text-primary px-2 py-1.5 xl:px-3 rounded-sm transition-all duration-300 border border-line hover:border-primary-line text-xs">
-                <Users className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
-                <span className="sr-only xl:not-sr-only xl:inline">Buyers</span>
+                <Search className="w-3.5 h-3.5 group-hover:text-primary transition-colors" />
+                <span className="sr-only xl:not-sr-only xl:inline">Find Buyers</span>
               </Link>
 
               {/* Shown ONLY while unverified.
