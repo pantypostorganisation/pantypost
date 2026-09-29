@@ -757,7 +757,41 @@ router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
       });
     }
     
-    const removed = post.removeComment(req.params.commentId, req.user.username);
+    /* Moderators can remove any comment.
+     *
+     * The model's removeComment() answers a different question -- is
+     * this person the comment's author or the post's owner -- and that
+     * rule is right for ordinary users. Moderation is a separate
+     * permission, so it is handled here rather than by loosening the
+     * model's check for everyone.
+     *
+     * This matters because a comment is the one piece of content on
+     * the site that publishes without review. Everything else waits in
+     * the approval queue; a comment is live the moment it is posted,
+     * which makes removing it the only control available. */
+    const role = String(req.user.role || '').toLowerCase();
+    const isModerator = role === 'admin' || role === 'moderator';
+
+    let removed = false;
+
+    if (isModerator) {
+      const comment = post.comments?.id?.(req.params.commentId)
+        || (post.comments || []).find((c) => String(c._id) === String(req.params.commentId));
+
+      if (comment) {
+        if (typeof comment.deleteOne === 'function') {
+          comment.deleteOne();
+        } else {
+          post.comments.pull({ _id: req.params.commentId });
+        }
+        removed = true;
+        console.log(
+          `[Post] Comment ${req.params.commentId} removed by ${req.user.username} (${role})`
+        );
+      }
+    } else {
+      removed = post.removeComment(req.params.commentId, req.user.username);
+    }
     
     if (!removed) {
       return res.status(403).json({
@@ -782,4 +816,5 @@ router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
 

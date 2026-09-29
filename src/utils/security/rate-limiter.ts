@@ -247,10 +247,20 @@ export const RATE_LIMITS = {
   },
 
   // Financial - More reasonable block times
+  /* Five attempts then a FULL HOUR locked out was written for a rail
+     that moves real money to a bank. It fires on failed attempts too,
+     so a seller who has not added payout details yet -- the most
+     common reason a withdrawal is refused -- burns the budget on
+     errors and is then locked out for an hour without ever having
+     requested anything.
+
+     The request still goes to a human for approval, so the limit is
+     not what protects the money; the review is. Ten attempts and five
+     minutes. */
   WITHDRAWAL: {
-    maxAttempts: 5,
+    maxAttempts: 10,
     windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDuration: 60 * 60 * 1000, // Block for 1 hour if exceeded
+    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
   },
   /* A crypto deposit "attempt" is generating an address, not spending
      money -- a buyer comparing networks or coming back later racks them
