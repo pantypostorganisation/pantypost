@@ -645,8 +645,18 @@ export const useBrowseListings = () => {
     rateLimitError,
     
     // Data
+    /* `filteredListings` is the PAGINATED array, named that way long
+       before infinite scroll existed. With pagination it was harmless:
+       a page showed 20 of 20. Now it is what has been loaded so far,
+       so the header read "40 listings" while the filter tabs, which
+       count properly, said 54.
+
+       The real total is exported separately rather than renaming this,
+       because several callers already read `filteredListings` expecting
+       rows to render. */
     filteredListings: paginatedListings,
     paginatedListings,
+    totalFilteredCount: filteredListings.length,
     categoryCounts,
     totalPages,
     

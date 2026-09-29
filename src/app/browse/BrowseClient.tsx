@@ -47,6 +47,7 @@ export default function BrowseClient() {
     page,
     hasMore,
     loadMore,
+    totalFilteredCount,
     hoveredListing,
     listingErrors,
     forceUpdateTimer,
@@ -405,7 +406,8 @@ export default function BrowseClient() {
 
           <BrowseHeader
             user={user}
-            filteredListingsCount={filteredListings.length}
+            // The total that match, not the number loaded so far.
+            filteredListingsCount={totalFilteredCount}
             filter={filter}
             categoryCounts={categoryCounts}
             onFilterChange={setFilter}
