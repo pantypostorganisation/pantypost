@@ -42,6 +42,11 @@ export default function WithdrawConfirmModal({
             You're about to withdraw{' '}
             <span className="font-semibold text-[#ff950e]">${formattedAmount}</span> from your seller balance.
           </p>
+          {/* Said plainly at the moment of confirming, because this is
+              where a seller wonders what they will actually receive. */}
+          <p className="text-xs text-gray-400">
+            You'll receive the full ${formattedAmount}. There is no withdrawal fee.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-[#111] p-3 text-xs text-gray-400">
               <ShieldCheck className="h-4 w-4 text-[#ff950e]" />
@@ -49,7 +54,10 @@ export default function WithdrawConfirmModal({
             </div>
             <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-[#111] p-3 text-xs text-gray-400">
               <Clock className="h-4 w-4 text-[#ff950e]" />
-              <span>Processing takes about 1-2 business days.</span>
+              {/* Matches the withdraw panel. Payouts are sent by hand,
+                  so this is a commitment we can keep rather than one
+                  that reads as automated. */}
+              <span>Reviewed and sent within 2 business days.</span>
             </div>
           </div>
           <p className="text-xs text-gray-500">A confirmation email will be sent once the transfer is initiated.</p>
@@ -82,5 +90,6 @@ export default function WithdrawConfirmModal({
     </div>
   );
 }
+
 
 

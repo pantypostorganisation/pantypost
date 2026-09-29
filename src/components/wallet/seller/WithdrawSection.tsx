@@ -140,13 +140,20 @@ export default function WithdrawSection({
           rateLimitConfig={RATE_LIMITS.WITHDRAWAL}
           className="flex flex-col gap-6"
         >
+          {/* Two things this used to say were false.
+              There is no fee at withdrawal -- the platform's 10% comes
+              off at the point of sale, so a seller reading this thought
+              they were paying it twice. And "1-2 business days" promised
+              an automated transfer; payouts are reviewed and sent by
+              hand, so the honest figure is the one we can keep. */}
           <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
             <div className="flex items-start gap-3">
               <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-300" />
               <div className="text-sm text-blue-100">
-                <p className="font-medium">Fast withdrawals</p>
+                <p className="font-medium">No withdrawal fee</p>
                 <p className="mt-1">
-                  Funds typically arrive within 1-2 business days after the 10% platform fee is applied.
+                  You withdraw the full amount. Our 10% comes out of each sale, not out
+                  of your payout. Requests are reviewed and sent within 2 business days.
                 </p>
               </div>
             </div>
@@ -273,4 +280,6 @@ export default function WithdrawSection({
     </section>
   );
 }
+
+
 

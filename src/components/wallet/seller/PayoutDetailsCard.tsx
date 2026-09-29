@@ -17,7 +17,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Landmark, Check, Loader2, AlertCircle } from 'lucide-react';
 import { apiCall } from '@/services/api.config';
 
-type Method = 'bank_au' | 'bank_intl' | 'paxum';
+/* Crypto is listed first because it is the only method we can pay on
+   a rail rather than by hand. Bank and Paxum stay because that is
+   where this is heading, but a seller picking one today waits on a
+   manual transfer. */
+type Method = 'crypto' | 'bank_au' | 'bank_intl' | 'paxum';
 
 interface Masked {
   method: Method;
@@ -38,6 +42,7 @@ export default function PayoutDetailsCard() {
   const [form, setForm] = useState({
     accountName: '', bsb: '', accountNumber: '', iban: '', swift: '',
     bankName: '', bankAddress: '', country: '', walletEmail: '',
+    cryptoAddress: '', cryptoNetwork: 'TRON_USDT',
   });
 
   const load = useCallback(async () => {
@@ -71,6 +76,7 @@ export default function PayoutDetailsCard() {
         setForm({
           accountName: '', bsb: '', accountNumber: '', iban: '', swift: '',
           bankName: '', bankAddress: '', country: '', walletEmail: '',
+          cryptoAddress: '', cryptoNetwork: 'TRON_USDT',
         });
       } else {
         const message =
@@ -132,6 +138,7 @@ export default function PayoutDetailsCard() {
               onChange={e => setMethod(e.target.value as Method)}
               className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
             >
+              <option value="crypto">Crypto (USDT) &mdash; paid same day</option>
               <option value="bank_au">Australian bank account</option>
               <option value="bank_intl">International bank account</option>
               <option value="paxum">Paxum</option>
@@ -162,6 +169,30 @@ export default function PayoutDetailsCard() {
           )}
 
           {method === 'paxum' && field('walletEmail', 'Paxum account email')}
+
+          {method === 'crypto' && (
+            <>
+              <div>
+                <label className="mb-1 block text-xs text-ink-muted">Network</label>
+                <select
+                  value={form.cryptoNetwork}
+                  onChange={e => setForm({ ...form, cryptoNetwork: e.target.value })}
+                  className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                >
+                  <option value="TRON_USDT">USDT on Tron (TRC20)</option>
+                  <option value="SOLANA_USDT">USDT on Solana</option>
+                </select>
+              </div>
+              {field('cryptoAddress', 'Wallet address')}
+              {/* Above the save button, not below it. Sending to a valid
+                  address on the wrong network loses the money outright,
+                  and a warning read afterwards is no warning at all. */}
+              <p className="rounded-md border border-yellow-600/40 bg-yellow-600/10 px-3 py-2 text-xs leading-relaxed text-yellow-400">
+                Check the network matches your wallet. Funds sent on the wrong network
+                cannot be recovered.
+              </p>
+            </>
+          )}
 
           {error && (
             <p className="flex items-center gap-2 text-xs text-red-400" role="alert">
@@ -212,3 +243,5 @@ export default function PayoutDetailsCard() {
     </div>
   );
 }
+
+
