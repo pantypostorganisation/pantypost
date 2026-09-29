@@ -367,20 +367,29 @@ export default function TopUpModal({
             </h2>
 
             <div className="mt-5 space-y-2.5">
-              <button
-                type="button"
-                onClick={payByCard}
-                disabled={loading}
-                className="flex w-full items-start gap-3 rounded-md border border-primary bg-primary-soft p-4 text-left transition-colors hover:bg-primary/10 disabled:opacity-60"
+              {/* Card is shown but not yet payable: our provider's
+                  on-ramp is being restored. Leaving it out entirely
+                  would have buyers assume we never take cards, which is
+                  worse than saying it is on the way. Muted and
+                  unclickable, so nobody starts something that cannot
+                  finish. */}
+              <div
+                className="flex w-full cursor-not-allowed items-start gap-3 rounded-md border border-line p-4 text-left opacity-60"
+                aria-disabled="true"
               >
-                <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" aria-hidden="true" />
                 <span>
-                  <span className="block text-sm font-medium text-white">Card</span>
-                  <span className="mt-0.5 block text-xs leading-relaxed text-ink-muted">
-                    Visa or Mastercard. Takes about a minute.
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink-muted">Card</span>
+                    <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
+                      Coming soon
+                    </span>
+                  </span>
+                  <span className="mt-0.5 block text-xs leading-relaxed text-ink-faint">
+                    Visa and Mastercard are on the way.
                   </span>
                 </span>
-              </button>
+              </div>
 
               <button
                 type="button"
@@ -646,3 +655,5 @@ function Field({
     </div>
   );
 }
+
+
