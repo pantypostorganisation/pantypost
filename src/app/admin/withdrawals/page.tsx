@@ -20,7 +20,8 @@ import {
   Wallet,
   ArrowUpRight,
   ArrowDownRight,
-  Info
+  Info,
+  X,
 } from 'lucide-react';
 import {
   format,
@@ -33,6 +34,7 @@ import {
   endOfDay
 } from 'date-fns';
 import { toZonedTime, fromZonedTime, formatInTimeZone } from '@/utils/timezone';
+import { apiCall } from '@/services/api.config';
 
 interface Withdrawal {
   id: string;
@@ -65,7 +67,11 @@ interface WeeklyData {
   averageAmount: number;
 }
 
-const TIMEZONE = 'America/Chicago'; // Central Time
+/* The operator is in Australia, not Chicago. Week boundaries and
+   timestamps drawn in Central Time meant a payout requested on Monday
+   morning here showed as Sunday, which put it in the previous week's
+   total. */
+const TIMEZONE = process.env.NEXT_PUBLIC_ADMIN_TIMEZONE || 'Australia/Sydney';
 
 export default function AdminWithdrawalsPage() {
   const { user, apiClient } = useAuth();
@@ -77,6 +83,47 @@ export default function AdminWithdrawalsPage() {
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [viewMode, setViewMode] = useState<'pending' | 'completed' | 'all'>('pending');
   const [searchTerm, setSearchTerm] = useState('');
+
+  /* The payout details behind "View Details".
+     Fetched on open rather than with the list, because a full account
+     number or wallet address has no business sitting in the browser
+     for every row on screen -- only for the one being paid. */
+  const [detailsFor, setDetailsFor] = useState<Withdrawal | null>(null);
+  const [payoutDetails, setPayoutDetails] = useState<any>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const openDetails = useCallback(async (withdrawal: Withdrawal) => {
+    setDetailsFor(withdrawal);
+    setPayoutDetails(null);
+    setDetailsError(null);
+    setDetailsLoading(true);
+    try {
+      const response = await apiCall<any>(
+        `/wallet/admin/payout-details/${encodeURIComponent(withdrawal.username)}`
+      );
+      if (response.success) {
+        setPayoutDetails(response.data);
+      } else {
+        setDetailsError('This seller has not added payout details.');
+      }
+    } catch {
+      setDetailsError('Could not load payout details.');
+    } finally {
+      setDetailsLoading(false);
+    }
+  }, []);
+
+  const copyValue = useCallback(async (value: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(key);
+      setTimeout(() => setCopied(null), 1800);
+    } catch {
+      // Clipboard can be blocked; the value is on screen to select.
+    }
+  }, []);
   const [stats, setStats] = useState({
     totalPendingAmount: 0,
     totalCompletedThisWeek: 0,
@@ -92,7 +139,7 @@ export default function AdminWithdrawalsPage() {
     }
   }, [user, router]);
 
-  // Get current week boundaries in CST
+  // Get current week boundaries in the operator's timezone
   const getWeekBoundaries = useCallback((weekOffset: number = 0) => {
     const now = new Date();
     const cstNow = toZonedTime(now, TIMEZONE);
@@ -407,7 +454,7 @@ export default function AdminWithdrawalsPage() {
               <p className="text-sm text-gray-400">
                 {formatInTimeZone(weeklyData.weekStart, TIMEZONE, 'MMM d, yyyy')} - {formatInTimeZone(weeklyData.weekEnd, TIMEZONE, 'MMM d, yyyy')}
               </p>
-              <p className="text-xs text-gray-500 mt-1">Central Time (CST)</p>
+              <p className="text-xs text-gray-500 mt-1">Australian Eastern Time</p>
             </div>
             
             <button
@@ -435,13 +482,20 @@ export default function AdminWithdrawalsPage() {
             <div className="flex items-start gap-3">
               <Info className="w-5 h-5 text-[#ff950e] flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-[#ff950e] mb-1">Action Required for Monday Payout</h3>
+                {/* Named a bank we do not have and a provider that
+                    prohibits adult businesses, and promised a weekly
+                    schedule that does not exist -- payouts go out when
+                    they are approved. */}
+                <h3 className="font-semibold text-[#ff950e] mb-1">
+                  {weeklyData.pendingWithdrawals.length} payout{weeklyData.pendingWithdrawals.length !== 1 ? 's' : ''} waiting
+                </h3>
                 <p className="text-sm text-gray-300">
-                  Transfer <span className="font-bold text-white">${weeklyData.totalPending.toFixed(2)}</span> from Mercury to Wise 
-                  to cover {weeklyData.pendingWithdrawals.length} pending withdrawal{weeklyData.pendingWithdrawals.length !== 1 ? 's' : ''}.
+                  <span className="font-bold text-white">${weeklyData.totalPending.toFixed(2)}</span> to send.
+                  Open each request for the seller&apos;s payout details, send the funds,
+                  then mark it paid.
                 </p>
                 <p className="text-xs text-gray-400 mt-2">
-                  Cutoff: Sunday 11:59 PM CST • Next payout: Monday
+                  Sellers are told to expect payment within 2 business days of requesting.
                 </p>
               </div>
             </div>
@@ -569,7 +623,14 @@ export default function AdminWithdrawalsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <button className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium transition-colors">
+                        {/* Was a button that did nothing. The payout
+                            details are the whole reason to open a
+                            request -- without them there is no way to
+                            know where to send the money. */}
+                        <button
+                          onClick={() => void openDetails(withdrawal)}
+                          className="text-[#ff950e] hover:text-[#ff6b00] text-sm font-medium transition-colors"
+                        >
                           View Details
                         </button>
                       </td>
@@ -605,6 +666,112 @@ export default function AdminWithdrawalsPage() {
           </div>
         )}
       </div>
+
+      {/* Payout details.
+          Everything needed to actually send the money, in one place,
+          with copy buttons -- because retyping a 34-character wallet
+          address by hand is how funds end up somewhere unrecoverable. */}
+      {detailsFor && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setDetailsFor(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-gray-800 bg-[#111] p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  Pay {detailsFor.username}
+                </h3>
+                <p className="mt-0.5 text-2xl font-bold text-[#ff950e]">
+                  ${detailsFor.amount.toFixed(2)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDetailsFor(null)}
+                aria-label="Close"
+                className="rounded-md p-1 text-gray-500 transition-colors hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5">
+              {detailsLoading && (
+                <p className="text-sm text-gray-400">Loading payout details...</p>
+              )}
+
+              {detailsError && (
+                <p className="rounded-lg border border-red-700 bg-red-900/30 p-3 text-sm text-red-300">
+                  {detailsError}
+                </p>
+              )}
+
+              {payoutDetails && (
+                <div className="space-y-2">
+                  {[
+                    ['Method', payoutDetails.method === 'crypto'
+                      ? `Crypto (${payoutDetails.cryptoNetwork === 'SOLANA_USDT' ? 'USDT on Solana' : 'USDT on Tron'})`
+                      : payoutDetails.method === 'paxum'
+                        ? 'Paxum'
+                        : payoutDetails.method === 'bank_au'
+                          ? 'Australian bank'
+                          : 'International bank'],
+                    ['Account name', payoutDetails.accountName],
+                    ['Wallet address', payoutDetails.cryptoAddress],
+                    ['Paxum email', payoutDetails.walletEmail],
+                    ['BSB', payoutDetails.bsb],
+                    ['Account number', payoutDetails.accountNumber],
+                    ['IBAN', payoutDetails.iban],
+                    ['SWIFT', payoutDetails.swift],
+                    ['Bank', payoutDetails.bankName],
+                    ['Country', payoutDetails.country],
+                  ]
+                    .filter(([, value]) => Boolean(value))
+                    .map(([label, value]) => (
+                      <div
+                        key={label as string}
+                        className="flex items-start justify-between gap-3 rounded-lg border border-gray-800 bg-black/40 p-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-xs text-gray-500">{label}</p>
+                          <p className="mt-0.5 break-all font-mono text-sm text-white">
+                            {value as string}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void copyValue(String(value), String(label))}
+                          aria-label={`Copy ${label}`}
+                          className="shrink-0 rounded-md border border-gray-700 p-2 text-gray-400 transition-colors hover:border-[#ff950e] hover:text-[#ff950e]"
+                        >
+                          {copied === label ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    ))}
+
+                  {payoutDetails.method === 'crypto' && (
+                    <p className="rounded-lg border border-yellow-600/40 bg-yellow-600/10 p-3 text-xs leading-relaxed text-yellow-400">
+                      Send on the network shown above. Funds sent on the wrong network
+                      cannot be recovered.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <p className="mt-5 text-xs leading-relaxed text-gray-500">
+              Send the funds yourself, then mark this request paid. Nothing is sent
+              automatically.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

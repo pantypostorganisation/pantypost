@@ -381,7 +381,10 @@ export default function TopUpModal({
                 <span>
                   <span className="flex items-center gap-2">
                     <span className="text-sm font-medium text-ink-muted">Card</span>
-                    <span className="rounded-md bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
+                    {/* rounded-sm, not a pill. A fully rounded badge
+                        reads as a status chip; a rectangle reads as a
+                        label, which is what this is. */}
+                    <span className="rounded-sm bg-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-muted">
                       Coming soon
                     </span>
                   </span>
