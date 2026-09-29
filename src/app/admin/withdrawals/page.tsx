@@ -115,6 +115,34 @@ export default function AdminWithdrawalsPage() {
     }
   }, []);
 
+  const [txRef, setTxRef] = useState('');
+  const [markingPaid, setMarkingPaid] = useState(false);
+
+  /* Records that a payout went out. Moves no money -- the funds left
+     our provider balance by hand, and the seller's wallet was debited
+     when they requested. This is the audit trail. */
+  const markPaid = useCallback(async () => {
+    if (!detailsFor) return;
+    setMarkingPaid(true);
+    try {
+      const response = await apiCall<any>(
+        `/wallet/admin/withdrawals/${detailsFor.id}/complete`,
+        { method: 'POST', body: JSON.stringify({ transactionRef: txRef }) }
+      );
+      if (response.success) {
+        setDetailsFor(null);
+        setTxRef('');
+        await fetchWithdrawals();
+      } else {
+        setDetailsError('Could not mark it paid. It may already be completed.');
+      }
+    } catch {
+      setDetailsError('Could not mark it paid.');
+    } finally {
+      setMarkingPaid(false);
+    }
+  }, [detailsFor, txRef]);
+
   const copyValue = useCallback(async (value: string, key: string) => {
     try {
       await navigator.clipboard.writeText(value);
@@ -174,7 +202,10 @@ export default function AdminWithdrawalsPage() {
             if (Array.isArray(userWithdrawals)) {
               userWithdrawals.forEach((w: any) => {
                 allWithdrawals.push({
-                  id: `${username}_${w.date}`,
+                  // The real transaction id when the API supplies it;
+                  // the synthesised fallback only ever identified a row
+                  // on screen, never a record to act on.
+                  id: w.id || `${username}_${w.date}`,
                   username,
                   amount: w.amount,
                   status: w.status || 'pending',
@@ -765,10 +796,38 @@ export default function AdminWithdrawalsPage() {
               )}
             </div>
 
-            <p className="mt-5 text-xs leading-relaxed text-gray-500">
-              Send the funds yourself, then mark this request paid. Nothing is sent
-              automatically.
-            </p>
+            {/* The instruction used to end here with nothing to press,
+                which left an admin with a payout sent and no way to
+                record it. */}
+            <div className="mt-5 border-t border-gray-800 pt-4">
+              <label htmlFor="txref" className="block text-xs text-gray-500">
+                Transaction reference (optional)
+              </label>
+              <input
+                id="txref"
+                value={txRef}
+                onChange={(event) => setTxRef(event.target.value)}
+                placeholder="Tx hash or payment id"
+                className="mt-1 w-full rounded-lg border border-gray-700 bg-black px-3 py-2 font-mono text-xs text-white placeholder-gray-600 focus:border-[#ff950e] focus:outline-none"
+              />
+              <p className="mt-1.5 text-xs text-gray-600">
+                Worth recording. If a seller says a payout never arrived, a hash
+                settles it in seconds.
+              </p>
+
+              <button
+                type="button"
+                disabled={markingPaid}
+                onClick={() => void markPaid()}
+                className="mt-3 w-full rounded-lg bg-green-600 py-3 text-sm font-semibold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+              >
+                {markingPaid ? 'Saving...' : 'Mark as paid'}
+              </button>
+
+              <p className="mt-3 text-xs leading-relaxed text-gray-500">
+                Send the funds yourself first. Nothing is sent automatically.
+              </p>
+            </div>
           </div>
         </div>
       )}

@@ -512,7 +512,7 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
     }
 
     const b = req.body || {};
-    const method = ['bank_au', 'bank_intl', 'paxum', 'crypto'].includes(b.method) ? b.method : null;
+    const method = ['bank_au', 'bank_intl', 'paxum'].includes(b.method) ? b.method : null;
     if (!method) {
       return res.status(400).json({ success: false, error: 'Choose a payout method' });
     }
@@ -532,43 +532,6 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Paxum email is required' });
     }
 
-    /* Crypto needs both the address and the chain.
-       The same string can be a valid address on more than one network,
-       and paying to the right address on the wrong chain loses the
-       money with no way back -- so the network is required rather than
-       inferred, and the address is shape-checked before we store
-       something we will later pay to. */
-    if (method === 'crypto') {
-      const address = String(b.cryptoAddress || '').trim();
-      const network = String(b.cryptoNetwork || '').trim();
-
-      if (!address) {
-        return res.status(400).json({ success: false, error: 'Wallet address is required' });
-      }
-      if (!['TRON_USDT', 'SOLANA_USDT'].includes(network)) {
-        return res.status(400).json({ success: false, error: 'Choose a network' });
-      }
-
-      // Tron addresses start with T and are 34 characters; Solana
-      // addresses are base58, 32-44 characters. Catches a pasted
-      // address from the wrong chain before it is ever paid to.
-      const looksTron = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
-      const looksSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
-
-      if (network === 'TRON_USDT' && !looksTron) {
-        return res.status(400).json({
-          success: false,
-          error: 'That does not look like a Tron address. Tron addresses start with T.'
-        });
-      }
-      if (network === 'SOLANA_USDT' && (!looksSolana || looksTron)) {
-        return res.status(400).json({
-          success: false,
-          error: 'That does not look like a Solana address.'
-        });
-      }
-    }
-
     const saved = await PayoutDetails.findOneAndUpdate(
       { username: req.user.username },
       {
@@ -584,8 +547,6 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
           bankAddress: b.bankAddress,
           country: b.country,
           walletEmail: b.walletEmail,
-          cryptoAddress: method === 'crypto' ? String(b.cryptoAddress).trim() : '',
-          cryptoNetwork: method === 'crypto' ? String(b.cryptoNetwork).trim() : '',
           updatedBy: req.user.username
         }
       },
@@ -1551,6 +1512,10 @@ router.get('/admin/analytics', authMiddleware, async (req, res) => {
         sellerWithdrawalsByUser[username] = [];
       }
       sellerWithdrawalsByUser[username].push({
+        /* The real id, which this response omitted. The admin page was
+           synthesising one from username and date, so there was no way
+           to act on a specific withdrawal -- only to look at it. */
+        id: withdrawal._id.toString(),
         amount: withdrawal.amount,
         date: withdrawal.createdAt.toISOString(),
         status: withdrawal.status,
@@ -2765,6 +2730,79 @@ router.post('/crypto/inqud/admin/reconcile-all', authMiddleware, async (req, res
   } catch (err) {
     console.error('[Inqud] bulk reconcile failed:', err.message);
     return res.status(500).json({ success: false, error: 'Could not reconcile deposits.' });
+  }
+});
+
+
+/**
+ * POST /api/wallet/admin/withdrawals/:id/complete
+ *
+ * Marks a payout as sent.
+ *
+ * Nothing here moves money -- the funds went out by hand from our
+ * provider balance, and this records that it happened. The balance was
+ * already deducted when the seller requested, so completing is purely
+ * a state change plus an audit trail of who sent it and when.
+ *
+ * The transaction reference is optional but worth asking for: when a
+ * seller says a payout never arrived, an on-chain hash settles it in
+ * seconds and its absence turns into a long conversation.
+ */
+router.post('/admin/withdrawals/:id/complete', authMiddleware, async (req, res) => {
+  try {
+    if (!isAdminUser(req.user)) {
+      return res.status(403).json({ success: false, error: 'Admin access required' });
+    }
+
+    /* Conditional update rather than find-then-save: two admins paying
+       the same request at the same moment would otherwise both mark it
+       sent, and the second would have no idea the first had. */
+    /* Withdrawals are Transactions with type 'withdrawal', not a
+       separate collection -- so the guard matches on type as well as
+       id, or this route could complete an unrelated record. */
+    const withdrawal = await Transaction.findOneAndUpdate(
+      { _id: req.params.id, type: 'withdrawal', status: 'pending' },
+      {
+        $set: {
+          status: 'completed',
+          completedAt: new Date(),
+          'metadata.completedBy': req.user.username,
+          'metadata.transactionRef': String(req.body?.transactionRef || '').trim().slice(0, 200)
+        }
+      },
+      { new: true }
+    );
+
+    if (!withdrawal) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not pending, or already marked paid.'
+      });
+    }
+
+    /* Tell the seller. They requested this and have been waiting;
+       finding out by checking their balance is a poor substitute for
+       being told. */
+    try {
+      if (global.webSocketService) {
+        global.webSocketService.emitNotification(withdrawal.from, {
+          type: 'withdrawal_completed',
+          title: 'Payout sent',
+          message: `Your $${Number(withdrawal.amount).toFixed(2)} withdrawal has been sent.`
+        });
+      }
+    } catch (notifyError) {
+      console.error('[Wallet] Withdrawal notification failed:', notifyError.message);
+    }
+
+    console.log(
+      `[Wallet] Withdrawal ${withdrawal._id} ($${withdrawal.amount}) marked paid by ${req.user.username}`
+    );
+
+    return res.json({ success: true, data: { id: withdrawal._id, status: withdrawal.status } });
+  } catch (error) {
+    console.error('[Wallet] Complete withdrawal error:', error);
+    return res.status(500).json({ success: false, error: 'Could not mark it paid' });
   }
 });
 
