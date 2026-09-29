@@ -18,6 +18,7 @@ import { resolveApiUrl } from '@/utils/url';
 import { isAdmin, canModerateContent } from '@/utils/security/permissions';
 import { useNotifications } from '@/context/NotificationContext';
 import { approvalService } from '@/services/approval.service';
+import { useWebSocket } from '@/context/WebSocketContext';
 import dynamic from 'next/dynamic';
 
 // OPTIMIZED: Lazy load HeaderSearch to reduce initial bundle
@@ -135,6 +136,13 @@ export default function Header(): React.ReactElement | null {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reportCount, setReportCount] = useState(0);
   const [approvalCount, setApprovalCount] = useState(0);
+  const webSocket = useWebSocket();
+  /* Held in a ref so effects can reach the live context without
+     depending on its identity. */
+  const webSocketRef = useRef(webSocket);
+  useEffect(() => {
+    webSocketRef.current = webSocket;
+  }, [webSocket]);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [showMobileNotifications, setShowMobileNotifications] = useState(false);
   const [activeNotifTab, setActiveNotifTab] = useState<'active' | 'cleared'>('active');
@@ -546,6 +554,14 @@ export default function Header(): React.ReactElement | null {
     const interval = setInterval(() => void refreshApprovalCount(), 60_000);
     const onFocus = () => void refreshApprovalCount();
 
+    /* Mobile browsers throttle background tabs and fire `focus`
+       unreliably, so a socket event that arrived while the tab was
+       backgrounded could sit unprocessed. visibilitychange is the one
+       mobile actually honours. */
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void refreshApprovalCount();
+    };
+
     /* Refresh the moment something is approved or denied.
        Polling every 60s and on focus covered another admin acting, or
        this tab being returned to -- but not the common case: the admin
@@ -563,6 +579,44 @@ export default function Header(): React.ReactElement | null {
       window.removeEventListener('pantypost:approval-count-changed', onApprovalChange);
     };
   }, [isAdminUser, refreshApprovalCount]);
+
+  /* Somebody ELSE submitting something.
+     The DOM event above only covers this tab acting; a seller posting
+     right now is the case that matters, and the badge used to wait up
+     to a minute to notice.
+
+     In its own effect, keyed only on whether this user moderates.
+     Putting `webSocket` in a dependency array does not work here: the
+     context object is not identity-stable across provider re-renders,
+     so the effect tore down and resubscribed on every render and the
+     subscription was rarely alive when an event arrived. The same trap
+     is documented in the homepage counters. The callback is read
+     through a ref so the subscription itself never needs rebuilding. */
+  const refreshApprovalRef = useRef(refreshApprovalCount);
+  useEffect(() => {
+    refreshApprovalRef.current = refreshApprovalCount;
+  }, [refreshApprovalCount]);
+
+  useEffect(() => {
+    if (!isAdminUser) return;
+
+    let unsubscribe: (() => void) | undefined;
+
+    /* A short delay, because the socket may not have connected on the
+       first render after sign-in. The context queues subscriptions
+       made before it is ready, but only once it exists at all. */
+    const timer = setTimeout(() => {
+      unsubscribe = webSocketRef.current?.subscribe?.(
+        'approval:queue_changed',
+        () => void refreshApprovalRef.current()
+      );
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [isAdminUser]);
 
   const handleClearOne = useCallback((notification: UINotification) => {
     if (notification.source === 'legacy') {
@@ -1072,10 +1126,30 @@ export default function Header(): React.ReactElement | null {
         <div className="flex min-w-0 items-center gap-2 ml-auto">
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className="flex md:hidden items-center justify-center w-10 h-10 bg-primary text-black rounded-sm hover:bg-primary-hover transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
-            aria-label="Open menu"
+            className="relative flex md:hidden items-center justify-center w-10 h-10 bg-primary text-black rounded-sm hover:bg-primary-hover transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105"
+            aria-label={
+              canModerate && approvalCount > 0
+                ? `Open menu, ${approvalCount} item${approvalCount === 1 ? '' : 's'} awaiting review`
+                : 'Open menu'
+            }
           >
             <Menu className="w-6 h-6" />
+
+            {/* The queue is invisible on mobile otherwise.
+                Desktop carries the count on the Approvals nav link, but
+                on a phone that link is behind the burger -- so a
+                moderator had to open the menu to discover anything was
+                waiting. Nothing publishes until someone reviews it, so
+                a queue nobody knows about is a seller wondering why
+                their listing never appeared. */}
+            {canModerate && approvalCount > 0 && (
+              <span
+                className="absolute -right-1 -top-1 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold text-white ring-2 ring-black"
+                aria-hidden="true"
+              >
+                {approvalCount > 99 ? '99+' : approvalCount}
+              </span>
+            )}
           </button>
 
           <nav className="hidden md:flex items-center gap-x-1 xl:gap-x-2">
@@ -1559,6 +1633,7 @@ export default function Header(): React.ReactElement | null {
     </>
   );
 }
+
 
 
 

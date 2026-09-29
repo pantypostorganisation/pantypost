@@ -1,3 +1,4 @@
+
 // src/services/api.config.ts
 
 /**
@@ -172,6 +173,7 @@ export const API_ENDPOINTS = {
 
   STATS: {
     PAYMENTS_PROCESSED: '/stats/total-payments',
+    HERO_COUNTER_ADMIN: '/stats/admin/hero-counter',
   },
 };
 
