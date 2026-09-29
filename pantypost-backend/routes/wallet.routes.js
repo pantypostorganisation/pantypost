@@ -512,7 +512,7 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
     }
 
     const b = req.body || {};
-    const method = ['bank_au', 'bank_intl', 'paxum'].includes(b.method) ? b.method : null;
+    const method = ['bank_au', 'bank_intl', 'paxum', 'crypto'].includes(b.method) ? b.method : null;
     if (!method) {
       return res.status(400).json({ success: false, error: 'Choose a payout method' });
     }
@@ -532,6 +532,43 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Paxum email is required' });
     }
 
+    /* Crypto needs both the address and the chain.
+       The same string can be a valid address on more than one network,
+       and paying to the right address on the wrong chain loses the
+       money with no way back -- so the network is required rather than
+       inferred, and the address is shape-checked before we store
+       something we will later pay to. */
+    if (method === 'crypto') {
+      const address = String(b.cryptoAddress || '').trim();
+      const network = String(b.cryptoNetwork || '').trim();
+
+      if (!address) {
+        return res.status(400).json({ success: false, error: 'Wallet address is required' });
+      }
+      if (!['TRON_USDT', 'SOLANA_USDT'].includes(network)) {
+        return res.status(400).json({ success: false, error: 'Choose a network' });
+      }
+
+      // Tron addresses start with T and are 34 characters; Solana
+      // addresses are base58, 32-44 characters. Catches a pasted
+      // address from the wrong chain before it is ever paid to.
+      const looksTron = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+      const looksSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+
+      if (network === 'TRON_USDT' && !looksTron) {
+        return res.status(400).json({
+          success: false,
+          error: 'That does not look like a Tron address. Tron addresses start with T.'
+        });
+      }
+      if (network === 'SOLANA_USDT' && (!looksSolana || looksTron)) {
+        return res.status(400).json({
+          success: false,
+          error: 'That does not look like a Solana address.'
+        });
+      }
+    }
+
     const saved = await PayoutDetails.findOneAndUpdate(
       { username: req.user.username },
       {
@@ -547,6 +584,8 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
           bankAddress: b.bankAddress,
           country: b.country,
           walletEmail: b.walletEmail,
+          cryptoAddress: method === 'crypto' ? String(b.cryptoAddress).trim() : '',
+          cryptoNetwork: method === 'crypto' ? String(b.cryptoNetwork).trim() : '',
           updatedBy: req.user.username
         }
       },
