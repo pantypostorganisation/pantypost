@@ -61,6 +61,21 @@ const userSchema = new mongoose.Schema({
     default: true
   },
 
+  /* Whether a buyer appears in the seller-facing buyer directory.
+   *
+   * Defaults to visible, because that is the behaviour we are shipping
+   * and a directory nobody is in helps nobody. But a buyer came here
+   * to purchase privately, not to be browsed, so the way out exists
+   * and is one toggle in their settings.
+   *
+   * Sellers can still see a buyer they have an order or conversation
+   * with regardless -- this controls the BROWSABLE list, not whether
+   * a counterparty can be looked up. */
+  isDiscoverable: {
+    type: Boolean,
+    default: true
+  },
+
   // =====================================================================
   // SHIPPING REACH
   //
@@ -647,6 +662,7 @@ userSchema.methods.shipsTo = function (buyerCountry) {
 };
 
 module.exports = User;
+
 
 
 

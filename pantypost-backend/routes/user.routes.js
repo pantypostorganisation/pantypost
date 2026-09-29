@@ -255,7 +255,7 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
       });
     }
 
-    const { bio, profilePic, country, isLocationPublic, shippingScope, shipsToCountries } = req.body || {};
+    const { bio, profilePic, country, isLocationPublic, shippingScope, shipsToCountries, isDiscoverable } = req.body || {};
 
     // Validate bio
     if (typeof bio !== 'undefined') {
@@ -323,6 +323,17 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
         });
       }
       user.isLocationPublic = isLocationPublic;
+    }
+
+    /* Buyers opting out of the directory. */
+    if (typeof isDiscoverable !== 'undefined') {
+      if (typeof isDiscoverable !== 'boolean') {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid value' }
+        });
+      }
+      user.isDiscoverable = isDiscoverable;
     }
 
     /* Where the seller is willing to post. Validated rather than
@@ -1184,6 +1195,159 @@ router.get('/:username/activity', authMiddleware, async (req, res) => {
   }
 });
 
+
+/**
+ * GET /api/users/buyers
+ *
+ * The buyer directory, for sellers.
+ *
+ * Sellers asked for this: between sales there is nothing to do but
+ * wait, and knowing who is around is better than refreshing an empty
+ * orders page.
+ *
+ * Deliberately thin. A buyer has no bio, no listings and usually no
+ * picture -- there is no profile to show, only presence and history.
+ * Anything more would be inventing detail about people who never
+ * chose to publish any.
+ */
+router.get('/buyers', authMiddleware, async (req, res) => {
+  try {
+    /* Sellers, moderators and admins. Not buyers: a buyer browsing
+       other buyers serves nothing and doubles who can see the list. */
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['seller', 'admin', 'moderator'].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: ERROR_CODES.FORBIDDEN, message: 'Sellers only' }
+      });
+    }
+
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 24, 1), 60);
+    const search = String(req.query.search || '').trim();
+
+    const query = {
+      role: 'buyer',
+      isBanned: { $ne: true },
+      isDiscoverable: { $ne: false }
+    };
+
+    if (search) {
+      // Escaped: a username is user input and a stray ( breaks the query.
+      const safe = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.username = { $regex: safe, $options: 'i' };
+    }
+
+    const [buyers, total] = await Promise.all([
+      User.find(query)
+        .select('username profilePic isOnline lastActive createdAt')
+        .sort({ isOnline: -1, lastActive: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      User.countDocuments(query)
+    ]);
+
+    /* Order counts in one aggregate rather than a query per buyer --
+       twenty-four extra round trips to render one page is how a list
+       becomes slow enough that nobody opens it. */
+    const usernames = buyers.map((buyer) => buyer.username);
+    let orderCounts = {};
+    try {
+      const Order = require('../models/Order');
+      const counts = await Order.aggregate([
+        { $match: { buyer: { $in: usernames } } },
+        { $group: { _id: '$buyer', count: { $sum: 1 } } }
+      ]);
+      counts.forEach((entry) => { orderCounts[entry._id] = entry.count; });
+    } catch (aggregateError) {
+      console.error('[Users] Buyer order counts failed:', aggregateError.message);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        buyers: buyers.map((buyer) => ({
+          username: buyer.username,
+          profilePic: buyer.profilePic || null,
+          isOnline: Boolean(buyer.isOnline),
+          lastActive: buyer.lastActive || null,
+          memberSince: buyer.createdAt || null,
+          orderCount: orderCounts[buyer.username] || 0
+        })),
+        page,
+        totalPages: Math.ceil(total / limit),
+        total
+      }
+    });
+  } catch (error) {
+    console.error('[Users] Buyer directory error:', error);
+    return res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.SERVER_ERROR, message: 'Could not load buyers' }
+    });
+  }
+});
+
+/** GET /api/users/buyers/:username -- one buyer, same thin shape. */
+router.get('/buyers/:username', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['seller', 'admin', 'moderator'].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: ERROR_CODES.FORBIDDEN, message: 'Sellers only' }
+      });
+    }
+
+    const buyer = await User.findOne({
+      username: String(req.params.username).toLowerCase(),
+      role: 'buyer'
+    })
+      .select('username profilePic bio isOnline lastActive createdAt isDiscoverable isBanned')
+      .lean();
+
+    if (!buyer || buyer.isBanned) {
+      return res.status(404).json({
+        success: false,
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'Buyer not found' }
+      });
+    }
+
+    /* Opting out hides you from the LIST, not from a seller you are
+       already dealing with -- so a direct lookup still resolves.
+       Hiding it here too would break order pages and conversations. */
+    let orderCount = 0;
+    try {
+      const Order = require('../models/Order');
+      orderCount = await Order.countDocuments({ buyer: buyer.username });
+    } catch (countError) {
+      console.error('[Users] Buyer order count failed:', countError.message);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        username: buyer.username,
+        profilePic: buyer.profilePic || null,
+        bio: buyer.bio || '',
+        isOnline: Boolean(buyer.isOnline),
+        lastActive: buyer.lastActive || null,
+        memberSince: buyer.createdAt || null,
+        orderCount
+      }
+    });
+  } catch (error) {
+    console.error('[Users] Buyer profile error:', error);
+    return res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.SERVER_ERROR, message: 'Could not load buyer' }
+    });
+  }
+});
+
 module.exports = router;
+
+
 
 
