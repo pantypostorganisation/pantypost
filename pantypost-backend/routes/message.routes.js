@@ -292,6 +292,40 @@ router.post('/send', authMiddleware, async (req, res) => {
       });
     }
     
+    /* Muted senders.
+       Checked before anything is written, and the reason is returned
+       so the person knows what happened and when it lifts -- a silent
+       failure would read as the site being broken and generate a
+       support message instead of a behaviour change. */
+    try {
+      const senderUser = await User.findOne({ username: sender })
+        .select('messagingRestrictedUntil messagingRestrictionReason')
+        .lean();
+
+      const until = senderUser?.messagingRestrictedUntil
+        ? new Date(senderUser.messagingRestrictedUntil)
+        : null;
+
+      if (until && until.getTime() > Date.now()) {
+        const permanent = until.getFullYear() > 2100;
+        return res.status(403).json({
+          success: false,
+          error: permanent
+            ? 'Your messaging has been restricted. Contact support if you think this is a mistake.'
+            : `Your messaging is restricted until ${until.toLocaleString()}.`,
+          meta: {
+            messagingRestricted: true,
+            until: until.toISOString(),
+            reason: senderUser.messagingRestrictionReason || ''
+          }
+        });
+      }
+    } catch (restrictionError) {
+      /* Never block a message because the check itself failed -- a
+         database hiccup should not silence the platform. */
+      console.error('[Messages] Restriction check failed:', restrictionError.message);
+    }
+
     // Generate threadId
     const threadId = Message.getThreadId(sender, receiver);
     
@@ -841,4 +875,6 @@ router.get('/reports/unread-count', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
 

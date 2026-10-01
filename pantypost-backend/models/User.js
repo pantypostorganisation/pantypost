@@ -76,6 +76,26 @@ const userSchema = new mongoose.Schema({
     default: true
   },
 
+  /* Messaging restriction.
+   *
+   * A date rather than a boolean, because the useful remedy for
+   * someone posting their Telegram is almost never permanent. A
+   * 24-hour mute plus a reason stops nearly everyone; a permanent ban
+   * just loses a buyer who would have complied.
+   *
+   * Null means unrestricted. A date in the past means the restriction
+   * has lapsed, which needs no cleanup job -- it simply stops
+   * applying. Far-future dates stand in for permanent. */
+  messagingRestrictedUntil: {
+    type: Date,
+    default: null
+  },
+  messagingRestrictionReason: {
+    type: String,
+    default: '',
+    maxlength: 300
+  },
+
   // =====================================================================
   // SHIPPING REACH
   //
@@ -662,6 +682,8 @@ userSchema.methods.shipsTo = function (buyerCountry) {
 };
 
 module.exports = User;
+
+
 
 
 

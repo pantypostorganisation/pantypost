@@ -1304,7 +1304,7 @@ router.get('/buyers/:username', authMiddleware, async (req, res) => {
       username: String(req.params.username).toLowerCase(),
       role: 'buyer'
     })
-      .select('username profilePic bio isOnline lastActive createdAt isDiscoverable isBanned')
+      .select('username profilePic bio isOnline lastActive createdAt isDiscoverable isBanned messagingRestrictedUntil messagingRestrictionReason')
       .lean();
 
     if (!buyer || buyer.isBanned) {
@@ -1334,7 +1334,17 @@ router.get('/buyers/:username', authMiddleware, async (req, res) => {
         isOnline: Boolean(buyer.isOnline),
         lastActive: buyer.lastActive || null,
         memberSince: buyer.createdAt || null,
-        orderCount
+        orderCount,
+
+        /* Only moderators see the restriction state. A seller has no
+           use for it, and showing it leaks a moderation decision to
+           someone who might repeat it to the buyer. */
+        ...(['admin', 'moderator'].includes(String(req.user.role || '').toLowerCase())
+          ? {
+              messagingRestrictedUntil: buyer.messagingRestrictedUntil || null,
+              messagingRestrictionReason: buyer.messagingRestrictionReason || ''
+            }
+          : {})
       }
     });
   } catch (error) {
@@ -1346,7 +1356,99 @@ router.get('/buyers/:username', authMiddleware, async (req, res) => {
   }
 });
 
+
+/**
+ * POST /api/users/buyers/:username/messaging-restriction
+ *
+ * Mutes or unmutes a user's ability to send messages.
+ *
+ * Timed by default. Someone who posts their Telegram once and gets a
+ * day's mute with a reason almost never does it again; a permanent ban
+ * loses a buyer who would have complied. Permanent exists for the ones
+ * who keep going.
+ */
+router.post('/buyers/:username/messaging-restriction', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['admin', 'moderator'].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: ERROR_CODES.FORBIDDEN, message: 'Moderator access required' }
+      });
+    }
+
+    const { hours, reason } = req.body || {};
+    const user = await User.findOne({ username: String(req.params.username).toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
+      });
+    }
+
+    /* hours === 0 lifts it. A positive number sets a deadline;
+       'permanent' uses a date far enough out that it never lapses,
+       which keeps one code path instead of two. */
+    if (hours === 0 || hours === null) {
+      user.messagingRestrictedUntil = null;
+      user.messagingRestrictionReason = '';
+    } else if (hours === 'permanent') {
+      user.messagingRestrictedUntil = new Date('2999-12-31');
+      user.messagingRestrictionReason = String(reason || '').slice(0, 300);
+    } else {
+      const span = Number(hours);
+      if (!Number.isFinite(span) || span <= 0 || span > 8760) {
+        return res.status(400).json({
+          success: false,
+          error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid duration' }
+        });
+      }
+      user.messagingRestrictedUntil = new Date(Date.now() + span * 60 * 60 * 1000);
+      user.messagingRestrictionReason = String(reason || '').slice(0, 300);
+    }
+
+    await user.save();
+
+    console.log(
+      `[Moderation] ${req.user.username} ${user.messagingRestrictedUntil ? 'restricted' : 'unrestricted'} messaging for ${user.username}`
+    );
+
+    /* Tell them, and say why. A mute nobody understands produces a
+       support ticket; a mute with a reason produces a behaviour
+       change. */
+    try {
+      if (global.webSocketService && user.messagingRestrictedUntil) {
+        global.webSocketService.emitNotification(user.username, {
+          type: 'messaging_restricted',
+          title: 'Messaging restricted',
+          message: user.messagingRestrictionReason
+            || 'Your ability to send messages has been temporarily restricted.'
+        });
+      }
+    } catch (notifyError) {
+      console.error('[Moderation] Restriction notice failed:', notifyError.message);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        username: user.username,
+        messagingRestrictedUntil: user.messagingRestrictedUntil,
+        messagingRestrictionReason: user.messagingRestrictionReason
+      }
+    });
+  } catch (error) {
+    console.error('[Users] Messaging restriction error:', error);
+    return res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.SERVER_ERROR, message: 'Could not update the restriction' }
+    });
+  }
+});
+
 module.exports = router;
+
 
 
 
