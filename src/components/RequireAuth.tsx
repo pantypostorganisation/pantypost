@@ -13,12 +13,20 @@ const RoleSchema = z.enum(VALID_ROLES);
 
 interface RequireAuthProps {
   role: ValidRole;
+  /* Pages open to more than one role.
+     Kept separate from `role` rather than widening it, because the
+     strict single-role match below is deliberate -- an admin should
+     not wander into buyer or seller pages by default. This is for the
+     handful of pages that genuinely serve several roles, like the
+     buyer directory, which sellers use and moderators need. */
+  roles?: ValidRole[];
   children: React.ReactNode;
   allowGuest?: boolean; // New prop to allow guest access
 }
 
 export default function RequireAuth({
   role,
+  roles,
   children,
   allowGuest = false,
 }: RequireAuthProps) {
@@ -54,7 +62,9 @@ export default function RequireAuth({
 
     // NEW: strict role matching — no admin override for buyer/seller routes
     let hasAccess = false;
-    if (parsed.data === 'admin') {
+    if (roles && roles.length > 0) {
+      hasAccess = Boolean(userRole && roles.includes(userRole));
+    } else if (parsed.data === 'admin') {
       /* Moderators reach admin-guarded pages, but only the approval
          queue: every other admin surface (wallets, bans, withdrawals,
          analytics) enforces its own admin-only check on the server, so
@@ -78,7 +88,7 @@ export default function RequireAuth({
     }
 
     setHasChecked(true);
-  }, [isAuthReady, user, role, router, hasChecked, allowGuest, pathname]);
+  }, [isAuthReady, user, role, roles, router, hasChecked, allowGuest, pathname]);
 
   if (!isAuthReady || !hasChecked) {
     return (
@@ -96,5 +106,6 @@ export default function RequireAuth({
 
   return <>{children}</>;
 }
+
 
 

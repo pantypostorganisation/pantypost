@@ -166,8 +166,13 @@ function BuyerContent() {
 
 export default function BuyerProfilePage() {
   return (
-    <RequireAuth role="seller">
+    // Moderators and admins too. Opening a buyer from the reports queue
+    // bounced to the homepage before this, which is exactly when the
+    // page is most needed.
+    <RequireAuth role="seller" roles={['seller', 'admin', 'moderator']}>
       <BuyerContent />
     </RequireAuth>
   );
 }
+
+
