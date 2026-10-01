@@ -7,7 +7,11 @@ import { getRateLimiter, getRateLimitMessage, formatWaitTime } from '@/utils/sec
 
 interface SecureFormProps {
   children: React.ReactNode;
-  onSubmit: (e: FormEvent) => Promise<void> | void;
+  /* Return false when the submission did not actually go through --
+     failed validation, a rejected file -- and the rate-limit attempt
+     is handed back. Returning nothing keeps the old behaviour, so
+     existing forms need no change. */
+  onSubmit: (e: FormEvent) => Promise<void | boolean> | void | boolean;
   className?: string;
   rateLimitKey?: string;
   rateLimitConfig?: { maxAttempts: number; windowMs: number };
@@ -83,14 +87,24 @@ export const SecureForm: React.FC<SecureFormProps> = ({
     setIsSubmitting(true);
 
     try {
-      await onSubmit(e);
+      const outcome = await onSubmit(e);
+
+      /* A submission that failed never reached the server, so it
+         should not have cost an attempt. Without this a seller whose
+         listing is rejected burns the budget trying to fix it and gets
+         locked out for her trouble -- which is exactly what happened
+         to two of them. */
+      if (outcome === false && rateLimitKey) {
+        getRateLimiter().refundAttempt(rateLimitKey);
+      }
     } catch (error) {
       console.error('Form submission error:', error);
 
-      // If it's a rate limit error, reset the attempt
-      if (rateLimitKey && error instanceof Error && error.message.includes('Rate limit')) {
-        const limiter = getRateLimiter();
-        limiter.reset(rateLimitKey);
+      /* Any throw means it did not go through either. This used to
+         refund only rate-limit errors, which is the one case where the
+         attempt SHOULD stand. */
+      if (rateLimitKey) {
+        getRateLimiter().refundAttempt(rateLimitKey);
       }
 
       throw error;

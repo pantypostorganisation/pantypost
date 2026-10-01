@@ -123,6 +123,22 @@ async function populateSellerProfile(listing, ratingsMap) {
         reviewCount: sellerRating?.reviewCount
       };
       listing.isSellerVerified = seller.isVerified || false;
+
+      /* Where this seller posts to.
+       *
+       * Sent with every listing so the buyer learns it on the listing
+       * page rather than at checkout. Out-of-range buyers are NOT
+       * blocked: a seller in Poland will happily post to Texas if
+       * someone covers the postage, and refusing the sale outright
+       * loses it for both of them. The page turns Buy into an enquiry
+       * instead, and the seller prices it properly -- Poland to
+       * Germany and Poland to Texas are not the same number. */
+      listing.sellerShipping = {
+        scope: seller.shippingScope || 'worldwide',
+        countries: seller.shipsToCountries || [],
+        // Their own country, for "ships within Australia only".
+        home: seller.country || ''
+      };
       // Order has no top-level `status` field â€” it has shippingStatus
       // and paymentStatus â€” so the previous filter on `status` matched
       // nothing and every browse card showed 0 sales. Orders are created
@@ -166,6 +182,7 @@ function filterPremiumContent(listing, hasAccess) {
     sellerProfile: listing.sellerProfile,
     isSellerVerified: listing.isSellerVerified,
     sellerSalesCount: listing.sellerSalesCount,
+    sellerShipping: listing.sellerShipping,
     
     // Obscure sensitive data
     description: 'Premium content - Subscribe to view full details',
@@ -1701,5 +1718,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 

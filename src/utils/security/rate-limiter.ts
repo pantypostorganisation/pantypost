@@ -107,7 +107,7 @@ export class ActionRateLimiter {
 
     // Within window
     if (entry.attempts >= config.maxAttempts) {
-      /* Default block: five minutes, not an hour.
+      /* Default block: thirty seconds.
        *
        * This used to fall back to the whole window, so any caller that
        * set windowMs to an hour and forgot blockDuration locked the
@@ -116,11 +116,14 @@ export class ActionRateLimiter {
        * failure counted, and the reward for trying to fix her own
        * listing was "wait 3600 seconds".
        *
-       * A limiter exists to stop automated abuse. Five minutes does
-       * that; an hour mostly punishes people whose first attempt went
-       * wrong. Callers that genuinely need longer still set
-       * blockDuration explicitly. */
-      const blockDuration = config.blockDuration || 5 * 60 * 1000;
+       * A limiter exists to stop a script hammering the API. Thirty
+       * seconds does that -- no automated run survives a pause every
+       * handful of requests -- while a person who hits it barely
+       * notices. Longer blocks were costing real sellers real
+       * listings, which is a far more expensive failure than a slow
+       * bot. Callers that genuinely need longer set blockDuration
+       * explicitly. */
+      const blockDuration = config.blockDuration || 30 * 1000;
       entry.blockedUntil = now + blockDuration;
       this.saveToStorage();
       
@@ -146,6 +149,35 @@ export class ActionRateLimiter {
   /**
    * Reset rate limit for specific action
    */
+  /**
+   * Gives back one attempt.
+   *
+   * The counter increments when a submission is ATTEMPTED, which is
+   * right for stopping a script and wrong for everything else: a
+   * seller whose listing is rejected tries again, reasonably, and the
+   * limiter treats her like an attacker. Two sellers hit this and one
+   * gave up.
+   *
+   * So a submission that never reached the server -- failed
+   * validation, a rejected upload -- hands its attempt back. Only
+   * genuine traffic counts toward the limit, which is what the limit
+   * was supposed to measure.
+   */
+  refundAttempt(action: string, identifier?: string): void {
+    const key = this.getKey(action, identifier);
+    const entry = this.limits.get(key);
+    if (!entry) return;
+
+    entry.attempts = Math.max(0, entry.attempts - 1);
+
+    /* Lift any active block as well. If the attempt that triggered it
+       never counted, neither should the block it caused -- otherwise a
+       seller refunded back under the limit is still locked out. */
+    entry.blockedUntil = undefined;
+
+    this.saveToStorage();
+  }
+
   reset(action: string, identifier?: string): void {
     const key = this.getKey(action, identifier);
     this.limits.delete(key);
@@ -270,9 +302,9 @@ export const RATE_LIMITS = {
      not what protects the money; the review is. Ten attempts and five
      minutes. */
   WITHDRAWAL: {
-    maxAttempts: 10,
+    maxAttempts: 30,
     windowMs: 15 * 60 * 1000, // 15 minutes
-    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
+    blockDuration: 30 * 1000, // Block for 30 seconds
   },
   /* A crypto deposit "attempt" is generating an address, not spending
      money -- a buyer comparing networks or coming back later racks them
@@ -284,9 +316,9 @@ export const RATE_LIMITS = {
      enough to stop a script and short enough that a real buyer waits
      rather than leaves. */
   DEPOSIT: {
-    maxAttempts: 10,
+    maxAttempts: 30,
     windowMs: 60 * 60 * 1000, // 1 hour
-    blockDuration: 5 * 60 * 1000, // Block for 5 minutes
+    blockDuration: 30 * 1000, // Block for 30 seconds
   },
   TIP: {
     maxAttempts: 20,

@@ -26,6 +26,37 @@ interface PurchaseSectionProps {
   onSubscribeClick: () => void;
 }
 
+/* Can this seller post to where the buyer is?
+ *
+ * Unknown buyer country returns true. A buyer who has not entered a
+ * delivery address yet has no country to compare, and guessing wrong
+ * would block a sale that was fine -- better to let them through and
+ * have the seller decline than to refuse someone standing in range.
+ *
+ * Comparison is case-insensitive and trimmed, because these strings
+ * arrive from three places (seller profile, buyer address, a dropdown)
+ * and they do not agree on capitalisation. */
+function sellerShipsTo(
+  shipping: { scope?: string; countries?: string[]; home?: string } | undefined,
+  buyerCountry: string | undefined
+): boolean {
+  if (!shipping || !buyerCountry) return true;
+
+  const target = String(buyerCountry).trim().toLowerCase();
+  if (!target) return true;
+
+  if (shipping.scope === 'worldwide' || !shipping.scope) return true;
+
+  if (shipping.scope === 'domestic') {
+    const home = String(shipping.home || '').trim().toLowerCase();
+    return home ? home === target : true;
+  }
+
+  return (shipping.countries || []).some(
+    (entry) => String(entry).trim().toLowerCase() === target
+  );
+}
+
 /* Shared notice block. Previously four near-identical inline blocks
    with different colour classes; this keeps the states visually
    consistent and makes adding another trivial. */
@@ -77,6 +108,17 @@ export default function PurchaseSection({
   toggleFavorite,
   onSubscribeClick,
 }: PurchaseSectionProps) {
+
+  /* Where the buyer is, from the address they have already given us.
+     Nothing is asked for here -- if we do not know, the sale proceeds
+     as normal rather than interrupting them for a field they came to
+     avoid. */
+  const buyerCountry: string =
+    user?.deliveryAddress?.country || user?.country || '';
+
+  const sellerShipping = (listing as any)?.sellerShipping;
+  const shipsHere = sellerShipsTo(sellerShipping, buyerCountry);
+
   const router = useRouter();
   const { listings } = useListings();
   const { getBuyerBalance, purchaseListing, reloadData, orderHistory } = useWallet();
@@ -342,6 +384,24 @@ export default function PurchaseSection({
         </Notice>
       )}
 
+      {/* Where this seller posts to.
+          Shown before the button, not after it, so a buyer learns it
+          while deciding rather than when they try to pay. Only when it
+          is a limit worth knowing -- "ships worldwide" on every
+          listing is noise. */}
+      {sellerShipping && sellerShipping.scope && sellerShipping.scope !== 'worldwide' && (
+        <p className="mb-3 text-xs leading-relaxed text-ink-muted">
+          {sellerShipping.scope === 'domestic'
+            ? `Usually ships within ${sellerShipping.home || 'their own country'} only.`
+            : `Usually ships to ${(sellerShipping.countries || []).slice(0, 4).join(', ')}${
+                (sellerShipping.countries || []).length > 4
+                  ? ` and ${(sellerShipping.countries || []).length - 4} more`
+                  : ''
+              }.`}
+          {!shipsHere && ' Ask them about posting to you.'}
+        </p>
+      )}
+
       {/* Action */}
       {!user ? (
         <button
@@ -372,6 +432,30 @@ export default function PurchaseSection({
         >
           <Crown className="h-4 w-4" />
           Subscribe to unlock
+        </button>
+      ) : !shipsHere ? (
+        /* Not a blocked sale, an enquiry.
+         *
+         * A seller in Poland will post to Texas if someone covers the
+         * postage -- refusing outright loses the sale for both of
+         * them. This routes the buyer to the seller instead, where a
+         * custom request can be priced for that specific trip. Poland
+         * to Germany and Poland to Texas are not the same number, so a
+         * blanket surcharge would be wrong anyway. */
+        <button
+          onClick={() =>
+            router.push(
+              `/buyers/messages?thread=${encodeURIComponent(listing.seller)}` +
+                `&prefill=${encodeURIComponent(
+                  `Hi! I'd like to buy "${listing.title}" but I'm in ${buyerCountry}. ` +
+                    `Would you be willing to post here if I cover the extra postage?`
+                )}`
+            )
+          }
+          className={`${buttonBase} border border-primary bg-primary-soft text-primary hover:bg-primary/10`}
+        >
+          <ShoppingBag className="h-4 w-4" />
+          Ask about shipping to {buyerCountry}
         </button>
       ) : purchaseCompleted || !isListingStillActive ? (
         <button
