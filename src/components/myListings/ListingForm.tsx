@@ -351,10 +351,17 @@ export default function ListingForm({
   }, [validation, formState.isAuction]);
 
   // Handle secure form submission
-  const handleSecureSave = useCallback(async (e: React.FormEvent) => {
+  /* Returns false when the submission did not go through.
+   *
+   * SecureForm hands the rate-limit attempt back on false. Every early
+   * return below is a listing that never reached the server, and
+   * counting those is what locked sellers out for trying to fix their
+   * own mistakes -- one burned her whole budget on a description that
+   * was two characters too short. */
+  const handleSecureSave = useCallback(async (e: React.FormEvent): Promise<boolean> => {
     e.preventDefault();
     
-    if (isSubmitting) return;
+    if (isSubmitting) return false;
     
     setIsSubmitting(true);
     setErrors({});
@@ -370,7 +377,7 @@ export default function ListingForm({
         if (!/^[0-9]+$/.test(formState.dropUnits) || units < 2 || units > 2000) {
           setErrors({ submit: 'Drop size must be a whole number between 2 and 2000 units.' });
           setTouched(prev => ({ ...prev, dropUnits: true }));
-          return;
+          return false;
         }
 
         /* The hook and the server both reject a bad open time, but
@@ -383,13 +390,13 @@ export default function ListingForm({
           if (Number.isNaN(when.getTime()) || when.getTime() <= Date.now() || when.getTime() > maxAhead) {
             setErrors({ submit: 'Drop open time must be in the future and within 60 days.' });
             setTouched(prev => ({ ...prev, dropScheduledFor: true }));
-            return;
+            return false;
           }
         }
 
         if (isEditing) {
           setErrors({ submit: 'Drops cannot be edited after creation. Cancel it and create a new one.' });
-          return;
+          return false;
         }
       }
 
@@ -401,15 +408,17 @@ export default function ListingForm({
           {}
         );
         setTouched(prev => ({ ...prev, ...touchedFields }));
-        return;
+        return false;
       }
 
       // If all validations pass, submit the form
       await onSave(consentChoice === 'none' ? undefined : consentChoice);
+      return true;
       
     } catch (error) {
       console.error('Form submission error:', error);
       setErrors({ submit: 'An error occurred while saving. Please try again.' });
+      return false;
     } finally {
       setIsSubmitting(false);
     }
@@ -1271,6 +1280,7 @@ export default function ListingForm({
     </SecureForm>
   );
 }
+
 
 
 
