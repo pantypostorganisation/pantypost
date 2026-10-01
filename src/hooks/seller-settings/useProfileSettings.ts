@@ -543,11 +543,22 @@ export function useProfileSettings() {
 
   const handleSave = async () => {
     const sanitizedCountry = profileData.country.trim();
-    if (!sanitizedCountry) {
-      setLocationError('Please select your country.');
-      return false;
-    }
-    setLocationError(null);
+
+    /* A missing country used to abort the whole save.
+     *
+     * So a seller editing her bio -- who had never set a country,
+     * because nothing had required one -- pressed Save and nothing
+     * happened. The error landed in the Location card further down the
+     * page, out of sight, and the bio reverted on reload. She told us
+     * it "doesn't save and goes to the old bio", which is exactly what
+     * it looked like from her side.
+     *
+     * Country matters for shipping, not for a bio. It is omitted from
+     * the payload when blank and flagged where it belongs, rather than
+     * holding every other field hostage to a field they did not touch. */
+    setLocationError(
+      sanitizedCountry ? null : 'Add your country so buyers know where you post from.'
+    );
 
     // =====================================================
     // WHAT SAVE DOES *NOT* SEND, AND WHY
@@ -568,7 +579,7 @@ export function useProfileSettings() {
     const payload: {
       bio: string;
       subscriptionPrice: string;
-      country: string;
+      country?: string;
       isLocationPublic: boolean;
       shippingScope: ShippingScope;
       shipsToCountries: string[];
@@ -576,11 +587,22 @@ export function useProfileSettings() {
     } = {
       bio: profileData.bio,
       subscriptionPrice: profileData.subscriptionPrice,
-      country: sanitizedCountry,
       isLocationPublic: profileData.isLocationPublic ?? true,
       shippingScope,
       shipsToCountries,
     };
+
+    // Omitted rather than sent empty, so a blank does not wipe a
+    // country that was set previously.
+    if (sanitizedCountry) {
+      payload.country = sanitizedCountry;
+    }
+
+    /* "Ships to my country only" with no country set would block every
+       buyer, so it falls back to worldwide until one is chosen. */
+    if (!sanitizedCountry && shippingScope === 'domestic') {
+      payload.shippingScope = 'worldwide';
+    }
 
     if (profileData.profilePicRemoved) {
       payload.profilePic = null;
@@ -663,6 +685,8 @@ export function useProfileSettings() {
     locationError
   };
 }
+
+
 
 
 
