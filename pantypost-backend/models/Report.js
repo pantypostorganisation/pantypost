@@ -45,8 +45,20 @@ const reportSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    enum: ['verified', 'spam', 'abuse', 'fake', 'other'],
+    /* 'off_platform' is its own category rather than being filed under
+       spam. It is a different problem with a different remedy -- spam
+       is removed, this is a conversation with a user about where
+       trades happen -- and lumping them together makes both harder to
+       work through. */
+    enum: ['verified', 'spam', 'abuse', 'fake', 'off_platform', 'other'],
     default: 'other'
+  },
+  /* Free-form detail from an automatic flag: what was matched and in
+     which thread. Shapeless on purpose -- a detector that gains a new
+     signal should not need a migration. */
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: null
   },
   processedBy: {
     type: String,
@@ -198,3 +210,4 @@ reportSchema.statics.getUserReportHistory = async function(username) {
 const Report = mongoose.model('Report', reportSchema);
 
 module.exports = Report;
+

@@ -309,6 +309,73 @@ router.post('/send', authMiddleware, async (req, res) => {
     });
     
     await message.save();
+
+    /* Off-platform solicitation.
+     *
+     * Raised as a report rather than blocked. A seller saying "I don't
+     * use Telegram, let's keep it here" is doing exactly the right
+     * thing and a blocker would stop her; meanwhile anyone determined
+     * gets through with tg or a line break. So the message sends, and
+     * a human sees it in context with the evidence attached.
+     *
+     * Never throws. A moderation flag failing must not stop a message
+     * that has already been written and saved. */
+    if (content) {
+      try {
+        const { detectOffPlatform } = require('../utils/offPlatformDetection');
+        const detection = detectOffPlatform(content);
+
+        if (detection.flagged) {
+          const Report = require('../models/Report');
+
+          /* One open report per sender, topped up rather than
+             duplicated -- a buyer who posts their number in five
+             threads is one problem, not five, and five near-identical
+             reports is how a queue stops being read. */
+          const existing = await Report.findOne({
+            reportedUser: sender,
+            reportType: 'spam',
+            status: 'pending',
+            'metadata.autoFlag': 'off_platform'
+          });
+
+          if (existing) {
+            existing.severity = detection.severity === 'high' ? 'high' : existing.severity;
+            existing.description =
+              `${existing.description}\n\n[${new Date().toISOString()}] to ${receiver}: ${String(content).slice(0, 300)}`
+                .slice(0, 4000);
+            await existing.save();
+          } else {
+            await Report.create({
+              reportedUser: sender,
+              reportedBy: 'system',
+              reportType: 'spam',
+              severity: detection.severity,
+              category: 'off_platform',
+              description:
+                `Automatic flag: possible attempt to move off platform (${detection.reasons.join(', ')}).\n\n` +
+                `[${new Date().toISOString()}] to ${receiver}: ${String(content).slice(0, 300)}`,
+              status: 'pending',
+              metadata: {
+                autoFlag: 'off_platform',
+                reasons: detection.reasons,
+                threadId
+              }
+            });
+          }
+
+          console.log(
+            `[Moderation] Off-platform flag: ${sender} -> ${receiver} (${detection.reasons.join(', ')}, ${detection.severity})`
+          );
+
+          if (global.webSocketService) {
+            global.webSocketService.broadcast('report:created', { at: new Date().toISOString() });
+          }
+        }
+      } catch (flagError) {
+        console.error('[Moderation] Off-platform check failed:', flagError.message);
+      }
+    }
     
     // Update sender's last active time
     await User.findOneAndUpdate(
@@ -774,3 +841,4 @@ router.get('/reports/unread-count', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
