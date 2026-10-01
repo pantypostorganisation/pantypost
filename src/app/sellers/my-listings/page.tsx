@@ -1,7 +1,7 @@
 // src/app/sellers/my-listings/page.tsx
 'use client';
 
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Gavel, Lock, PlusCircle, ShieldCheck } from 'lucide-react';
 
@@ -9,6 +9,8 @@ import BanCheck from '@/components/BanCheck';
 import RequireAuth from '@/components/RequireAuth';
 import ListingCard from '@/components/myListings/ListingCard';
 import ListingForm from '@/components/myListings/ListingForm';
+import DigitalContentForm from '@/components/myListings/DigitalContentForm';
+import { apiCall, API_BASE_URL, buildApiUrl } from '@/services/api.config';
 import { useMyListings } from '@/hooks/useMyListings';
 
 /* =====================================================================
@@ -87,6 +89,93 @@ function MyListingsContent() {
   const hasListings = totalListings > 0;
   const remainingSlots = Math.max((maxListings ?? 0) - totalListings, 0);
   const formOpen = showForm || editingState.isEditing;
+
+  /* Physical vs digital.
+     Defaults to physical because that is what the platform is for and
+     what most sellers came to do -- digital is the addition, not the
+     headline. Editing an existing listing forces physical, since a
+     digital item is a different shape entirely and cannot be edited
+     through this form. */
+  const [createTab, setCreateTab] = useState<'physical' | 'digital'>('physical');
+
+  const [digitalItems, setDigitalItems] = useState<any[]>([]);
+  const [digitalLoading, setDigitalLoading] = useState(false);
+
+  const loadDigital = useCallback(async () => {
+    setDigitalLoading(true);
+    try {
+      const response = await apiCall<any>('/digital-content/mine/all');
+      if (response.success) setDigitalItems(response.data || []);
+    } catch {
+      // A failed load leaves the previous list rather than an error
+      // page; the physical listings below are the point of this page.
+    } finally {
+      setDigitalLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadDigital();
+  }, [loadDigital]);
+
+  /* Uploaded as multipart rather than JSON, because the file has to
+     travel with the fields. apiCall assumes JSON, so this goes direct
+     and reads the token the same way apiCall does. */
+  const submitDigital = useCallback(
+    async (data: {
+      file: File;
+      title: string;
+      description: string;
+      price: number;
+      blurLevel: string;
+    }): Promise<boolean> => {
+      try {
+        const body = new FormData();
+        body.append('image', data.file);
+        body.append('title', data.title);
+        body.append('description', data.description);
+        body.append('price', String(data.price));
+        body.append('blurLevel', data.blurLevel);
+
+        let token = '';
+        try {
+          const stored = localStorage.getItem('auth_tokens');
+          if (stored) token = JSON.parse(stored)?.token || '';
+        } catch {
+          // No token means the request 401s and the form says so.
+        }
+
+        const response = await fetch(buildApiUrl('/digital-content'), {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          body,
+        });
+
+        const result = await response.json();
+        if (!result.success) return false;
+
+        await loadDigital();
+        setCreateTab('physical');
+        resetForm();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [loadDigital, resetForm]
+  );
+
+  const deleteDigital = useCallback(
+    async (id: string) => {
+      try {
+        await apiCall(`/digital-content/${id}`, { method: 'DELETE' });
+        await loadDigital();
+      } catch {
+        // Nothing removed; the item stays on screen, which is honest.
+      }
+    },
+    [loadDigital]
+  );
 
   return (
     <main className="min-h-screen bg-surface text-white">
@@ -172,6 +261,39 @@ function MyListingsContent() {
         {/* Create / edit form */}
         {formOpen && (
           <div className="mb-8 rounded-lg border border-line bg-surface-raised p-5">
+            {/* Only when creating. Editing is always an existing
+                physical listing, and offering a Digital tab there
+                would suggest you could convert one into the other. */}
+            {!editingState.isEditing && (
+              <div className="mb-5 flex gap-1 rounded-md border border-line p-1">
+                {([
+                  { value: 'physical' as const, label: 'Physical item' },
+                  { value: 'digital' as const, label: 'Digital content' },
+                ]).map((tab) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setCreateTab(tab.value)}
+                    aria-pressed={createTab === tab.value}
+                    className={`flex-1 rounded-sm px-3 py-2 text-sm font-medium transition-colors ${
+                      createTab === tab.value
+                        ? 'bg-primary text-black'
+                        : 'text-ink-muted hover:text-white'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {createTab === 'digital' && !editingState.isEditing ? (
+              <DigitalContentForm
+                onSubmit={submitDigital}
+                onCancel={resetForm}
+                isVerified={isVerified}
+              />
+            ) : (
             <ListingForm
               formState={formState}
               isEditing={editingState.isEditing}
@@ -190,7 +312,71 @@ function MyListingsContent() {
               saveError={error}
               fieldErrors={validationErrors}
             />
+            )}
           </div>
+        )}
+
+        {/* Digital content, its own grid.
+            Separate from the listings below rather than mixed in: the
+            two have different shapes -- no shipping, no auction, a
+            blurred preview instead of photos -- and one card trying to
+            render both would serve neither well. */}
+        {digitalItems.length > 0 && (
+          <section className="mb-8">
+            <h2 className="mb-3 text-sm font-semibold text-white">
+              Digital content
+              {digitalLoading && <span className="ml-2 text-xs text-ink-faint">updating…</span>}
+            </h2>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {digitalItems.map((item) => (
+                <div
+                  key={item.id}
+                  className="overflow-hidden rounded-lg border border-line bg-surface-raised"
+                >
+                  <div className="relative aspect-square bg-black">
+                    {item.previewUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`${API_BASE_URL.replace('/api', '')}${item.previewUrl}`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    )}
+                    {item.approvalStatus !== 'approved' && (
+                      <span
+                        className={`absolute left-2 top-2 rounded-sm px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                          item.approvalStatus === 'denied'
+                            ? 'bg-red-600 text-white'
+                            : 'bg-yellow-600 text-black'
+                        }`}
+                      >
+                        {item.approvalStatus === 'denied' ? 'Not approved' : 'In review'}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p-3.5">
+                    <p className="truncate text-sm font-medium text-white">{item.title}</p>
+                    <p className="mt-1 text-xs text-ink-muted">
+                      ${Number(item.price).toFixed(2)} · {item.purchaseCount} unlock
+                      {item.purchaseCount === 1 ? '' : 's'}
+                      {item.totalEarned > 0 && ` · $${Number(item.totalEarned).toFixed(2)} earned`}
+                    </p>
+                    {item.approvalStatus === 'denied' && item.denialReason && (
+                      <p className="mt-1.5 text-xs text-red-400">{item.denialReason}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void deleteDigital(item.id)}
+                      className="mt-2.5 text-xs text-ink-faint transition-colors hover:text-red-400"
+                    >
+                      {item.purchaseCount > 0 ? 'Hide' : 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* The listings themselves -- the reason for the page */}
@@ -248,5 +434,7 @@ export default function MyListingsPage() {
     </BanCheck>
   );
 }
+
+
 
 
