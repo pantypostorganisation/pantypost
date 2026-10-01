@@ -20,6 +20,7 @@
 
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const router = express.Router();
 
 const DigitalContent = require('../models/DigitalContent');
@@ -29,13 +30,54 @@ const Transaction = require('../models/Transaction');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const authMiddleware = require('../middleware/auth.middleware');
-const { uploadConfigs, handleUploadError } = require('../config/upload.config');
 const {
   processDigitalUpload,
   privatePathFor,
   removeDigitalUpload,
-  isAvailable
+  isAvailable,
+  PRIVATE_ROOT
 } = require('../utils/privateMedia');
+
+/* This route owns its multer instance rather than borrowing one from
+   upload.config. The shared uploadConfigs exports already-built
+   middleware, not a multer instance, so uploadConfigs.single('image')
+   did not configure anything -- it CALLED a request handler with
+   'image' as the request object, which threw at startup and took the
+   whole API down with it.
+   
+   Uploads land in private-media/tmp, outside the static mount, because
+   even the few milliseconds before processing finishes is time an
+   unblurred original would otherwise be publicly fetchable. */
+const multer = require('multer');
+const TMP_DIR = path.join(PRIVATE_ROOT, 'tmp');
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      fs.mkdir(TMP_DIR, { recursive: true }, (err) => cb(err, TMP_DIR));
+    },
+    filename: (req, file, cb) => {
+      cb(null, `${Date.now()}-${Math.round(Math.random() * 1e9)}`);
+    }
+  }),
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!String(file.mimetype || '').startsWith('image/')) {
+      return cb(new Error('Images only'));
+    }
+    cb(null, true);
+  }
+});
+
+/** Turns multer's own errors into the JSON shape the client expects. */
+function handleUploadError(err, req, res, next) {
+  if (!err) return next();
+  console.error('[DigitalContent] Upload error:', err.message);
+  return res.status(400).json({
+    success: false,
+    error: err.code === 'LIMIT_FILE_SIZE' ? 'That file is over 15MB.' : 'Could not read that file.'
+  });
+}
 
 const PLATFORM_FEE_RATE = DigitalContent.PLATFORM_FEE_RATE;
 
@@ -51,7 +93,7 @@ function isModerator(user) {
 router.post(
   '/',
   authMiddleware,
-  uploadConfigs.single ? uploadConfigs.single('image') : (req, res, next) => next(),
+  upload.single('image'),
   handleUploadError,
   async (req, res) => {
     try {
