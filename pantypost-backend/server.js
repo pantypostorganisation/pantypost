@@ -182,6 +182,25 @@ app.use('/uploads/verification', (req, res) => {
   });
 });
 
+// =====================================================
+// Paid digital content: originals are not in uploads/ at all.
+//
+// They live in private-media/, a sibling of uploads/ rather than a
+// child, so the static mount below cannot reach them however the path
+// is written. The only route to one is
+// GET /api/digital-content/:id/media, which checks for a purchase
+// first.
+//
+// This block is belt and braces: there should be no way to ask for
+// private-media through /uploads, but a future refactor that moves the
+// directory would otherwise publish every paid photo on the site in
+// one commit.
+// =====================================================
+app.use('/uploads/private-media', (req, res) => {
+  console.warn(`[Security] Blocked public request for private media: ${req.path}`);
+  return res.status(404).json({ success: false, error: 'Not found' });
+});
+
 // Serve uploaded files with proper headers
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
   // Never serve dot-files from the uploads tree
@@ -257,6 +276,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/listings', listingRoutes);
+app.use('/api/digital-content', require('./routes/digitalContent.routes'));
 app.use('/api/orders', orderRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/wallet', walletRoutes);
@@ -1597,4 +1617,6 @@ server.listen(PORT, HOST, async () => {
   console.log('  - Public WS:     /public-ws (for guest real-time)');
   console.log('\n💸 What rarri we driving today?\n');
 });
+
+
 
