@@ -21,7 +21,7 @@ import { apiCall } from '@/services/api.config';
    a rail rather than by hand. Bank and Paxum stay because that is
    where this is heading, but a seller picking one today waits on a
    manual transfer. */
-type Method = 'crypto' | 'bank_au' | 'bank_intl' | 'paxum';
+type Method = 'crypto' | 'bank_us' | 'bank_au' | 'bank_intl' | 'paxum';
 
 interface Masked {
   method: Method;
@@ -43,6 +43,7 @@ export default function PayoutDetailsCard() {
     accountName: '', bsb: '', accountNumber: '', iban: '', swift: '',
     bankName: '', bankAddress: '', country: '', walletEmail: '',
     cryptoAddress: '', cryptoNetwork: 'TRON_USDT',
+    routingNumber: '', accountType: 'checking',
   });
 
   const load = useCallback(async () => {
@@ -77,6 +78,7 @@ export default function PayoutDetailsCard() {
           accountName: '', bsb: '', accountNumber: '', iban: '', swift: '',
           bankName: '', bankAddress: '', country: '', walletEmail: '',
           cryptoAddress: '', cryptoNetwork: 'TRON_USDT',
+          routingNumber: '', accountType: 'checking',
         });
       } else {
         const message =
@@ -139,8 +141,12 @@ export default function PayoutDetailsCard() {
               className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
             >
               <option value="crypto">Crypto (USDT) &mdash; paid same day</option>
+              {/* US above AU: most of our sellers are American, and a
+                  US seller picking "International" was asked for an
+                  IBAN and a SWIFT code she does not have. */}
+              <option value="bank_us">US bank account</option>
               <option value="bank_au">Australian bank account</option>
-              <option value="bank_intl">International bank account</option>
+              <option value="bank_intl">Other international bank</option>
               <option value="paxum">Paxum</option>
             </select>
           </div>
@@ -152,6 +158,32 @@ export default function PayoutDetailsCard() {
               {field('bsb', 'BSB', '000-000')}
               {field('accountNumber', 'Account number')}
             </div>
+          )}
+
+          {method === 'bank_us' && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {field('routingNumber', 'Routing number (ABA)', '9 digits')}
+                {field('accountNumber', 'Account number')}
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-ink-muted">Account type</label>
+                <select
+                  value={form.accountType}
+                  onChange={e => setForm({ ...form, accountType: e.target.value })}
+                  className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-sm text-white focus:border-primary focus:outline-none"
+                >
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                </select>
+              </div>
+              {/* ACH routes checking and savings differently, and a
+                  mismatch bounces the payment days later rather than
+                  failing at the time. */}
+              <p className="text-xs text-ink-faint">
+                Both numbers are on a check, or in your banking app under account details.
+              </p>
+            </>
           )}
 
           {method === 'bank_intl' && (
@@ -243,5 +275,6 @@ export default function PayoutDetailsCard() {
     </div>
   );
 }
+
 
 

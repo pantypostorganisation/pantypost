@@ -512,7 +512,7 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
     }
 
     const b = req.body || {};
-    const method = ['bank_au', 'bank_intl', 'paxum'].includes(b.method) ? b.method : null;
+    const method = ['bank_au', 'bank_us', 'bank_intl', 'paxum', 'crypto'].includes(b.method) ? b.method : null;
     if (!method) {
       return res.status(400).json({ success: false, error: 'Choose a payout method' });
     }
@@ -525,6 +525,52 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
     if (method === 'bank_au' && (!b.bsb || !b.accountNumber)) {
       return res.status(400).json({ success: false, error: 'BSB and account number are required' });
     }
+    /* US accounts.
+       The routing number is shape-checked because a wrong one does
+       not fail at the time -- the payment leaves, bounces days later,
+       and by then the seller has been told it was sent. Nine digits is
+       the entire format, so this costs nothing to verify. */
+    if (method === 'bank_us') {
+      const routing = String(b.routingNumber || '').replace(/\D/g, '');
+      if (!/^\d{9}$/.test(routing)) {
+        return res.status(400).json({ success: false, error: 'A US routing number is 9 digits.' });
+      }
+      if (!b.accountNumber || String(b.accountNumber).trim().length < 4) {
+        return res.status(400).json({ success: false, error: 'Account number is required' });
+      }
+      if (!['checking', 'savings'].includes(b.accountType)) {
+        return res.status(400).json({ success: false, error: 'Choose checking or savings' });
+      }
+    }
+
+    /* Crypto needs the address AND the chain: the same string can be
+       valid on more than one network, and paying to the right address
+       on the wrong chain loses the money with no way back. */
+    if (method === 'crypto') {
+      const address = String(b.cryptoAddress || '').trim();
+      const network = String(b.cryptoNetwork || '').trim();
+
+      if (!address) {
+        return res.status(400).json({ success: false, error: 'Wallet address is required' });
+      }
+      if (!['TRON_USDT', 'SOLANA_USDT'].includes(network)) {
+        return res.status(400).json({ success: false, error: 'Choose a network' });
+      }
+
+      const looksTron = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(address);
+      const looksSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+
+      if (network === 'TRON_USDT' && !looksTron) {
+        return res.status(400).json({
+          success: false,
+          error: 'That does not look like a Tron address. Tron addresses start with T.'
+        });
+      }
+      if (network === 'SOLANA_USDT' && (!looksSolana || looksTron)) {
+        return res.status(400).json({ success: false, error: 'That does not look like a Solana address.' });
+      }
+    }
+
     if (method === 'bank_intl' && !(b.iban || b.accountNumber)) {
       return res.status(400).json({ success: false, error: 'IBAN or account number is required' });
     }
@@ -547,6 +593,10 @@ router.put('/payout-details', authMiddleware, async (req, res) => {
           bankAddress: b.bankAddress,
           country: b.country,
           walletEmail: b.walletEmail,
+          routingNumber: method === 'bank_us' ? String(b.routingNumber).replace(/\D/g, '') : '',
+          accountType: method === 'bank_us' ? String(b.accountType) : '',
+          cryptoAddress: method === 'crypto' ? String(b.cryptoAddress).trim() : '',
+          cryptoNetwork: method === 'crypto' ? String(b.cryptoNetwork).trim() : '',
           updatedBy: req.user.username
         }
       },
@@ -2807,6 +2857,7 @@ router.post('/admin/withdrawals/:id/complete', authMiddleware, async (req, res) 
 });
 
 module.exports = router;
+
 
 
 

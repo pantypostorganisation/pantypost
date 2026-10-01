@@ -24,7 +24,12 @@ const payoutDetailsSchema = new mongoose.Schema(
          rather than by hand. The bank and Paxum options remain because
          that is where this is heading, but a seller choosing one today
          waits on a manual transfer. */
-      enum: ['bank_au', 'bank_intl', 'paxum', 'crypto'],
+      /* 'bank_us' exists because a US seller has neither a BSB nor an
+         IBAN. She has a routing number, and most US consumer banks do
+         not issue a SWIFT code at all -- so the international form was
+         a dead end for the single largest group of sellers on the
+         platform. One told us before anyone noticed. */
+      enum: ['bank_au', 'bank_us', 'bank_intl', 'paxum', 'crypto'],
       required: true
     },
 
@@ -34,6 +39,17 @@ const payoutDetailsSchema = new mongoose.Schema(
     // Australian domestic
     bsb: { type: String, trim: true, maxlength: 10 },
     accountNumber: { type: String, trim: true, maxlength: 30 },
+
+    /* United States. Routing number plus account number is all an ACH
+       transfer needs; the account TYPE is required too, because ACH
+       routes checking and savings differently and a mismatch bounces
+       the payment days later. */
+    routingNumber: { type: String, trim: true, maxlength: 12 },
+    accountType: {
+      type: String,
+      enum: ['checking', 'savings', ''],
+      default: ''
+    },
 
     // International
     iban: { type: String, trim: true, maxlength: 40 },
@@ -84,10 +100,14 @@ payoutDetailsSchema.methods.toMasked = function toMasked() {
           ? this.walletEmail
           : this.method === 'bank_au'
             ? `BSB ${this.bsb || '---'} / ${tail(this.accountNumber)}`
-            : `${this.bankName || 'Bank'} ${tail(this.iban || this.accountNumber)}`,
+            : this.method === 'bank_us'
+              ? `${this.accountType || 'Account'} ${tail(this.accountNumber)} (routing ${tail(this.routingNumber)})`
+              : `${this.bankName || 'Bank'} ${tail(this.iban || this.accountNumber)}`,
     updatedAt: this.updatedAt
   };
 };
 
 module.exports = mongoose.model('PayoutDetails', payoutDetailsSchema);
+
+
 
