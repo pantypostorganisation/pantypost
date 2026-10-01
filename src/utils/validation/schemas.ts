@@ -174,7 +174,7 @@ export const profileSchemas = {
 export const listingSchemas = {
   title: z
     .string()
-    .min(5, 'Title must be at least 5 characters')
+    .min(3, 'Give your listing a title')
     .max(100, 'Title must be at most 100 characters')
     .transform(sanitizers.normalizeSpaces)
     .refine(
@@ -184,7 +184,7 @@ export const listingSchemas = {
 
   description: z
     .string()
-    .min(20, 'Description must be at least 20 characters')
+    .min(10, 'Add a short description so buyers know what they are getting')
     .max(2000, 'Description must be at most 2000 characters')
     .transform(sanitizers.normalizeSpaces)
     .refine(
@@ -229,14 +229,25 @@ export const listingSchemas = {
     .max(10, 'Maximum 10 images allowed'),
 
   createListingSchema: z.object({
+    /* Minimums loosened after two sellers hit them and gave up.
+     *
+     * 20 characters sounds short until you write a real listing:
+     * "Worn for 2 days" is 15, "Black lace, size M" is 18. Both were
+     * rejected. The form's own rules were looser than these, so a
+     * seller filled in something the UI accepted and the context then
+     * refused -- and because failed attempts count toward the rate
+     * limit, trying again locked her out entirely.
+     *
+     * A short description is a worse listing, not an invalid one.
+     * That is a nudge, not a gate. */
     title: z
       .string()
-      .min(5, 'Title must be at least 5 characters')
+      .min(3, 'Give your listing a title')
       .max(100, 'Title must be at most 100 characters')
       .transform(sanitizers.normalizeSpaces),
     description: z
       .string()
-      .min(20, 'Description must be at least 20 characters')
+      .min(10, 'Add a short description so buyers know what they are getting')
       .max(2000, 'Description must be at most 2000 characters')
       .transform(sanitizers.normalizeSpaces),
     price: z
@@ -534,5 +545,7 @@ export function validateField<T>(
     return 'Validation failed';
   }
 }
+
+
 
 

@@ -107,8 +107,20 @@ export class ActionRateLimiter {
 
     // Within window
     if (entry.attempts >= config.maxAttempts) {
-      // Use custom block duration or default to a reasonable time
-      const blockDuration = config.blockDuration || Math.min(config.windowMs, 60 * 60 * 1000); // Max 1 hour default
+      /* Default block: five minutes, not an hour.
+       *
+       * This used to fall back to the whole window, so any caller that
+       * set windowMs to an hour and forgot blockDuration locked the
+       * user out for an hour. A seller hit it on the listing form --
+       * her attempts were FAILING because of a validation bug, each
+       * failure counted, and the reward for trying to fix her own
+       * listing was "wait 3600 seconds".
+       *
+       * A limiter exists to stop automated abuse. Five minutes does
+       * that; an hour mostly punishes people whose first attempt went
+       * wrong. Callers that genuinely need longer still set
+       * blockDuration explicitly. */
+      const blockDuration = config.blockDuration || 5 * 60 * 1000;
       entry.blockedUntil = now + blockDuration;
       this.saveToStorage();
       
@@ -439,6 +451,7 @@ export function getRateLimitMessage(result: ReturnType<ActionRateLimiter['check'
 
   return 'Rate limit exceeded. Please try again later.';
 }
+
 
 
 

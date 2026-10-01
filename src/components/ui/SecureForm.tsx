@@ -3,7 +3,7 @@
 
 import React, { FormEvent, useState, useEffect } from 'react';
 import { AlertCircle, ShieldCheck, Loader2 } from 'lucide-react';
-import { getRateLimiter, getRateLimitMessage } from '@/utils/security/rate-limiter';
+import { getRateLimiter, getRateLimitMessage, formatWaitTime } from '@/utils/security/rate-limiter';
 
 interface SecureFormProps {
   children: React.ReactNode;
@@ -48,7 +48,10 @@ export const SecureForm: React.FC<SecureFormProps> = ({
   useEffect(() => {
     if (isRateLimited && rateLimitWaitTime > 0) {
       setRateLimitError(
-        `Too many attempts. Please wait ${rateLimitWaitTime} seconds before trying again.`
+        /* "Please wait 3600 seconds" is a number nobody converts in
+           their head, and it reads as a punishment rather than a
+           pause. formatWaitTime says "an hour" or "5 minutes". */
+        `Too many attempts. Please wait ${formatWaitTime(rateLimitWaitTime)} before trying again.`
       );
     } else {
       setRateLimitError(null);
@@ -236,3 +239,5 @@ class CSRFTokenManager {
     return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
   }
 }
+
+

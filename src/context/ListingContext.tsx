@@ -164,6 +164,10 @@ type ListingContextType = {
   isAuthReady: boolean;
   listings: Listing[];
   addListing: (listing: AddListingInput) => Promise<Listing | null>;
+  /* Why the last addListing returned null. addListing cannot say -- it
+     returns a Listing or nothing -- so the detail is read separately
+     by whichever form needs to show it. */
+  getLastValidationError: () => string;
   addAuctionListing: (listing: AddListingInput, auctionSettings: AuctionInput) => Promise<void>;
   removeListing: (id: string) => Promise<void>;
   updateListing: (
@@ -595,6 +599,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [listings]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- Create listing ----------
+  /* The last validation failure, so the form can show WHICH field was
+     wrong rather than a generic "could not be saved". A ref rather
+     than state: it is read at the moment of failure, and making it
+     state would re-render every consumer of this context for a message
+     only one form cares about. */
+  const lastValidationError = useRef<string>('');
+
   const addListing = async (listing: NewListingInput): Promise<Listing | null> => {
     if (!user || user.role !== 'seller') {
       toast.error('You must be logged in as a seller to create listings.');
@@ -624,10 +635,13 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     );
 
     if (!validationResult.success) {
-      toast.error(
-        'Please check your listing details:\n' +
-          Object.values(validationResult.errors || {}).join('\n')
-      );
+      /* The toast carries the specific problem, but a toast vanishes
+         and the form resets around it -- a seller told us the error
+         "didn't say what". So the detail is also left on the context
+         for the form to render in place, where it stays until fixed. */
+      const details = Object.values(validationResult.errors || {}).join('\n');
+      lastValidationError.current = details;
+      toast.error(details || 'Please check your listing details');
       return null;
     }
 
@@ -1388,6 +1402,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
         isAuthReady,
         listings,
         addListing,
+    getLastValidationError: () => lastValidationError.current,
         addAuctionListing,
         removeListing,
         updateListing,
@@ -1432,6 +1447,7 @@ export const useListings = () => {
   if (!context) throw new Error('useListings must be used within a ListingProvider');
   return context;
 };
+
 
 
 
