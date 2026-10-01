@@ -419,6 +419,21 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
   const listingsCache = useRef<{ timestamp: number; promise: Promise<any> } | null>(null);
   const LISTINGS_CACHE_TIME = 1000;
 
+  /* How many listings this context holds.
+   *
+   * It called getListings() with no arguments, which took the API's
+   * default of 20 -- site-wide, every seller combined. Everything
+   * downstream filters THAT array, so a seller's own listings page
+   * showed whichever of hers happened to fall inside the first twenty
+   * listings on the platform. With 29 live she saw a handful and
+   * reasonably concluded the rest had vanished or sold.
+   *
+   * 100 is the API's own ceiling (Math.min(limit, 100)), so this asks
+   * for everything one call will give. Past 100 live listings this
+   * needs to page the API, or better, seller-scoped views should fetch
+   * their own seller's listings rather than filtering a shared cache. */
+  const LISTINGS_FETCH_LIMIT = 100;
+
   // ---------- Initial load ----------
   const loadData = useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -471,7 +486,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
       if (listingsCache.current && now - listingsCache.current.timestamp < LISTINGS_CACHE_TIME) {
         listingsResult = await listingsCache.current.promise;
       } else {
-        const promise = listingsService.getListings();
+        const promise = listingsService.getListings({ limit: LISTINGS_FETCH_LIMIT });
         listingsCache.current = { timestamp: now, promise };
         listingsResult = await promise;
       }
@@ -553,7 +568,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
     setIsLoading(true);
     setError(null);
     try {
-      const promise = listingsService.getListings();
+      const promise = listingsService.getListings({ limit: LISTINGS_FETCH_LIMIT });
       listingsCache.current = { timestamp: now, promise };
       const listingsResult = await promise;
       if (listingsResult.success && listingsResult.data) {
@@ -1417,6 +1432,7 @@ export const useListings = () => {
   if (!context) throw new Error('useListings must be used within a ListingProvider');
   return context;
 };
+
 
 
 
