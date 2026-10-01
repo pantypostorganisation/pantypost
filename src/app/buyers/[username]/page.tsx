@@ -37,7 +37,11 @@ function BuyerContent() {
   const username = String(params?.username || '');
 
   const { user } = useAuth();
-  const canModerate = user?.role === 'admin' || user?.role === 'moderator';
+  /* Compared as a string because the shared User type's role union
+     predates the moderator role and still lists only buyer and seller.
+     Widening that type touches every consumer; this does not. */
+  const role = String(user?.role || '');
+  const canModerate = role === 'admin' || role === 'moderator';
 
   const [buyer, setBuyer] = useState<Buyer | null>(null);
   const [loading, setLoading] = useState(true);
