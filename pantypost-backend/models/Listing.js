@@ -117,7 +117,7 @@ const listingSchema = new mongoose.Schema({
     min: 0,
     max: 168 // Max 1 week
   },
-  /* Homepage position, 1 to 5, or null.
+  /* Homepage position, 1 to 8, or null.
    *
    * This used to be a hardcoded array in the frontend, which meant a
    * code change and a deploy to swap a featured listing -- and a pin
@@ -131,7 +131,7 @@ const listingSchema = new mongoose.Schema({
   featuredSlot: {
     type: Number,
     min: 1,
-    max: 5,
+    max: 8,
     default: null,
     index: { sparse: true }
   },

@@ -292,10 +292,10 @@ ListingCard.displayName = 'ListingCard';
  * silently once the listing fell outside whatever the homepage
  * fetched.
  *
- * Five slots. An empty one fills with a random listing rather than
- * leaving a hole -- a gap in the grid reads as broken, and nobody
- * notices for days. */
-const FEATURED_SLOTS = 5;
+ * Eight slots, matching the grid. An empty one fills with a random
+ * listing rather than leaving a hole -- a gap reads as broken, and
+ * nobody notices for days. */
+const FEATURED_SLOTS = 8;
 
 export default function FeaturedRandom() {
   const [listings, setListings] = useState<Listing[]>([]);

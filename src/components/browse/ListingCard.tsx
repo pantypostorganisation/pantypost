@@ -362,8 +362,10 @@ export default function ListingCard({
             <p className="px-1 pb-1.5 text-[10px] uppercase tracking-wide text-gray-500">
               Homepage slot
             </p>
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map((slot) => (
+            {/* Wraps onto two rows of four, so the picker does not run
+                off the side of a card on a phone. */}
+            <div className="grid grid-cols-4 gap-1">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((slot) => (
                 <button
                   key={slot}
                   onClick={() => void assignSlot(slot)}

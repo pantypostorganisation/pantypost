@@ -842,8 +842,8 @@ router.patch('/:id/featured', authMiddleware, async (req, res) => {
     }
 
     const position = Number(slot);
-    if (!Number.isInteger(position) || position < 1 || position > 5) {
-      return res.status(400).json({ success: false, error: 'Slot must be 1 to 5' });
+    if (!Number.isInteger(position) || position < 1 || position > 8) {
+      return res.status(400).json({ success: false, error: 'Slot must be 1 to 8' });
     }
 
     const listing = await Listing.findOne({
