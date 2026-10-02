@@ -265,6 +265,43 @@ router.patch('/me/profile', authMiddleware, async (req, res) => {
           error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Bio must be <= 500 characters' }
         });
       }
+      /* Payment details do not go in a bio.
+       *
+       * One seller wrote "DM 2 buy, only taking Zelle CashApp or
+       * PayPal" -- not a scam, just someone who did not know how the
+       * platform works. But a bio is seen by every buyer who opens her
+       * profile, so it does more harm than the same line in a message,
+       * and she is the one who would have been left with no recourse
+       * when a buyer took the goods and disputed the payment.
+       *
+       * Same detector as messages. Refused at save with the reason,
+       * rather than removed later by hand, so it never appears. */
+      if (bio.trim()) {
+        try {
+          const { detectPaymentSolicitation } = require('../utils/offPlatformDetection');
+          const payment = detectPaymentSolicitation(bio);
+
+          if (payment.block) {
+            console.log(
+              `[Moderation] Bio rejected for ${user.username}: ${payment.reasons.join(', ')}`
+            );
+            return res.status(400).json({
+              success: false,
+              error: {
+                code: ERROR_CODES.VALIDATION_ERROR,
+                message:
+                  'Payment details cannot go in your bio. Buyers pay through PantyPost, ' +
+                  'which is what protects you if an order goes wrong — off-platform you ' +
+                  'have no recourse at all.'
+              }
+            });
+          }
+        } catch (checkError) {
+          // A failing check must not stop someone editing their bio.
+          console.error('[Moderation] Bio payment check failed:', checkError.message);
+        }
+      }
+
       user.bio = bio;
     }
 
@@ -1447,7 +1484,73 @@ router.post('/buyers/:username/messaging-restriction', authMiddleware, async (re
   }
 });
 
+
+/**
+ * POST /api/users/:username/clear-bio
+ *
+ * Wipes a bio, for moderators.
+ *
+ * The save-time check above stops new ones, but bios written before it
+ * existed are still there, and some will need removing for reasons no
+ * detector covers. The previous text is logged rather than discarded:
+ * if the person asks why, "it said X" is a better answer than "I don't
+ * remember".
+ */
+router.post('/:username/clear-bio', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['admin', 'moderator'].includes(role)) {
+      return res.status(403).json({
+        success: false,
+        error: { code: ERROR_CODES.FORBIDDEN, message: 'Moderator access required' }
+      });
+    }
+
+    const user = await User.findOne({ username: String(req.params.username).toLowerCase() });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: { code: ERROR_CODES.NOT_FOUND, message: 'User not found' }
+      });
+    }
+
+    const previous = user.bio || '';
+    user.bio = '';
+    if (user.settings) user.settings.bio = '';
+    await user.save();
+
+    console.log(
+      `[Moderation] ${req.user.username} cleared bio for ${user.username}. Was: ${previous.slice(0, 300)}`
+    );
+
+    /* Tell them, with the reason. A bio that silently vanishes gets
+       rewritten the same way within the hour. */
+    try {
+      if (global.webSocketService) {
+        global.webSocketService.emitNotification(user.username, {
+          type: 'moderation',
+          title: 'Your bio was removed',
+          message:
+            String(req.body?.reason || '').trim() ||
+            'Your bio broke our content rules. Please write a new one.'
+        });
+      }
+    } catch (notifyError) {
+      console.error('[Moderation] Bio clear notice failed:', notifyError.message);
+    }
+
+    return res.json({ success: true, data: { cleared: true } });
+  } catch (error) {
+    console.error('[Users] Clear bio error:', error);
+    return res.status(500).json({
+      success: false,
+      error: { code: ERROR_CODES.SERVER_ERROR, message: 'Could not clear that bio' }
+    });
+  }
+});
+
 module.exports = router;
+
 
 
 
