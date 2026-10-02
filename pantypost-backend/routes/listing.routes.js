@@ -133,6 +133,11 @@ async function populateSellerProfile(listing, ratingsMap) {
        * loses it for both of them. The page turns Buy into an enquiry
        * instead, and the seller prices it properly -- Poland to
        * Germany and Poland to Texas are not the same number. */
+      /* Carried on every listing so a moderator scrolling browse can
+         see which are already featured, rather than finding out by
+         assigning a slot and displacing something. */
+      listing.featuredSlot = listing.featuredSlot ?? null;
+
       listing.sellerShipping = {
         scope: seller.shippingScope || 'worldwide',
         countries: seller.shipsToCountries || [],
@@ -183,9 +188,6 @@ function filterPremiumContent(listing, hasAccess) {
     isSellerVerified: listing.isSellerVerified,
     sellerSalesCount: listing.sellerSalesCount,
     sellerShipping: listing.sellerShipping,
-    /* Sent with every listing so a moderator browsing can see at a
-       glance which are already featured, rather than discovering it by
-       assigning a slot and displacing something. */
     featuredSlot: listing.featuredSlot ?? null,
     
     // Obscure sensitive data
@@ -803,10 +805,19 @@ router.get('/featured', async (req, res) => {
       listings.map((listing) => populateSellerProfile(listing, ratingsMap))
     );
 
-    /* populateSellerProfile returns the shape every other listing
-       endpoint returns, so the homepage can render these with the same
-       card component it already uses. */
-    return res.json({ success: true, data: populated });
+    /* `id` has to be set here.
+       Browse reaches listings through listingsService, which maps _id
+       to id on the way through; this endpoint is called directly, so
+       the documents arrived with only _id and every featured card
+       linked to /browse/undefined. */
+    return res.json({
+      success: true,
+      data: populated.map((listing) => ({
+        ...listing,
+        id: String(listing._id),
+        featuredSlot: listing.featuredSlot ?? null
+      }))
+    });
   } catch (error) {
     console.error('[Listings] Featured fetch error:', error);
     return res.status(500).json({ success: false, error: 'Could not load featured listings' });
