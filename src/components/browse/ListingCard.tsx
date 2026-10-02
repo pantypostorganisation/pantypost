@@ -15,6 +15,7 @@ import { useFavorites } from '@/context/FavoritesContext';
 import { useToast } from '@/context/ToastContext';
 import { resolveApiUrl } from '@/utils/url';
 import { listingsService, type DropInfo } from '@/services/listings.service';
+import { apiCall } from '@/services/api.config';
 
 interface ExtendedListingCardProps extends ListingCardProps {
   isGuest?: boolean;
@@ -35,6 +36,40 @@ export default function ListingCard({
   isGuest = false
 }: ExtendedListingCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  /* Featuring, for moderators.
+     currentSlot is held locally so the star updates the moment it is
+     tapped -- waiting for a refetch to redraw makes it feel like the
+     tap missed. */
+  const [showSlots, setShowSlots] = useState(false);
+  const [featuring, setFeaturing] = useState(false);
+  const [currentSlot, setCurrentSlot] = useState<number | null>(
+    (listing as any)?.featuredSlot ?? null
+  );
+
+  const canModerate = user?.role === 'admin' || (user as any)?.role === 'moderator';
+
+  const assignSlot = async (slot: number | null) => {
+    setFeaturing(true);
+    try {
+      const response = await apiCall<any>(
+        `/listings/${(listing as any).id || (listing as any)._id}/featured`,
+        { method: 'PATCH', body: JSON.stringify({ slot }) }
+      );
+      if (response?.success) {
+        setCurrentSlot(slot);
+        setShowSlots(false);
+        showSuccessToast(
+          slot ? `Featured in slot ${slot}` : 'Removed from the homepage',
+          slot ? 'It stays there until it sells or is replaced.' : ''
+        );
+      }
+    } catch {
+      showErrorToast('Could not update', 'Try that again.');
+    } finally {
+      setFeaturing(false);
+    }
+  };
 
   /* Preload the neighbouring images.
      Only the visible image was ever requested, so clicking to the next
@@ -290,6 +325,68 @@ export default function ListingCard({
                 </span>
               )}
             </button>
+
+            {/* Homepage slot.
+                Here rather than in an admin screen because this is
+                where you are when you notice a listing worth featuring
+                -- scrolling browse. Walking to a separate page to type
+                an id is how a feature gets left stale for a month. */}
+            <button
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowSlots((open) => !open);
+              }}
+              className={`flex h-8 items-center gap-1 rounded-md px-2.5 shadow-md transition ${
+                currentSlot
+                  ? 'bg-primary text-black'
+                  : 'bg-white/90 text-gray-700 hover:bg-primary hover:text-black'
+              }`}
+              aria-label={currentSlot ? `Featured in slot ${currentSlot}` : 'Feature on homepage'}
+            >
+              <Star className={`h-4 w-4 ${currentSlot ? 'fill-current' : ''}`} />
+              {currentSlot && <span className="text-xs font-bold">{currentSlot}</span>}
+            </button>
+          </div>
+        )}
+
+        {/* Slot picker */}
+        {canModerate && showSlots && (
+          <div
+            className="absolute right-2 top-12 z-30 rounded-lg border border-gray-700 bg-[#111] p-2 shadow-xl"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <p className="px-1 pb-1.5 text-[10px] uppercase tracking-wide text-gray-500">
+              Homepage slot
+            </p>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((slot) => (
+                <button
+                  key={slot}
+                  onClick={() => void assignSlot(slot)}
+                  disabled={featuring}
+                  className={`h-7 w-7 rounded-sm text-xs font-semibold transition disabled:opacity-50 ${
+                    currentSlot === slot
+                      ? 'bg-primary text-black'
+                      : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                >
+                  {slot}
+                </button>
+              ))}
+              {currentSlot && (
+                <button
+                  onClick={() => void assignSlot(null)}
+                  disabled={featuring}
+                  className="h-7 rounded-sm bg-white/10 px-2 text-xs font-medium text-gray-400 transition hover:bg-red-600 hover:text-white disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -437,6 +534,7 @@ export default function ListingCard({
     </article>
   );
 }
+
 
 
 

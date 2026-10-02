@@ -117,6 +117,27 @@ const listingSchema = new mongoose.Schema({
     min: 0,
     max: 168 // Max 1 week
   },
+  /* Homepage position, 1 to 5, or null.
+   *
+   * This used to be a hardcoded array in the frontend, which meant a
+   * code change and a deploy to swap a featured listing -- and a pin
+   * silently stopped working once the listing fell outside whatever
+   * the homepage happened to fetch.
+   *
+   * Sparse index: only the handful of listings actually featured are
+   * indexed, and a unique constraint would be wrong here. Moving a
+   * listing into an occupied slot should displace the old one, which
+   * the route handles explicitly, rather than failing on a write. */
+  featuredSlot: {
+    type: Number,
+    min: 1,
+    max: 5,
+    default: null,
+    index: { sparse: true }
+  },
+  featuredBy: { type: String, default: null },
+  featuredAt: { type: Date, default: null },
+
   isPremium: {
     type: Boolean,
     default: false
@@ -365,4 +386,6 @@ listingSchema.methods.placeBid = async function(bidder, amount) {
 const Listing = mongoose.model('Listing', listingSchema);
 
 module.exports = Listing;
+
+
 

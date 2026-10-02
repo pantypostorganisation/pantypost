@@ -286,26 +286,16 @@ const ListingCard = React.memo(({ listing, isBuyer }: { listing: Listing; isBuye
 });
 ListingCard.displayName = 'ListingCard';
 
-/* Listings pinned to fixed positions on the homepage.
+/* Featured slots now live on the listing itself, set by a moderator
+ * from the browse page. The array that used to be here meant a code
+ * change and a deploy to swap a feature, and a pin stopped working
+ * silently once the listing fell outside whatever the homepage
+ * fetched.
  *
- * `position` is 1-based and matches what a visitor sees, so "first"
- * here means first on the page. A pinned listing that has sold, been
- * removed or lost its images simply falls out of the eligible set and
- * the grid closes up behind it -- nothing has to be unpinned by hand
- * when an item sells.
- *
- * Hardcoded deliberately: at two or three entries a config array beats
- * a database flag and an admin screen. If this list grows past about
- * five, move it to a `featured` field on the listing model. */
-const PINNED_LISTINGS: { id: string; position: number }[] = [
-  { id: '6ab2970b0363672d9cd29022', position: 1 },
-  { id: '6ab410430363672d9cd5e867', position: 2 },
-  { id: '6abbd9b15dd2a772c39596d6', position: 3 },
-  { id: '6ab54a930363672d9cd9810a', position: 4 },
-  // Position 5 sits on the second row on mobile, so this one is
-  // effectively desktop-only.
-  { id: '6a9210c045200fefdeca5093', position: 5 },
-];
+ * Five slots. An empty one fills with a random listing rather than
+ * leaving a hole -- a gap in the grid reads as broken, and nobody
+ * notices for days. */
+const FEATURED_SLOTS = 5;
 
 export default function FeaturedRandom() {
   const [listings, setListings] = useState<Listing[]>([]);
@@ -330,24 +320,19 @@ export default function FeaturedRandom() {
          *
          * Asking for them by id means a pin holds until the listing
          * actually sells, however large the site gets. */
-        const [response, pinnedResults] = await Promise.all([
+        const [response, featuredResponse] = await Promise.all([
           listingsService.getListings({
             limit: 50,
             sortBy: 'date',
             sortOrder: 'desc',
           }),
-          Promise.all(
-            PINNED_LISTINGS.map(async (entry) => {
-              try {
-                const result = await apiCall<any>(`/listings/${entry.id}`);
-                return result?.success ? result.data : null;
-              } catch {
-                // A pin that cannot be fetched is simply not pinned.
-                return null;
-              }
-            })
-          ),
+          /* Asked for by slot, so a feature holds however large the
+             catalogue grows. A failure here is not fatal -- the grid
+             falls back to a straight shuffle. */
+          apiCall<any>('/listings/featured').catch(() => null),
         ]);
+
+        const featured: any[] = featuredResponse?.success ? featuredResponse.data || [] : [];
 
         if (response.success && response.data) {
           // Filter eligible listings client-side
@@ -373,13 +358,13 @@ export default function FeaturedRandom() {
              Pinning is applied against `eligible`, so a sold or removed
              listing is already gone and needs no special handling. */
           const idOf = (listing: any) => String(listing.id ?? listing._id ?? '');
-          const pinnedIds = new Set(PINNED_LISTINGS.map((entry) => entry.id));
+          const pinnedIds = new Set(featured.map((listing: any) => idOf(listing)));
 
-          /* Merge the separately-fetched pins in, so they are eligible
-             even when they were not in the newest fifty. The same
-             checks apply -- a pinned listing with no images or a
-             finished auction still drops out. */
-          (pinnedResults || []).forEach((listing: any) => {
+          /* Featured listings may not be in the newest fifty, so they
+             are merged in. The same eligibility rules apply: one with
+             no images or a finished auction still drops out, and its
+             slot fills with something else. */
+          featured.forEach((listing: any) => {
             if (!listing) return;
             const id = idOf(listing);
             if (!id || eligible.some((item: any) => idOf(item) === id)) return;
@@ -404,9 +389,11 @@ export default function FeaturedRandom() {
              a shuffled array instead would shift later pins by one for
              each earlier one. */
           const pinnedByPosition = new Map<number, any>();
-          PINNED_LISTINGS.forEach((entry) => {
-            const match = eligible.find((listing: any) => idOf(listing) === entry.id);
-            if (match) pinnedByPosition.set(entry.position, match);
+          featured.forEach((listing: any) => {
+            const slot = Number(listing?.featuredSlot);
+            if (!Number.isInteger(slot) || slot < 1 || slot > FEATURED_SLOTS) return;
+            const match = eligible.find((item: any) => idOf(item) === idOf(listing));
+            if (match) pinnedByPosition.set(slot, match);
           });
 
           const selected: any[] = [];
@@ -484,6 +471,7 @@ export default function FeaturedRandom() {
     </section>
   );
 }
+
 
 
 

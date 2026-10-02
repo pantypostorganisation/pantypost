@@ -183,6 +183,10 @@ function filterPremiumContent(listing, hasAccess) {
     isSellerVerified: listing.isSellerVerified,
     sellerSalesCount: listing.sellerSalesCount,
     sellerShipping: listing.sellerShipping,
+    /* Sent with every listing so a moderator browsing can see at a
+       glance which are already featured, rather than discovering it by
+       assigning a slot and displacing something. */
+    featuredSlot: listing.featuredSlot ?? null,
     
     // Obscure sensitive data
     description: 'Premium content - Subscribe to view full details',
@@ -770,6 +774,113 @@ router.post('/', authMiddleware, async (req, res) => {
 });
 
 // GET /api/listings/:id - Get a specific listing with premium enforcement
+
+/* ------------------------------------------------------------------
+ * Featured slots
+ *
+ * The homepage's five highlighted positions. This replaces a hardcoded
+ * array in the frontend: changing a feature meant a code change and a
+ * deploy, and a pin quietly stopped working whenever the listing fell
+ * outside the data the homepage happened to fetch.
+ * ---------------------------------------------------------------- */
+
+/** GET /api/listings/featured -- the current five, in slot order. */
+router.get('/featured', async (req, res) => {
+  try {
+    const listings = await Listing.find({
+      featuredSlot: { $ne: null },
+      status: 'active',
+      approvalStatus: 'approved'
+    })
+      .sort({ featuredSlot: 1 })
+      .lean();
+
+    /* A sold or removed listing simply is not returned, so its slot
+       frees itself. No cleanup job, and nobody has to remember to
+       unpin something that sold at 3am. */
+    const ratingsMap = await getSellerRatings(listings.map((l) => l.seller));
+    const populated = await Promise.all(
+      listings.map((listing) => populateSellerProfile(listing, ratingsMap))
+    );
+
+    /* populateSellerProfile returns the shape every other listing
+       endpoint returns, so the homepage can render these with the same
+       card component it already uses. */
+    return res.json({ success: true, data: populated });
+  } catch (error) {
+    console.error('[Listings] Featured fetch error:', error);
+    return res.status(500).json({ success: false, error: 'Could not load featured listings' });
+  }
+});
+
+/**
+ * PATCH /api/listings/:id/featured
+ *
+ * Assigns a slot, or clears one with slot: null.
+ *
+ * Assigning an occupied slot DISPLACES the listing already there
+ * rather than failing. That is what a moderator means when they tap
+ * slot 2 on a different listing -- refusing the write and making them
+ * clear the old one first would be pedantry.
+ */
+router.patch('/:id/featured', authMiddleware, async (req, res) => {
+  try {
+    const role = String(req.user.role || '').toLowerCase();
+    if (!['admin', 'moderator'].includes(role)) {
+      return res.status(403).json({ success: false, error: 'Moderator access required' });
+    }
+
+    const { slot } = req.body || {};
+
+    if (slot === null || slot === 0) {
+      await Listing.updateOne(
+        { _id: req.params.id },
+        { $set: { featuredSlot: null, featuredBy: null, featuredAt: null } }
+      );
+      console.log(`[Listings] ${req.user.username} cleared feature on ${req.params.id}`);
+      return res.json({ success: true, data: { slot: null } });
+    }
+
+    const position = Number(slot);
+    if (!Number.isInteger(position) || position < 1 || position > 5) {
+      return res.status(400).json({ success: false, error: 'Slot must be 1 to 5' });
+    }
+
+    const listing = await Listing.findOne({
+      _id: req.params.id,
+      status: 'active',
+      approvalStatus: 'approved'
+    });
+
+    if (!listing) {
+      return res.status(404).json({
+        success: false,
+        error: 'That listing is not available to feature'
+      });
+    }
+
+    // Whoever held the slot loses it.
+    await Listing.updateMany(
+      { featuredSlot: position, _id: { $ne: listing._id } },
+      { $set: { featuredSlot: null, featuredBy: null, featuredAt: null } }
+    );
+
+    listing.featuredSlot = position;
+    listing.featuredBy = req.user.username;
+    listing.featuredAt = new Date();
+    await listing.save();
+
+    console.log(
+      `[Listings] ${req.user.username} featured "${listing.title}" in slot ${position}`
+    );
+
+    return res.json({ success: true, data: { slot: position } });
+  } catch (error) {
+    console.error('[Listings] Feature error:', error);
+    return res.status(500).json({ success: false, error: 'Could not update the feature' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -1718,6 +1829,8 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
 
 
 
