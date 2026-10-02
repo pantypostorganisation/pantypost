@@ -6,6 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Shield, Star, Lock, Clock, Gavel } from 'lucide-react';
 import { listingsService } from '@/services/listings.service';
+import { apiCall } from '@/services/api.config';
 import type { Listing } from '@/context/ListingContext';
 import { useAuth } from '@/context/AuthContext';
 import { resolveApiUrl } from '@/utils/url';
@@ -318,12 +319,35 @@ export default function FeaturedRandom() {
         setLoading(true);
         setError(null);
 
-        // OPTIMIZED: Reduce initial fetch limit for faster load
-        const response = await listingsService.getListings({
-          limit: 50,
-          sortBy: 'date',
-          sortOrder: 'desc',
-        });
+        /* Pinned listings are fetched BY ID, separately.
+         *
+         * They used to be picked out of the same newest-50 fetch, so
+         * a pin quietly stopped working once the catalogue grew past
+         * fifty and the listing fell out of the window. The listing
+         * was still live, still approved -- it simply was not in the
+         * data the homepage happened to receive, which is a confusing
+         * way for a deliberate choice to fail.
+         *
+         * Asking for them by id means a pin holds until the listing
+         * actually sells, however large the site gets. */
+        const [response, pinnedResults] = await Promise.all([
+          listingsService.getListings({
+            limit: 50,
+            sortBy: 'date',
+            sortOrder: 'desc',
+          }),
+          Promise.all(
+            PINNED_LISTINGS.map(async (entry) => {
+              try {
+                const result = await apiCall<any>(`/listings/${entry.id}`);
+                return result?.success ? result.data : null;
+              } catch {
+                // A pin that cannot be fetched is simply not pinned.
+                return null;
+              }
+            })
+          ),
+        ]);
 
         if (response.success && response.data) {
           // Filter eligible listings client-side
@@ -350,6 +374,20 @@ export default function FeaturedRandom() {
              listing is already gone and needs no special handling. */
           const idOf = (listing: any) => String(listing.id ?? listing._id ?? '');
           const pinnedIds = new Set(PINNED_LISTINGS.map((entry) => entry.id));
+
+          /* Merge the separately-fetched pins in, so they are eligible
+             even when they were not in the newest fifty. The same
+             checks apply -- a pinned listing with no images or a
+             finished auction still drops out. */
+          (pinnedResults || []).forEach((listing: any) => {
+            if (!listing) return;
+            const id = idOf(listing);
+            if (!id || eligible.some((item: any) => idOf(item) === id)) return;
+
+            const stillLive = !('status' in listing) || listing.status === 'active';
+            const hasImage = listing.imageUrls && listing.imageUrls.length > 0;
+            if (stillLive && hasImage && listing.seller) eligible.push(listing);
+          });
 
           const unpinned = eligible.filter((listing: any) => !pinnedIds.has(idOf(listing)));
           const shuffled = [...unpinned].sort(() => Math.random() - 0.5);
@@ -446,6 +484,7 @@ export default function FeaturedRandom() {
     </section>
   );
 }
+
 
 
 

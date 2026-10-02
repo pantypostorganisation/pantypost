@@ -155,11 +155,28 @@ function normaliseDiditResult(payload) {
     .map((w) => w?.code)
     .filter(Boolean);
 
+  /* Which country ISSUED the document.
+   *
+   * This is the only reliable signal of where someone actually is. Our
+   * geo block reads the IP, and an IP is a VPN away from being
+   * anything -- which is how accounts kept arriving from a country
+   * that has been on the signup block list all along. A passport does
+   * not change with a VPN.
+   *
+   * Didit returns ISO-3166 alpha-3 ("NGA"); our block list is alpha-2
+   * ("NG"), so the caller converts. */
+  const issuingCountry =
+    payload.id_verification?.issuing_state
+    || payload.id_verification?.issuing_state_name
+    || payload.document?.issuing_country
+    || null;
+
   return {
     status,
     rawStatus: payload.status,
     sessionId: payload.session_id,
     username: payload.vendor_data,
+    issuingCountry,
     // Rounded: we have no need for a precise estimate, and a coarse
     // value is less identifying if these records are ever exported.
     estimatedAge: estimatedAge !== null ? Math.round(estimatedAge) : null,

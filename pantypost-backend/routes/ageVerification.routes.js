@@ -12,6 +12,28 @@ const express = require('express');
 const router = express.Router();
 
 const User = require('../models/User');
+const { isHardBlocked, isSignupBlocked } = require('../config/blockedCountries');
+
+/* Didit reports ISO-3166 alpha-3; the block list is alpha-2.
+   Only the countries actually on the list need mapping -- an unknown
+   code returns null and the verification proceeds, which is the right
+   default for a check that exists to catch a known set. */
+const ALPHA3_TO_ALPHA2 = {
+  CUB: 'CU', IRN: 'IR', PRK: 'KP', SYR: 'SY', RUS: 'RU', BLR: 'BY',
+  SAU: 'SA', ARE: 'AE', QAT: 'QA', KWT: 'KW', OMN: 'OM', BHR: 'BH',
+  YEM: 'YE', IRQ: 'IQ', AFG: 'AF', PAK: 'PK', SDN: 'SD', BRN: 'BN',
+  DZA: 'DZ', EGY: 'EG', LBY: 'LY', MAR: 'MA', TUN: 'TN', JOR: 'JO',
+  LBN: 'LB', TUR: 'TR', CHN: 'CN', TKM: 'TM', UZB: 'UZ', TJK: 'TJ',
+  IDN: 'ID', MYS: 'MY', IND: 'IN', BGD: 'BD', PHL: 'PH', VNM: 'VN',
+  MMR: 'MM', THA: 'TH', KHM: 'KH', LKA: 'LK', NGA: 'NG', UGA: 'UG',
+};
+
+function toAlpha2(code) {
+  const value = String(code || '').trim().toUpperCase();
+  if (value.length === 2) return value;
+  return ALPHA3_TO_ALPHA2[value] || null;
+}
+
 const authMiddleware = require('../middleware/auth.middleware');
 const { getProvider, isEnabled, AGE_STATUS, providerName } = require('../services/ageAssurance');
 
@@ -192,6 +214,43 @@ router.post('/webhook', async (req, res) => {
       return res.json({ success: true });
     }
 
+    /* Block on the DOCUMENT's country, not the IP.
+     *
+     * Nigeria has been on SIGNUP_BLOCKED since August, and accounts
+     * kept arriving anyway -- because that list is enforced against
+     * the IP address, and a VPN costs three dollars a month. Every
+     * fraudulent account we have traced since has carried a document
+     * from a country already on that list.
+     *
+     * A passport is harder to change than an exit node. Checking the
+     * issuing state closes the gap the IP check cannot, and it fails
+     * the verification rather than banning an existing account, so
+     * nobody who already passed is retroactively punished. */
+    if (result.issuingCountry) {
+      const alpha2 = toAlpha2(result.issuingCountry);
+
+      if (alpha2 && (isHardBlocked(alpha2) || isSignupBlocked(alpha2))) {
+        user.ageVerification = {
+          ...(user.ageVerification || {}),
+          status: AGE_STATUS.DECLINED,
+          sessionId: result.sessionId || user.ageVerification?.sessionId,
+          provider: providerName(),
+          method: result.method,
+          warnings: [...(result.warnings || []), 'JURISDICTION_BLOCKED'],
+          updatedAt: new Date(),
+        };
+
+        applySellerVerification(user, AGE_STATUS.DECLINED);
+        await user.save();
+
+        console.warn(
+          `[AgeVerification] ${result.username}: document from blocked jurisdiction ${alpha2} — rejected`
+        );
+
+        return res.json({ success: true });
+      }
+    }
+
     const previous = user.ageVerification?.status;
 
     user.ageVerification = {
@@ -295,4 +354,6 @@ router.post('/refresh', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+
 
