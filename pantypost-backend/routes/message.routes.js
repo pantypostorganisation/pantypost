@@ -326,6 +326,72 @@ router.post('/send', authMiddleware, async (req, res) => {
       console.error('[Messages] Restriction check failed:', restrictionError.message);
     }
 
+    /* Payment details do not send.
+     *
+     * Unlike a Telegram mention -- which a seller might reasonably
+     * decline in writing -- there is no innocent version of posting a
+     * wallet address or a cashtag here. Both sides have a wallet on
+     * the platform; an off-platform payment exists to avoid the thing
+     * protecting them.
+     *
+     * It protects the SELLER more than us. A buyer who takes the
+     * conversation off-site has her address and her goods, and nothing
+     * holding him to the payment. The platform was the only guarantee
+     * and she just gave it up.
+     *
+     * Blocked attempts are still reported, so a pattern of them is
+     * visible rather than silently absorbed. */
+    if (content) {
+      try {
+        const { detectPaymentSolicitation } = require('../utils/offPlatformDetection');
+        const payment = detectPaymentSolicitation(content);
+
+        if (payment.block) {
+          try {
+            const Report = require('../models/Report');
+            await Report.create({
+              reportedUser: sender,
+              reportedBy: 'system',
+              reportType: 'scam',
+              severity: 'high',
+              category: 'off_platform',
+              description:
+                `Blocked: attempted off-platform payment (${payment.reasons.join(', ')}).\n\n` +
+                `[${new Date().toISOString()}] to ${receiver}: ${String(content).slice(0, 300)}`,
+              status: 'pending',
+              metadata: { autoFlag: 'payment_blocked', reasons: payment.reasons }
+            });
+
+            if (global.webSocketService) {
+              global.webSocketService.emitApprovalQueueChanged?.();
+            }
+          } catch (reportError) {
+            console.error('[Moderation] Payment block report failed:', reportError.message);
+          }
+
+          console.log(
+            `[Moderation] BLOCKED payment message: ${sender} -> ${receiver} (${payment.reasons.join(', ')})`
+          );
+
+          /* Says why. A message that silently fails to send reads as a
+             broken site and gets tried again; one that explains itself
+             changes what the person does next. */
+          return res.status(403).json({
+            success: false,
+            error:
+              'That message was not sent. Payment details cannot be shared here — ' +
+              'pay and get paid through your PantyPost wallet so both sides are protected. ' +
+              'Off-platform payments have no buyer or seller protection.',
+            meta: { blocked: 'off_platform_payment' }
+          });
+        }
+      } catch (paymentError) {
+        /* A failing check must not silence the platform. If this throws
+           the message sends -- the flagging below still catches it. */
+        console.error('[Moderation] Payment check failed:', paymentError.message);
+      }
+    }
+
     // Generate threadId
     const threadId = Message.getThreadId(sender, receiver);
     

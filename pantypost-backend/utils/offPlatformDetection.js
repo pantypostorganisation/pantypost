@@ -130,4 +130,100 @@ function detectOffPlatform(content) {
   return { flagged: true, reasons, severity, solicits };
 }
 
-module.exports = { detectOffPlatform, normalise };
+/* ==================================================================
+ * PAYMENT SOLICITATION
+ *
+ * Stricter than the above, and this one BLOCKS.
+ *
+ * The distinction is between a mention and an instrument. "I don't use
+ * PayPal, let's keep it on the site" is a seller protecting herself,
+ * and stopping her from saying it would be absurd. "$myhandle" or a
+ * wallet address is not a mention -- it is the means to take a payment
+ * off-platform, and there is no version of posting one that serves
+ * anybody here.
+ *
+ * It matters more for the SELLER than for us. An off-platform buyer
+ * has her address, her items and no reason to pay; the platform she
+ * left is the only thing that was holding him to the deal. Every
+ * marketplace in this category has sellers who learned that once.
+ * ================================================================== */
+
+/* Identifiers with no innocent reading. Each of these is something a
+   buyer could pay to, or a seller could be paid at, and none of them
+   has a use in a conversation about a listing. */
+const PAYMENT_IDENTIFIERS = [
+  /* Must contain a letter. "$450 for two pairs" is a price, and
+     treating it as a Cash App tag would block ordinary haggling. */
+  { pattern: /\$(?=[a-z0-9_]{3,20}\b)[a-z0-9_]*[a-z][a-z0-9_]*\b/i, label: 'Cash App tag' },
+  { pattern: /paypal\.me\/[a-z0-9_.-]+/i,                 label: 'PayPal.me link' },
+  { pattern: /venmo\.com\/[a-z0-9_.-]+/i,                 label: 'Venmo link' },
+  { pattern: /cash\.app\/[a-z0-9$_.-]+/i,                 label: 'Cash App link' },
+  { pattern: /throne\.(me|com)\/[a-z0-9_.-]+/i,           label: 'Throne wishlist' },
+  { pattern: /amazon\.[a-z.]{2,6}\/.*\/wishlist|amzn\.to\//i, label: 'Amazon wishlist' },
+  /* Two formats. Legacy addresses exclude the ambiguous characters
+     0, O, I and l; bech32 (bc1...) uses its own charset that DOES
+     include l, so one pattern covering both missed every modern
+     address -- which is most of them. */
+  { pattern: /\bbc1[a-z0-9]{25,62}\b/i,                   label: 'Bitcoin address' },
+  { pattern: /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/,       label: 'Bitcoin address' },
+  { pattern: /\b0x[a-f0-9]{40}\b/i,                       label: 'Ethereum address' },
+  { pattern: /\bT[1-9A-HJ-NP-Za-km-z]{33}\b/,             label: 'Tron address' },
+  { pattern: /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/i, label: 'Email address' },
+];
+
+/* Services whose NAME plus an invitation is enough. Naming one is not
+   an offence; naming one while asking to be paid there is. */
+const PAYMENT_SERVICES =
+  /cashapp|venmo|paypal|zelle|wise|revolut|chime|skrill|payoneer|westernunion|moneygram|remitly|applepay|googlepay|giftcard|amazongift|steamcard|throne/;
+
+const PAYMENT_INVITATIONS = [
+  /\b(send|pay|transfer|deposit|wire)\s+(it\s+)?(to|me|via|through|using|on)\b/i,
+  /\b(my|the)\s+(cashapp|venmo|paypal|zelle|wallet|handle|tag|address)\b/i,
+  /\b(pay|send)\s+me\s+(on|through|via|at)\b/i,
+  /\bgift\s*card\b/i,
+  /\b(outside|off|away from)\s+(the\s+)?(site|platform|app)\b/i,
+  /\bavoid\s+(the\s+)?fees?\b/i,
+  /\bno\s+fees?\b/i,
+];
+
+/**
+ * Decides whether a message is trying to take payment off-platform.
+ *
+ * `block` means refuse to send it. `flag` means let it through and
+ * raise it for review. The difference is whether an actual payment
+ * instrument is present, not how suspicious the wording sounds.
+ */
+function detectPaymentSolicitation(content) {
+  const text = String(content || '');
+  if (!text.trim()) return { block: false, flag: false, reasons: [] };
+
+  const variants = normalise(text);
+  const reasons = [];
+
+  /* Our own domain first, so a seller linking her own listing is not
+     mistaken for an external payment link. */
+  const withoutOwnLinks = text.replace(/https?:\/\/(www\.)?pantypost\.com\S*/gi, '');
+
+  PAYMENT_IDENTIFIERS.forEach(({ pattern, label }) => {
+    if (pattern.test(withoutOwnLinks)) reasons.push(label);
+  });
+
+  const namesService = variants.some((variant) => PAYMENT_SERVICES.test(variant));
+  const invites = PAYMENT_INVITATIONS.some((pattern) => pattern.test(text));
+
+  /* An identifier is enough on its own. A service name needs an
+     invitation alongside it, so declining to use one stays sayable. */
+  const block = reasons.length > 0 || (namesService && invites);
+
+  if (namesService) reasons.push('Payment service named');
+
+  return {
+    block,
+    flag: reasons.length > 0,
+    reasons,
+    // Blocked attempts are the ones worth looking at first.
+    severity: block ? 'high' : 'medium'
+  };
+}
+
+module.exports = { detectOffPlatform, detectPaymentSolicitation, normalise };
