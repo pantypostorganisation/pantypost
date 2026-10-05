@@ -18,7 +18,7 @@ export interface FilterOptions {
   searchTerm: string;
   minPrice: string;
   maxPrice: string;
-  sortBy: 'newest' | 'priceAsc' | 'priceDesc' | 'endingSoon';
+  sortBy: 'popular' | 'newest' | 'priceAsc' | 'priceDesc' | 'endingSoon';
   selectedHourRange: HourRangeOption;
 }
 
