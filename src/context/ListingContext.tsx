@@ -436,7 +436,7 @@ export const ListingProvider: React.FC<{ children: ReactNode }> = ({ children })
    * for everything one call will give. Past 100 live listings this
    * needs to page the API, or better, seller-scoped views should fetch
    * their own seller's listings rather than filtering a shared cache. */
-  const LISTINGS_FETCH_LIMIT = 100;
+  const LISTINGS_FETCH_LIMIT = 500;
 
   // ---------- Initial load ----------
   const loadData = useCallback(async () => {

@@ -379,12 +379,35 @@ router.get('/', async (req, res) => {
         sortObj.createdAt = -1;
         break;
       default:
+        /* Most viewed first, newest as the tiebreak.
+         *
+         * Browse was newest-first, which meant the order was decided by
+         * upload time and nothing else -- a listing nobody had looked
+         * at sat above one that forty people had opened.
+         *
+         * The trade-off, worth knowing: view counts are
+         * self-reinforcing. Whatever sits at the top gets seen, which
+         * keeps it at the top. The createdAt tiebreak softens it, and
+         * the featured slots let you override it by hand, but if new
+         * sellers start complaining their listings never surface, this
+         * is why -- and the answer then is a score that divides views
+         * by age rather than a bigger tiebreak. */
+        sortObj.views = -1;
         sortObj.createdAt = -1;
     }
     
     // Pagination
     const pageNum = parseInt(page);
-    const limitNum = Math.min(parseInt(limit), 100);
+    /* Raised from 100. The catalogue passed 121 listings and browse
+       asks for everything in one call, so twenty-one were simply
+       invisible -- not filtered out, not on page two, just absent.
+       
+       500 buys room to grow, and the ceiling still exists because an
+       unbounded limit is how one request pulls the whole collection
+       into memory. The real answer is for browse to page the API
+       rather than fetch the lot, which is worth doing before this
+       number needs raising again. */
+    const limitNum = Math.min(parseInt(limit) || 20, 500);
     const skip = (pageNum - 1) * limitNum;
     
     // Execute query
