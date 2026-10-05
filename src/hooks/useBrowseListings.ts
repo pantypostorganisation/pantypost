@@ -79,7 +79,13 @@ export const useBrowseListings = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
-  const [sortBy, setSortBy] = useState<FilterOptions['sortBy']>('newest');
+  /* Default is what people see, so it should be the best guess at what
+     they want. Newest-first ordered browse by upload time and nothing
+     else -- a listing nobody had opened sat above one forty people
+     had. */
+  const [sortBy, setSortBy] = useState<FilterOptions['sortBy']>(
+    'popular' as FilterOptions['sortBy']
+  );
   const [page, setPage] = useState(0);
   const [forceUpdateTimer, setForceUpdateTimer] = useState(0);
   const [hoveredListing, setHoveredListing] = useState<string | null>(null);
@@ -290,6 +296,13 @@ export const useBrowseListings = () => {
     // Apply sorting
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case 'popular':
+          /* Views, newest as the tiebreak. The scatter below stops this
+             from calcifying. */
+          return (
+            ((b as any).views || 0) - ((a as any).views || 0) ||
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
         case 'newest':
           return new Date(b.date).getTime() - new Date(a.date).getTime();
         case 'priceAsc':
@@ -310,6 +323,54 @@ export const useBrowseListings = () => {
       }
     });
     
+    /* Scatter newcomers through the popular ordering.
+     *
+     * Most-viewed on its own is a ratchet: whatever is on top gets
+     * seen, which keeps it on top, and a listing posted today has no
+     * route to the first page no matter how good it is. That quietly
+     * punishes exactly the sellers being recruited -- and a browse page
+     * showing the same twelve items every visit gets stale for buyers
+     * too.
+     *
+     * So every fourth slot goes to something with few views. Enough to
+     * give new listings real exposure, not so much that the ordering
+     * stops meaning anything. Only on the default view: someone who
+     * deliberately picks "Newest first" or a price sort gets exactly
+     * what they asked for. */
+    if (sortBy === 'popular' && filtered.length > 8) {
+      const QUIET_VIEW_THRESHOLD = 5;
+      const EVERY_NTH = 4;
+
+      const quiet = filtered.filter((listing) => ((listing as any).views || 0) <= QUIET_VIEW_THRESHOLD);
+      const rest = filtered.filter((listing) => ((listing as any).views || 0) > QUIET_VIEW_THRESHOLD);
+
+      if (quiet.length > 0 && rest.length > 0) {
+        /* Shuffled, so the same new listings do not occupy the same
+           slots on every visit -- which would just recreate the problem
+           one level down. */
+        const shuffledQuiet = [...quiet].sort(() => Math.random() - 0.5);
+
+        const mixed: typeof filtered = [];
+        let quietIndex = 0;
+
+        rest.forEach((listing, index) => {
+          mixed.push(listing);
+          if ((index + 1) % (EVERY_NTH - 1) === 0 && quietIndex < shuffledQuiet.length) {
+            mixed.push(shuffledQuiet[quietIndex]);
+            quietIndex += 1;
+          }
+        });
+
+        // Anything left over goes on the end rather than being dropped.
+        while (quietIndex < shuffledQuiet.length) {
+          mixed.push(shuffledQuiet[quietIndex]);
+          quietIndex += 1;
+        }
+
+        return mixed;
+      }
+    }
+
     return filtered;
   }, [freshListings, filter, debouncedSearchTerm, minPrice, maxPrice, selectedHourRange, sortBy]);
 
@@ -607,7 +668,7 @@ export const useBrowseListings = () => {
     setMinPrice('');
     setMaxPrice('');
     setSelectedHourRange(HOUR_RANGE_OPTIONS[0]);
-    setSortBy('newest');
+    setSortBy('popular' as FilterOptions['sortBy']);
     setRateLimitError(null);
   }, []);
 
@@ -686,6 +747,8 @@ export const useBrowseListings = () => {
     PAGE_SIZE
   };
 };
+
+
 
 
 

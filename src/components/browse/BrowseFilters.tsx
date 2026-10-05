@@ -225,6 +225,9 @@ export default function BrowseFilters({
           className={`cursor-pointer px-3 py-2 ${FIELD}`}
           aria-label="Sort by"
         >
+          {/* First, because it is the default. A dropdown whose first
+              option is not what is currently selected looks broken. */}
+          <option value="popular">Most popular</option>
           <option value="newest">Newest first</option>
           <option value="priceAsc">Price: low to high</option>
           <option value="priceDesc">Price: high to low</option>
@@ -261,5 +264,6 @@ export default function BrowseFilters({
     </div>
   );
 }
+
 
 
