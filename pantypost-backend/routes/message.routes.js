@@ -7,6 +7,36 @@ const authMiddleware = require('../middleware/auth.middleware');
 const webSocketService = require('../config/websocket');
 const { v4: uuidv4 } = require('uuid');
 
+/* New-account messaging limits. Tunable from the environment so these
+   can be loosened or tightened without a deploy. */
+const NEW_ACCOUNT_WINDOW_HOURS = Number(process.env.NEW_ACCOUNT_WINDOW_HOURS || 24);
+const NEW_ACCOUNT_THREAD_LIMIT = Number(process.env.NEW_ACCOUNT_THREAD_LIMIT || 2);
+
+/* How many conversations this user has STARTED -- threads whose
+   earliest message is theirs. Replies to someone else's opening
+   message are not counted, which is what keeps the limit off anyone
+   who is simply answering their inbox.
+
+   Bounded by `since` (the signup time) as well as by username. The
+   account is younger than the window whenever this runs, so every
+   message it could possibly have is inside that bound -- the date
+   clause changes no result and keeps the scan off the full message
+   collection. */
+async function countThreadsStarted(username, since) {
+  const match = { $or: [{ sender: username }, { receiver: username }] };
+  if (since) match.createdAt = { $gte: since };
+
+  const rows = await Message.aggregate([
+    { $match: match },
+    { $sort: { createdAt: 1 } },
+    { $group: { _id: '$threadId', firstSender: { $first: '$sender' } } },
+    { $match: { firstSender: username } },
+    { $count: 'started' },
+  ]);
+
+  return rows.length ? rows[0].started : 0;
+}
+
 // Get user status endpoint
 router.get('/user-status/:username', authMiddleware, async (req, res) => {
   try {
@@ -394,7 +424,109 @@ router.post('/send', authMiddleware, async (req, res) => {
 
     // Generate threadId
     const threadId = Message.getThreadId(sender, receiver);
-    
+
+    /* New accounts: verified, and two conversations in the first day.
+     *
+     * Every scam account traced so far has had the same shape -- sign
+     * up, open a dozen threads inside the hour, push every one of them
+     * to Telegram. Two rules break that shape:
+     *
+     *   1. You must be age-verified to START a conversation. Didit runs
+     *      the blocked-jurisdiction check against the document, so an
+     *      unverified account has never been through it at all.
+     *   2. A verified account still gets NEW_ACCOUNT_THREAD_LIMIT new
+     *      conversations in its first NEW_ACCOUNT_WINDOW_HOURS hours --
+     *      enough for a real buyer, not enough to work a seller list,
+     *      and long enough for a human to look at the account first.
+     *
+     * REPLIES ARE ALWAYS FREE. Both rules apply only to opening a
+     * thread that does not exist yet, so nobody is ever stopped from
+     * answering someone who messaged them: a brand-new seller with
+     * eight enquiries can answer all eight. That distinction is the
+     * difference between a scam filter and an outage. */
+    const senderRole = String(req.user.role || '');
+
+    if (senderRole !== 'admin' && senderRole !== 'moderator') {
+      try {
+        const threadExists = await Message.exists({ threadId });
+
+        if (!threadExists) {
+          const senderUser = await User.findOne({ username: sender })
+            .select('isVerified verificationStatus createdAt')
+            .lean();
+
+          /* Same verified test the rest of this file uses, and both
+             fields are set together on a Didit approval. */
+          const verified = !!(
+            senderUser?.isVerified ||
+            senderUser?.verificationStatus === 'verified'
+          );
+
+          if (!verified) {
+            console.log(`[Messages] Blocked unverified new conversation: ${sender} -> ${receiver}`);
+
+            return res.status(403).json({
+              success: false,
+              error:
+                'Verify your age before starting a new conversation. ' +
+                'It takes about a minute, and it is what keeps scammers off the platform. ' +
+                'You can still reply to anyone who has messaged you.',
+              meta: { blocked: 'verification_required' }
+            });
+          }
+
+          const createdAt = senderUser?.createdAt ? new Date(senderUser.createdAt) : null;
+
+          if (!createdAt) {
+            /* No signup timestamp means the age of the account cannot be
+               known, so the window cannot be applied. Logged rather than
+               guessed -- a wrong guess here either blocks established
+               users or lets new ones through unchecked. */
+            console.warn(
+              `[Messages] ${sender} has no createdAt — new-account conversation limit not applied`
+            );
+          } else {
+            const windowMs = NEW_ACCOUNT_WINDOW_HOURS * 60 * 60 * 1000;
+            const accountAgeMs = Date.now() - createdAt.getTime();
+
+            if (accountAgeMs < windowMs) {
+              const started = await countThreadsStarted(sender, createdAt);
+
+              if (started >= NEW_ACCOUNT_THREAD_LIMIT) {
+                const msLeft = windowMs - accountAgeMs;
+                const hoursLeft = Math.max(1, Math.ceil(msLeft / (60 * 60 * 1000)));
+
+                console.log(
+                  `[Messages] New-account limit hit: ${sender} -> ${receiver} ` +
+                  `(${started} started, ${hoursLeft}h left in window)`
+                );
+
+                return res.status(403).json({
+                  success: false,
+                  error:
+                    `New accounts can start ${NEW_ACCOUNT_THREAD_LIMIT} conversations in their ` +
+                    `first ${NEW_ACCOUNT_WINDOW_HOURS} hours. You can start more in about ` +
+                    `${hoursLeft} hour${hoursLeft === 1 ? '' : 's'}, and you can keep replying ` +
+                    `to your existing conversations now.`,
+                  meta: {
+                    blocked: 'new_account_limit',
+                    limit: NEW_ACCOUNT_THREAD_LIMIT,
+                    started,
+                    hoursRemaining: hoursLeft
+                  }
+                });
+              }
+            }
+          }
+        }
+      } catch (gateError) {
+        /* Fails open, like every other check in this handler. A broken
+           limit must not take messaging down for the whole platform. */
+        console.error('[Messages] New-account gate failed:', gateError.message);
+      }
+    }
+
+
     // Create new message with a UUID
     const messageId = uuidv4();
     const message = new Message({
