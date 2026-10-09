@@ -14,6 +14,18 @@ const router = express.Router();
 const User = require('../models/User');
 const { isHardBlocked, isSignupBlocked } = require('../config/blockedCountries');
 
+/* =====================================================================
+ * Issuing-country extraction
+ *
+ * The first version of this check read a single field that the
+ * normaliser was supposed to populate. It never fired once in
+ * production -- not one log line -- because the key it guessed at
+ * does not exist in Didit's payload. Rather than guess again, this
+ * version walks the raw webhook body, collects EVERY field that
+ * looks like a country, and logs what it found. Whatever Didit calls
+ * the field, it gets caught, and the log tells us the real name.
+ * ===================================================================== */
+
 /* Didit reports ISO-3166 alpha-3; the block list is alpha-2.
    Only the countries actually on the list need mapping -- an unknown
    code returns null and the verification proceeds, which is the right
@@ -28,16 +40,128 @@ const ALPHA3_TO_ALPHA2 = {
   MMR: 'MM', THA: 'TH', KHM: 'KH', LKA: 'LK', NGA: 'NG', UGA: 'UG',
 };
 
-function toAlpha2(code) {
-  const value = String(code || '').trim().toUpperCase();
-  if (value.length === 2) return value;
-  return ALPHA3_TO_ALPHA2[value] || null;
+/* Some providers send the country spelled out rather than coded.
+   Keys are letters only, uppercased -- see normaliseWord(). */
+const NAME_TO_ALPHA2 = {
+  CUBA: 'CU',
+  IRAN: 'IR', IRANISLAMICREPUBLICOF: 'IR',
+  NORTHKOREA: 'KP', KOREADEMOCRATICPEOPLESREPUBLICOF: 'KP', DPRK: 'KP',
+  SYRIA: 'SY', SYRIANARABREPUBLIC: 'SY',
+  RUSSIA: 'RU', RUSSIANFEDERATION: 'RU',
+  BELARUS: 'BY',
+  SAUDIARABIA: 'SA',
+  UNITEDARABEMIRATES: 'AE', UAE: 'AE',
+  QATAR: 'QA', KUWAIT: 'KW', OMAN: 'OM', BAHRAIN: 'BH',
+  YEMEN: 'YE', IRAQ: 'IQ', AFGHANISTAN: 'AF', PAKISTAN: 'PK',
+  SUDAN: 'SD', BRUNEI: 'BN', BRUNEIDARUSSALAM: 'BN',
+  ALGERIA: 'DZ', EGYPT: 'EG', LIBYA: 'LY', MOROCCO: 'MA',
+  TUNISIA: 'TN', JORDAN: 'JO', LEBANON: 'LB',
+  TURKEY: 'TR', TURKIYE: 'TR',
+  CHINA: 'CN', TURKMENISTAN: 'TM', UZBEKISTAN: 'UZ', TAJIKISTAN: 'TJ',
+  INDONESIA: 'ID', MALAYSIA: 'MY', INDIA: 'IN', BANGLADESH: 'BD',
+  PHILIPPINES: 'PH', VIETNAM: 'VN', VIETNAM_: 'VN',
+  MYANMAR: 'MM', BURMA: 'MM', THAILAND: 'TH', CAMBODIA: 'KH',
+  SRILANKA: 'LK', NIGERIA: 'NG', UGANDA: 'UG',
+};
+
+function normaliseWord(value) {
+  return String(value || '').toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+/* Any key that might name a country of issue. Deliberately broad --
+   a false match that does not resolve to a known country is harmless,
+   because resolveCountry() returns null and we carry on. */
+const COUNTRY_KEY = /country|nationality|citizenship|issuing|issuer/i;
+
+/* ...except anything derived from the network. This check exists to
+   read the DOCUMENT, and an IP-based block already runs at signup.
+   Blocking a verified user because their VPN exits in Lagos is a
+   different policy, and not this one. */
+const NETWORK_KEY = /(^|[^a-z])ip([^a-z]|$)|geoip|geo_?location|browser|user_?agent/i;
+
+/* Turn one field value into an alpha-2 country, or null.
+ *
+ * The two-letter case is the trap. A US driver's licence carries
+ * `issuing_state: "IN"` for Indiana, which is also India's country
+ * code -- and SD, MA, TN and ID collide the same way. So a bare
+ * two-letter value is only read as a country when the key itself
+ * says "country", "nationality" or "citizenship". Didit sends
+ * alpha-3 ("NGA") for passports, which is unambiguous. */
+function resolveCountry(rawValue, keyPath) {
+  const word = normaliseWord(rawValue);
+  if (!word) return null;
+
+  if (word.length === 3 && ALPHA3_TO_ALPHA2[word]) return ALPHA3_TO_ALPHA2[word];
+  if (word.length > 3 && NAME_TO_ALPHA2[word]) return NAME_TO_ALPHA2[word];
+
+  if (word.length === 2 && /country|nationality|citizenship|iso/i.test(keyPath)) {
+    return word;
+  }
+
+  return null;
+}
+
+/* Walk the whole payload and return every country-looking field,
+   deepest-first order of discovery, with its path for the log. */
+function findCountryFields(payload) {
+  const found = [];
+  const seen = new WeakSet();
+
+  const walk = (node, path) => {
+    if (!node || typeof node !== 'object') return;
+    if (seen.has(node)) return;
+    seen.add(node);
+    if (found.length > 60) return;
+
+    for (const [key, value] of Object.entries(node)) {
+      const keyPath = path ? `${path}.${key}` : key;
+
+      if (value && typeof value === 'object') {
+        walk(value, keyPath);
+        continue;
+      }
+
+      if (typeof value !== 'string' && typeof value !== 'number') continue;
+      if (NETWORK_KEY.test(keyPath)) continue;
+      if (!COUNTRY_KEY.test(key)) continue;
+
+      found.push({ keyPath, value: String(value) });
+    }
+  };
+
+  try {
+    walk(payload, '');
+  } catch (error) {
+    console.error('[AgeVerification] Country scan failed:', error.message);
+  }
+
+  return found;
+}
+
+/* Prefer an explicitly document-issuing field when several match, so
+   the log and the block reason point at the passport rather than at a
+   home-address country that happens to appear alongside it. */
+function rankCountryFields(fields) {
+  const weight = (keyPath) => {
+    if (/issuing/i.test(keyPath)) return 0;
+    if (/issuer|nationality|citizenship/i.test(keyPath)) return 1;
+    if (/document|doc_/i.test(keyPath)) return 2;
+    return 3;
+  };
+  return [...fields].sort((a, b) => weight(a.keyPath) - weight(b.keyPath));
 }
 
 const authMiddleware = require('../middleware/auth.middleware');
 const { getProvider, isEnabled, AGE_STATUS, providerName } = require('../services/ageAssurance');
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://pantypost.com';
+
+const JURISDICTION_WARNING = 'JURISDICTION_BLOCKED';
+
+function hasJurisdictionBlock(user) {
+  const warnings = user?.ageVerification?.warnings || [];
+  return warnings.some((w) => String(w).startsWith(JURISDICTION_WARNING));
+}
 
 /* =====================================================================
  * GET /api/age-verification/status
@@ -119,6 +243,16 @@ router.post('/start', authMiddleware, async (req, res) => {
         success: true,
         data: { alreadyVerified: true },
         message: 'You are already verified.',
+      });
+    }
+
+    /* A document from a blocked jurisdiction is not a camera problem,
+       so there is nothing to retry. Refusing here also stops them
+       burning a paid Didit session every sixty seconds. */
+    if (hasJurisdictionBlock(user)) {
+      return res.status(403).json({
+        success: false,
+        error: 'We are unable to verify accounts from your region. Contact support if you believe this is a mistake.',
       });
     }
 
@@ -223,32 +357,78 @@ router.post('/webhook', async (req, res) => {
      * from a country already on that list.
      *
      * A passport is harder to change than an exit node. Checking the
-     * issuing state closes the gap the IP check cannot, and it fails
-     * the verification rather than banning an existing account, so
-     * nobody who already passed is retroactively punished. */
+     * issuing state closes the gap the IP check cannot.
+     *
+     * The scan is logged on every webhook, approved or not. That log
+     * is the whole reason this version works: the previous one read a
+     * single guessed key, found nothing, and failed silently for
+     * weeks. If Didit renames a field, the log says so on the next
+     * verification instead of after the next scam report. */
+    const countryFields = rankCountryFields(findCountryFields(req.body || {}));
+
     if (result.issuingCountry) {
-      const alpha2 = toAlpha2(result.issuingCountry);
+      countryFields.unshift({
+        keyPath: 'normalised.issuingCountry',
+        value: String(result.issuingCountry),
+      });
+    }
 
+    if (countryFields.length) {
+      console.log(
+        `[AgeVerification] ${result.username}: country fields -> ` +
+        countryFields.map((f) => `${f.keyPath}=${f.value}`).join(', ')
+      );
+    } else {
+      console.log(`[AgeVerification] ${result.username}: no country fields in payload`);
+    }
+
+    let blockedCode = null;
+    let blockedField = null;
+
+    for (const field of countryFields) {
+      const alpha2 = resolveCountry(field.value, field.keyPath);
       if (alpha2 && (isHardBlocked(alpha2) || isSignupBlocked(alpha2))) {
-        user.ageVerification = {
-          ...(user.ageVerification || {}),
-          status: AGE_STATUS.DECLINED,
-          sessionId: result.sessionId || user.ageVerification?.sessionId,
-          provider: providerName(),
-          method: result.method,
-          warnings: [...(result.warnings || []), 'JURISDICTION_BLOCKED'],
-          updatedAt: new Date(),
-        };
-
-        applySellerVerification(user, AGE_STATUS.DECLINED);
-        await user.save();
-
-        console.warn(
-          `[AgeVerification] ${result.username}: document from blocked jurisdiction ${alpha2} — rejected`
-        );
-
-        return res.json({ success: true });
+        blockedCode = alpha2;
+        blockedField = field;
+        break;
       }
+    }
+
+    if (blockedCode) {
+      user.ageVerification = {
+        ...(user.ageVerification || {}),
+        status: AGE_STATUS.DECLINED,
+        sessionId: result.sessionId || user.ageVerification?.sessionId,
+        provider: providerName(),
+        method: result.method,
+        warnings: [
+          ...(result.warnings || []),
+          `${JURISDICTION_WARNING}:${blockedCode}`,
+        ],
+        updatedAt: new Date(),
+      };
+
+      applySellerVerification(user, AGE_STATUS.DECLINED);
+      await user.save();
+
+      console.warn(
+        `[AgeVerification] ${result.username}: document from blocked jurisdiction ` +
+        `${blockedCode} (${blockedField.keyPath}=${blockedField.value}) — rejected`
+      );
+
+      // Let their open tab stop spinning.
+      try {
+        if (global.webSocketService) {
+          global.webSocketService.emitToUser(result.username, 'age_verification:updated', {
+            status: AGE_STATUS.DECLINED,
+            isVerified: false,
+          });
+        }
+      } catch (wsError) {
+        console.error('[AgeVerification] WebSocket notify failed:', wsError.message);
+      }
+
+      return res.json({ success: true });
     }
 
     const previous = user.ageVerification?.status;
@@ -311,6 +491,17 @@ router.post('/refresh', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
+    /* Refresh asks Didit for the raw verdict, which knows nothing about
+       our jurisdiction policy -- so without this guard it would happily
+       overwrite a jurisdiction rejection with Didit's own APPROVED and
+       hand back the badge. The block has to be sticky. */
+    if (hasJurisdictionBlock(user)) {
+      return res.json({
+        success: true,
+        data: { status: AGE_STATUS.DECLINED, isVerified: false },
+      });
+    }
+
     const sessionId = user.ageVerification?.sessionId;
     if (!sessionId) {
       return res.json({
@@ -321,6 +512,52 @@ router.post('/refresh', authMiddleware, async (req, res) => {
 
     const provider = getProvider();
     const result = await provider.getDecision(sessionId);
+
+    /* Same document check as the webhook. getDecision returns the
+       normalised shape, so scan whatever it hands back -- if it carries
+       the raw payload we catch the issuing state here too, and if it
+       does not, the webhook remains the primary gate. */
+    const countryFields = rankCountryFields(findCountryFields(result || {}));
+    if (result.issuingCountry) {
+      countryFields.unshift({
+        keyPath: 'normalised.issuingCountry',
+        value: String(result.issuingCountry),
+      });
+    }
+
+    let blockedCode = null;
+    for (const field of countryFields) {
+      const alpha2 = resolveCountry(field.value, field.keyPath);
+      if (alpha2 && (isHardBlocked(alpha2) || isSignupBlocked(alpha2))) {
+        blockedCode = alpha2;
+        break;
+      }
+    }
+
+    if (blockedCode) {
+      user.ageVerification = {
+        ...(user.ageVerification || {}),
+        status: AGE_STATUS.DECLINED,
+        method: result.method,
+        warnings: [
+          ...(result.warnings || []),
+          `${JURISDICTION_WARNING}:${blockedCode}`,
+        ],
+        updatedAt: new Date(),
+      };
+
+      applySellerVerification(user, AGE_STATUS.DECLINED);
+      await user.save();
+
+      console.warn(
+        `[AgeVerification] ${user.username}: refresh found blocked jurisdiction ${blockedCode} — rejected`
+      );
+
+      return res.json({
+        success: true,
+        data: { status: AGE_STATUS.DECLINED, isVerified: false },
+      });
+    }
 
     user.ageVerification = {
       ...(user.ageVerification || {}),
@@ -354,6 +591,3 @@ router.post('/refresh', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
-
-
-
