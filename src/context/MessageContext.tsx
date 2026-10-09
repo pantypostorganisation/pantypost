@@ -12,6 +12,25 @@ import { useWebSocket } from '@/context/WebSocketContext';
 import { useAuth } from '@/context/AuthContext';
 import { WebSocketEvent } from '@/types/websocket';
 import { getRateLimiter } from '@/utils/security/rate-limiter';
+import RestrictionModal, { type RestrictionNotice } from '@/components/messaging/RestrictionModal';
+
+/* What a send attempt actually did.
+ *
+ * sendMessage used to return Promise<void> and swallow every failure:
+ * the service result was checked with `if (result.success && ...)` and
+ * the else branch simply did not exist. Nothing threw, so the callers'
+ * catch blocks never ran, their optimistic message stayed on screen,
+ * and a refused message looked delivered to the person who sent it.
+ *
+ * Returning the outcome rather than throwing is deliberate -- several
+ * call sites invoke this without awaiting, and throwing there would
+ * produce unhandled rejections. Callers that ignore the return value
+ * keep working exactly as before. */
+export interface SendMessageOutcome {
+  success: boolean;
+  error?: string;
+  blocked?: string;
+}
 
 // Types
 type Message = {
@@ -68,7 +87,7 @@ type MessageContextType = {
   sellerProfiles: { [username: string]: SellerProfile };
   isLoading: boolean;
   isInitialized: boolean;
-  sendMessage: (sender: string, receiver: string, content: string, options?: MessageOptions) => Promise<void>;
+  sendMessage: (sender: string, receiver: string, content: string, options?: MessageOptions) => Promise<SendMessageOutcome>;
   sendCustomRequest: (
     buyer: string,
     seller: string,
@@ -125,6 +144,11 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
   const [updateTrigger, setUpdateTrigger] = useState(0);
+
+  /* Held here rather than in the messaging pages, so one modal covers
+     every route that can send a message -- buyer threads, seller
+     threads, admin -- without each view having to wire it up. */
+  const [restrictionNotice, setRestrictionNotice] = useState<RestrictionNotice | null>(null);
 
   const wsContext = useWebSocket ? useWebSocket() : null;
   const { subscribe, isConnected } = wsContext || { subscribe: null, isConnected: false };
@@ -397,20 +421,24 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       if (!cleanSender || !cleanReceiver) {
         console.error('Invalid sender or receiver');
-        return;
+        return { success: false, error: 'Invalid sender or receiver' };
       }
 
       const recvBlocked = blockedUsers[cleanReceiver]?.includes(cleanSender);
       const sndBlocked = blockedUsers[cleanSender]?.includes(cleanReceiver);
       if (recvBlocked || sndBlocked) {
         console.warn('[MessageContext] Message blocked due to user block settings');
-        return;
+        return { success: false, error: 'You cannot message this user.', blocked: 'user_block' };
       }
 
       const rate = rateLimiter.check(`MESSAGE_SEND:${cleanSender}`, { maxAttempts: 20, windowMs: 30_000 });
       if (!rate.allowed) {
         console.warn(`[MessageContext] Rate limit exceeded. Try again in ${rate.waitTime}s`);
-        return;
+        return {
+          success: false,
+          error: `You are sending messages too quickly. Try again in ${rate.waitTime}s.`,
+          blocked: 'rate_limit',
+        };
       }
 
       const isImageMessage = options?.type === 'image' || !!options?.meta?.imageUrl;
@@ -420,12 +448,12 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
         const contentValidation = messageSchemas.messageContent.safeParse(sanitizedContent);
         if (!contentValidation.success) {
           console.error('Invalid message content:', contentValidation.error);
-          return;
+          return { success: false, error: 'That message could not be sent as written.' };
         }
         sanitizedContent = contentValidation.data;
       } else if (!isImageMessage) {
         console.error('Message content cannot be empty');
-        return;
+        return { success: false, error: 'Message content cannot be empty' };
       } else {
         sanitizedContent = '';
       }
@@ -472,9 +500,37 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
               };
             });
           }
+
+          return { success: true };
         }
+
+        /* The branch that did not exist.
+         *
+         * A refused send now reports back, and a moderation block
+         * raises the modal rather than disappearing. The notice is read
+         * from meta when the server sends one, and falls back to the
+         * error text so this still works if meta is ever dropped in
+         * transit again. */
+        const meta = (result as { meta?: Record<string, unknown> })?.meta || {};
+        const blocked = typeof meta.blocked === 'string' ? meta.blocked : undefined;
+        const errorMessage = result.error?.message || 'That message was not sent.';
+
+        if (blocked === 'off_platform_restricted' || blocked === 'off_platform_payment') {
+          const notice = meta.notice as { title?: string; body?: string } | undefined;
+          const [fallbackTitle, ...fallbackBody] = errorMessage.split('\n\n');
+
+          setRestrictionNotice({
+            title: notice?.title || fallbackTitle || 'MESSAGE NOT SENT',
+            body: notice?.body || fallbackBody.join('\n\n') || errorMessage,
+            matched: Array.isArray(meta.matched) ? (meta.matched as string[]) : undefined,
+            permanent: meta.permanent === true,
+          });
+        }
+
+        return { success: false, error: errorMessage, blocked };
       } catch (error) {
         console.error('Error sending message:', error);
+        return { success: false, error: 'Failed to send message. Please try again.' };
       }
     },
     [blockedUsers, rateLimiter]
@@ -777,6 +833,7 @@ export const MessageProvider: React.FC<{ children: ReactNode }> = ({ children })
       }}
     >
       {children}
+      <RestrictionModal notice={restrictionNotice} onDismiss={() => setRestrictionNotice(null)} />
     </MessageContext.Provider>
   );
 };

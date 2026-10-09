@@ -478,6 +478,7 @@ router.post('/send', authMiddleware, async (req, res) => {
         const {
           detectInstantRestrict,
           restrictionUntil,
+          RESTRICTION_NOTICE,
         } = require('../utils/offPlatformEnforcement');
 
         const hit = detectInstantRestrict(content);
@@ -560,14 +561,26 @@ router.post('/send', authMiddleware, async (req, res) => {
               `(${hit.matched.join(', ')}) until ${until.toISOString()}`
             );
 
+            /* `error` stays a single string so any existing toast keeps
+               working. `meta.notice` carries the same thing split into
+               a title and body, so the frontend can render it as a
+               modal the person has to dismiss rather than a toast that
+               slides away unread. */
             return res.status(403).json({
               success: false,
-              error:
-                'That message was not sent, and your messaging has been restricted. ' +
-                'Moving a conversation to an outside app is not allowed here — it is how ' +
-                'buyers and sellers get scammed, because nothing off the platform is protected. ' +
-                'Contact support if you believe this is a mistake.',
-              meta: { blocked: 'off_platform_restricted', matched: hit.matched },
+              error: `${RESTRICTION_NOTICE.title}\n\n${RESTRICTION_NOTICE.body}`,
+              meta: {
+                blocked: 'off_platform_restricted',
+                matched: hit.matched,
+                tier: hit.tier,
+                restrictedUntil: until.toISOString(),
+                permanent: until.getFullYear() > 2100,
+                notice: {
+                  title: RESTRICTION_NOTICE.title,
+                  body: RESTRICTION_NOTICE.body,
+                  severity: 'critical',
+                },
+              },
             });
           }
         }

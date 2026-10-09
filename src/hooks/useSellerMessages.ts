@@ -673,25 +673,49 @@ export function useSellerMessages() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 0);
       
-      // Send the actual message in the background
-      sendMessage(user.username, activeThread, messageContent, {
-        type: selectedImage ? 'image' : 'normal',
-        meta: selectedImage ? { imageUrl: selectedImage } : undefined,
-      }).catch(error => {
-        console.error('Failed to send message:', error);
-        
-        // Remove optimistic message on error
+      /* Roll back on a REFUSAL as well as on a thrown error -- see the
+         same change in useBuyerMessages. sendMessage swallowed
+         failures and returned normally, so this .catch never fired and
+         the optimistic message stayed on screen looking delivered. */
+      const dropOptimistic = () => {
         setOptimisticMessages(prev => ({
           ...prev,
           [threadId]: prev[threadId]?.filter(msg => msg._tempId !== tempId) || []
         }));
-        
-        // Restore input on error
-        setReplyMessage(messageContent);
-        setSelectedImage(selectedImage);
-        setValidationErrors({ message: 'Failed to send message. Please try again.' });
-      });
-      
+      };
+
+      sendMessage(user.username, activeThread, messageContent, {
+        type: selectedImage ? 'image' : 'normal',
+        meta: selectedImage ? { imageUrl: selectedImage } : undefined,
+      })
+        .then(outcome => {
+          if (!outcome || outcome.success !== false) return;
+
+          const moderated =
+            outcome.blocked === 'off_platform_restricted' ||
+            outcome.blocked === 'off_platform_payment';
+
+          dropOptimistic();
+
+          /* A moderation block raises the modal from MessageContext and
+             the text is not handed back. Anything else returns it so
+             nothing the seller typed is lost. */
+          if (!moderated) {
+            setReplyMessage(messageContent);
+            setSelectedImage(selectedImage);
+            setValidationErrors({
+              message: outcome.error || 'Failed to send message. Please try again.',
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Failed to send message:', error);
+          dropOptimistic();
+          setReplyMessage(messageContent);
+          setSelectedImage(selectedImage);
+          setValidationErrors({ message: 'Failed to send message. Please try again.' });
+        });
+
     } catch (error) {
       console.error('Failed to send message:', error);
       setValidationErrors({ message: 'Failed to send message' });

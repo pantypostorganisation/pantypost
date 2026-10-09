@@ -729,10 +729,18 @@ class ApiClient {
             }
           }
 
+          /* Keep the server's own meta on a failure.
+             It used to be discarded here, so anything the backend sent
+             alongside an error -- why a message was blocked, how long a
+             restriction lasts, what to show the user -- never reached
+             the UI. Only the error string survived. */
           return {
             success: false,
             error: normalizedError,
-            meta: { requestId },
+            meta: {
+              ...(typeof data.meta === 'object' && data.meta !== null ? data.meta : {}),
+              requestId,
+            },
           };
         }
         // >>>>>>>>>>>>>>>>>> MODIFIED BLOCK ENDS HERE <<<<<<<<<<<<<<<<<<
@@ -772,10 +780,14 @@ class ApiClient {
                 ? { message: data.error }
                 : data.error || { message: 'Unknown error' };
 
+            // Same as above: do not drop the server's meta on failure.
             return {
               success: false,
               error: normalizedError,
-              meta: { requestId },
+              meta: {
+                ...(typeof data.meta === 'object' && data.meta !== null ? data.meta : {}),
+                requestId,
+              },
             };
           }
         } else {

@@ -712,9 +712,28 @@ export const useBuyerMessages = () => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 0);
     
-    // Send the actual message in the background
+    /* Roll back on a REFUSAL as well as on a thrown error.
+     *
+     * sendMessage never threw on a refusal -- it swallowed the failure
+     * and returned normally -- so this catch block never ran and the
+     * optimistic message above stayed on screen. A message the server
+     * had rejected sat in the thread looking delivered, which is why
+     * nobody learned that asking sellers to move to Telegram does not
+     * work. Now the outcome is checked as well as caught. */
+    const rollBack = (reason: string) => {
+      setOptimisticMessages(prev => ({
+        ...prev,
+        [threadId]: prev[threadId]?.filter(msg => msg._tempId !== tempId) || []
+      }));
+
+      setReplyMessage(messageContent);
+      setSelectedImage(selectedImage);
+      setImageError(reason);
+      setMessageUpdateCounter(prev => prev + 1);
+    };
+
     try {
-      await sendMessage(
+      const outcome = await sendMessage(
         user.username,
         activeThread,
         messageContent,
@@ -724,22 +743,30 @@ export const useBuyerMessages = () => {
           _optimisticId: tempId
         }
       );
+
+      if (outcome && outcome.success === false) {
+        /* A moderation block already raises the modal from
+           MessageContext, so the input is cleared rather than
+           refilled -- handing the refused text back would only invite
+           them to send it again. Anything else (rate limit, network)
+           gives the text back so nothing is lost. */
+        const moderated =
+          outcome.blocked === 'off_platform_restricted' ||
+          outcome.blocked === 'off_platform_payment';
+
+        if (moderated) {
+          setOptimisticMessages(prev => ({
+            ...prev,
+            [threadId]: prev[threadId]?.filter(msg => msg._tempId !== tempId) || []
+          }));
+          setMessageUpdateCounter(prev => prev + 1);
+        } else {
+          rollBack(outcome.error || 'Failed to send message. Please try again.');
+        }
+      }
     } catch (error) {
       console.error('Failed to send message:', error);
-      
-      // Remove optimistic message on error
-      setOptimisticMessages(prev => ({
-        ...prev,
-        [threadId]: prev[threadId]?.filter(msg => msg._tempId !== tempId) || []
-      }));
-      
-      // Restore input on error
-      setReplyMessage(messageContent);
-      setSelectedImage(selectedImage);
-      setImageError('Failed to send message. Please try again.');
-      
-      // Force update to remove optimistic message
-      setMessageUpdateCounter(prev => prev + 1);
+      rollBack('Failed to send message. Please try again.');
     }
   }, [activeThread, replyMessage, selectedImage, user, sendMessage]);
   
