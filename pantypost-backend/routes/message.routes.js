@@ -22,6 +22,40 @@ const NEW_ACCOUNT_THREAD_LIMIT = Number(process.env.NEW_ACCOUNT_THREAD_LIMIT || 
    message it could possibly have is inside that bound -- the date
    clause changes no result and keeps the scan off the full message
    collection. */
+/* Report.description is capped at 1000 characters by its schema.
+ *
+ * The off-platform flag appended evidence and clamped at 4000, so once
+ * a sender's report grew past 1000 every further top-up failed
+ * validation -- silently, because the only thing wrapping it is a catch
+ * that logs. Those were precisely the messages that were supposed to
+ * reach the moderation queue, and they were being thrown away.
+ *
+ * The newest evidence now wins: the opening line is kept, and older
+ * entries are dropped from the front until the result fits. Someone who
+ * posts their Telegram thirty times is still one problem; what is worth
+ * reading is the most recent few. */
+const MAX_REPORT_DESCRIPTION = 1000;
+
+/** One evidence line, short enough that several fit inside the cap. */
+function evidenceLine(receiver, content) {
+  return `[${new Date().toISOString()}] to ${receiver}: ${String(content || '').slice(0, 200)}`;
+}
+
+function appendReportEvidence(description, line) {
+  const parts = String(description || '').split('\n\n');
+  const header = parts[0] || '';
+  const entries = [...parts.slice(1), line];
+
+  let out = [header, ...entries].join('\n\n');
+
+  while (out.length > MAX_REPORT_DESCRIPTION && entries.length > 1) {
+    entries.shift();
+    out = [header, '[older entries dropped]', ...entries].join('\n\n');
+  }
+
+  return out.slice(0, MAX_REPORT_DESCRIPTION);
+}
+
 async function countThreadsStarted(username, since) {
   const match = { $or: [{ sender: username }, { receiver: username }] };
   if (since) match.createdAt = { $gte: since };
@@ -385,9 +419,10 @@ router.post('/send', authMiddleware, async (req, res) => {
               reportType: 'scam',
               severity: 'high',
               category: 'off_platform',
-              description:
-                `Blocked: attempted off-platform payment (${payment.reasons.join(', ')}).\n\n` +
-                `[${new Date().toISOString()}] to ${receiver}: ${String(content).slice(0, 300)}`,
+              description: appendReportEvidence(
+                `Blocked: attempted off-platform payment (${payment.reasons.join(', ')}).`,
+                evidenceLine(receiver, content)
+              ),
               status: 'pending',
               metadata: { autoFlag: 'payment_blocked', reasons: payment.reasons }
             });
@@ -573,9 +608,10 @@ router.post('/send', authMiddleware, async (req, res) => {
 
           if (existing) {
             existing.severity = detection.severity === 'high' ? 'high' : existing.severity;
-            existing.description =
-              `${existing.description}\n\n[${new Date().toISOString()}] to ${receiver}: ${String(content).slice(0, 300)}`
-                .slice(0, 4000);
+            existing.description = appendReportEvidence(
+              existing.description,
+              evidenceLine(receiver, content)
+            );
             await existing.save();
           } else {
             await Report.create({
@@ -584,9 +620,10 @@ router.post('/send', authMiddleware, async (req, res) => {
               reportType: 'spam',
               severity: detection.severity,
               category: 'off_platform',
-              description:
-                `Automatic flag: possible attempt to move off platform (${detection.reasons.join(', ')}).\n\n` +
-                `[${new Date().toISOString()}] to ${receiver}: ${String(content).slice(0, 300)}`,
+              description: appendReportEvidence(
+                `Automatic flag: possible attempt to move off platform (${detection.reasons.join(', ')}).`,
+                evidenceLine(receiver, content)
+              ),
               status: 'pending',
               metadata: {
                 autoFlag: 'off_platform',
