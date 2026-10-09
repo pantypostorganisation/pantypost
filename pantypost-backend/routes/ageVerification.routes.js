@@ -163,6 +163,133 @@ function hasJurisdictionBlock(user) {
   return warnings.some((w) => String(w).startsWith(JURISDICTION_WARNING));
 }
 
+/**
+ * Find a blocked issuing country for this verification, or null.
+ *
+ * Scans the payload we were given, and if that carries no country at
+ * all, asks the provider for the full decision and scans that instead.
+ * Always logs what it found, which is the part that makes a silent
+ * failure impossible to repeat.
+ */
+async function findBlockedJurisdiction(provider, result, primaryPayload) {
+  const who = result.username || 'unknown';
+
+  const scan = (payload, source) =>
+    rankCountryFields(findCountryFields(payload || {})).map((f) => ({ ...f, source }));
+
+  let candidates = scan(primaryPayload, 'webhook');
+
+  if (result.issuingCountry) {
+    candidates.unshift({
+      keyPath: 'normalised.issuingCountry',
+      value: String(result.issuingCountry),
+      source: 'webhook',
+    });
+  }
+
+  /* A webhook can be a thin status notification with no document block
+     in it at all -- which is exactly why the original check never
+     fired. When the payload carries nothing to check, ask Didit
+     directly for the decision and scan that. One extra API call, and
+     only on the webhooks that would otherwise be checked against
+     nothing. */
+  if (!candidates.length && result.sessionId && typeof provider.getDecision === 'function') {
+    try {
+      console.log(
+        `[AgeVerification] ${who}: no country in webhook — fetching decision ${result.sessionId}`
+      );
+
+      const decision = await provider.getDecision(result.sessionId);
+      candidates = scan(decision?.raw || decision, 'decision');
+
+      if (decision?.issuingCountry) {
+        candidates.unshift({
+          keyPath: 'decision.issuingCountry',
+          value: String(decision.issuingCountry),
+          source: 'decision',
+        });
+      }
+    } catch (error) {
+      console.error(`[AgeVerification] ${who}: decision lookup failed:`, error.message);
+    }
+  }
+
+  if (candidates.length) {
+    console.log(
+      `[AgeVerification] ${who}: country fields (${candidates[0].source}) -> ` +
+      candidates.map((f) => `${f.keyPath}=${f.value}`).join(', ')
+    );
+  } else {
+    console.log(`[AgeVerification] ${who}: no country fields found in webhook or decision`);
+  }
+
+  for (const field of candidates) {
+    const alpha2 = resolveCountry(field.value, field.keyPath);
+    if (alpha2 && (isHardBlocked(alpha2) || isSignupBlocked(alpha2))) {
+      return { code: alpha2, field };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Record the rejection and close the account.
+ *
+ * Caller saves. Kept in one place so the webhook and the refresh path
+ * cannot drift apart on what a jurisdiction block actually does.
+ */
+function applyJurisdictionBlock(user, blocked, result) {
+  user.ageVerification = {
+    ...(user.ageVerification || {}),
+    status: AGE_STATUS.DECLINED,
+    sessionId: result.sessionId || user.ageVerification?.sessionId,
+    provider: providerName(),
+    method: result.method,
+    warnings: [
+      ...(result.warnings || []),
+      `${JURISDICTION_WARNING}:${blocked.code}`,
+    ],
+    updatedAt: new Date(),
+  };
+
+  applySellerVerification(user, AGE_STATUS.DECLINED);
+
+  /* Banned, not merely declined.
+   *
+   * A decline on its own only closes the verification gate. The
+   * account keeps its password, its session and -- until the messaging
+   * limits landed -- its ability to work through a seller list. Every
+   * account this check has caught was there to scam, so the account
+   * goes with the verification.
+   *
+   * No banExpiry is set: a document does not change issuing country,
+   * so there is nothing for a timer to resolve. Lifting it is a
+   * deliberate manual act.
+   *
+   * messagingRestrictedUntil is set as well, because the messaging
+   * route reads that field directly on every send. That closes any
+   * session already holding a valid token, without waiting for the
+   * token to expire. */
+  /* Staff are never auto-banned. This check reads a document field
+     through a chain of guesses, and the cost of it misfiring on an
+     admin is being locked out of your own site with no way back in.
+     The verification still declines; the account stays reachable. */
+  if (user.role === 'admin' || user.role === 'moderator') {
+    console.error(
+      `[AgeVerification] ${user.username} is ${user.role} and matched blocked ` +
+      `jurisdiction ${blocked.code} — DECLINED but NOT banned. Check this by hand.`
+    );
+    return;
+  }
+
+  user.isBanned = true;
+  user.banReason = `Automatic: identity document issued in a blocked jurisdiction (${blocked.code}).`;
+  user.bannedBy = 'system';
+  user.messagingRestrictedUntil = new Date('2999-12-31T00:00:00Z');
+  user.messagingRestrictionReason = user.banReason;
+}
+
 /* =====================================================================
  * GET /api/age-verification/status
  * Where the current user stands. Used by the gate on page load.
@@ -364,56 +491,15 @@ router.post('/webhook', async (req, res) => {
      * single guessed key, found nothing, and failed silently for
      * weeks. If Didit renames a field, the log says so on the next
      * verification instead of after the next scam report. */
-    const countryFields = rankCountryFields(findCountryFields(req.body || {}));
+    const blocked = await findBlockedJurisdiction(provider, result, req.body || {});
 
-    if (result.issuingCountry) {
-      countryFields.unshift({
-        keyPath: 'normalised.issuingCountry',
-        value: String(result.issuingCountry),
-      });
-    }
-
-    if (countryFields.length) {
-      console.log(
-        `[AgeVerification] ${result.username}: country fields -> ` +
-        countryFields.map((f) => `${f.keyPath}=${f.value}`).join(', ')
-      );
-    } else {
-      console.log(`[AgeVerification] ${result.username}: no country fields in payload`);
-    }
-
-    let blockedCode = null;
-    let blockedField = null;
-
-    for (const field of countryFields) {
-      const alpha2 = resolveCountry(field.value, field.keyPath);
-      if (alpha2 && (isHardBlocked(alpha2) || isSignupBlocked(alpha2))) {
-        blockedCode = alpha2;
-        blockedField = field;
-        break;
-      }
-    }
-
-    if (blockedCode) {
-      user.ageVerification = {
-        ...(user.ageVerification || {}),
-        status: AGE_STATUS.DECLINED,
-        sessionId: result.sessionId || user.ageVerification?.sessionId,
-        provider: providerName(),
-        method: result.method,
-        warnings: [
-          ...(result.warnings || []),
-          `${JURISDICTION_WARNING}:${blockedCode}`,
-        ],
-        updatedAt: new Date(),
-      };
-
-      applySellerVerification(user, AGE_STATUS.DECLINED);
+    if (blocked) {
+      applyJurisdictionBlock(user, blocked, result);
       await user.save();
 
       console.warn(
         `[AgeVerification] ${result.username}: document from blocked jurisdiction ` +
-        `${blockedCode} (${blockedField.keyPath}=${blockedField.value}) — rejected`
+        `${blocked.code} (${blocked.field.keyPath}=${blocked.field.value}) — rejected and BANNED`
       );
 
       // Let their open tab stop spinning.
@@ -513,44 +599,22 @@ router.post('/refresh', authMiddleware, async (req, res) => {
     const provider = getProvider();
     const result = await provider.getDecision(sessionId);
 
-    /* Same document check as the webhook. getDecision returns the
-       normalised shape, so scan whatever it hands back -- if it carries
-       the raw payload we catch the issuing state here too, and if it
-       does not, the webhook remains the primary gate. */
-    const countryFields = rankCountryFields(findCountryFields(result || {}));
-    if (result.issuingCountry) {
-      countryFields.unshift({
-        keyPath: 'normalised.issuingCountry',
-        value: String(result.issuingCountry),
-      });
-    }
+    /* Same document check as the webhook, against the decision this
+       path already fetched -- so someone who reaches a verdict without
+       a webhook ever arriving is checked exactly the same way. */
+    const blocked = await findBlockedJurisdiction(
+      provider,
+      { ...result, username: user.username },
+      result.raw || result
+    );
 
-    let blockedCode = null;
-    for (const field of countryFields) {
-      const alpha2 = resolveCountry(field.value, field.keyPath);
-      if (alpha2 && (isHardBlocked(alpha2) || isSignupBlocked(alpha2))) {
-        blockedCode = alpha2;
-        break;
-      }
-    }
-
-    if (blockedCode) {
-      user.ageVerification = {
-        ...(user.ageVerification || {}),
-        status: AGE_STATUS.DECLINED,
-        method: result.method,
-        warnings: [
-          ...(result.warnings || []),
-          `${JURISDICTION_WARNING}:${blockedCode}`,
-        ],
-        updatedAt: new Date(),
-      };
-
-      applySellerVerification(user, AGE_STATUS.DECLINED);
+    if (blocked) {
+      applyJurisdictionBlock(user, blocked, result);
       await user.save();
 
       console.warn(
-        `[AgeVerification] ${user.username}: refresh found blocked jurisdiction ${blockedCode} — rejected`
+        `[AgeVerification] ${user.username}: refresh found blocked jurisdiction ` +
+        `${blocked.code} — rejected and BANNED`
       );
 
       return res.json({

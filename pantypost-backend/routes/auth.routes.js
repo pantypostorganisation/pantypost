@@ -11,6 +11,53 @@ const { sendEmail, emailTemplates } = require('../config/email');
 const crypto = require('crypto');
 const AdminTwoFactor = require('../models/AdminTwoFactor');
 const { isSignupBlocked } = require('../config/blockedCountries');
+
+/* =====================================================================
+ * BAN ENFORCEMENT
+ *
+ * The User model has carried isBanned, banReason and banExpiry for
+ * months, and nothing on the way in ever read them. Banning an account
+ * hid it from the admin UI and left its token working: it could still
+ * message sellers, create listings and spend its wallet.
+ *
+ * These two helpers are called on every path that hands out or renews
+ * a session, so a ban takes effect at the next request rather than
+ * whenever the old token happens to expire.
+ * ===================================================================== */
+
+/* banExpiry is honoured, so a temporary ban needs no cleanup job -- a
+   date in the past simply stops applying, the same way
+   messagingRestrictedUntil does. No expiry means permanent. */
+function activeBan(user) {
+  if (!user || !user.isBanned) return null;
+
+  const expiry = user.banExpiry ? new Date(user.banExpiry) : null;
+  if (expiry && expiry.getTime() <= Date.now()) return null;
+
+  return { reason: user.banReason || '', expiry };
+}
+
+/* The reason is logged, never returned. Several bans are automatic and
+   naming the exact signal that caught someone tells them precisely
+   what to change on the next attempt. */
+function sendBanned(res, user, ban) {
+  console.warn(
+    `[Auth] Blocked sign-in by banned account ${user.username}` +
+    `${ban.reason ? ` (${ban.reason})` : ''}`
+  );
+
+  return res.status(403).json({
+    success: false,
+    error: {
+      code: 'ACCOUNT_BANNED',
+      message: ban.expiry
+        ? `This account is suspended until ${ban.expiry.toLocaleString()}. Contact support if you believe this is a mistake.`
+        : 'This account has been suspended. Contact support if you believe this is a mistake.',
+      banned: true,
+      expiresAt: ban.expiry ? ban.expiry.toISOString() : null
+    }
+  });
+}
 const webSocketService = require('../config/websocket');
 const publicWebSocketService = require('../config/publicWebsocket');
 
@@ -803,6 +850,14 @@ router.post('/login', loginLimiter, async (req, res) => {
       });
     }
 
+    /* Checked after the password, so the response cannot be used to
+       enumerate which accounts are banned, and before the emails below,
+       so a banned account stops triggering verification sends. */
+    const loginBan = activeBan(user);
+    if (loginBan) {
+      return sendBanned(res, user, loginBan);
+    }
+
     if (user.role !== 'admin' && !user.emailVerified) {
       try {
         await EmailVerification.deleteMany({ userId: user._id });
@@ -1102,6 +1157,14 @@ router.get('/me', authMiddleware, async (req, res) => {
       });
     }
 
+    /* Kills a session that was already open when the ban landed. The
+       app calls this on load, so a banned account is turned out at its
+       next page view rather than at token expiry. */
+    const meBan = activeBan(user);
+    if (meBan) {
+      return sendBanned(res, user, meBan);
+    }
+
     user.lastActive = new Date();
     user.isOnline = true;
     await user.save();
@@ -1175,6 +1238,26 @@ router.post('/refresh', async (req, res) => {
       });
     }
     const decoded = jwt.verify(refreshToken, JWT_SECRET);
+
+    /* Loads the account rather than trusting the token's claims, so a
+       ban cannot be outlived by renewing. Without this a banned
+       account refreshes itself a fresh seven-day token indefinitely. */
+    const user = await User.findById(decoded.id).select('username isBanned banReason banExpiry');
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: ERROR_CODES.AUTH_TOKEN_INVALID,
+          message: 'Your session has expired. Please log in again to continue.'
+        }
+      });
+    }
+
+    const refreshBan = activeBan(user);
+    if (refreshBan) {
+      return sendBanned(res, user, refreshBan);
+    }
+
     await User.findByIdAndUpdate(decoded.id, { lastActive: new Date(), isOnline: true });
     const newToken = jwt.sign({ id: decoded.id, username: decoded.username, role: decoded.role }, JWT_SECRET, { expiresIn: '7d' });
     res.json({ success: true, data: { token: newToken, refreshToken: newToken }});

@@ -142,15 +142,25 @@ async function diditGetDecision(sessionId) {
 function normaliseDiditResult(payload) {
   const status = mapDiditStatus(payload.status);
 
+  /* The webhook body and the decision endpoint do not return the same
+     shape. A webhook can arrive as a thin status notification with no
+     id_verification block at all, while the decision endpoint nests
+     the same data under `decision`. The first version of the
+     jurisdiction check read one fixed path and so never fired once in
+     production. Every known nesting is tried here, and the caller
+     additionally scans the raw payload for anything this misses. */
+  const idv = payload.id_verification || payload.decision?.id_verification || {};
+  const liveness = payload.liveness || payload.decision?.liveness || {};
+
   // Present when the selfie path completed.
-  const estimatedAge = payload.liveness?.age_estimation ?? null;
+  const estimatedAge = liveness.age_estimation ?? null;
 
   // Present only when the document fallback fired.
-  const documentAge = payload.id_verification?.age ?? null;
+  const documentAge = idv.age ?? null;
 
   const warnings = [
-    ...(payload.liveness?.warnings || []),
-    ...(payload.id_verification?.warnings || []),
+    ...(liveness.warnings || []),
+    ...(idv.warnings || []),
   ]
     .map((w) => w?.code)
     .filter(Boolean);
@@ -165,18 +175,33 @@ function normaliseDiditResult(payload) {
    *
    * Didit returns ISO-3166 alpha-3 ("NGA"); our block list is alpha-2
    * ("NG"), so the caller converts. */
+  const doc = payload.document || payload.decision?.document || {};
+
   const issuingCountry =
-    payload.id_verification?.issuing_state
-    || payload.id_verification?.issuing_state_name
-    || payload.document?.issuing_country
+    idv.issuing_state
+    || idv.issuing_state_name
+    || idv.issuing_country
+    || idv.nationality
+    || doc.issuing_country
+    || doc.issuing_state
     || null;
 
   return {
     status,
     rawStatus: payload.status,
-    sessionId: payload.session_id,
-    username: payload.vendor_data,
+    sessionId: payload.session_id || payload.decision?.session_id,
+    username: payload.vendor_data || payload.decision?.vendor_data,
     issuingCountry,
+
+    /* The provider's untouched response.
+     *
+     * TRANSIENT ONLY. It carries the name, document number and date of
+     * birth -- none of which may ever be written to the database. It is
+     * here so the jurisdiction check can scan for the issuing country
+     * whatever Didit decides to call that field, and for nothing else.
+     * Both routes copy named fields out of this object and discard the
+     * rest, which is what keeps the no-identity-data promise intact. */
+    raw: payload,
     // Rounded: we have no need for a precise estimate, and a coarse
     // value is less identifying if these records are ever exported.
     estimatedAge: estimatedAge !== null ? Math.round(estimatedAge) : null,
