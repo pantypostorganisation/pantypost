@@ -460,6 +460,124 @@ router.post('/send', authMiddleware, async (req, res) => {
     // Generate threadId
     const threadId = Message.getThreadId(sender, receiver);
 
+    const senderRole = String(req.user.role || '');
+
+    /* Named off-platform channels: block, restrict, report.
+     *
+     * No intent weighing here. If the word is in the message, the
+     * message does not send and the sender is restricted permanently.
+     * See utils/offPlatformEnforcement.js for why it is this blunt and
+     * what it knowingly catches.
+     *
+     * Staff are exempt from the restriction itself. That is not a
+     * softening of the rule -- it stops a moderator discussing a report
+     * from muting themselves, and stops the owner locking himself out
+     * of his own platform. The attempt is still logged. */
+    if (content) {
+      try {
+        const {
+          detectInstantRestrict,
+          restrictionUntil,
+        } = require('../utils/offPlatformEnforcement');
+
+        const hit = detectInstantRestrict(content);
+
+        if (hit.restrict) {
+          if (senderRole === 'admin' || senderRole === 'moderator') {
+            console.warn(
+              `[Moderation] ${sender} (${senderRole}) used a restricted term ` +
+              `(${hit.matched.join(', ')}) — exempt, message allowed`
+            );
+          } else {
+            const until = restrictionUntil();
+            const reason = `Off-platform solicitation: used "${hit.matched.join('", "')}" in a message.`;
+
+            await User.findOneAndUpdate(
+              { username: sender },
+              {
+                $set: {
+                  messagingRestrictedUntil: until,
+                  messagingRestrictionReason: reason.slice(0, 300),
+                },
+              }
+            );
+
+            /* The report is the point of the exercise -- it is how you
+               see who was caught and whether it was a scammer or a
+               seller turning one down. Topped up rather than
+               duplicated, and clamped to the schema's limit so it
+               cannot silently fail to save. */
+            try {
+              const Report = require('../models/Report');
+              const line = evidenceLine(receiver, content);
+
+              const existing = await Report.findOne({
+                reportedUser: sender,
+                reportType: 'scam',
+                status: 'pending',
+                'metadata.autoFlag': 'instant_restrict',
+              });
+
+              if (existing) {
+                existing.description = appendReportEvidence(existing.description, line);
+                existing.severity = 'high';
+                await existing.save();
+              } else {
+                await Report.create({
+                  reportedUser: sender,
+                  reportedBy: 'system',
+                  reportType: 'scam',
+                  severity: 'high',
+                  category: 'off_platform',
+                  description: appendReportEvidence(
+                    `MESSAGING RESTRICTED automatically: used "${hit.matched.join('", "')}". ` +
+                    `Read the message below before acting -- a seller REFUSING to go off-platform ` +
+                    `is caught by this rule too, and should have the restriction lifted.`,
+                    line
+                  ),
+                  status: 'pending',
+                  metadata: {
+                    autoFlag: 'instant_restrict',
+                    matched: hit.matched,
+                    restrictedUntil: until,
+                    threadId,
+                  },
+                });
+              }
+
+              if (global.webSocketService) {
+                global.webSocketService.broadcast('report:created', {
+                  at: new Date().toISOString(),
+                });
+                global.webSocketService.emitApprovalQueueChanged?.();
+              }
+            } catch (reportError) {
+              console.error('[Moderation] Restriction report failed:', reportError.message);
+            }
+
+            console.warn(
+              `[Moderation] RESTRICTED ${sender} -> ${receiver} ` +
+              `(${hit.matched.join(', ')}) until ${until.toISOString()}`
+            );
+
+            return res.status(403).json({
+              success: false,
+              error:
+                'That message was not sent, and your messaging has been restricted. ' +
+                'Moving a conversation to an outside app is not allowed here — it is how ' +
+                'buyers and sellers get scammed, because nothing off the platform is protected. ' +
+                'Contact support if you believe this is a mistake.',
+              meta: { blocked: 'off_platform_restricted', matched: hit.matched },
+            });
+          }
+        }
+      } catch (restrictError) {
+        /* Fails open like every other check in this handler. A broken
+           detector must not take messaging down for the platform. */
+        console.error('[Moderation] Instant-restrict check failed:', restrictError.message);
+      }
+    }
+
     /* New accounts: verified, and two conversations in the first day.
      *
      * Every scam account traced so far has had the same shape -- sign
@@ -479,8 +597,6 @@ router.post('/send', authMiddleware, async (req, res) => {
      * answering someone who messaged them: a brand-new seller with
      * eight enquiries can answer all eight. That distinction is the
      * difference between a scam filter and an outage. */
-    const senderRole = String(req.user.role || '');
-
     if (senderRole !== 'admin' && senderRole !== 'moderator') {
       try {
         const threadExists = await Message.exists({ threadId });
